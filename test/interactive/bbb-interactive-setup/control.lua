@@ -1,4 +1,4 @@
--- bbb-interactive-setup: the four gestures a headless Factorio cannot make.
+-- bbb-interactive-setup: the five gestures a headless Factorio cannot make.
 --
 -- Every trigger below needs a PLAYER -- game.get_player resolves to nothing in
 -- a --create, and on_player_mined_entity/on_built_entity with a player_index
@@ -19,7 +19,7 @@ local N, E, S, W =
   defines.direction.south, defines.direction.west
 
 -- Everything sits in this box, east of spawn.
-local X0, X1, Y0, Y1 = 8, 32, -34, 84
+local X0, X1, Y0, Y1 = 8, 32, -34, 96
 local COL = 20 -- the part column
 
 local function prep_ground(s)
@@ -168,6 +168,38 @@ local function band_bridge(s)
   put(s, BELT, COL + 1, 56, { direction = W })
 end
 
+-- E: FAST REPLACE, both directions. The forward half is a running belt line
+-- passing one tile below a small balancer: dropping a part onto that belt cuts
+-- the line and makes the balancer three in and three out, which is the gesture
+-- the whole feature exists for. The reverse half is a four-part column fed only
+-- on its top and bottom rows, so the two middle parts carry no edge interface
+-- and are the only parts a belt can be laid on -- the top and bottom ones
+-- refuse, because an interface is a belt-connectable standing on that tile.
+local function band_fastreplace(s)
+  local b = 84
+  for i = 0, 1 do
+    put(s, PART, COL, b + i)
+    source(s, COL - 4, b + i, E)
+    for x = COL - 2, COL - 1 do put(s, BELT, x, b + i, { direction = E }) end
+    for x = COL + 1, COL + 3 do put(s, BELT, x, b + i, { direction = E }) end
+    sink(s, COL + 4, b + i, E)
+  end
+  -- The belt line that runs PAST the balancer, unbroken across (COL, b+2).
+  source(s, COL - 4, b + 2, E)
+  for x = COL - 2, COL + 3 do put(s, BELT, x, b + 2, { direction = E }) end
+  sink(s, COL + 4, b + 2, E)
+
+  -- The reverse column, four parts at b+5 .. b+8, fed on the ends only.
+  local c = b + 5
+  for i = 0, 3 do put(s, PART, COL, c + i) end
+  for _, i in ipairs { 0, 3 } do
+    source(s, COL - 4, c + i, E)
+    for x = COL - 2, COL - 1 do put(s, BELT, x, c + i, { direction = E }) end
+    for x = COL + 1, COL + 3 do put(s, BELT, x, c + i, { direction = E }) end
+    sink(s, COL + 4, c + i, E)
+  end
+end
+
 --------------------------------------------------------------------------------
 
 script.on_init(function()
@@ -182,7 +214,9 @@ script.on_init(function()
   band_shrink(s)
   band_limit(s)
   band_bridge(s)
-  log("[BBB-INTERACTIVE] rigs staged: pocket y-24, shrink y-12, limit y0, bridge y40; gap at (20,56)")
+  band_fastreplace(s)
+  log("[BBB-INTERACTIVE] rigs staged: pocket y-24, shrink y-12, limit y0, " ..
+      "bridge y40 (gap at (20,56)), fast replace y84")
 end)
 
 script.on_event(defines.events.on_player_created, function(e)
@@ -197,6 +231,7 @@ script.on_event(defines.events.on_player_created, function(e)
     { pos = { COL, -12 }, text = "B: belt on my south face, then mine it" },
     { pos = { COL, 16 },  text = "C: 65th belt on my north face (20,-1)" },
     { pos = { COL, 56 },  text = "D: one part in this gap" },
+    { pos = { COL, 86 },  text = "E: part onto my belt line, belt onto my middle" },
   }
   p.force.chart(p.surface, { { X0 - 32, Y0 - 32 }, { X1 + 32, Y1 + 32 } })
   for _, t in ipairs(tags) do
@@ -208,5 +243,6 @@ script.on_event(defines.events.on_player_created, function(e)
   p.print("[BBB] B: y=-12 lay a south-facing belt on the free south face, then mine it.")
   p.print("[BBB] C: y=0 lay a 65th belt against the big one, at (20,-1) facing south.")
   p.print("[BBB] D: y=56 place a balancer part in the one-tile gap between the two big ones.")
+  p.print("[BBB] E: y=86 drop a part onto the belt line at (20,86); then lay a belt on (20,90).")
   p.print("[BBB] Expected outcomes and the log lines to grep: test/interactive/README.md")
 end)

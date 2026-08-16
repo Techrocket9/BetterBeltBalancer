@@ -80,6 +80,20 @@
 --         teardowns belong to `AddPart`, not to compile(), so they are queued
 --         before the flush even starts: without the pass at the top of flushDead
 --         both balancers are demolished and come back EMPTY on the next tick.
+--   frepa FAST REPLACE, forward: a saturated two-part balancer with a plain
+--         belt line running past it one tile south. A PART is fast-replaced onto
+--         that belt while it runs, which is the gesture the feature exists for
+--         -- dropping a balancer into a belt line you already have. The line is
+--         cut, the balancer becomes three in and three out, and the belt plus
+--         whatever it was carrying goes where a fast replace puts it.
+--   frepb FAST REPLACE, reverse, and it is the half that needs guest code. A
+--         fast-replaceable group is symmetric, so a BELT can be laid on a part
+--         -- and the engine raises NO EVENT AT ALL for the part it destroys.
+--         Four parts in a column, fed on the top and bottom rows only so the two
+--         middle ones carry no interface; a south-facing belt is laid on one of
+--         them, and the registry has to notice. It also probes the refusal: a
+--         part that DOES carry an interface cannot be replaced, because
+--         `bbb-linked-belt` is a belt-connectable standing on the same tile.
 --   ntch  THE FIELD REPORT'S SHAPE: a 2x2 balancer with one corner missing,
 --         saturated and flowing, two in and two out. The missing corner is the
 --         only tile in this save that is enclosed by parts and is not one, and
@@ -152,7 +166,25 @@ local LIM_PARTS = 32
 local BRDG = LIM + LIM_PARTS + 8
 local BRDG_HALF = 16
 local BRDG_FED = 3
-local ROWS = BRDG + 2 * BRDG_HALF + 9
+-- FAST REPLACE, two rigs in one band, and they are the only rigs in this suite
+-- that are BUILT MID-RUN. Everything above is standing from on_init and every
+-- baseline in test/assert-edge.py is a statement about that world; these two are
+-- placed after the last of those assertions has been made, so not one of them
+-- moves. Their SOURCE CHESTS and their stock are created in on_init all the
+-- same, because `count_all` is a conserved quantity and inserting twenty-four
+-- thousand items into it mid-run would read as this mod minting matter.
+--
+--   frepa  the forward gesture: a saturated two-part balancer with a PLAIN BELT
+--          LINE running east one tile below it. From the bottom part that belt
+--          is neither `dir` nor `back`, so it is not an edge at all (M2's `pass`
+--          shape) -- until a part is fast-replaced onto it, at which point the
+--          line is cut and the balancer is three in and three out.
+--   frepb  the reverse: four parts in a column, fed and drained on the top and
+--          bottom rows only, so the two middle parts carry no interface and are
+--          the only parts in this save a belt can legally be laid on.
+local FREP = BRDG + 2 * BRDG_HALF + 8
+local FREPB = FREP + 6
+local ROWS = FREPB + 10
 
 -- Everything the compiler is allowed to put on the visible surface. All four are
 -- named rather than just the linked belt: the assertion is about the CONTRACT
@@ -873,6 +905,184 @@ local function p_probe_operators()
     tostring(ok), tostring(got)))
 end
 
+--------------------------------------------------------------------------------
+-- FAST REPLACE
+--
+-- `bbb-balancer-part` carries `fast_replaceable_group = "transport-belt"`, so a
+-- part held over a belt replaces it the way a splitter does. The group is
+-- symmetric, which buys the reverse for free and is why the guest has to watch
+-- for it: measured on 2.0.77, a belt laid on a part destroys that part and
+-- raises NO EVENT of any kind, so without guest/go/fastreplace.go the registry
+-- keeps a tile it calls a part which is holding somebody's belt.
+--
+-- Both rigs are built at CHN_END + 2680 rather than in on_init -- see the FREP
+-- comment at the top of this file.
+--------------------------------------------------------------------------------
+
+-- The source half of `feed`, minus the chest: the chests are made in on_init so
+-- their stock is inside the conserved total from t=0.
+local function frep_feed(s, y)
+  put(s, LOADER, -5, y, { direction = E, type = "output" })
+  for x = -4, -1 do put(s, BELT, x, y, { direction = E }) end
+  for x = 1, 3 do put(s, BELT, x, y, { direction = E }) end
+  return sink(s, y)
+end
+
+local function p_frep_build()
+  local s = surf()
+  log("[BBB-EDGE] frep-build begin")
+  for r = 0, 1 do put(s, PART, 0, FREP + r) end
+  local a = { frep_feed(s, FREP), frep_feed(s, FREP + 1) }
+  -- The belt line that runs PAST the balancer, x = -4 through 3 with no gap at
+  -- x = 0. Its chest is the third output the balancer will have.
+  put(s, LOADER, -5, FREP + 2, { direction = E, type = "output" })
+  for x = -4, 3 do put(s, BELT, x, FREP + 2, { direction = E }) end
+  a[3] = sink(s, FREP + 2)
+  storage.out.frepa = a
+
+  for r = 0, 3 do put(s, PART, 0, FREPB + r) end
+  storage.out.frepb = { frep_feed(s, FREPB), frep_feed(s, FREPB + 3) }
+  log("[BBB-EDGE] frep-build end")
+end
+
+-- A fast replace hands the replaced ENTITY back as an item, and with no player
+-- to hand it to the engine spills it. That item is new matter -- the engine
+-- minted it, exactly as the insert probe mints its own -- and `count_all` is a
+-- conserved quantity, so the machine items are logged and then removed. What the
+-- belt was CARRYING is left exactly where it fell: that is a real spill and it
+-- belongs in the count.
+local MACHINE_ITEMS = { ["express-transport-belt"] = true, [PART] = true }
+
+-- The engine hands the replaced entity back the way `spill_item_stack` does:
+-- onto a belt if there is one under it and onto the floor if there is not. Both
+-- have to be looked at, and the reverse gesture is exactly the case where the
+-- item lands on a BELT -- the one that was just created on that tile.
+local function frep_sweep(tag, y0, y1)
+  local s, seen, took, where = surf(), {}, 0, "ground"
+  local area = { { -8, y0 }, { 8, y1 } }
+  for _, e in pairs(s.find_entities_filtered { area = area, type = "item-entity" }) do
+    if e.valid and e.stack and e.stack.valid_for_read then
+      local n, c = e.stack.name, e.stack.count
+      seen[n] = (seen[n] or 0) + c
+      if MACHINE_ITEMS[n] then
+        took = took + c
+        e.destroy()
+      end
+    end
+  end
+  for _, e in pairs(s.find_entities_filtered {
+    area = area, type = { "transport-belt", "underground-belt", "splitter",
+                          "lane-splitter", "loader-1x1", "loader" },
+  }) do
+    if e.valid then
+      for i = 1, e.get_max_transport_line_index() do
+        local line = e.get_transport_line(i)
+        for name in pairs(MACHINE_ITEMS) do
+          local n = line.get_item_count(name)
+          if n > 0 then
+            seen[name] = (seen[name] or 0) + n
+            took = took + n
+            where = "on a belt"
+            line.remove_item { name = name, count = n }
+          end
+        end
+      end
+    end
+  end
+  local parts = {}
+  for k, v in pairs(seen) do parts[#parts + 1] = k .. "x" .. v end
+  table.sort(parts)
+  log(string.format(
+    "[BBB-EDGE] frep-spill tag=%s handed-back=[%s] machine-removed=%d where=%s",
+    tag, table.concat(parts, ","), took, where))
+end
+
+-- FORWARD: a part onto the belt line, while everything is running.
+--
+-- THE CREATE IS GATED ON `can_fast_replace` AND THAT IS NOT BELT AND BRACES.
+-- `create_entity{fast_replace = true}` does not ask that question: handed a
+-- gesture the engine would refuse it falls back to CREATING, and a
+-- simple-entity-with-force is created whatever it collides with -- so a guest
+-- without the prototype line would end up with a part and a belt on one tile,
+-- and the next compile would try to put an interface there and fail. Asking
+-- first is what makes the red arm of this leg an assertion rather than a
+-- compile error.
+local function p_frep_forward()
+  local s = surf()
+  log("[BBB-EDGE] frep-fwd begin")
+  local can = s.can_fast_replace {
+    name = PART, position = P(0, FREP + 2), force = "player", direction = N,
+  }
+  log(string.format("[BBB-EDGE] frep-can what=part-over-belt value=%s",
+    tostring(can)))
+  local made = can and s.create_entity {
+    name = PART, position = P(0, FREP + 2), force = "player",
+    fast_replace = true, raise_built = true,
+  } or nil
+  log(string.format("[BBB-EDGE] frep-fwd created=%s belt-left=%s part-there=%s",
+    tostring(made ~= nil),
+    tostring(at(s, 0, FREP + 2, { type = "transport-belt" }) ~= nil),
+    tostring(at(s, 0, FREP + 2, { name = PART }) ~= nil)))
+  frep_sweep("fwd", FREP - 3, FREP + 5)
+  log("[BBB-EDGE] frep-fwd end")
+end
+
+-- THE REFUSAL: a part that carries an edge interface cannot be belt-replaced,
+-- because `bbb-linked-belt` is a belt-connectable standing on that same tile.
+-- `can_fast_replace` is the engine's answer to a PLAYER and it is the assertion.
+--
+-- `create_entity` does not ask that question -- it mines the part and only then
+-- discovers it cannot place the belt -- so the part is put back. A player cannot
+-- reach that state and a phantom left standing here would be an artefact in
+-- every audit after it rather than the thing under test.
+local function p_frep_edge()
+  local s = surf()
+  log("[BBB-EDGE] frep-edge begin")
+  log(string.format("[BBB-EDGE] frep-can what=belt-over-edge-part value=%s",
+    tostring(s.can_fast_replace {
+      name = BELT, position = P(0, FREPB), force = "player", direction = S })))
+  local made = s.create_entity {
+    name = BELT, position = P(0, FREPB), direction = S, force = "player",
+    fast_replace = true, raise_built = true,
+  }
+  local still = at(s, 0, FREPB, { name = PART })
+  log(string.format("[BBB-EDGE] frep-edge created=%s part-survived=%s",
+    tostring(made ~= nil), tostring(still ~= nil)))
+  if not still then
+    s.create_entity { name = PART, position = P(0, FREPB), force = "player" }
+  end
+  frep_sweep("edge", FREPB - 3, FREPB + 7)
+  log("[BBB-EDGE] frep-edge end")
+end
+
+-- REVERSE: a south-facing belt onto an INTERIOR part, which splits the column
+-- into a two-part cluster above and a one-part cluster below, with the new belt
+-- an OUTPUT of the first and an INPUT of the second.
+--
+-- Nothing tells the guest this happened except the belt's own build event, so
+-- without guest/go/fastreplace.go the registry keeps four parts in one cluster,
+-- the belt is INTERIOR and therefore never classified, the fingerprint never
+-- moves, and nothing at all is rebuilt.
+local function p_frep_reverse()
+  local s = surf()
+  log("[BBB-EDGE] frep-rev begin")
+  local can = s.can_fast_replace {
+    name = BELT, position = P(0, FREPB + 2), force = "player", direction = S,
+  }
+  log(string.format("[BBB-EDGE] frep-can what=belt-over-interior-part value=%s",
+    tostring(can)))
+  local made = can and s.create_entity {
+    name = BELT, position = P(0, FREPB + 2), direction = S, force = "player",
+    fast_replace = true, raise_built = true,
+  } or nil
+  log(string.format("[BBB-EDGE] frep-rev created=%s part-left=%s belt-there=%s",
+    tostring(made ~= nil),
+    tostring(at(s, 0, FREPB + 2, { name = PART }) ~= nil),
+    tostring(at(s, 0, FREPB + 2, { type = "transport-belt" }) ~= nil)))
+  frep_sweep("rev", FREPB - 3, FREPB + 7)
+  log("[BBB-EDGE] frep-rev end")
+end
+
 local function report(tag)
   local names = {}
   for name in pairs(storage.out) do names[#names + 1] = name end
@@ -1070,7 +1280,37 @@ local ONE_OFFS = {
   [CHN_END + 2656] = function() brdg_report("back-close") end,
   [CHN_END + 2660] = function() audit_and_count("post-brdg-final") end,
 
-  [CHN_END + 2664] = function() log("[BBB-EDGE] done") end,
+  -- FAST REPLACE, after everything else, and that is deliberate: these two rigs
+  -- are BUILT HERE rather than in on_init so that every baseline above -- the
+  -- fifteen clusters, the ninety-five parts, the placement-probe counts -- is a
+  -- statement about the same world it has always been about. Only the tags below
+  -- see the frep rigs at all.
+  [CHN_END + 2680] = p_frep_build,
+  -- Three hundred and twenty ticks to fill: source chest, loader, four belts, a
+  -- P=2 hidden network and three more belts before the first item reaches a
+  -- chest.
+  [CHN_END + 3000] = function()
+    audit_and_count("frep-built"); report("frep-before-open")
+  end,
+  [CHN_END + 3350] = function() report("frep-before-close") end,
+  [CHN_END + 3354] = function() audit_and_count("pre-frep") end,
+  [CHN_END + 3358] = p_frep_forward,
+  [CHN_END + 3362] = function() audit_and_count("post-frep-fwd") end,
+  [CHN_END + 3366] = p_frep_edge,
+  [CHN_END + 3370] = function() audit_and_count("post-frep-edge") end,
+  [CHN_END + 3374] = p_frep_reverse,
+  [CHN_END + 3378] = function() audit_and_count("post-frep-rev") end,
+  -- The after-window opens 162 ticks past the last edit and is the same length
+  -- as the before-window, so the two are a ratio. A rebuild puts every
+  -- reinserted item back at the HEAD of the butterfly, so an output is briefly
+  -- starved by construction -- the same reason the brdg recovery window waits.
+  [CHN_END + 3540] = function() report("frep-after-open") end,
+  [CHN_END + 3890] = function() report("frep-after-close") end,
+  [CHN_END + 3894] = function()
+    audit_and_count("frep-final"); probe_placement("frep")
+  end,
+
+  [CHN_END + 3898] = function() log("[BBB-EDGE] done") end,
 }
 
 --------------------------------------------------------------------------------
@@ -1203,6 +1443,20 @@ script.on_init(function()
     put(s, LOADER, 0, foot + 2, { direction = S, type = "input" })
     storage.brdg_b = s.create_entity {
       name = "steel-chest", position = P(0, foot + 3), force = "player",
+    }
+  end
+
+  -- THE FAST-REPLACE RIGS' SOURCE CHESTS, AND NOTHING ELSE OF THEM. The rigs
+  -- themselves are built at CHN_END + 2680 so that no baseline above moves, but
+  -- their stock has to be inside the conserved total from t=0: `count_all` is
+  -- the instrument this whole suite rests on, and twenty-four thousand items
+  -- appearing in it halfway through would read as the mod minting matter.
+  for _, y in ipairs { FREP, FREP + 1, FREP + 2, FREPB, FREPB + 3 } do
+    local c = s.create_entity {
+      name = "steel-chest", position = P(-6, y), force = "player",
+    }
+    c.get_inventory(defines.inventory.chest).insert {
+      name = "iron-plate", count = STOCK,
     }
   end
 

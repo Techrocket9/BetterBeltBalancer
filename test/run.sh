@@ -251,7 +251,7 @@ for suite in $SUITES; do
       # ground-item total and the recompile tags must read zero.
       echo "=== edge: mid-operation churn, merges, splits and forces ==="
       stage "$TMP/edge" bbb-edge-test
-      run "$TMP/edge" "${BBB_EDGE_TICKS:-4650}"
+      run "$TMP/edge" "${BBB_EDGE_TICKS:-5850}"
       echo "==> asserting conservation and the edge cases"
       python3 "$ROOT/test/assert-edge.py" "$TMP/edge/create.log" "$TMP/edge/run.log"
       ;;

@@ -495,6 +495,16 @@ func onEventBody(id, ptr uint32) {
 		return
 	}
 
+	// A BELT-CONNECTABLE APPEARING ON A PART'S TILE MEANS THE PART IS GONE, and
+	// nothing else says so: `fast_replaceable_group` is symmetric, so the line
+	// that lets a part replace a belt lets a belt replace a part -- and the
+	// engine raises no event at all for the entity it replaced. One tile lookup
+	// on the appearance path, a host call only on a hit, and it runs BEFORE the
+	// neighbourhood walk below so that walk sees the registry the removal left.
+	// See fastreplace.go.
+	if what == evAppear {
+		reapFastReplaced(si, floorTile(pos.X), floorTile(pos.Y), builtBy)
+	}
 	onNeighbour(si, pos.X, pos.Y, minedBy, builtBy)
 }
 

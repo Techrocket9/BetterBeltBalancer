@@ -124,6 +124,13 @@ guest/go/                the Go guest, its own module (//go:wasmimport is
                          STRANDED list, the one place in this guest where
                          `nets` holds a network under a key that is no longer a
                          root. Read its header before moving either call.
+                         fastreplace.go is the OTHER HALF of the one data-stage
+                         line that lets a part be placed over a belt: a
+                         fast-replaceable group is symmetric, so a BELT can be
+                         laid on a part -- and the engine raises no event at all
+                         for the part it destroys, so without the check there
+                         the registry keeps a tile it calls a part which is
+                         holding somebody's belt ("Fast replace").
                          host.go is DELETED: it wrote out the one host call the
                          generated binding could not make, and the binding can
                          make it now (FKLUA-GAPS.md item 16)
@@ -783,6 +790,7 @@ An unverified path is not a tested path, and the list is short but real:
 | `on_pre_surface_cleared` / `on_surface_cleared` | **Implemented, not separately exercised.** They share `dropSurface` and `hiddenSurfaceGone` with the delete pair, which are exercised. |
 | **the miner's pocket** — a player mining a balancer keeps what the network was holding | **Implemented; only the TRIGGER is unverifiable headlessly, and that is narrower than it was.** The wall is measured rather than quoted: a headless `--create` has no players, so `game.get_player(1)` is nil (`players=0`), and `on_player_mined_entity` is not raiseable — `script.raise_event` refuses it outright, *"on_player_mined_entity (ID 74) can't be raised through script"*. **The `edge` suite asserts both refusals**, so the day either falls the run fails and asks for the real test. Since the 2026-08-02 field report the suite ALSO pins the two halves that never needed a player: the **insert arithmetic**, asked of a steel chest through the same `insertOne` from inside the same deferred flush (`bbb-insert-probe`, four legs, guest and Lua numbers cross-checked), and the **quantity** — a saturated balancer taken apart one part per tick, 118 items that a player now receives instead of the floor, and, since the second field report, an output belt laid on a running balancer and mined again, 128 more. Since the force correction it also pins the **claim predicate**: which network a claim belongs to is pure guest logic, so it lives in `guest/go/carry` and `make check` proves it — including the two-force overlapping-box case the shipped code got wrong, and the tile a mine BESIDE a network is claimed under, which is the second report's own trap. Plus the fallback and the negative as before. **What is behind the wall is one line of policy and no arithmetic**, which is exactly what the two reports were about: both were the list of removals that get a beneficiary being narrower than the sentence describing it. See "The miner's pocket" and "A mine beside a machine is a mine of that machine". |
 | **the over-limit feedback** — a player told their balancer is full, and handed the belt back | **Implemented; only the TRIGGER is unverifiable headlessly, and it is the same wall as the pocket's.** A headless `--create` has no players, so `game.get_player` resolves to nothing and `revertOne` returns before it mines anything — which means the flying text, the `utility/cannot_build` sound and the hand-back cannot fire in any suite. Everything ELSE about the pass is pinned by the `edge` suite's `lim` leg: the refusal happening before the teardown (0 items on the ground where the unfixed guest put 1,690), the standing network still delivering at its old rate across the edit, the audit's `drift=1 unbuilt=0`, the feedback gate firing **exactly once** per distinct edge state rather than once per audit, and the ROBOT arm of the feedback end to end — every headless build is a script build, so the fork always takes `force.print`, and the suite asserts that the LocalisedString crossed and the `LuaForce` resolved. Plus the negative, which is the half with teeth: **zero pieces handed back over the whole run**, so a revert firing for a script build fails. Since 2026-08-05 the same holds for the MERGE form -- the `brdg` leg refuses a bridge between two working balancers and the same trigger is the same one line behind the same wall. See "The sixty-fifth belt" and "The merge that would be over the limit". |
+| **the FAST-REPLACE gesture** — a part placed over a belt, and a belt placed over a part | **Implemented; only the CURSOR is unverifiable headlessly, and that is a narrower wall than the pocket's.** `create_entity{fast_replace = true}` is not a player: handed a replace the engine would refuse it falls back to CREATING, so the `edge` suite's `frepa`/`frepb` rigs ask `can_fast_replace` first and drive only what a cursor could. Everything that is not the cursor is pinned there — the engine's own `can_fast_replace` answers in both directions and on an interface-carrying part, the belt really being gone and the part really being registered, the 3→3 network that results balancing to 0.00%, the reverse SPLIT reaching the registry (`15 clusters / 95 parts, drift=0 unbuilt=0`), and the guest's own removal line firing exactly once. What a human still has to see is the preview over the cursor and the replaced piece arriving in an INVENTORY rather than on the ground; a script build has no player, so every headless number here is the spill arm. See "Fast replace". |
 | ~~A real second guest BUILD~~ | **Now verified.** This used to read "the same code path to the byte, because this mod exports no `fk_migrate`". It exports one now, so the `upg` suite's build-stamp bump reaches `on_configuration_changed`, the hook, and a rebuild driven by it -- and `assert-upgrade.py` asserts the guest was told *and* that the notification, not the first-event fallback, is what ran the scan. What is still not exercised is `fk_migrate_adopt`, which this mod must never export. |
 
 ### `upg` -- `test/assert-upgrade.py`, then M2's own assertions again
@@ -893,6 +901,14 @@ sixteen parts each (thirty-two inputs and one output apiece, P = 32) with one
 tile between them, which is the merge shape "The sixty-fifth belt" left
 uncovered. Neither of the last two is about items.
 
+**And that baseline did not move when fast replace added two more rigs**, which
+is worth a sentence because every rig before them cost the whole table a
+re-record. `frepa` and `frepb` are BUILT MID-RUN, after the last of the
+assertions above has been made — only their source chests exist from `on_init`,
+so the conserved total never rises — and every count, every audit and every
+placement sample before them is the number it has always been. Anything added
+here later should do the same unless it has a reason not to.
+
 | what is done to a full network | what came out |
 |---|---|
 | **100 add-part / remove-part cycles** on a balancer whose outputs are DEAD-ENDED, so its hidden network is full and stays full | 200 teardowns, median **72 items handed back each**, **0 lost**, **0 on the ground** (it was **1,833**), the count never rose, `drift=0 unbuilt=0` on all 100 audits, fifteen clusters of ninety-five parts back every cycle |
@@ -921,6 +937,9 @@ uncovered. Neither of the last two is about items.
 | **and that belt mined off again** | the edge list is back to sixty-four, which is the fingerprint the `netInfo` already holds, so the compile is a **SKIP**: `drift=0`, and nothing was rebuilt because nothing was ever torn down |
 | **A PART BRIDGING TWO WORKING BALANCERS into one that is over the limit** — `brdg`, 32+32 inputs plus the gap tile's own two, so 66 over 2 | the merge is refused with **0 teardowns, 0 builds and 0 spills in the dispatch**: **0 items on the ground** (it was **1,814**), the conserved total unmoved, and both halves still delivering **184 and 184 items over 246 ticks against 186 and 185 before** (it was 8 and 8). The audit reports `nets=12 drift=1 unbuilt=0` — every standing network COUNTED, including the two now keyed by roots that are not roots — and says the same thing at all four samples while the refusal stands. **Exactly one** `alert:` |
 | **and that part mined off again** | both halves' fingerprints are the ones their `netInfo`s never lost, so both compiles are a **SKIP**: `drift=0`, **0 teardowns and 0 builds**, and nothing reached the ground on the way back either |
+| **A PART FAST-REPLACED ONTO A BELT** of a live line running past a saturated balancer — `frepa` | the belt is gone, the part is registered, the cluster is 2 → 3 parts, and the **3→3 network it became delivers 262 262 262 over 350 ticks, 0.00% spread**. The belt and its eight items are handed back to the ground (no player), and nothing else moves |
+| **A BELT FAST-REPLACED ONTO AN INTERIOR PART** — `frepb`, and the half the engine tells nobody about | the four-part column SPLITS: 14 clusters / 96 parts → **15 / 95, drift=0 unbuilt=0**, the guest logging its own removal **exactly once**, the part handed back onto the belt that replaced it, and both halves still delivering. Without `fastreplace.go` it is **14 / 96** — a tile the registry calls a part with a player's belt standing on it |
+| **and a belt over a part that CARRIES an interface** | refused: `can_fast_replace` is false, because `bbb-linked-belt` is a belt-connectable on that same tile |
 
 **Zero spills over the whole run except THREE WINDOWS, and the suite fails on a
 fourth.** The windows are the dissolve (1 spill, 118 items), the by-hand
@@ -2252,6 +2271,233 @@ administrator's keypress — and covering them means the same decision in the
 middle of two paths whose whole design is a wholesale rewrite. Written down
 rather than done; `agents/maxports.md` §5 carries it too.
 
+<!-- ============================ FAST REPLACE ============================ -->
+
+## Fast replace — a part goes over a belt, and a belt goes over a part
+
+**A balancer part can be placed over a piece of belt now, the way a vanilla
+splitter can.** It is one data-stage line and one guest check, and the two halves
+are not the same size at all: the line is the whole feature, and the check is the
+whole risk.
+
+```lua
+fast_replaceable_group = "transport-belt",   -- mod-data/prototypes/entity.lua
+```
+
+That string is base's own group for **every transport belt, underground belt,
+splitter and lane splitter** (`data/base/prototypes/entity/transport-belts.lua`;
+loaders are `"loader"` and linked belts are `"linked-belts"`, so neither is
+touched). `fast_replaceable_group` is an `EntityPrototype` property, so a
+`simple-entity-with-force` may carry one — checked against the pinned
+`prototype-api.json` rather than assumed.
+
+**THE COLLISION MASK DID NOT MOVE AND MUST NOT.** `transport_belt` is still in
+it, which is what stops a player laying a belt THROUGH a balancer; fast replace
+is an exception the engine makes for the entity being REPLACED and for nothing
+else. `can_place_entity` for a part over a belt is still **false** after the
+change, and `can_fast_replace` is what went true. Measured, both before and
+after.
+
+### What the engine actually does, measured
+
+Probed on Factorio 2.0.77, base only, with a scratch mod. `can_fast_replace` is
+the question a player's cursor asks, so it is the one the table is about.
+
+| the cursor holds | over | before the line | after |
+|---|---|---|---|
+| a balancer part | a transport belt | false | **true** |
+| a balancer part | an underground belt end | false | **true** |
+| a balancer part | a lane splitter | false | **true** |
+| a balancer part | a splitter | false | false (two tiles wide) |
+| a balancer part | a loader | false | false (another group) |
+| a belt / underground / lane splitter | a part with **no** interface on its tile | false | **true** |
+| a splitter or a loader | a part | false | false |
+| any of them | a part that **carries an edge interface** | false | **false** |
+
+The last row is the one that shapes everything below. `bbb-linked-belt` is a
+belt-connectable standing on the cluster's own tile, and a vanilla belt collides
+with it — so a part with any edge against it cannot be belt-replaced, and the
+reverse gesture reaches interior parts only. That is a consequence rather than a
+design, and it is written down instead of fought.
+
+**And the four hidden prototypes really do stay out of it, though not for the
+reason `hidden.lua` gives.** `strip()` sets `fast_replaceable_group = nil`, and
+the engine does not read that as "no group": it defaults an entity with no
+declared group to a **singleton group named after itself**, which is what the
+runtime reports for all four (`bbb-linked-belt` → `bbb-linked-belt`, and so on)
+and what it reported for the part before this change. Either reading gives the
+same answer — none of them shares a group with a belt or with the part — and
+`can_fast_replace` is false for every one of them, which is the authority.
+
+**The upgrade planner cannot pair a part with a belt.** Two entities are upgrades
+of each other only with the same group, the same collision BOX and the same
+collision MASK. The masks are identical
+(`floor+meltable+object+transport_belt+water_tile`, measured); the boxes are not
+— the part is ±0.35 and every belt is ±0.4 — so the box is the only thing keeping
+them apart, and it is worth knowing that it is what is doing the work.
+
+**`create_entity{fast_replace = true}` is not the gesture and must not be used as
+one.** Handed a replace the engine would refuse, it falls back to CREATING, and a
+`simple-entity-with-force` is created whatever it collides with — so a script
+gets a part and a belt on one tile. Worse in the other direction: over a part
+that carries an interface it **mines the part and then fails to place the belt**,
+returning nil and leaving neither. The `edge` suite's rigs therefore ask
+`can_fast_replace` first and build only when the answer is yes, and the one leg
+that deliberately drives the refusal puts the part back afterwards.
+
+### The forward direction needs no guest code, and that is a property rather than luck
+
+The engine mines the belt before it creates the part, so the build event arrives
+in a world the belt has already left; `AddPart` registers the part inside the
+event and the compiler re-reads the world from the deferred flush a tick later
+("THE REMOVAL WINDOW IS GONE", compile.go). Whether a PLAYER's fast replace also
+raises a mine event for the belt is unknown and does not matter: a mine on that
+tile reaches `onNeighbour`, which records a claim and queues the cluster, and
+both orderings end in the same recompile.
+
+### The reverse direction is what `guest/go/fastreplace.go` is for
+
+**A fast-replaceable group is symmetric.** The same line that lets a part replace
+a belt lets a belt replace a part, and the engine raises **no event at all** for
+the part it destroys. Measured, with a script standing in for the gesture: the
+only event in the whole dispatch is the BUILD event for the belt.
+
+So without a check the registry keeps a **phantom** — a tile it calls a balancer
+part which is holding somebody's belt. Measured on the guest before the file
+existed: three parts became two in the world and the audit went on reporting
+`parts=3 drift=0 unbuilt=0`, because a phantom tile is INTERIOR, the belt
+standing on it is never classified, and the fingerprint therefore never moves.
+The cluster is then wrong for the rest of the session: **the belt a player laid
+does nothing at all**, and the tile is inside the box every teardown of that
+cluster sweeps.
+
+**The check is one map probe on the appearance path and a host call only on a
+hit.** Is the appearing belt-connectable's own tile a registered part tile — the
+centre of the 5×5 neighbourhood `onNeighbour` walks anyway — and if so, is that
+part still standing? In ordinary play the first answer is always no, because the
+part's collision mask carries `transport_belt` and the only way a belt reaches a
+part's tile is by replacing the part.
+
+**It is correct under every event ordering**, which matters because a headless
+run cannot say what a PLAYER's fast replace raises (there is no player in a
+`--create`, and the `edge` suite's existing probe asserts both walls). No mine
+event — the check removes the part. The mine event FIRST — `onPart` has already
+removed it, the tile lookup misses, and no host call is made. The build first and
+the mine after — the check removes it, and `removePart` on an unregistered tile
+is a no-op. All three end in the same registry.
+
+**Who is credited is `builtBy`**, the player who placed the belt: a fast replace
+hands the replaced entity to the player doing the replacing, so if the shrinking
+machine cannot take back everything it was holding, that player is the one the
+overflow belongs to. It is the miner's pocket's rule (carry.go) reached through
+the other door, and `RemovePartMinedBy` is literally the same call `onPart` makes
+for a mine.
+
+### The consequence a player will meet, stated rather than hidden
+
+**Dragging a belt line across a balancer replaces the parts it can.** A drag is a
+sequence of builds and each one is subject to the same check, so a belt dragged
+over a balancer takes out every part with no belt against any of its free faces
+and is refused on the rest. That is exactly what vanilla does when a belt is
+dragged over a splitter, it is the price of the group being one string in both
+directions, and it is recoverable: the parts arrive in the inventory as items and
+the machine recompiles around what is left. A balancer whose every part carries
+an edge is immune by construction.
+
+### Verified, and the two red proofs
+
+Two rigs in the `edge` suite, `frepa` and `frepb`, and they are the only rigs in
+that suite **built mid-run** — after the last of its existing assertions has been
+made, so that not one baseline in it moved. Their source chests and their stock
+are created in `on_init` all the same, because `count_all` is a conserved
+quantity and inserting twenty-four thousand items into it halfway through would
+read as this mod minting matter.
+
+| | measured |
+|---|---|
+| **forward**: a part dropped onto a belt of a live line beside a saturated 2-part balancer | `can_fast_replace` **true**, the belt gone, the part registered, the cluster 2 → 3 parts |
+| ...and what it handed back | `express-transport-belt` ×1 and the belt's eight iron plates, on the ground; the conserved total unmoved once the engine's own machine item is taken out of it |
+| ...and the balancer it became | **3 → 3 over four ports, 262 262 262 over 350 ticks, 0.00% spread** |
+| **reverse**: a belt laid on an interior part of a four-part column | `can_fast_replace` **true**, the part gone, the belt on the tile, the part item handed back **onto the belt that replaced it** |
+| ...and the registry | 14 clusters / 96 parts → **15 clusters / 95 parts, drift=0 unbuilt=0**: the column SPLIT, and the new belt is an output of the upper half and an input of the lower one |
+| ...and the guest said so | `a belt-connectable fast-replaced the part at 0,418`, **exactly once** |
+| ...and the column kept running | `[262, 262]` → `[132, 264]`, 76% — see below |
+| **the refusal**: a belt over a part carrying an interface | `can_fast_replace` **false**; `create_entity` ignoring that returns nil and mines the part anyway, which the rig repairs |
+| spills, ground items and `[BBB] error:` across the whole leg | **0**, **0** and **0** |
+
+**The column delivers less after the split and that is the correct answer.**
+Before: two independent belts in and two out, 2.0 belts. After: the lower cluster
+has TWO inputs — its own belt and the one coming down from upstairs — and one
+output, and a balancer equalises its inputs, so it draws half a belt from each
+and delivers 1.0, while the upper splits its one belt between its own output and
+the belt feeding downstairs and delivers 0.5. 1.5 belts of 2.0. The bound is set
+at 70% knowing that; what may not happen is a half that STOPS.
+
+**RED PROOF 1, the data-stage line.** Remove `fast_replaceable_group` and
+rebuild: all three `can_fast_replace` answers come back **false**, the rigs
+correctly do nothing, and the suite fails with
+
+    FAIL: post-frep-fwd: the guest saw 14 clusters of 95 parts, expected 14 of 96
+
+**RED PROOF 2, the guest check.** Put the line back and make `reapFastReplaced`
+return immediately: the belt is created, the part is gone from the world, and
+
+    FAIL: post-frep-rev: the guest saw 14 clusters of 96 parts, expected 15 of 95
+
+with `frepb` going on delivering `[264, 264]` — unchanged, because nothing was
+rebuilt and the belt is inert. That is the phantom, and it is what a player would
+be left with.
+
+### What is interactive, and it is one gesture in two directions
+
+The trigger is behind the same wall as the miner's pocket and the over-limit
+hand-back: a `--create` has no player, so nothing headless can make a CURSOR do
+this. `test/interactive/` stages gesture **E** for it (`make interactive-install`;
+[`test/interactive/README.md`](test/interactive/README.md) is the checklist), and
+the rig's tiles are verified headlessly so the coordinates in it are not a guess:
+
+    part-over-belt(20,86)=true    at=[express-transport-belt]
+    belt-over-part(20,89)=false   at=[bbb-balancer-part,bbb-linked-belt,bbb-linked-belt]
+    belt-over-part(20,90)=true    at=[bbb-balancer-part]
+    belt-over-part(20,91)=true    at=[bbb-balancer-part]
+    belt-over-part(20,92)=false   at=[bbb-balancer-part,bbb-linked-belt,bbb-linked-belt]
+
+What a human has to see: the fast-replace preview rather than a red block over a
+belt; the belt and its cargo arriving in the INVENTORY rather than on the ground
+(a script build has no player, so every headless number here is the spill arm);
+the reverse gesture handing the PART back the same way; and the refusal over the
+parts that carry interfaces. Grep for `a belt-connectable fast-replaced the part
+at` and for `compiled cluster … 3->3`.
+
+### What it costs
+
+Package built 2026-08-16, shipped config (`--persist=packed --gc=collected`):
+
+| | before | after | |
+|---|--:|--:|---|
+| `dist/better-belt-balancer_0.1.0.zip` | 327,613 B | **330,778 B** | +0.97% |
+| `fk_module.lua` | 2,534,887 B | **2,559,428 B** | +0.97% |
+| `dist/bbb.wasm` | 1,106,413 B | 1,114,847 B | |
+| members bound into the mod | 42 | **42** | of 4,257 — none added |
+
+`LuaSurface.find_entity` was already bound (limit.go's revert uses it), so
+nothing new crosses the boundary and `make check` needed no re-pin.
+
+**Nothing on any hot path moves, and that is measured rather than argued.** The
+`mar` suite's seven per-operation slopes under `-gc=leaking` came back
+**identical to the byte** — 1,216 / 352 / 1,180 / 32 / 736 / 3,736 / 1,712 B and
+3.92 MiB of linear memory — which is the gate a check that runs for every belt
+built anywhere on the map has to clear. Leg D (a belt laid 18 tiles from
+anything) is 32 B and leg B (a belt laid inside the neighbour gate) is 352 B,
+both unmoved: a `map[key]uint32` point query allocates nothing.
+
+The `edge` suite is 4,650 → 5,850 ticks and still runs in about fifteen seconds.
+Its placement probe is **191 / 191 / 196 / 197 / 180 / 180, 0 off a part tile**,
+byte-identical to the run before this pass, plus one new `frep` sample at 192 —
+which is what building the rigs late buys.
+
+<!-- ========================== END FAST REPLACE ========================== -->
+
 ## Status
 
 Design fixed 2026-07-31: **compile, don't interpret** -- balancer clusters compile
@@ -2283,6 +2529,7 @@ measured rather than asserted:
 | **...and a player who mines one keeps them** | Any removal a player caused — a part mined, a shrink as much as the dissolve, and since the second field report **a belt mined at the machine's edge** — offers whatever no network could take to that player before the ground, like mining a vanilla machine. Only the TRIGGER needs a player; the insert arithmetic, the claim identity and both quantities (118 items taking a balancer apart by hand, 128 mining an output belt off one) are pinned headlessly by `go test ./carry/` and the `edge` suite. "The miner's pocket" |
 | **...and one it cannot build is refused without demolishing the one that works** | A 65th belt against a 64-port balancer is refused BEFORE the teardown: 0 items on the ground where the unfixed guest put 1,690, the standing network delivering 184 items over 246 ticks before the edit and 185 after, and the player told, with the belt back in their inventory. "The sixty-fifth belt" |
 | **...or the TWO that work** | A part bridging two working balancers into one that is over the limit is refused before their teardowns too, which are `AddPart`'s and not the compiler's: 0 items on the ground where the unfixed guest put 1,814, both halves still delivering 184 and 184 against 186 and 185 across the edit, and mining the part back out costing 0 teardowns and 0 builds. "The merge that would be over the limit" |
+| **...and a part clicks over a belt like a splitter does** | `fast_replaceable_group = "transport-belt"` on the part, which is base's own group: a balancer can be dropped straight into a belt line you already have, and the belt goes to the player. The group is symmetric, so a belt laid on a part replaces it too — and the engine raises NO event for the part it destroys, which is the whole of `guest/go/fastreplace.go`. "Fast replace" |
 | **Nothing the compiler places draws anything** | The hidden prototypes are clones of base belts and kept base's pictures — including a three-by-three linked-belt `structure` on the one prototype that stands where a player looks. All four are blanked, and the `edge` suite asserts the structural half: 180–197 visible-surface entities of ours, **every one on a registered part tile, 0 off one**, across six samples. "The tan streak" |
 | **Its long-game cost is measured, not assumed** | Every net-zero world operation's permanent-heap slope, flat over hundreds of iterations, a 300-hour projection built on it, and — since 2026-08-02 — the one stall that projection predicted, measured at **782 ms** and then removed by shipping `--gc=collected`. See "The marathon save" and "The third decision" |
 | **It is not shipped** | No mod-portal release, no play-testing outside the suites, placeholder-quality (computed) art. Licensed MIT (`LICENSE`, 2026-08-15) |
@@ -2427,9 +2674,9 @@ conservation exact, while a `kindAt` that always answers candidate 0 fires
 profile byte-identical to the healthy run and the item total unmoved at 704.
 
 
-**And verified 2026-08-05 after the OVER-LIMIT MERGE PASS**, which is the last
-thing this file records — "The merge that would be over the limit", the shape the
-pass above shipped with a note saying it did not cover. `make check` green,
+**And verified 2026-08-05 after the OVER-LIMIT MERGE PASS** — "The merge that
+would be over the limit", the shape the pass above shipped with a note saying it
+did not cover. `make check` green,
 sprite checker green, **all eight suites green in BOTH arms**, and the leaking
 arm's seven slopes back **identical to the byte** (1,216 / 352 / 1,180 / 32 /
 736 / 3,736 / 1,712 B and 3.92 MiB) — which is the gate this pass had to clear
@@ -2447,6 +2694,29 @@ total conserved to the item throughout, which is why eight suites were green ove
 it. Shipped zip 310,628 → **316,749 B** (+1.97%), `fk_module.lua` 2,432,188 →
 **2,516,161 B** (+3.45%), members **42, none added**.
 
+**And verified 2026-08-16 after the FAST-REPLACE PASS** ("Fast replace"), which
+is the last thing this file records. `make check` green, sprite checker green,
+**all eight suites green in BOTH arms from clean**, and the leaking arm's seven
+slopes back **identical to the byte** (1,216 / 352 / 1,180 / 32 / 736 / 3,736 /
+1,712 B and 3.92 MiB) — which is the gate this pass had above all others, because
+the check it adds runs for every belt-connectable built anywhere on the map. It
+is a `map[key]uint32` point query and allocates nothing, and leg D (a belt laid
+18 tiles from anything, 32 B) and leg B (a belt inside the neighbour gate,
+352 B) say so.
+
+**No other suite's numbers moved, and neither did the `edge` suite's**, which is
+the unusual part and was the point of building `frepa` and `frepb` mid-run: its
+baseline is still fifteen clusters over ninety-five parts and its placement probe
+is still 191 / 191 / 196 / 197 / 180 / 180 with 0 off a part tile, plus one new
+`frep` sample at 192. The suite went 4,650 → 5,850 ticks and still runs in about
+fifteen seconds. Two red proofs, and they fail on different tags: without the
+prototype line `post-frep-fwd` reports 14 clusters of 95 parts against 14 of 96,
+and with the line but without `reapFastReplaced` `post-frep-rev` reports 14 of 96
+against 15 of 95 — the phantom, with the column still delivering `[264, 264]`
+because the belt a player laid is inert. Shipped zip 327,613 → **330,778 B**
+(+0.97%), `fk_module.lua` 2,534,887 → **2,559,428 B** (+0.97%), members **42,
+none added**.
+
 **What a future session should pick up first**, in order:
 
 1. **A licence.** Nothing can be released without one, and FkLua is in the same
@@ -2463,10 +2733,10 @@ it. Shipped zip 310,628 → **316,749 B** (+1.97%), `fk_module.lua` 2,432,188 �
    collector's own code, emitted — but it is what a mod-portal release will be
    judged on, and it is the first thing to re-measure if upstream's emitter
    changes.
-4. **The five unverifiable paths** in "What M3 implements and does NOT verify" —
+4. **The six unverifiable paths** in "What M3 implements and does NOT verify" —
    undo/redo application, the two player-rotation events, the space-platform
-   build/mine events, the miner's pocket's TRIGGER and, since 2026-08-04, the
-   over-limit feedback's. Each needs a player or a
+   build/mine events, the miner's pocket's TRIGGER, the over-limit feedback's
+   and, since 2026-08-16, the FAST-REPLACE cursor. Each needs a player or a
    platform hub that a headless `--create` does not have; none is a code gap. The
    pocket is the one a user can check in thirty seconds of interactive play and
    it is worth doing before a release. Two gestures, one per field report: mine a
@@ -2479,9 +2749,14 @@ it. Shipped zip 310,628 → **316,749 B** (+1.97%), `fk_module.lua` 2,432,188 �
    A fourth, for the merge shape: put a part in the one-tile gap between two
    balancers whose belts add up to more than sixty-four and check that BOTH of
    them keep running and that the part comes back to your inventory ("The merge
-   that would be over the limit"). **All four gestures are pre-staged now**:
+   that would be over the limit"). A fifth, for FAST REPLACE, in both
+   directions: drop a balancer part onto a belt of a running line and check that
+   the belt and its cargo arrive in your inventory, then lay a belt on an
+   interior part of a balancer and check that the PART does — and that the same
+   belt is refused over a part carrying an edge interface ("Fast replace").
+   **All five gestures are pre-staged now**:
    `make interactive-install` puts a rig-staging mod beside the real one, a
-   fresh world spawns you next to the four rigs with the pieces in hand, and
+   fresh world spawns you next to the five rigs with the pieces in hand, and
    [`test/interactive/README.md`](test/interactive/README.md) is the checklist
    with the log line each gesture must produce.
    **Those reports are also the standing warning about this list**: the pocket sat on it for one commit, a

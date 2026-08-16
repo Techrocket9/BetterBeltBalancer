@@ -57,6 +57,26 @@ one that would be over the limit is refused the same way, with both left
 running. [`agents/maxports.md`](agents/maxports.md) records what raising the
 limit would take.
 
+## Fast replace
+
+Balancer parts share base's `transport-belt` fast-replace group, so a part held
+over a belt, an underground belt end or a lane splitter replaces it the way a
+splitter does: the belt and whatever it was carrying go to your inventory and the
+part takes the tile. Dropping a balancer straight into a belt line you already
+have is one click per tile. Splitters and loaders are not replaced this way (a
+splitter is two tiles wide, and loaders are a different group).
+
+The group works in both directions, so a belt held over a part replaces the part.
+Only parts with no belt against any of their free faces can be replaced that way:
+a part on the edge of a balancer carries the hidden interface that connects it to
+your belt, and that interface blocks the placement. Dragging a belt line across a
+balancer therefore takes out the parts in the middle and is refused at the edges,
+exactly as dragging a belt across a splitter does in the base game. The parts come
+back as items and the balancer recompiles around what is left.
+
+The collision mask is unchanged: a belt still cannot be laid *through* a
+balancer, only fast-replaced onto one part at a time.
+
 ## Performance
 
 Measured on Factorio 2.0.77 headless, base only, Apple M3 Pro, against
@@ -151,7 +171,7 @@ Factorio, and asserts against the guest's own log lines. Two build switches:
 | `guest/go/` | the Go guest; `plan/` is the network planner, `fkapi/` the generated FkLua bindings |
 | `mod-data/` | the hand-written data stage: prototypes, graphics, locale |
 | [`bench/`](bench/README.md) | the head-to-head benchmark harness, its setup mod and the results |
-| `test/` | the eight headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the four player gestures a headless run cannot make |
+| `test/` | the eight headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the five player gestures a headless run cannot make |
 | `fklua.toml` | mod identity, the API pin (2.0.77), guest language and GC mode |
 | `CLAUDE.md`, `agents/` | maintainer design notes and the full measurement record |
 

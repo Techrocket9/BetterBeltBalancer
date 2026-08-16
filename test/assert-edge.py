@@ -105,6 +105,24 @@ TOLDFORCE = re.compile(
     r"(.*)$"
 )
 HANDBACKFAIL = re.compile(r"\[BBB\] alert: player (\d+) could not be handed back")
+# FAST REPLACE. The `frep-can` lines are the ENGINE's own answer to the question
+# a player's cursor asks; the rest is what actually happened to the world.
+FREPCAN = re.compile(r"\[BBB-EDGE\] frep-can what=(\S+) value=(\S+)")
+FREPFWD = re.compile(
+    r"\[BBB-EDGE\] frep-fwd created=(\S+) belt-left=(\S+) part-there=(\S+)")
+FREPEDGE = re.compile(
+    r"\[BBB-EDGE\] frep-edge created=(\S+) part-survived=(\S+)")
+FREPREV = re.compile(
+    r"\[BBB-EDGE\] frep-rev created=(\S+) part-left=(\S+) belt-there=(\S+)")
+FREPSPILL = re.compile(
+    r"\[BBB-EDGE\] frep-spill tag=(\S+) handed-back=\[([^\]]*)\] "
+    r"machine-removed=(\d+) where=(.*)$")
+# The guest's own statement that it noticed. It can only be written when the
+# part was ALREADY GONE by the time the belt's build event arrived, so its
+# presence is also the measurement that the engine raised no removal event for
+# the part it destroyed.
+REAPED = re.compile(
+    r"\[BBB\] a belt-connectable fast-replaced the part at (-?\d+),(-?\d+)")
 
 # What the insert probe offers a steel chest, in the order probe.go offers it.
 # The counts are distinct, none of them 1, and none a multiple of another: a
@@ -127,7 +145,8 @@ HAND_OVERFLOW_MIN = 10
 # The placement probe's samples. Every one is taken in a tick where the world is
 # settled, and `flowing` is taken while every rig in the save is saturated --
 # which is the condition the tan-streak field report was made under.
-PLACE_TAGS = ("init", "post-merge", "post-add-out", "flowing", "final", "brdg")
+PLACE_TAGS = ("init", "post-merge", "post-add-out", "flowing", "final", "brdg",
+              "frep")
 
 # A floor, so that a probe which found nothing cannot pass. Eleven clusters with
 # two or more edges each is well over this; the number exists only to make an
@@ -276,6 +295,29 @@ EXPECT = {
     # compiles are a SKIP.
     "post-brdg-back":          (12, 89, 0, 0),
     "post-brdg-final":         (12, 89, 0, 0),
+    # FAST REPLACE. Its two rigs are the only ones in this suite that are built
+    # MID-RUN, and that is why every number above this line is the number it was
+    # before the feature existed: nothing until here has ever seen them. Building
+    # them adds two clusters and six parts -- frepa's two and frepb's four.
+    "frep-built":              (14, 95, 0, 0),
+    "pre-frep":                (14, 95, 0, 0),
+    # A PART fast-replaced onto the belt line running past frepa. The belt is
+    # gone, the part joined the cluster, and the balancer that was two in and two
+    # out is three and three.
+    "post-frep-fwd":           (14, 96, 0, 0),
+    # A belt refused over an EDGE part -- one carrying an interface. Nothing
+    # moves: `can_fast_replace` is false there and the rig puts back what
+    # `create_entity` mined behind the engine's own check.
+    "post-frep-edge":          (14, 96, 0, 0),
+    # And a belt laid on an INTERIOR part, which is the half nothing tells the
+    # guest about. The four-part column SPLITS into two and one: fifteen clusters
+    # over ninety-five parts.
+    #
+    # `(14, 96)` here is the defect, and it is what the guest without
+    # guest/go/fastreplace.go reports -- a tile it calls a balancer part which is
+    # holding somebody's belt, for the rest of the session.
+    "post-frep-rev":           (15, 95, 0, 0),
+    "frep-final":              (15, 95, 0, 0),
 }
 
 # THE TAGS AT WHICH A REFUSED MERGE IS STANDING, and what the audit's `nets=`
@@ -1204,6 +1246,207 @@ def main():
              % (len(told_b), " with a print FAILURE" if told_b and
                 "FAILED" in told_b[0].group(3) else ""))
     print("  the force was told once, and the LocalisedString reached the engine")
+    print()
+
+    # ---- fast replace ------------------------------------------------------
+    #
+    # `bbb-balancer-part` carries `fast_replaceable_group = "transport-belt"`,
+    # base's own group for every belt, underground, splitter and lane splitter.
+    # A part held over a belt replaces it the way a splitter does.
+    #
+    # THE GROUP IS SYMMETRIC, which is what makes the second half of this leg
+    # about guest code rather than about a data-stage line. A belt laid on a part
+    # destroys that part and the engine raises NO EVENT for it -- measured on
+    # 2.0.77: the only event in the whole dispatch is the BUILD event for the
+    # belt. Without guest/go/fastreplace.go the registry keeps a phantom: a tile
+    # it calls a balancer part which is holding a player's belt. The audit cannot
+    # see it either, because a phantom tile is INTERIOR, so the belt standing on
+    # it is never classified and the fingerprint never moves.
+    #
+    # WHAT THE UNFIXED GUEST DOES, MEASURED (this rig, this schedule, against
+    # the same guest with the check in reapFastReplaced disabled):
+    #
+    #   post-frep-rev: the guest saw 14 clusters of 96 parts, expected 15 of 95
+    #
+    # and the frepb column goes on reporting four parts in one cluster, with the
+    # belt inert, for the rest of the run.
+    cans = {m.group(1): m.group(2) for m in (FREPCAN.search(l) for l in lines) if m}
+    spills_fr = {m.group(1): (m.group(2), int(m.group(3)), m.group(4).strip())
+                 for m in (FREPSPILL.search(l) for l in lines) if m}
+    need = ("part-over-belt", "belt-over-edge-part", "belt-over-interior-part")
+    if any(t not in cans for t in need):
+        fail("the fast-replace leg did not run: %s"
+             % ", ".join(t for t in need if t not in cans))
+    print("what the engine says a player may fast-replace:")
+    for what in need:
+        print("  %-24s %s" % (what, cans[what]))
+
+    # 1. THE FORWARD GESTURE, which is the feature. `can_fast_replace` is FALSE
+    #    without the prototype line -- that is this leg's data-stage red proof --
+    #    and the belt has to actually be gone afterwards, because
+    #    `create_entity{fast_replace = true}` creates a part on top of a belt it
+    #    could not replace rather than refusing.
+    if cans["part-over-belt"] != "true":
+        fail("the engine refuses to fast-replace a belt with a balancer part: "
+             "`fast_replaceable_group` is missing from bbb-balancer-part in "
+             "mod-data/prototypes/entity.lua, or it is not base's own "
+             "\"transport-belt\"")
+    fwd = FREPFWD.search("\n".join(lines))
+    if not fwd:
+        fail("the forward fast-replace leg did not report")
+    print("a PART fast-replaced onto a belt of a running line:")
+    print("  created=%s  belt still there=%s  part there=%s"
+          % (fwd.group(1), fwd.group(2), fwd.group(3)))
+    if fwd.group(1) != "true" or fwd.group(3) != "true":
+        fail("the part was not created over the belt")
+    if fwd.group(2) != "false":
+        fail("the belt is STILL THERE under the new part: create_entity fell "
+             "back to creating rather than replacing, so this leg measured two "
+             "entities on one tile instead of a fast replace")
+    if "fwd" not in spills_fr:
+        fail("the forward leg logged no ground sample")
+    handed, machine, where = spills_fr["fwd"]
+    print("  what the replace handed back: [%s], %s (%d of them the engine's "
+          "own machine item, removed so the conserved total stays conserved)"
+          % (handed, where, machine))
+    if "express-transport-belt" not in handed:
+        fail("the belt itself was not handed back: with no player the engine "
+             "spills it, and nothing else in this window can produce one")
+    if machine != 1:
+        fail("the forward replace put %d machine items on the ground, expected "
+             "exactly 1 (the belt)" % machine)
+
+    # 2. AND THE BALANCER IT BECAME BALANCES. Three in and three out over four
+    #    ports, measured as a rate over the window after the edit -- the third
+    #    output's chest has been taking a full belt from the pass line since
+    #    t=0, so a cumulative total would say nothing.
+    fa, fb = windows_out.get("frep-after-open"), windows_out.get("frep-after-close")
+    ba, bb = windows_out.get("frep-before-open"), windows_out.get("frep-before-close")
+    for w, n in ((fa, "frep-after-open"), (fb, "frep-after-close"),
+                 (ba, "frep-before-open"), (bb, "frep-before-close")):
+        if not w or "frepa" not in w or "frepb" not in w:
+            fail("the fast-replace window %s did not run" % n)
+    da = [y - x for x, y in zip(fa["frepa"], fb["frepa"])]
+    if len(da) != 3:
+        fail("the frepa rig has %d outputs after the edit, expected 3" % len(da))
+    mean = sum(da) / 3.0
+    spread = (max(da) - min(da)) / mean if mean else 1.0
+    print("  the 3->3 balancer the replace built, over the window after it:")
+    print("    per-output %r, spread %.2f%%" % (da, 100 * spread))
+    if mean < 100:
+        fail("the frepa rig delivered %.0f items per output: it stopped running "
+             "after the part was dropped into the line" % mean)
+    if spread > 0.02:
+        fail("the 3->3 network is %.2f%% out of balance: a part dropped into a "
+             "live belt line must produce a balancer like any other"
+             % (100 * spread))
+
+    # 3. THE REFUSAL. A part that carries an edge interface cannot be
+    #    belt-replaced: `bbb-linked-belt` is a belt-connectable of its own
+    #    standing on that same tile, so the engine's own check says no. That is
+    #    what a player's cursor gets, and it is the only thing that keeps the
+    #    reverse gesture off the edges of a machine.
+    edge = FREPEDGE.search("\n".join(lines))
+    if not edge:
+        fail("the fast-replace refusal leg did not report")
+    print("a BELT over a part that carries an edge interface:")
+    print("  can_fast_replace=%s  create_entity created=%s  part survived=%s"
+          % (cans["belt-over-edge-part"], edge.group(1), edge.group(2)))
+    if cans["belt-over-edge-part"] != "false":
+        fail("the engine would let a player lay a belt on a part that carries "
+             "an edge interface. Two belt-connectables on one tile is the whole "
+             "of spike S1's loophole and it is not something to rely on the "
+             "other way round: re-measure before believing this")
+    if edge.group(1) != "false":
+        fail("create_entity placed a belt on a part carrying an interface: it "
+             "returned an entity where it has always returned nil")
+
+    # 4. THE REVERSE, and the guest noticing it. `can_fast_replace` is true for
+    #    an interior part, the part goes, the belt takes the tile -- and the ONLY
+    #    thing that tells the guest is the belt's own build event.
+    rev = FREPREV.search("\n".join(lines))
+    if not rev:
+        fail("the reverse fast-replace leg did not report")
+    print("a BELT fast-replaced onto an INTERIOR part:")
+    print("  can_fast_replace=%s  created=%s  part still there=%s  belt there=%s"
+          % (cans["belt-over-interior-part"], rev.group(1), rev.group(2),
+             rev.group(3)))
+    if cans["belt-over-interior-part"] != "true":
+        fail("the engine refuses a belt over an interior part, so the reverse "
+             "gesture this leg is about cannot happen and the guard it proves "
+             "is unreachable")
+    if rev.group(1) != "true" or rev.group(3) != "true":
+        fail("the belt was not created over the part")
+    if rev.group(2) != "false":
+        fail("the part is still standing under the belt: create_entity fell "
+             "back to creating rather than replacing")
+    reaped = [m for m in (REAPED.search(l) for l in lines) if m]
+    print("  the guest unregistered it: %d time(s) %r"
+          % (len(reaped), [(m.group(1), m.group(2)) for m in reaped]))
+    if len(reaped) != 1:
+        fail("the guest logged %d fast-replace removals, expected exactly 1. "
+             "None at all means guest/go/fastreplace.go never fired and the "
+             "registry is holding a tile that a player's belt is standing on; "
+             "more than one means it is firing for something that is not a "
+             "replace" % len(reaped))
+    # That line can only be written when the part was ALREADY GONE by the time
+    # the belt's build event arrived, so it is also this suite's measurement of
+    # the thing it cannot ask directly: the engine raised no removal event for
+    # the entity it replaced. What a PLAYER's fast replace raises is behind the
+    # same wall as the miner's pocket -- there is no player in a --create -- and
+    # the guard is written to be correct whichever way that falls (see
+    # guest/go/fastreplace.go).
+    print("  ...which is only reachable if no removal event preceded it, so the "
+          "engine raised none")
+    if "rev" not in spills_fr:
+        fail("the reverse leg logged no ground sample")
+    handed, machine, where = spills_fr["rev"]
+    print("  what the replace handed back: [%s], %s (%d machine items removed)"
+          % (handed, where, machine))
+    if "bbb-balancer-part" not in handed:
+        fail("the PART itself was not handed back: with no player the engine "
+             "puts it on the belt it just created, or on the floor if there is "
+             "none, exactly as a mined machine goes")
+    if machine != 1:
+        fail("the reverse replace put %d machine items on the ground, expected "
+             "exactly 1 (the part)" % machine)
+
+    # 5. AND BOTH HALVES OF THE SPLIT KEEP RUNNING, AND THE NEW BELT IS AN EDGE
+    #    OF BOTH OF THEM. The column became a two-part cluster above the belt and
+    #    a one-part cluster below it, and that one belt is an OUTPUT of the first
+    #    and an INPUT of the second -- two networks in series through a tile that
+    #    used to be inside one of them. Windows of the same length either side.
+    #
+    #    THE COLUMN DELIVERS LESS AFTERWARDS AND THAT IS THE CORRECT ANSWER
+    #    rather than a regression, so the bound is set knowing why. Before: two
+    #    independent belts in and two out, 2.0 belts delivered. After: the lower
+    #    cluster has TWO inputs -- its own belt and the one coming down from
+    #    upstairs -- and one output, and a balancer equalises its inputs, so it
+    #    draws half a belt from each and delivers 1.0; the upper splits its one
+    #    belt between its own output and the belt feeding downstairs and delivers
+    #    0.5. 1.5 belts of 2.0, measured at 76%: [262, 262] -> [132, 264]. What
+    #    must not happen is a half that STOPS.
+    b_tot = [y - x for x, y in zip(ba["frepb"], bb["frepb"])]
+    a_tot = [y - x for x, y in zip(fa["frepb"], fb["frepb"])]
+    print("  frepb either side of the split: %r -> %r (%.0f%% of the column)"
+          % (b_tot, a_tot, 100.0 * sum(a_tot) / max(sum(b_tot), 1)))
+    if min(b_tot) <= 0:
+        fail("frepb delivered nothing BEFORE the reverse replace: this leg's "
+             "control is dead and it proves nothing")
+    if min(a_tot) <= 0:
+        fail("frepb delivered %r after the split: one half of the column stopped "
+             "balancing, which is what a phantom part -- or an interface placed "
+             "on a tile that now holds a belt -- looks like" % a_tot)
+    if sum(a_tot) < 0.7 * sum(b_tot):
+        fail("frepb delivered %d items after the split against %d before: the "
+             "cascade costs half a belt and no more"
+             % (sum(a_tot), sum(b_tot)))
+    # The LOWER half GAINED an input, and it is fed through the new belt only if
+    # the guest noticed the replace and re-derived the cluster at all.
+    if a_tot[1] < b_tot[1]:
+        fail("the lower half of frepb delivered %d after the split against %d "
+             "before: it gained an input and cannot have got slower"
+             % (a_tot[1], b_tot[1]))
     print()
 
     # ---- and nothing of ours stands where nothing covers it ----------------

@@ -32,6 +32,25 @@ data:extend {
 
     minable = { mining_time = 0.1, result = "bbb-balancer-part" },
     placeable_by = { item = "bbb-balancer-part", count = 1 },
+
+    -- FAST REPLACE, and it is the one line that makes a part behave like the
+    -- machine it is. `"transport-belt"` is base's own group for every belt,
+    -- underground, splitter and lane splitter, so holding a part over a belt
+    -- replaces it the way holding a splitter over one does: the belt and
+    -- whatever it was carrying go to the player, the part takes the tile.
+    --
+    -- IT DOES NOT WEAKEN THE COLLISION MASK ABOVE and must not be read as
+    -- doing so. Fast replace is an exception the engine makes for the entity
+    -- being REPLACED and for nothing else, so a belt still cannot be laid
+    -- THROUGH a balancer -- it can only be laid ON one, one tile at a time,
+    -- which is the reverse gesture and is handled in guest/go/fastreplace.go.
+    --
+    -- The group is symmetric by construction, so this also buys the reverse:
+    -- a belt held over a part replaces the part. Only a part with NO EDGE
+    -- INTERFACE on its tile can be replaced that way -- `bbb-linked-belt` is a
+    -- belt-connectable of its own and blocks the placement, measured -- which
+    -- means the gesture reaches interior parts and is refused on edges.
+    fast_replaceable_group = "transport-belt",
     max_health = 170,
     corpse = "splitter-remnants",
     resistances = { { type = "fire", percent = 60 } },

@@ -1,13 +1,13 @@
 # The interactive checklist
 
-Four things a headless Factorio cannot check, because each needs a real
-player: `game.get_player` resolves to nothing during `--create`, and the
-player events cannot be raised from script. The headless suites pin the
-arithmetic, the quantities and the negative cases; this checklist pins the
-triggers. The `bbb-interactive-setup` mod in this directory stages a rig for
-each gesture beside spawn on a fresh world, so each check costs about thirty
-seconds. It stages and asserts nothing; the assertions are what you see and the
-`[BBB]` log lines listed below.
+Five things a headless Factorio cannot check, because each needs a real
+player: `game.get_player` resolves to nothing during `--create`, the
+player events cannot be raised from script, and a script build is not a
+cursor. The headless suites pin the arithmetic, the quantities and the negative
+cases; this checklist pins the triggers. The `bbb-interactive-setup` mod in this
+directory stages a rig for each gesture beside spawn on a fresh world, so each
+check costs about thirty seconds. It stages and asserts nothing; the assertions
+are what you see and the `[BBB]` log lines listed below.
 
 ## Setup
 
@@ -17,7 +17,7 @@ make interactive-install    # the rig-staging mod beside it
 ```
 
 Enable both mods and start a new freeplay world with any settings (the setup
-mod disables the crash site and the intro). You spawn beside four labelled rigs
+mod disables the crash site and the intro). You spawn beside five labelled rigs
 with 50 express belts and 10 balancer parts in your inventory, and map tags
 mark the gesture for each rig. When done, disable `bbb-interactive-setup`;
 nothing it stages survives into ordinary play.
@@ -83,6 +83,37 @@ anywhere.
 At any point, `/bbb-audit` in the console prints cluster and network counts.
 While a refused merge stands, `drift=1 unbuilt=0` is correct; `drift=0
 unbuilt=1` would mean the merge tore the machines down.
+
+## E. Fast replace, both ways (y = 84)
+
+A two-part balancer with a plain belt line running east one tile below it, and
+below that a four-part column fed only on its top and bottom rows.
+
+**A part over a belt.** Hold a balancer part over the belt line at (20, 86).
+The cursor must show the fast-replace preview rather than a red block. Place it.
+Expected: the belt vanishes, the part takes the tile and joins the balancer
+above, the belt and whatever it was carrying arrive in your inventory, and the
+balancer is now three in and three out with all three outputs filling. Nothing
+on the ground.
+
+**A belt over a part.** Hold an express belt over (20, 90) or (20, 91), the two
+middle parts of the column. The cursor must show the fast-replace preview.
+Place it. Expected: the part vanishes, the belt takes the tile, the part arrives
+in your inventory, and the column becomes two balancers with the new belt an
+output of the upper one and an input of the lower one. Run `/bbb-audit`:
+`drift=0 unbuilt=0`, one more cluster and one fewer part than before. A tile
+still counted as a part with your belt standing on it is the defect this gesture
+exists to catch.
+
+**And the refusal.** Hold the same belt over (20, 89) or (20, 92), the two
+parts at the ends of the column. Those carry the balancer's edge interfaces, and
+an interface is a belt-connectable of its own, so the build must be refused and
+nothing may happen. Only parts with no belt against any of their free faces can
+be replaced this way.
+
+Log lines: `a belt-connectable fast-replaced the part at 20,90` for the reverse
+gesture, and `compiled cluster ... 3->3` for the forward one. Neither direction
+may produce a `[BBB] error:` or a spill line.
 
 ## A false alarm to recognise
 

@@ -830,9 +830,10 @@ func strandedNets(root uint32) uint32 {
 //     reached yet.
 //  2. THE COMPILE BUFFERS ARE PACKAGE LEVEL AND NOT RE-ENTRANT -- `tileBuf`,
 //     `edgeBuf`, `opBuf`, `entBuf`. Nothing in the nested handler touches them
-//     today (`onNeighbour` is 25 map probes and no host call), but "today" is
-//     not a property to build a reentrancy argument on. After the drain there is
-//     no drain to re-enter.
+//     today (`onNeighbour` is 25 map probes and no host call, and the
+//     fast-replace check beside it runs on the APPEARANCE path, which a mine is
+//     not -- see fastreplace.go), but "today" is not a property to build a
+//     reentrancy argument on. After the drain there is no drain to re-enter.
 //  3. THE CARRY TRANSACTION MUST BE CLOSED. A mine records a claim
 //     (`carry.Claims`), and a claim is consumed by the settle at the END of a
 //     flush. One recorded before `endCarry` would be settled against THIS
