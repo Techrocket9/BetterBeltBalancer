@@ -94,6 +94,13 @@ const (
 //     belt-connectable.
 //   - the audit marker and the insert probe, both `simple-entity`, for the same
 //     reason.
+//   - `balancer-part`, the INCUMBENT'S part and the name this mod's data stage
+//     keeps alive after the incumbent is uninstalled. A ghost of one revived out
+//     of a migrating player's old blueprint book arrives through the build
+//     events and is swapped for a real part; see legacy.go. A name filter for a
+//     prototype that does not exist is ACCEPTED by `script.on_event` and matches
+//     nothing -- measured against 2.0.77 rather than assumed, because the
+//     alternative was a subscription list that had to branch on the mod set.
 //
 // What this removes is everything else on the map: an assembler placed, a tree
 // mined, a biter killed, a wall built. Each of those used to enter the guest and
@@ -110,7 +117,7 @@ var entityFilter = append(
 		Key: fkapi.OfString("filter"),
 		Val: fkapi.OfString("transport-belt-connectable"),
 	})},
-	fkapi.NameFilter(PartName, AuditName, ProbeName)...,
+	fkapi.NameFilter(PartName, AuditName, ProbeName, LegacyPartName)...,
 )
 
 func init() {
@@ -213,6 +220,40 @@ func init() {
 //go:wasmexport fk_on_init
 func onInit() {
 	fk.Log("[BBB] guest init: cluster tracking armed for " + PartName)
+	// A NEW MAP, OR THIS MOD BEING ADDED TO A SAVE THAT ALREADY EXISTS -- and
+	// the second is the common half of the migration this feature is for: a
+	// player swaps Belt Balancer 2 out and this mod in, in one edit of the mod
+	// list, and `on_init` is the first moment a guest exists at all. See
+	// legacy.go. It does NOT call ensureRegistry: the scan registers what it
+	// converts through AddPart directly, and the world scan the first event
+	// pays for adopts the networks this one just built rather than rebuilding
+	// them.
+	legacyRecheck(legTrigInit)
+}
+
+// fk_on_configuration_changed is the MOD SET moving: a neighbour added, removed,
+// or moved to another version.
+//
+// It is what makes "this mod installed first, the incumbent removed a month
+// later" convert AT LOAD rather than at whatever event happens to arrive next.
+// Factorio raises `on_configuration_changed` for exactly that edit and for
+// nothing else a guest can observe; until upstream wired this export the event
+// was consumed by the glue's own rebuild check and told a guest nothing
+// (FKLUA-GAPS.md item 22, fixed upstream).
+//
+// REPLICATED, and therefore allowed to write guest state: it runs on the peer
+// that LOADED the save, before the first tick, so its effects are already inside
+// the state a joining client downloads. That is the opposite side of the rule
+// from `fk_after_load`, which is armed from `script.on_load` -- the thing a
+// joiner runs and nobody else -- and which this mod must never export.
+//
+// It fires AFTER `fk_migrate` on a load that is both, so the heap is settled
+// before the guest is told the world around it moved.
+//
+//go:wasmexport fk_on_configuration_changed
+func onConfigurationChanged() {
+	ensureRegistry()
+	legacyRecheck(legTrigConfig)
 }
 
 // fk_migrate is the REBUILT-GUEST SIGNAL, and exporting it is now safe.
@@ -240,6 +281,11 @@ func onMigrate(oldVersion uint32) {
 	logS("); the heap is fresh and the registry comes from the world")
 	logEnd()
 	ensureRegistry()
+	// A fresh heap knows nothing about a migration it may already have done, so
+	// the decision is taken again from the world. It is cheap and it is correct:
+	// on a save that has been through it, the scan finds no `balancer-part` and
+	// says nothing.
+	legacyRecheck(legTrigMigrate)
 }
 
 // fk_on_deferred drains one tick's worth of accumulated recompiles.
@@ -264,6 +310,11 @@ func onDeferred() {
 	// the queues are empty and this is where the world scan belongs anyway.
 	ensureRegistry()
 	flush()
+	// The belt and braces behind fk_on_configuration_changed: a Blocked legacy
+	// phase is re-tested against the marker prototype, which is two host calls
+	// and no allocation, and only while it IS Blocked. One integer compare on
+	// every other tick this guest ever runs. See legacy.go.
+	legacyRearm(legTrigDeferred)
 	// The one place a collection may START, and only under `--gc=collected` --
 	// this is a no-op call that inlines away entirely under `-gc=leaking`. It is
 	// here rather than in an `fk_on_tick` this mod does not have, and rather
@@ -297,6 +348,12 @@ func onEventBody(id, ptr uint32) {
 	// perfectly good balancer has no network and needs a second one. One bool
 	// test; see lifecycle.go.
 	ensureRegistry()
+	// The same shape, one state further on: a fresh heap has not yet decided
+	// whether this game's `balancer-part` is an incumbent's or the stub this mod
+	// ships, and it must decide before it reacts to one. One integer compare;
+	// see legacy.go, which is emphatic about why this is the CHEAP gate and the
+	// re-arm lives in fk_on_deferred.
+	legacyGate(legTrigDispatch)
 
 	var obj fkapi.Object
 	what := evAppear
@@ -451,6 +508,18 @@ func onEventBody(id, ptr uint32) {
 			}
 		}
 		onPart(k, f, what, minedBy, builtBy)
+		return
+	}
+
+	// AN INCUMBENT'S PART, APPEARING AFTER THE MIGRATION SCAN. The one that
+	// matters is a ghost out of a migrating player's old blueprint book, revived
+	// by a construction robot; a script from another mod building one lands here
+	// too. It is swapped for one of ours in place. A DISAPPEARANCE needs nothing:
+	// a stub was never in this registry. See legacy.go.
+	if name == LegacyPartName {
+		if what == evAppear {
+			legacyBuilt(si, pos)
+		}
 		return
 	}
 

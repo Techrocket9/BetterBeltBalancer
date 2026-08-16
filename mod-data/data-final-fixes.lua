@@ -1,0 +1,13 @@
+-- The data stage's last pass, and it exists for exactly one thing.
+--
+-- `prototypes/legacy.lua` defines a stub `balancer-part` when, and only when,
+-- nobody else has -- which is how this mod keeps a Belt Balancer 2 or 3 save's
+-- balancers alive across the load that removes those mods, without touching
+-- anything while they are still installed. It has to run in FINAL FIXES rather
+-- than in `data.lua`: an incumbent defines its own `balancer-part` in its data
+-- stage, and only a pass that runs after every mod's data and data-updates
+-- stages can see whether it did.
+--
+-- `fklua mod` merges every file of `mod-data/` into the package, this one
+-- included; nothing here is generated.
+require("prototypes.legacy")

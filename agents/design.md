@@ -152,6 +152,18 @@ a single repeated tile — no prior art to reuse). **Delivered at M5**: 47-varia
 tiling, unified at any shape, art computed rather than drawn and replaceable a PNG at a
 time (`CLAUDE.md`, "M5 is done").
 
+**And the bar the forum record does not state, because no incumbent had to clear
+it: a player's EXISTING save.** Every fork of the incumbent defines the same
+`simple-entity-with-force` called `balancer-part` with the same I/O model, so a
+save full of them already says what each balancer's ports are — which is what
+makes adoption possible rather than merely desirable. Delivered 2026-08-16:
+uninstall the incumbent and every part it left standing becomes one of this
+mod's, at load, once per save, with the belts and the item stacks untouched and
+the technology granted. Nothing happens while the incumbent is installed, and
+nothing happens to a `balancer-part` some OTHER mod owns. `CLAUDE.md`, "Adopting
+a Belt Balancer 2 or 3 save"; `guest/go/legacy.go` and
+`mod-data/prototypes/legacy.lua` are the two halves.
+
 ## Milestones
 
 | # | Scope | Exit criterion |

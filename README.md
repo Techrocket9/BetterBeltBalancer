@@ -119,6 +119,45 @@ harness: [`bench/README.md`](bench/README.md).
   spilled. Base Factorio pays nothing for the path, which is gated on the
   force's belt-stacking bonus.
 
+## Migrating from Belt Balancer 2 or 3
+
+If you are already using Belt Balancer, Belt Balancer 2, Belt Balancer 3 or Belt
+Balancer Performance, this mod adopts what they built. Uninstall the old mod and
+load your save: every balancer part it left standing becomes one of this mod's
+parts, at the same tiles, on the same force, at the same quality and health, and
+the belts around it become that balancer's inputs and outputs exactly as they
+were. The conversion happens once, at load, before the first tick, and the log
+carries one line saying how many parts on how many surfaces became how many
+balancers.
+
+Nothing happens while the old mod is still installed. Both can sit in a mod list
+together for as long as you like; this mod does not touch a `balancer-part` that
+belongs to a mod that is running, and it does not touch one that belongs to any
+other mod either.
+
+What comes across:
+
+- **The balancers**, as balancers, working. They compile into hidden networks on
+  the load that adopts them, so a save that had 50 of them has 50 of them.
+- **Everything on the belts.** Those belts are vanilla and are not touched.
+- **Your parts in chests and inventories.** A stack of the old mod's part item
+  survives and places this mod's parts, so a chest full of them is still a chest
+  full of balancer parts. The stacks keep the old name.
+- **Your blueprints.** A blueprint or book taken with the old mod installed still
+  places balancers; each part a robot builds from it becomes one of this mod's a
+  tick later.
+- **The ability to craft.** The old mod's technologies go with it, so any force
+  that owned a balancer is given this mod's balancer technology.
+
+What does not:
+
+- **The items the old mod was holding.** Belt Balancer 2 and 3 take items off
+  the belts and hold them in a Lua table of their own, up to two per output lane
+  per balancer, and Factorio deletes a removed mod's saved state along with the
+  mod before any script can read it. That is a handful of items per balancer and
+  there is no mechanism that could recover them.
+- **The old mod's technologies and recipes**, which the engine removes.
+
 ## Building
 
 Prerequisites: Go, TinyGo 0.41.1, binaryen (`wasm-opt`, which TinyGo's wasm
@@ -132,7 +171,7 @@ headless tests and the benchmarks also need a Factorio 2.0 install; set
 make zip      # dist/better-belt-balancer_<version>.zip, a complete mod
 make install  # unpacked, into your Factorio mods directory (MODS_DIR overrides)
 make check    # pure-Go unit tests, bindings and lockfile current, gofmt
-make test     # headless verification: eight suites in a real Factorio
+make test     # headless verification: nine suites in a real Factorio
 ```
 
 `make test` creates saves with the rigs already built, benchmarks them in a real
@@ -144,7 +183,7 @@ Factorio, and asserts against the guest's own log lines. Two build switches:
   collector. The shipped build is collected: over 3,400 teardown-and-rebuild
   cycles the leaking arm's heap doubled its way to 32 MiB with a 782 ms tick at
   the last doubling, where the collected arm ended at 0.5 MiB with a worst tick
-  of 71 ms and no measurable steady-state difference. Both arms pass all eight
+  of 71 ms and no measurable steady-state difference. Both arms pass all nine
   suites.
 
 ## Status
@@ -171,7 +210,7 @@ Factorio, and asserts against the guest's own log lines. Two build switches:
 | `guest/go/` | the Go guest; `plan/` is the network planner, `fkapi/` the generated FkLua bindings |
 | `mod-data/` | the hand-written data stage: prototypes, graphics, locale |
 | [`bench/`](bench/README.md) | the head-to-head benchmark harness, its setup mod and the results |
-| `test/` | the eight headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the five player gestures a headless run cannot make |
+| `test/` | the nine headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the six player gestures a headless run cannot make |
 | `fklua.toml` | mod identity, the API pin (2.0.77), guest language and GC mode |
 | `CLAUDE.md`, `agents/` | maintainer design notes and the full measurement record |
 

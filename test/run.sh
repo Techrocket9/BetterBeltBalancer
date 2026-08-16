@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless verification. Eight suites, all real Factorio runs, not models:
+# Headless verification. Nine suites, all real Factorio runs, not models:
 #
 #   M1  do balancer parts merge and split correctly?
 #   M2  does the compiled hidden network actually balance?
@@ -19,6 +19,14 @@
 #   mix   MORE THAN ONE KIND of item through one balancer: two pure belts, a
 #         sushi belt, and 48 distinct kinds at once -- past the carry pool's
 #         bound, which used to DESTROY the overflow. Every count is per item NAME
+#   mig   ADOPTING A BELT BALANCER 2 SAVE. The only suite whose two phases run
+#         under DIFFERENT MOD SETS: an incumbent's balancers are built in phase
+#         one and the incumbent is uninstalled between the phases. Four legs --
+#         swapped in one edit, removed a session later, arriving one at a time
+#         through build events (which is also the only save written AFTER a
+#         conversion, so its second phase is a plain reload that must do
+#         nothing), and a stranger who owns the same prototype name and must
+#         never be touched
 #
 #   make test          # builds the mod first
 #   test/run.sh        # against whatever dist/ already holds
@@ -49,7 +57,7 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 [ -x "$FACTORIO" ] || { echo "factorio not found at: $FACTORIO (set FACTORIO_BIN)" >&2; exit 1; }
 [ -d "$MOD_DIR" ]  || { echo "no built mod at $MOD_DIR; run \`make mod\` first" >&2; exit 1; }
 
-SUITES="${*:-m1 m2 m3 upg plat mar edge mix}"
+SUITES="${*:-m1 m2 m3 upg plat mar edge mix mig}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.
@@ -126,6 +134,71 @@ bump_build() {
   grep -q 'build = "' "$f" || { echo "no build stamp in $f" >&2; exit 1; }
   perl -pi -e 's/build = "[^"]+"/build = "m3-upgrade-test"/' "$f"
   echo "==> mod version and guest build stamp bumped: this is an upgrade"
+}
+
+# --- the mig suite's staging -------------------------------------------------
+#
+# EVERY OTHER SUITE RUNS ITS TWO PHASES UNDER ONE MOD SET. This one cannot: the
+# thing under test is what happens when a NEIGHBOUR is uninstalled, so the mod
+# list has to differ between `--create` and `--benchmark`, and in one leg this
+# mod is not present for the create at all.
+#
+# A mod DIRECTORY that is present but not in mod-list.json is added back by
+# Factorio as enabled, so "removed" here means the directory is deleted as well
+# as the entry -- which is also what a player does.
+
+# mig_list <workdir> <extra-mod-name-or-empty> <bbb-enabled>
+mig_list() {
+  local work="$1" extra="$2" bbb="$3"
+  local extra_entry=""
+  [ -n "$extra" ] && extra_entry="    { \"name\": \"$extra\", \"enabled\": true },"
+  cat > "$work/mods/mod-list.json" <<JSON
+{
+  "mods": [
+    { "name": "base", "enabled": true },
+    { "name": "elevated-rails", "enabled": false },
+    { "name": "quality", "enabled": false },
+    { "name": "space-age", "enabled": false },
+$extra_entry
+    { "name": "$MOD_NAME", "enabled": $bbb },
+    { "name": "bbb-mig-test", "enabled": true }
+  ]
+}
+JSON
+}
+
+# stage_mig <workdir> <extra-mod-name> <bbb-in-phase-one>
+stage_mig() {
+  local work="$1" extra="$2" bbb="$3"
+  rm -rf "$work"
+  mkdir -p "$work/mods"
+  cp -R "$ROOT/test/mods/bbb-mig-test" "$work/mods/bbb-mig-test"
+  [ -n "$extra" ] && cp -R "$ROOT/test/mods/$extra" "$work/mods/$extra"
+  [ "$bbb" = true ] && cp -R "$MOD_DIR" "$work/mods/"
+  mig_list "$work" "$extra" "$bbb"
+}
+
+# The incumbent goes, this mod arrives, in one edit of the mod list -- which is
+# what a player does when they read "use this instead".
+mig_swap_in() {
+  rm -rf "$1/mods/belt-balancer-2"
+  cp -R "$MOD_DIR" "$1/mods/"
+  mig_list "$1" "" true
+  echo "==> belt-balancer-2 uninstalled and $MOD_NAME installed: this is the swap"
+}
+
+# This mod was already there; the incumbent leaves a session later.
+mig_drop_incumbent() {
+  rm -rf "$1/mods/belt-balancer-2"
+  mig_list "$1" "" true
+  echo "==> belt-balancer-2 uninstalled; $MOD_NAME was already installed"
+}
+
+# The stranger STAYS. This mod arrives beside it and must leave it alone.
+mig_add_bbb_beside_foreign() {
+  cp -R "$MOD_DIR" "$1/mods/"
+  mig_list "$1" "bbb-mig-foreign" true
+  echo "==> $MOD_NAME installed beside bbb-mig-foreign, which still owns balancer-part"
 }
 
 # run <workdir> <ticks>
@@ -272,8 +345,47 @@ for suite in $SUITES; do
       echo "==> asserting per-kind conservation and the mixed-load rates"
       python3 "$ROOT/test/assert-mix.py" "$TMP/mix/create.log" "$TMP/mix/run.log"
       ;;
+    mig)
+      # THE ONLY SUITE WHOSE TWO PHASES RUN UNDER DIFFERENT MOD SETS. Four legs,
+      # and the last is the one with the blast radius.
+      echo "=== mig: adopting a Belt Balancer 2 save ==="
+
+      echo "--- leg 1: the incumbent swapped out and this mod in, in one edit ---"
+      stage_mig "$TMP/mig1" belt-balancer-2 false
+      BETWEEN=mig_swap_in run "$TMP/mig1" "${BBB_MIG_TICKS:-3600}"
+      unset BETWEEN
+      python3 "$ROOT/test/assert-mig.py" --leg added \
+        "$TMP/mig1/create.log" "$TMP/mig1/run.log"
+
+      echo "--- leg 2: this mod installed first, the incumbent removed later ---"
+      stage_mig "$TMP/mig2" belt-balancer-2 true
+      BETWEEN=mig_drop_incumbent run "$TMP/mig2" "${BBB_MIG_TICKS:-3600}"
+      unset BETWEEN
+      python3 "$ROOT/test/assert-mig.py" --leg later \
+        "$TMP/mig2/create.log" "$TMP/mig2/run.log"
+
+      # No incumbent has ever been installed here, so `balancer-part` is this
+      # mod's own stub from the first byte and the observer's parts arrive one at
+      # a time through BUILD EVENTS -- which is the path an old blueprint's
+      # ghosts take. It is also the only leg whose save is written AFTER the
+      # conversion and whose second phase changes no mod at all, so it is the
+      # only one that can show the once-per-save flag surviving a save and
+      # costing nothing on the way back.
+      echo "--- leg 3: legacy parts arriving through build events, then a plain reload ---"
+      stage_mig "$TMP/mig3" "" true
+      run "$TMP/mig3" "${BBB_MIG_TICKS:-3600}"
+      python3 "$ROOT/test/assert-mig.py" --leg built \
+        "$TMP/mig3/create.log" "$TMP/mig3/run.log"
+
+      echo "--- leg 4: a stranger owns balancer-part and must be left alone ---"
+      stage_mig "$TMP/mig4" bbb-mig-foreign false
+      BETWEEN=mig_add_bbb_beside_foreign run "$TMP/mig4" "${BBB_MIG_TICKS:-3600}"
+      unset BETWEEN
+      python3 "$ROOT/test/assert-mig.py" --leg foreign \
+        "$TMP/mig4/create.log" "$TMP/mig4/run.log"
+      ;;
     *)
-      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge or mix)" >&2
+      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix or mig)" >&2
       exit 1
       ;;
   esac

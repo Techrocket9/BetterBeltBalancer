@@ -1,13 +1,16 @@
 # The interactive checklist
 
-Five things a headless Factorio cannot check, because each needs a real
-player: `game.get_player` resolves to nothing during `--create`, the
-player events cannot be raised from script, and a script build is not a
-cursor. The headless suites pin the arithmetic, the quantities and the negative
-cases; this checklist pins the triggers. The `bbb-interactive-setup` mod in this
-directory stages a rig for each gesture beside spawn on a fresh world, so each
-check costs about thirty seconds. It stages and asserts nothing; the assertions
-are what you see and the `[BBB]` log lines listed below.
+Six things a headless Factorio cannot check. Five of them need a real player:
+`game.get_player` resolves to nothing during `--create`, the player events
+cannot be raised from script, and a script build is not a cursor. The headless
+suites pin the arithmetic, the quantities and the negative cases; this checklist
+pins the triggers. The `bbb-interactive-setup` mod in this directory stages a
+rig for gestures A to E beside spawn on a fresh world, so each of those costs
+about thirty seconds. It stages and asserts nothing; the assertions are what you
+see and the `[BBB]` log lines listed below.
+
+The sixth, F, needs no player and no staged rig. It needs your own save and your
+own graphical client, which is what the suites do not have.
 
 ## Setup
 
@@ -114,6 +117,35 @@ be replaced this way.
 Log lines: `a belt-connectable fast-replaced the part at 20,90` for the reverse
 gesture, and `compiled cluster ... 3->3` for the forward one. Neither direction
 may produce a `[BBB] error:` or a spill line.
+
+## F. Adopting a Belt Balancer 2 or 3 save
+
+No staged rig for this one, and no player needed either: the headless suite
+drives the whole conversion, against a stand-in and once by hand against the
+real Belt Balancer 2. What it cannot do is look at the result or hold a
+blueprint book.
+
+Take a save of your own that uses Belt Balancer, Belt Balancer 2, Belt Balancer 3
+or Belt Balancer Performance, with balancers running and items on the belts.
+Uninstall that mod, install this one, and load. Expected:
+
+- one `[BBB] legacy: adopted N parts from M surfaces into K clusters` line, with
+  `trigger=configuration_changed` if this mod was already installed and
+  `trigger=init` if it arrived in the same edit;
+- every balancer where it was, drawing this mod's plating rather than a hole,
+  and running within a second;
+- the belts around them still carrying what they were carrying;
+- a stack of the old part in a chest still there, and placing this mod's parts;
+- the balancer technology researched, so the recipe is available;
+- no `[BBB] error:` anywhere.
+
+Then place one of your old blueprints of a balancer. Its ghosts ask for this
+mod's part item, and each part a robot revives becomes one of this mod's parts a
+tick later. The swap itself is covered headlessly; what is not is the
+construction network and the blueprint that reach it.
+
+Nothing at all should happen if you load with both mods still installed. The log
+says so once, naming the mod and its version.
 
 ## A false alarm to recognise
 

@@ -12,7 +12,7 @@ these numbers, so they are kept even where the item is closed.
 
 | status | items |
 | --- | --- |
-| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21 |
+| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22 |
 | Closed, no change needed | 17 (a budget rather than a defect) |
 | Open | 18 |
 
@@ -253,6 +253,22 @@ root-scan cost, the scan is reserved out of each step rather than charged on
 top, and the collector logs one line the first time the floor binds. Because a
 step now spends its whole budget in total, this mod's setting was re-derived to
 `4096 + reserve`; its own root check is deleted.
+
+## 22. A guest could not observe the mod set changing
+
+Factorio raises `script.on_configuration_changed` when a neighbouring mod is
+added, removed or moved to another version, and the glue registered exactly one
+thing on it: its own rebuild check, which returns immediately unless the guest's
+build stamp moved. A mod set changing does not move it, so the event that
+reports a neighbour being uninstalled arrived, was consumed, and told the guest
+nothing. This mod needed it for a once-per-save conversion of the balancers an
+uninstalled predecessor left behind; without it the best available trigger was
+the first event of the session, which converts late and on a tick nobody chose.
+Fixed upstream: `fk_on_configuration_changed()` is dispatched whenever Factorio
+raises the event, after the rebuild check, with no arguments. It is replicated,
+runs on the peer that loaded before the first tick, and may therefore write
+guest state, unlike the peer-local first-tick-after-a-load hook. This mod
+exports it and its migration converts at load.
 
 ## Smaller notes
 

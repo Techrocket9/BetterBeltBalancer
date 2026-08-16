@@ -1437,6 +1437,14 @@ func flushLive() {
 // reconcile paths that split their own flush in half open the transaction
 // themselves and the nesting counter absorbs this one.
 func flush() {
+	// AN INCUMBENT'S PART THAT ARRIVED THROUGH A BUILD EVENT, swapped for one of
+	// ours before anything else happens -- so the AddPart it makes is compiled by
+	// this same drain rather than by the next one, including on the synchronous
+	// drain a `bbb-audit` marker forces, which is the only one a `--create` ever
+	// reaches. One length test on an empty slice in every save that never had a
+	// Belt Balancer 2 in it. See legacy.go, which is emphatic about why this is
+	// deferred rather than done inside the event.
+	legacyRunBuilds()
 	beginCarry()
 	flushDead()
 	flushLive()

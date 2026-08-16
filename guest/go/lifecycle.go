@@ -463,6 +463,57 @@ var (
 	adoptSeen   []bool
 )
 
+// collectSurfaces fills rfwSurfIdx/rfwSurfObj with every surface in the game,
+// SORTED BY INDEX, and sets hiddenIdx if the hidden surface is among them.
+//
+// ASK WHAT SURFACES EXIST. `game.surfaces` binds now (FKLUA-GAPS.md item 15): a
+// dyn-keyed dictionary return comes back as an ordered pair slice, and `pairs()`
+// over this one yields the NAME as the key, so the hidden surface falls out of
+// the same walk rather than costing its own `get_surface` by name.
+//
+// What this replaces is a probe: `get_surface(1)`, `get_surface(2)`, ...
+// stopping after 64 consecutive misses, which was ~65 host calls on a save with
+// one surface and a guess about how sparse an index can get. It is now one call
+// plus one `index` read per surface -- two, on that save.
+//
+// TWO CALLERS, ONE WALK, and it is a shared function rather than two copies for
+// the reason the sort exists at all: both of them go on to register parts in the
+// order this list gives, which decides node ids, which decide cluster roots and
+// hidden-surface slots. Two walks that could disagree about an order would be a
+// desync waiting for the day one of them changed. See legacy.go, which is the
+// second caller.
+//
+// SORTED BY INDEX, by insertion, which is what the probe loop used to give for
+// free. fk_abi.lua declines to promise an iteration order for a dictionary
+// return -- reasonably, since it walks `pairs()`. Two or three surfaces is a
+// real save and a dozen is a big one, so an insertion sort is the whole
+// algorithm.
+func collectSurfaces() {
+	hiddenIdx = 0
+	rfwSurfIdx, rfwSurfObj = rfwSurfIdx[:0], rfwSurfObj[:0]
+	pairs, err := fkapi.Game.Surfaces()
+	if err != nil {
+		return
+	}
+	for i := range pairs {
+		si, err := (fkapi.LuaSurface{Object: pairs[i].Val}).Index()
+		if err != nil {
+			continue
+		}
+		if pairs[i].Key.Tag == fkapi.TagString && pairs[i].Key.Str == hiddenSurfName {
+			hiddenIdx = si
+		}
+		at := len(rfwSurfIdx)
+		rfwSurfIdx = append(rfwSurfIdx, si)
+		rfwSurfObj = append(rfwSurfObj, pairs[i].Val)
+		for at > 0 && rfwSurfIdx[at-1] > si {
+			rfwSurfIdx[at-1], rfwSurfIdx[at] = rfwSurfIdx[at], rfwSurfIdx[at-1]
+			rfwSurfObj[at-1], rfwSurfObj[at] = rfwSurfObj[at], rfwSurfObj[at-1]
+			at--
+		}
+	}
+}
+
 // rebuildFromWorld re-derives the whole registry, and ADOPTS the networks it
 // finds rather than rebuilding them.
 //
@@ -490,46 +541,7 @@ func rebuildFromWorld() {
 	// with the notes recorded and delivers the one correct message.
 	rebuildingFromWorld = true
 
-	// ASK WHAT SURFACES EXIST. `game.surfaces` binds now (FKLUA-GAPS.md item
-	// 15): a dyn-keyed dictionary return comes back as an ordered pair slice,
-	// and `pairs()` over this one yields the NAME as the key, so the hidden
-	// surface falls out of the same walk rather than costing its own
-	// `get_surface` by name.
-	//
-	// What this replaces is a probe: `get_surface(1)`, `get_surface(2)`, ...
-	// stopping after 64 consecutive misses, which was ~65 host calls on a save
-	// with one surface and a guess about how sparse an index can get. It is now
-	// one call plus one `index` read per surface -- two, on that save.
-	hiddenIdx = 0
-	rfwSurfIdx, rfwSurfObj = rfwSurfIdx[:0], rfwSurfObj[:0]
-	pairs, err := fkapi.Game.Surfaces()
-	if err == nil {
-		for i := range pairs {
-			si, err := (fkapi.LuaSurface{Object: pairs[i].Val}).Index()
-			if err != nil {
-				continue
-			}
-			if pairs[i].Key.Tag == fkapi.TagString && pairs[i].Key.Str == hiddenSurfName {
-				hiddenIdx = si
-			}
-			// SORTED BY INDEX, by insertion, which is what the probe loop used
-			// to give for free. fk_abi.lua declines to promise an iteration
-			// order for a dictionary return -- reasonably, since it walks
-			// `pairs()` -- and this guest registers parts in surface order,
-			// which decides node ids, which decide roots and slot claims. A
-			// lockstep game cannot have two clients disagree about that. Two or
-			// three surfaces is a real save and a dozen is a big one, so an
-			// insertion sort is the whole algorithm.
-			at := len(rfwSurfIdx)
-			rfwSurfIdx = append(rfwSurfIdx, si)
-			rfwSurfObj = append(rfwSurfObj, pairs[i].Val)
-			for at > 0 && rfwSurfIdx[at-1] > si {
-				rfwSurfIdx[at-1], rfwSurfIdx[at] = rfwSurfIdx[at], rfwSurfIdx[at-1]
-				rfwSurfObj[at-1], rfwSurfObj[at] = rfwSurfObj[at], rfwSurfObj[at-1]
-				at--
-			}
-		}
-	}
+	collectSurfaces()
 
 	surfaces, found := uint32(0), uint32(0)
 	for i := range rfwSurfIdx {
@@ -875,6 +887,11 @@ var auditRoots []uint32
 // ignores it and reads the log line instead.
 func auditAll() uint32 {
 	ensureRegistry()
+	// AND IT IS A DOOR ONTO THE MIGRATION TOO. `/bbb-audit` is the one thing a
+	// player can type that means "look at the world again", so a save whose
+	// incumbent was removed without the load hook seeing it converts here. It is
+	// one integer compare on every other audit ever run. See legacy.go.
+	legacyRearm(legTrigAudit)
 	auditRoots = liveRootList(auditRoots)
 	nets0, drift, unbuilt := uint32(0), uint32(0), uint32(0)
 	for i := range auditRoots {
