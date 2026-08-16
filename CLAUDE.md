@@ -3027,8 +3027,8 @@ from its build stamp and its seven slopes identical to the byte. Shipped zip
 290,455 → **291,364 B**. See "The root scan that could not fit in a step", and
 [`FKLUA-GAPS.md`](FKLUA-GAPS.md) item 21, which is the upstream ask.
 
-**And re-verified again from clean 2026-08-03 after the STANDARDIZATION PASS**,
-which is the last thing this file records. That pass regenerated the bindings
+**And re-verified again from clean 2026-08-03 after the STANDARDIZATION PASS**.
+That pass regenerated the bindings
 against a FkLua six rounds newer (B1a/B1b/B2, members 4,191 → 4,250, and
 **member ids moved** — `LuaControl.Insert` 316 → 317, so the committed pair was
 one that would have called a different function silently), re-derived the
@@ -3120,8 +3120,8 @@ total conserved to the item throughout, which is why eight suites were green ove
 it. Shipped zip 310,628 → **316,749 B** (+1.97%), `fk_module.lua` 2,432,188 →
 **2,516,161 B** (+3.45%), members **42, none added**.
 
-**And verified 2026-08-16 after the FAST-REPLACE PASS** ("Fast replace"), which
-is the last thing this file records. `make check` green, sprite checker green,
+**And verified 2026-08-16 after the FAST-REPLACE PASS** ("Fast replace").
+`make check` green, sprite checker green,
 **all eight suites green in BOTH arms from clean**, and the leaking arm's seven
 slopes back **identical to the byte** (1,216 / 352 / 1,180 / 32 / 736 / 3,736 /
 1,712 B and 3.92 MiB) — which is the gate this pass had above all others, because
@@ -3168,6 +3168,25 @@ prototypes added. The one thing it needed from upstream is
 landed in the same round and is what makes the removed-later case convert at load
 rather than at the next thing the player happens to do.
 
+**And verified 2026-08-16 once more with BOTH of that day's passes merged**,
+which is the last thing this file records. The two were built on sibling
+branches from the same base and rebased into one line — fast replace first, the
+migration on top — and the merged tree was gated from clean rather than trusted
+from its halves: `make check` green (bindings and lock unmoved), sprite checker
+green at 10 references, **all nine suites green in BOTH arms** (`make test`
+1m10s, `make GC=leaking test` 1m14s, one invocation each), and the leaking arm's
+seven slopes back **identical to the byte** (1,216 / 352 / 1,180 / 32 / 736 /
+3,736 / 1,712 B and 3.92 MiB). The `mig` suite's four legs report exactly what
+each half recorded alone — 11 parts, 2 surfaces, 3 clusters, `trigger=init` and
+`trigger=configuration_changed`, 48 copper before and after, 3.997× and 2.995×
+— and the `edge` suite's fast-replace legs still read 14/95 → 14/96 forward and
+14/96 → 15/95 reverse. Merged package, shipped config: zip **349,822 B**,
+`fk_module.lua` **2,745,246 B**, members **51** of 4,257, 22 events subscribed,
+4 defines read; the two halves' own before/after rows above were each measured
+against a 327,613 B base and add up to this within the two bytes of zip
+timestamp noise the harness carries. `fk_on_configuration_changed` is FkLua
+master `6e3eb28`, and `bin/fklua` was rebuilt from it before either arm ran.
+
 **What a future session should pick up first**, in order:
 
 1. **A licence.** Nothing can be released without one, and FkLua is in the same
@@ -3209,7 +3228,7 @@ rather than at the next thing the player happens to do.
    `make interactive-install` puts a rig-staging mod beside the real one, a
    fresh world spawns you next to the five rigs with the pieces in hand, and
    [`test/interactive/README.md`](test/interactive/README.md) is the checklist
-   with the log line each gesture must produce. **A fifth gesture joined that
+   with the log line each gesture must produce. **A sixth gesture joined that
    checklist on 2026-08-16 and it needs no player at all**: swap a real
    incumbent out of a real save and look at the result, and place one of that
    save's old blueprints so a robot revives a legacy ghost. Everything else
@@ -3467,15 +3486,17 @@ would otherwise land on the first tick of the benchmark.
 `script.on_event(id, handler, filters)` applies its filter list **in C++ before
 the handler runs**, and `fk.subscribe` carries one now
 ([`FKLUA-GAPS.md`](FKLUA-GAPS.md) item 3, fixed upstream). All eleven
-per-entity subscriptions use it, with the same three-term list:
+per-entity subscriptions use it, with the same five-term list:
 
 | term | covers |
 |---|---|
 | `{filter = "transport-belt-connectable"}` | every belt that can be an edge — `classifySide`'s six types — **and all four of our own hidden prototypes**, each being a clone of a base belt-connectable |
 | `{filter = "name", name = "bbb-balancer-part"}` | the part, a `simple-entity-with-force` and therefore not belt-connectable |
 | `{filter = "name", name = "bbb-audit"}` | the marker, a `simple-entity`, same reason |
+| `{filter = "name", name = "bbb-insert-probe"}` | the insert probe, the same |
+| `{filter = "name", name = "balancer-part"}` | the INCUMBENT'S part, which this mod's data stage keeps alive as a stub once the incumbent is gone ("Adopting a Belt Balancer 2 or 3 save"). A name filter for a prototype that does not exist is accepted and matches nothing, measured, so the list does not branch on the mod set |
 
-**Three terms, not the eleven names and types the obvious version needs.**
+**Five terms, not the dozen names and types the obvious version needs.**
 `transport-belt-connectable` is a category the filter grammar has built in, and
 finding it is the difference between a filter list that has to be revisited
 every time a prototype is added and one that does not. Verified against the
