@@ -210,7 +210,7 @@ install: mod
 	cp -R $(MOD_DIR) "$(MODS_DIR)/"
 	@echo "installed into $(MODS_DIR)"
 
-# The rig-staging mod for the four player-gesture checks no headless run can
+# The rig-staging mod for the five player-gesture checks no headless run can
 # make; test/interactive/README.md is the checklist.
 interactive-install:
 	@mkdir -p "$(MODS_DIR)"

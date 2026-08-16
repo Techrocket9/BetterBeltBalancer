@@ -785,8 +785,9 @@ func onPart(k key, force uint32, what int, minedBy, builtBy uint32) {
 			// that already contained this part -- the engine places before the
 			// event fires -- and registered it, so AddPart reports no change.
 			// Any refusal that rebuild issued fired before this note could
-			// exist (the rebuild clears the feedback memo for exactly this
-			// reason; lifecycle.go), so the informed retry still needs the
+			// exist (a rebuild's refusal never arms the feedback memo, for
+			// exactly this reason; limit.go, refuseOverLimit), so the informed
+			// retry still needs the
 			// note recorded and the cluster queued, or an over-limit piece
 			// stands with nothing but a chat line. Outside the wake race a
 			// duplicate PLAYER build event is a mod raising built twice for

@@ -4,6 +4,6 @@
   "title": "BBB interactive checklist rigs",
   "author": "BetterBeltBalancer",
   "factorio_version": "2.0",
-  "description": "Pre-stages the four player-gesture rigs the headless suites cannot drive (the miner's pocket, the edge-belt shrink, the 65th belt, the over-limit bridge) beside spawn on a fresh world. Enable together with better-belt-balancer, start a new world, follow test/interactive/README.md, then disable.",
+  "description": "Pre-stages the five player-gesture rigs the headless suites cannot drive (the miner's pocket, the edge-belt shrink, the 65th belt, the over-limit bridge, fast replace both ways) beside spawn on a fresh world. Enable together with better-belt-balancer, start a new world, follow test/interactive/README.md, then disable.",
   "dependencies": ["base >= 2.0.0", "better-belt-balancer"]
 }
