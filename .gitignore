@@ -1,0 +1,18 @@
+.DS_Store
+dist/
+scratch_tmp/
+*.wasm
+target/
+# Never commit anything from the Factorio install or user dir
+factorio-current.log
+# benchmark scratch: temp mod dirs, saves, logs
+bench/tmp/
+bench/**/*.zip
+# M1 verification scratch: staged mod dir, save, factorio logs. tmp-* is the
+# same thing under a second $BBB_TEST_TMP, which is how the two --gc arms are
+# run against each other without either overwriting the other's logs.
+test/tmp/
+test/tmp-*/
+
+# Python leaves these behind when check-layout.py is imported by another script.
+__pycache__/

@@ -1,0 +1,260 @@
+scenario	mod	n	k	tier	ticks	runs	avg_ms	min_ms	max_ms	whole_us	belts_us	entity_us	script_us	throughput	balance	factorio	date	note
+saturated	belt-balancer-2_2.0.9	1	4	express	3600	2	0.1845	0.0780	3.9750	176.16	47.26	3.30	15.31	8808	1.000	2.0.77	2026-08-01	
+control	none	1	4	express	3600	2	0.1605	0.0800	0.2880	162.10	48.46	3.31	0.31	8648	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-2_2.0.9	50	4	express	3600	2	1.0320	0.1960	12.9210	1020.54	100.16	63.87	681.87	440400	1.000	2.0.77	2026-08-01	
+control	none	50	4	express	3600	2	0.2235	0.0910	0.6370	228.14	61.48	53.43	0.69	432400	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-2_2.0.9	200	4	express	3600	2	3.8125	0.5780	57.5620	3833.81	244.22	308.92	2951.91	1761600	1.000	2.0.77	2026-08-01	
+control	none	200	4	express	3600	2	0.4735	0.2090	1.5990	468.93	126.22	230.91	1.67	1729600	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-2_2.0.9	50	8	express	3600	2	1.8730	0.2870	21.9480	1910.40	144.00	133.34	1396.26	880800	1.000	2.0.77	2026-08-01	
+control	none	50	8	express	3600	2	0.2995	0.1380	1.0270	297.10	82.77	103.68	1.05	852000	1.000	2.0.77	2026-08-01	
+idle	belt-balancer-2_2.0.9	200	4	express	3600	2	0.4505	0.3310	5.1050	427.99	40.54	1.75	268.83	0	n/a	2.0.77	2026-08-01	
+control-idle	none	200	4	express	3600	2	0.1715	0.0810	1.4950	163.22	49.25	1.70	1.47	0	n/a	2.0.77	2026-08-01	
+saturated	belt-balancer-2_2.0.9	1	4	normal	3600	2	0.1750	0.0820	0.3840	170.22	49.91	2.39	5.61	2808	1.000	2.0.77	2026-08-01	
+control	none	1	4	normal	3600	2	0.1655	0.0730	0.6920	166.98	51.82	2.38	0.29	2648	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-2_2.0.9	50	4	normal	3600	2	0.4595	0.1210	9.9270	467.11	92.30	26.71	200.20	140400	1.000	2.0.77	2026-08-01	
+control	none	50	4	normal	3600	2	0.1995	0.0960	0.6900	197.02	60.91	23.87	0.62	132400	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-2_2.0.9	200	4	normal	3600	2	1.5175	0.2500	42.8330	1566.85	280.09	125.15	951.95	561600	1.000	2.0.77	2026-08-01	
+control	none	200	4	normal	3600	2	0.3665	0.1560	1.6570	344.71	126.82	102.59	1.64	529600	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-2_2.0.9	50	8	normal	3600	2	0.7720	0.1880	18.4080	786.47	128.04	55.52	425.37	280800	1.000	2.0.77	2026-08-01	
+control	none	50	8	normal	3600	2	0.2405	0.1030	0.9950	253.38	88.89	49.39	1.01	252000	1.000	2.0.77	2026-08-01	
+idle	belt-balancer-2_2.0.9	200	4	normal	3600	2	0.2030	0.0770	1.9860	204.50	49.76	1.72	35.59	0	n/a	2.0.77	2026-08-01	
+control-idle	none	200	4	normal	3600	2	0.1705	0.0740	1.4520	165.21	50.29	1.71	1.29	0	n/a	2.0.77	2026-08-01	
+saturated	belt-balancer-3_1.0.1	1	4	express	1200	2	0.2510	0.0900	3.4310	218.94	54.60	4.26	19.89	1608	1.000	2.0.77	2026-08-01	bb3 smoke test
+saturated	belt-balancer-3_1.0.1	1	4	express	3600	2	0.2025	0.0820	0.5130	187.52	49.41	3.57	17.86	8808	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-3_1.0.1	50	4	express	3600	2	1.2785	0.3200	15.8590	1290.09	104.66	79.42	866.26	440400	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-3_1.0.1	200	4	express	3600	2	5.0425	0.8790	82.3680	4880.32	256.51	433.73	3818.55	1761600	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-3_1.0.1	50	8	express	3600	2	2.4600	0.5080	30.3080	2389.36	169.48	179.83	1755.89	880800	1.000	2.0.77	2026-08-01	
+idle	belt-balancer-3_1.0.1	200	4	express	3600	2	0.7605	0.5560	7.1140	797.32	56.92	2.96	583.39	0	n/a	2.0.77	2026-08-01	
+saturated	belt-balancer-3_1.0.1	1	4	normal	3600	2	0.1925	0.0670	0.5380	183.60	51.10	2.87	6.67	2808	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-3_1.0.1	50	4	normal	3600	2	0.5885	0.1130	18.1150	561.05	82.48	40.42	259.03	140400	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-3_1.0.1	200	4	normal	3600	2	1.8705	0.2310	62.5870	1944.51	288.85	199.18	1182.74	561600	1.000	2.0.77	2026-08-01	
+saturated	belt-balancer-3_1.0.1	50	8	normal	3600	2	1.0125	0.1050	28.3920	1041.43	138.60	84.88	569.14	280800	1.000	2.0.77	2026-08-01	
+idle	belt-balancer-3_1.0.1	200	4	normal	3600	2	0.2810	0.0520	6.2690	267.25	52.84	2.03	80.13	0	n/a	2.0.77	2026-08-01	
+saturated	belt-balancer-3_1.0.1	200	4	express	3600	2	4.9610	0.8960	66.1680	5027.87	257.14	458.20	3892.70	1761600	1.000	2.0.77	2026-08-01	confirm
+idle	belt-balancer-3_1.0.1	200	4	express	3600	2	0.7365	0.5490	10.3730	730.44	49.37	2.32	540.31	0	n/a	2.0.77	2026-08-01	confirm
+saturated	better-belt-balancer_0.1.0	1	4	express	1200	1	0.2770	0.0530	8.0320	197.86	54.80	5.44	0.46	1500	1.005	2.0.77	2026-08-01	bbb smoke test
+saturated	better-belt-balancer_0.1.0	1	4	express	3600	2	0.1850	0.0640	0.5010	173.84	49.54	4.79	0.37	8700	1.001	2.0.77	2026-08-01	first pass; superseded by the head2head rows (see RESULTS.md: machine contention)
+saturated	better-belt-balancer_0.1.0	50	4	express	3600	2	0.2585	0.1180	3.2360	264.31	63.23	66.22	1.26	435000	1.001	2.0.77	2026-08-01	first pass; superseded by the head2head rows (see RESULTS.md: machine contention)
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6605	0.1980	22.3460	551.51	135.18	281.14	1.90	1740000	1.001	2.0.77	2026-08-01	first pass; superseded by the head2head rows (see RESULTS.md: machine contention)
+saturated	better-belt-balancer_0.1.0	50	8	express	3600	2	0.3545	0.1250	10.4730	490.48	134.30	197.13	1.78	867000	1.001	2.0.77	2026-08-01	first pass; superseded by the head2head rows (see RESULTS.md: machine contention)
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2130	0.0640	20.1140	205.42	52.77	2.60	1.50	0	n/a	2.0.77	2026-08-01	first pass; superseded by the head2head rows (see RESULTS.md: machine contention)
+saturated	better-belt-balancer_0.1.0	1	4	normal	3600	2	0.1850	0.0490	4.0120	169.52	49.25	3.49	0.36	2752	1.000	2.0.77	2026-08-01	first pass; superseded by the head2head rows (see RESULTS.md: machine contention)
+saturated	better-belt-balancer_0.1.0	50	4	normal	3600	2	0.2240	0.1040	3.3510	235.23	64.03	34.51	0.85	137600	1.000	2.0.77	2026-08-01	first pass; superseded by the head2head rows (see RESULTS.md: machine contention)
+saturated	better-belt-balancer_0.1.0	200	4	normal	3600	2	0.4220	0.1270	18.9730	368.90	106.32	130.41	2.01	550400	1.000	2.0.77	2026-08-01	first pass; superseded by the head2head rows (see RESULTS.md: machine contention)
+saturated	better-belt-balancer_0.1.0	50	8	normal	3600	2	0.3010	0.1140	10.5830	271.02	71.82	60.56	1.76	274200	1.003	2.0.77	2026-08-01	first pass; superseded by the head2head rows (see RESULTS.md: machine contention)
+idle	better-belt-balancer_0.1.0	200	4	normal	3600	2	0.2100	0.0710	34.7400	193.47	56.21	3.12	1.68	0	n/a	2.0.77	2026-08-01	first pass; superseded by the head2head rows (see RESULTS.md: machine contention)
+control	none	200	4	express	3600	2	0.5940	0.2010	3.0880	565.26	136.37	303.81	2.01	1729600	1.000	2.0.77	2026-08-01	gc pass; control re-measure
+control-idle	none	200	4	express	3600	2	0.1865	0.0710	1.9510	171.23	49.50	1.92	1.64	0	n/a	2.0.77	2026-08-01	gc pass
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6605	0.1930	27.4450	672.41	150.87	356.56	2.24	1740000	1.001	2.0.77	2026-08-01	gc pass
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2070	0.0480	22.4490	175.53	51.12	2.80	1.59	0	n/a	2.0.77	2026-08-01	gc pass
+saturated	belt-balancer-2_2.0.9	200	4	express	3600	2	5.1605	0.5590	69.4510	5147.13	302.50	489.60	3928.92	1761600	1.000	2.0.77	2026-08-01	gc pass
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6995	0.2020	21.2320	610.55	138.20	340.15	2.09	1740000	1.001	2.0.77	2026-08-01	confirm
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2115	0.0750	22.2420	209.18	50.97	2.75	1.69	0	n/a	2.0.77	2026-08-01	confirm
+control	none	500	4	express	3600	2	1.6195	0.6000	8.4010	1583.34	288.64	1138.07	4.68	4324000	1.000	2.0.77	2026-08-01	scale-out control
+saturated	better-belt-balancer_0.1.0	500	4	express	3600	2	2.0500	0.6430	88.5000	2049.81	518.97	1350.30	6.49	4350000	1.001	2.0.77	2026-08-01	scale-out
+control	none	1	4	express	3600	2	0.1700	0.0700	0.4180	166.02	48.94	3.77	0.38	8648	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-2_2.0.9	1	4	express	3600	2	0.2025	0.0720	0.8060	181.83	47.19	3.63	16.63	8808	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-3_1.0.1	1	4	express	3600	2	0.1900	0.0770	0.4890	206.44	53.09	4.05	19.47	8808	1.000	2.0.77	2026-08-01	head2head
+saturated	better-belt-balancer_0.1.0	1	4	express	3600	2	0.1750	0.0740	0.5290	196.91	59.14	5.44	0.40	8700	1.001	2.0.77	2026-08-01	head2head
+control	none	50	4	express	3600	2	0.2355	0.1140	0.8940	270.88	57.26	71.91	0.90	432400	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-2_2.0.9	50	4	express	3600	2	1.3120	0.2410	23.5060	1337.78	99.03	92.83	900.94	440400	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-3_1.0.1	50	4	express	3600	2	1.3660	0.3020	19.7620	1406.04	100.67	96.85	940.35	440400	1.000	2.0.77	2026-08-01	head2head
+saturated	better-belt-balancer_0.1.0	50	4	express	3600	2	0.2455	0.1020	3.4790	239.35	60.47	60.75	0.87	435000	1.001	2.0.77	2026-08-01	head2head
+control	none	200	4	express	3600	2	0.5610	0.2020	2.0660	549.53	123.66	296.25	2.65	1729600	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-2_2.0.9	200	4	express	3600	2	4.9245	0.5730	81.8350	5010.04	253.87	459.53	3823.69	1761600	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-3_1.0.1	200	4	express	3600	2	5.1540	0.8480	79.1490	5367.35	262.92	486.48	4209.69	1761600	1.000	2.0.77	2026-08-01	head2head
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6445	0.2060	21.1440	610.71	134.99	314.66	2.19	1740000	1.001	2.0.77	2026-08-01	head2head
+control	none	50	8	express	3600	2	0.3205	0.1320	1.4700	342.79	78.84	141.32	1.25	852000	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-2_2.0.9	50	8	express	3600	2	2.4275	0.3570	32.5190	2407.18	166.17	195.26	1751.20	880800	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-3_1.0.1	50	8	express	3600	2	2.4850	0.4980	32.0540	2527.48	150.73	190.04	1895.61	880800	1.000	2.0.77	2026-08-01	head2head
+saturated	better-belt-balancer_0.1.0	50	8	express	3600	2	0.3530	0.1310	11.5310	361.83	86.59	143.72	1.51	867000	1.001	2.0.77	2026-08-01	head2head
+control-idle	none	200	4	express	3600	2	0.1870	0.0470	4.4340	176.58	51.96	1.91	1.95	0	n/a	2.0.77	2026-08-01	head2head
+idle	belt-balancer-2_2.0.9	200	4	express	3600	2	0.5260	0.3520	7.3590	517.70	46.93	2.50	331.72	0	n/a	2.0.77	2026-08-01	head2head
+idle	belt-balancer-3_1.0.1	200	4	express	3600	2	0.7690	0.5550	3.0130	768.88	49.33	3.19	575.91	0	n/a	2.0.77	2026-08-01	head2head
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2190	0.0490	27.7950	176.51	52.47	2.79	1.44	0	n/a	2.0.77	2026-08-01	head2head
+control	none	1	4	normal	3600	2	0.1730	0.0600	0.5180	169.65	51.00	2.71	0.42	2648	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-2_2.0.9	1	4	normal	3600	2	0.1875	0.0670	0.6030	186.74	51.09	2.80	6.85	2808	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-3_1.0.1	1	4	normal	3600	2	0.1825	0.0790	0.6010	178.07	50.31	2.79	7.16	2808	1.000	2.0.77	2026-08-01	head2head
+saturated	better-belt-balancer_0.1.0	1	4	normal	3600	2	0.1715	0.0720	0.5290	164.01	46.55	3.63	0.36	2752	1.000	2.0.77	2026-08-01	head2head
+control	none	50	4	normal	3600	2	0.2095	0.0870	1.1330	230.94	61.66	39.00	0.84	132400	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-2_2.0.9	50	4	normal	3600	2	0.5600	0.1130	19.2420	556.41	84.67	39.29	247.21	140400	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-3_1.0.1	50	4	normal	3600	2	0.5640	0.1170	22.1900	576.39	90.99	43.77	254.49	140400	1.000	2.0.77	2026-08-01	head2head
+saturated	better-belt-balancer_0.1.0	50	4	normal	3600	2	0.2090	0.0950	3.3880	242.37	67.16	39.18	1.19	137600	1.000	2.0.77	2026-08-01	head2head
+control	none	200	4	normal	3600	2	0.3785	0.1450	2.2860	406.98	139.57	138.20	1.86	529600	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-2_2.0.9	200	4	normal	3600	2	1.8615	0.2310	68.1010	1948.07	241.13	205.18	1201.49	561600	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-3_1.0.1	200	4	normal	3600	2	1.8830	0.2060	64.5190	2026.33	282.90	215.46	1217.98	561600	1.000	2.0.77	2026-08-01	head2head
+saturated	better-belt-balancer_0.1.0	200	4	normal	3600	2	0.4305	0.1390	21.2870	391.66	111.11	152.81	1.94	550400	1.000	2.0.77	2026-08-01	head2head
+control	none	50	8	normal	3600	2	0.2650	0.1200	1.4370	258.79	81.64	60.12	1.28	252000	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-2_2.0.9	50	8	normal	3600	2	0.9970	0.1450	29.7930	1062.52	160.49	89.69	568.62	280800	1.000	2.0.77	2026-08-01	head2head
+saturated	belt-balancer-3_1.0.1	50	8	normal	3600	2	1.0215	0.1620	33.0100	1039.79	137.76	91.59	568.85	280800	1.000	2.0.77	2026-08-01	head2head
+saturated	better-belt-balancer_0.1.0	50	8	normal	3600	2	0.2805	0.1160	10.7630	247.42	66.16	54.31	1.31	274200	1.003	2.0.77	2026-08-01	head2head
+control-idle	none	200	4	normal	3600	2	0.1900	0.0710	1.7810	168.44	50.34	1.78	1.36	0	n/a	2.0.77	2026-08-01	head2head
+idle	belt-balancer-2_2.0.9	200	4	normal	3600	2	0.2410	0.0760	2.5250	227.12	49.74	1.95	52.28	0	n/a	2.0.77	2026-08-01	head2head
+idle	belt-balancer-3_1.0.1	200	4	normal	3600	2	0.2715	0.0680	3.1760	261.00	50.45	2.03	82.47	0	n/a	2.0.77	2026-08-01	head2head
+idle	better-belt-balancer_0.1.0	200	4	normal	3600	2	0.2020	0.0750	19.6050	222.60	54.84	3.03	1.48	0	n/a	2.0.77	2026-08-01	head2head
+idle	better-belt-balancer_0.1.0	50	4	express	3600	2	0.1810	0.0750	3.0350	167.64	49.68	2.88	0.78	0	n/a	2.0.77	2026-08-01	DIAG gc scaling, persist=table
+control	none	200	4	express	3600	2	0.5265	0.2200	2.4790	506.18	132.56	248.10	1.72	1729600	1.000	2.0.77	2026-08-01	round2-defer control saturated
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6730	0.2000	25.6370	615.39	143.50	306.33	1.94	1740000	1.001	2.0.77	2026-08-01	round2-defer+filters saturated
+control-idle	none	200	4	express	3600	2	0.1810	0.0720	1.7870	181.36	53.34	1.92	1.54	0	n/a	2.0.77	2026-08-01	round2 control idle
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1950	0.0690	18.3050	194.20	49.71	2.58	1.53	0	n/a	2.0.77	2026-08-01	round2 bbb idle
+control	none	200	4	express	3600	2	0.5405	0.2140	7.3740	508.44	135.67	255.45	1.84	1729600	1.000	2.0.77	2026-08-01	round2 control saturated rep2
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6060	0.2040	20.3400	633.07	153.93	337.13	2.25	1740000	1.001	2.0.77	2026-08-01	round2 bbb saturated rep2
+idle	better-belt-balancer_0.1.0	200	4	express	3600	5	0.1848	0.0660	18.1190	192.79	57.31	2.47	1.37	0	n/a	2.0.77	2026-08-01	persist-pass2 table idle-table-1
+idle	better-belt-balancer_0.1.0	200	4	express	3600	5	0.1840	0.0740	20.2080	183.37	51.22	2.48	1.32	0	n/a	2.0.77	2026-08-01	persist-pass2 packed idle-packed-1
+idle	better-belt-balancer_0.1.0	200	4	express	3600	5	0.1828	0.0750	15.1500	169.01	49.53	2.46	1.30	0	n/a	2.0.77	2026-08-01	persist-pass2 table idle-table-2
+idle	better-belt-balancer_0.1.0	200	4	express	3600	5	0.1830	0.0760	21.9990	181.41	49.16	2.47	1.29	0	n/a	2.0.77	2026-08-01	persist-pass2 packed idle-packed-2
+idle	better-belt-balancer_0.1.0	200	4	express	3600	5	0.1818	0.0770	15.3080	177.87	49.44	2.45	1.25	0	n/a	2.0.77	2026-08-01	persist-pass2 table idle-table-3
+idle	better-belt-balancer_0.1.0	200	4	express	3600	5	0.1860	0.0810	18.7190	187.49	50.50	2.50	1.32	0	n/a	2.0.77	2026-08-01	persist-pass2 packed idle-packed-3
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	3	0.4937	0.1900	16.5740	454.84	96.35	231.90	1.88	1740000	1.001	2.0.77	2026-08-01	persist-pass2 table sat-table-1
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	3	0.5267	0.1850	18.0640	458.89	97.29	234.99	1.95	1740000	1.001	2.0.77	2026-08-01	persist-pass2 packed sat-packed-1
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	3	0.4763	0.1770	15.1980	470.47	99.57	236.86	1.93	1740000	1.001	2.0.77	2026-08-01	persist-pass2 table sat-table-2
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	3	0.4677	0.1730	18.9280	461.40	97.10	225.47	1.83	1740000	1.001	2.0.77	2026-08-01	persist-pass2 packed sat-packed-2
+control-idle	none	200	4	express	3600	5	0.1678	0.0730	1.5060	158.86	48.31	1.65	1.32	0	n/a	2.0.77	2026-08-01	persist-pass2 control-idle
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.4665	0.1830	17.8860	467.25	96.90	228.70	1.72	1740000	1.001	2.0.77	2026-08-01	round4 bbb saturated
+control	none	200	4	express	3600	2	0.4885	0.2150	1.5540	476.95	125.38	234.47	1.98	1729600	1.000	2.0.77	2026-08-01	round4 control
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1865	0.0860	18.0350	168.98	50.54	2.48	1.39	0	n/a	2.0.77	2026-08-01	round4 bbb idle
+control-idle	none	200	4	express	3600	2	0.1755	0.0760	1.4000	160.58	48.56	1.68	1.25	0	n/a	2.0.77	2026-08-01	round4 control-idle
+control-idle	none	200	4	express	3600	2	0.1690	0.0700	1.6610	161.05	48.97	1.71	1.28	0	n/a	2.0.77	2026-08-01	M5 idle control
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1875	0.0890	18.5770	154.98	46.07	2.46	1.30	0	n/a	2.0.77	2026-08-01	M5 idle, adaptive sprites
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1855	0.0720	19.8750	190.34	51.75	2.45	1.21	0	n/a	2.0.77	2026-08-01	heapdiet-before
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1685	0.0720	2.2810	167.06	50.59	2.47	1.29	0	n/a	2.0.77	2026-08-01	heapdiet-probe-QUIET
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1720	0.0820	2.2430	163.79	49.36	2.46	1.24	0	n/a	2.0.77	2026-08-01	heapdiet-after-rep1
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1700	0.0680	2.2580	157.34	46.80	2.46	1.19	0	n/a	2.0.77	2026-08-01	heapdiet-after-rep2
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1695	0.0720	2.1880	162.96	48.91	2.51	1.25	0	n/a	2.0.77	2026-08-01	heapdiet-after-rep3
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1705	0.0760	2.3170	164.84	49.99	2.50	1.28	0	n/a	2.0.77	2026-08-01	heapdiet-after-rep4
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1725	0.0740	2.2720	164.86	50.33	2.48	1.24	0	n/a	2.0.77	2026-08-01	heapdiet-after-rep5
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1810	0.0800	18.5370	191.37	52.13	2.49	1.32	0	n/a	2.0.77	2026-08-01	heapdiet-before-rep2
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1855	0.0840	16.9950	163.99	49.26	2.52	1.33	0	n/a	2.0.77	2026-08-01	heapdiet-before-rep3
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1850	0.0890	18.0540	187.52	51.02	2.47	1.36	0	n/a	2.0.77	2026-08-01	heapdiet-before-rep4
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1835	0.0750	17.7330	155.09	46.68	2.49	1.26	0	n/a	2.0.77	2026-08-01	heapdiet-before-rep5
+idle	better-belt-balancer_0.1.0	500	4	express	3600	2	0.1795	0.0790	4.8920	168.68	49.22	2.50	3.05	0	n/a	2.0.77	2026-08-01	heapdiet-after-n500-rep1
+idle	better-belt-balancer_0.1.0	500	4	express	3600	2	0.1770	0.0730	5.0760	167.23	49.07	2.48	3.10	0	n/a	2.0.77	2026-08-01	heapdiet-after-n500-rep2
+idle	better-belt-balancer_0.1.0	500	4	express	3600	2	0.1785	0.0700	5.0890	160.69	47.60	2.44	2.75	0	n/a	2.0.77	2026-08-01	heapdiet-after-n500-rep3
+idle	better-belt-balancer_0.1.0	500	4	express	3600	2	0.2125	0.0820	49.7080	160.56	47.12	2.48	3.02	0	n/a	2.0.77	2026-08-01	heapdiet-before-n500-rep1
+idle	better-belt-balancer_0.1.0	500	4	express	3600	2	0.2130	0.0860	49.6480	168.17	49.26	2.47	2.96	0	n/a	2.0.77	2026-08-01	heapdiet-before-n500-rep2
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.4510	0.1810	2.5430	442.85	96.52	230.01	1.89	1740000	1.001	2.0.77	2026-08-01	heapdiet-final-bbb
+control-idle	none	200	4	express	3600	2	0.1655	0.0740	1.4200	166.83	50.59	1.67	1.31	0	n/a	2.0.77	2026-08-01	heapdiet-final-control-idle
+control	none	200	4	express	3600	2	0.4790	0.2140	1.6360	487.72	126.59	241.25	1.69	1729600	1.000	2.0.77	2026-08-01	heapdiet-final-control-sat
+idle	better-belt-balancer_0.1.0	1	4	express	3600	2	0.1640	0.0810	0.4600	163.80	50.57	2.45	0.32	0	n/a	2.0.77	2026-08-01	heapprobe-n1
+idle	better-belt-balancer_0.1.0	50	4	express	3600	2	0.1625	0.0740	0.8930	166.00	49.73	2.49	0.54	0	n/a	2.0.77	2026-08-01	heapprobe-n50
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1675	0.0730	2.2290	166.30	49.62	2.47	1.19	0	n/a	2.0.77	2026-08-01	heapprobe-n200
+idle	better-belt-balancer_0.1.0	1	4	express	3600	2	0.1615	0.0740	0.4100	163.84	50.03	2.46	0.31	0	n/a	2.0.77	2026-08-01	heapprobe2-n1
+idle	better-belt-balancer_0.1.0	50	4	express	3600	2	0.1675	0.0860	0.9060	166.87	50.95	2.48	0.51	0	n/a	2.0.77	2026-08-01	heapprobe2-n50
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1690	0.0740	2.2790	167.85	51.33	2.51	1.26	0	n/a	2.0.77	2026-08-01	heapprobe2-n200
+idle	better-belt-balancer_0.1.0	500	4	express	3600	2	0.1795	0.0800	5.1340	168.65	50.58	2.46	2.95	0	n/a	2.0.77	2026-08-01	heapprobe2-n500
+control-idle	none	500	4	express	3600	2	0.1730	0.0830	3.1000	161.48	48.49	1.69	3.10	0	n/a	2.0.77	2026-08-01	heapdiet-final-control-idle-n500
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.4510	0.1800	2.4280	460.70	100.24	237.23	1.61	1740000	1.001	2.0.77	2026-08-01	final-bbb-sat
+control	none	200	4	express	3600	2	0.4760	0.1950	1.6670	506.41	144.87	242.57	1.72	1729600	1.000	2.0.77	2026-08-01	final-control-sat
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1720	0.0760	2.3680	164.38	49.97	2.47	1.36	0	n/a	2.0.77	2026-08-01	final-bbb-idle-rep1
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1700	0.0790	2.2270	163.59	49.59	2.39	1.48	0	n/a	2.0.77	2026-08-01	final-bbb-idle-rep2
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1700	0.0770	2.2630	165.42	49.48	2.50	1.24	0	n/a	2.0.77	2026-08-01	final-bbb-idle-rep3
+control-idle	none	200	4	express	3600	2	0.1710	0.0800	1.4220	167.36	51.01	1.68	1.23	0	n/a	2.0.77	2026-08-01	final-control-idle
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6070	0.1880	4.7110	1059.17	286.90	507.86	2.39	1740000	1.001	2.0.77	2026-08-02	gc=leaking rep=1
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.8545	0.2530	7.4750	668.67	162.40	354.50	2.84	1740000	1.001	2.0.77	2026-08-02	gc=collected rep=1
+control	none	200	4	express	3600	2	0.5775	0.2050	2.5240	508.37	120.75	264.81	1.78	1729600	1.000	2.0.77	2026-08-02	gc=control rep=1
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1975	0.0700	2.8510	217.63	58.71	3.91	1.86	0	n/a	2.0.77	2026-08-02	gc=leaking rep=1
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2465	0.0570	15.9940	206.78	55.82	4.12	1.70	0	n/a	2.0.77	2026-08-02	gc=collected rep=1
+control-idle	none	200	4	express	3600	2	0.2450	0.0490	11.2950	241.93	78.50	3.30	1.73	0	n/a	2.0.77	2026-08-02	gc=control rep=1
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.7565	0.2430	13.7930	630.27	150.94	339.08	3.49	1740000	1.001	2.0.77	2026-08-02	gc=leaking rep=2
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.7440	0.2480	10.5790	636.47	157.02	328.60	2.16	1740000	1.001	2.0.77	2026-08-02	gc=collected rep=2
+control	none	200	4	express	3600	2	0.6080	0.2190	11.8430	567.82	125.48	299.64	1.83	1729600	1.000	2.0.77	2026-08-02	gc=control rep=2
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2160	0.0490	5.6070	187.40	55.04	2.92	2.28	0	n/a	2.0.77	2026-08-02	gc=leaking rep=2
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2250	0.0640	4.6620	179.65	50.08	2.95	1.47	0	n/a	2.0.77	2026-08-02	gc=collected rep=2
+control-idle	none	200	4	express	3600	2	0.1835	0.0780	2.1180	173.61	52.13	1.88	1.39	0	n/a	2.0.77	2026-08-02	gc=control rep=2
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6305	0.2020	4.4040	562.40	131.30	295.01	1.93	1740000	1.001	2.0.77	2026-08-02	gc=leaking rep=3
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6900	0.1910	18.8280	642.55	161.05	342.72	2.19	1740000	1.001	2.0.77	2026-08-02	gc=collected rep=3
+control	none	200	4	express	3600	2	0.5420	0.2090	2.7440	552.02	126.92	285.91	1.90	1729600	1.000	2.0.77	2026-08-02	gc=control rep=3
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2050	0.0590	3.0880	171.99	49.52	2.50	2.03	0	n/a	2.0.77	2026-08-02	gc=leaking rep=3
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2260	0.0490	22.6420	171.33	49.22	2.69	1.50	0	n/a	2.0.77	2026-08-02	gc=collected rep=3
+control-idle	none	200	4	express	3600	2	0.1915	0.0700	2.5450	189.79	56.90	1.87	1.50	0	n/a	2.0.77	2026-08-02	gc=control rep=3
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6830	0.2040	8.0020	639.84	159.60	323.89	2.38	1740000	1.001	2.0.77	2026-08-02	gc=leaking rep=4
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	1.0000	0.2530	39.0650	1063.33	309.04	517.22	4.99	1740000	1.001	2.0.77	2026-08-02	gc=collected rep=4
+control	none	200	4	express	3600	2	0.8455	0.2740	14.2840	667.83	136.17	386.21	3.16	1729600	1.000	2.0.77	2026-08-02	gc=control rep=4
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1995	0.0570	3.1710	191.99	53.68	3.38	1.68	0	n/a	2.0.77	2026-08-02	gc=leaking rep=4
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2490	0.0490	13.6520	204.36	56.00	3.28	1.69	0	n/a	2.0.77	2026-08-02	gc=collected rep=4
+control-idle	none	200	4	express	3600	2	0.2375	0.0490	4.1060	209.16	56.38	2.44	3.27	0	n/a	2.0.77	2026-08-02	gc=control rep=4
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.9820	0.2980	9.7780	1172.21	306.71	661.33	3.79	1740000	1.001	2.0.77	2026-08-02	gc=leaking rep=5
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.9285	0.2390	10.8150	678.09	148.24	387.27	2.20	1740000	1.001	2.0.77	2026-08-02	gc=collected rep=5
+control	none	200	4	express	3600	2	0.6805	0.2450	16.0020	671.05	147.41	380.22	2.26	1729600	1.000	2.0.77	2026-08-02	gc=control rep=5
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2115	0.0740	3.6670	204.29	56.85	3.12	1.78	0	n/a	2.0.77	2026-08-02	gc=leaking rep=5
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2315	0.0490	5.6220	225.83	62.72	3.50	2.87	0	n/a	2.0.77	2026-08-02	gc=collected rep=5
+control-idle	none	200	4	express	3600	2	0.2075	0.0460	2.8490	174.60	51.57	1.79	1.30	0	n/a	2.0.77	2026-08-02	gc=control rep=5
+idle	better-belt-balancer_0.1.0	200	4	express	1800	1	0.1990	0.0950	2.8960	178.71	52.53	2.79	1.08	0	n/a	2.0.77	2026-08-02	gcattrib leaking rep=1
+idle	better-belt-balancer_0.1.0	200	4	express	1800	1	0.2480	0.0980	4.8550	164.67	48.64	2.66	1.01	0	n/a	2.0.77	2026-08-02	gcattrib collected rep=1
+control-idle	none	200	4	express	1800	1	0.1950	0.0770	1.6900	172.61	50.93	1.89	1.14	0	n/a	2.0.77	2026-08-02	gcattrib control rep=1
+idle	better-belt-balancer_0.1.0	200	4	express	1800	1	0.2380	0.0770	4.0990	174.92	50.84	2.72	1.19	0	n/a	2.0.77	2026-08-02	gcattrib leaking rep=2
+idle	better-belt-balancer_0.1.0	200	4	express	1800	1	0.3230	0.0610	5.2160	278.37	79.25	3.97	1.48	0	n/a	2.0.77	2026-08-02	gcattrib collected rep=2
+control-idle	none	200	4	express	1800	1	0.2630	0.0700	2.0590	243.41	66.34	2.77	1.35	0	n/a	2.0.77	2026-08-02	gcattrib control rep=2
+idle	better-belt-balancer_0.1.0	200	4	express	1800	1	0.2250	0.1030	2.9230	258.63	74.25	3.46	2.06	0	n/a	2.0.77	2026-08-02	gcattrib leaking rep=3
+idle	better-belt-balancer_0.1.0	200	4	express	1800	1	0.2660	0.0720	6.8990	176.63	52.03	2.73	1.18	0	n/a	2.0.77	2026-08-02	gcattrib collected rep=3
+control-idle	none	200	4	express	1800	1	0.2220	0.0900	1.8100	210.65	59.78	2.20	3.56	0	n/a	2.0.77	2026-08-02	gcattrib control rep=3
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6340	0.2040	4.8040	543.62	129.25	287.32	2.04	1740000	1.001	2.0.77	2026-08-02	gcpass2 sat-leaking-r1
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6350	0.2000	6.1180	557.23	130.39	290.53	2.22	1740000	1.001	2.0.77	2026-08-02	gcpass2 sat-collected-r1
+control	none	200	4	express	3600	2	0.5590	0.2140	9.2390	544.58	124.71	288.66	2.16	1729600	1.000	2.0.77	2026-08-02	gcpass2 sat-control-r1
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1855	0.0790	3.0330	178.14	51.23	2.62	1.48	0	n/a	2.0.77	2026-08-02	gcpass2 idle-leaking-r1
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2320	0.0560	11.2780	184.92	49.82	3.97	2.86	0	n/a	2.0.77	2026-08-02	gcpass2 idle-collected-r1
+control-idle	none	200	4	express	3600	2	0.1955	0.0510	6.9050	171.74	48.18	2.21	1.51	0	n/a	2.0.77	2026-08-02	gcpass2 idle-control-r1
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.7965	0.2650	10.5930	728.37	163.82	383.82	2.92	1740000	1.001	2.0.77	2026-08-02	gcpass2 sat-leaking-r2
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.7075	0.2110	5.1580	604.97	149.33	311.51	2.10	1740000	1.001	2.0.77	2026-08-02	gcpass2 sat-collected-r2
+control	none	200	4	express	3600	2	0.5875	0.2110	10.8140	561.89	126.00	295.11	2.24	1729600	1.000	2.0.77	2026-08-02	gcpass2 sat-control-r2
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2155	0.0710	7.0520	192.11	56.23	2.66	1.41	0	n/a	2.0.77	2026-08-02	gcpass2 idle-leaking-r2
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2060	0.0760	4.9520	170.67	50.75	2.58	1.40	0	n/a	2.0.77	2026-08-02	gcpass2 idle-collected-r2
+control-idle	none	200	4	express	3600	2	0.1890	0.0660	2.2460	178.34	52.55	1.81	1.57	0	n/a	2.0.77	2026-08-02	gcpass2 idle-control-r2
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.8465	0.2120	19.1140	948.89	265.85	501.99	4.04	1740000	1.001	2.0.77	2026-08-02	gcpass2 sat-leaking-r3
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.9220	0.2030	55.8250	575.11	141.06	299.11	2.02	1740000	1.001	2.0.77	2026-08-02	gcpass2 sat-collected-r3
+control	none	200	4	express	3600	2	0.6310	0.2250	12.3290	518.05	122.37	266.64	2.37	1729600	1.000	2.0.77	2026-08-02	gcpass2 sat-control-r3
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2190	0.0720	3.2100	202.46	55.74	3.01	1.97	0	n/a	2.0.77	2026-08-02	gcpass2 idle-leaking-r3
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2255	0.0580	5.7940	229.50	62.55	4.61	1.94	0	n/a	2.0.77	2026-08-02	gcpass2 idle-collected-r3
+control-idle	none	200	4	express	3600	2	0.1955	0.0490	1.9220	172.85	51.19	1.82	1.58	0	n/a	2.0.77	2026-08-02	gcpass2 idle-control-r3
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.8040	0.2030	20.7890	868.71	201.63	494.96	3.08	1740000	1.001	2.0.77	2026-08-02	gcpass2 sat-leaking-r4
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.8365	0.2100	9.0820	564.03	131.78	294.16	1.96	1740000	1.001	2.0.77	2026-08-02	gcpass2 sat-collected-r4
+control	none	200	4	express	3600	2	0.6235	0.2200	3.1930	701.77	138.37	398.93	2.43	1729600	1.000	2.0.77	2026-08-02	gcpass2 sat-control-r4
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2055	0.0650	3.5030	188.37	54.19	2.77	1.37	0	n/a	2.0.77	2026-08-02	gcpass2 idle-leaking-r4
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2035	0.0500	9.2420	183.66	54.06	2.62	1.41	0	n/a	2.0.77	2026-08-02	gcpass2 idle-collected-r4
+control-idle	none	200	4	express	3600	2	0.1820	0.0750	2.3460	180.77	52.98	1.73	1.44	0	n/a	2.0.77	2026-08-02	gcpass2 idle-control-r4
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6300	0.1820	10.1570	622.49	137.21	343.80	2.13	1740000	1.001	2.0.77	2026-08-02	gcpass2 sat-leaking-r5
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.7565	0.2060	6.1260	724.93	178.05	390.56	2.31	1740000	1.001	2.0.77	2026-08-02	gcpass2 sat-collected-r5
+control	none	200	4	express	3600	2	0.5940	0.2230	2.7930	585.15	126.34	316.42	1.80	1729600	1.000	2.0.77	2026-08-02	gcpass2 sat-control-r5
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1940	0.0710	2.7920	183.51	52.87	2.64	1.56	0	n/a	2.0.77	2026-08-02	gcpass2 idle-leaking-r5
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2355	0.0740	7.6400	204.70	60.56	2.79	1.82	0	n/a	2.0.77	2026-08-02	gcpass2 idle-collected-r5
+control-idle	none	200	4	express	3600	2	0.1905	0.0690	2.0500	204.30	59.91	2.22	1.59	0	n/a	2.0.77	2026-08-02	gcpass2 idle-control-r5
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.8300	0.1960	6.0000	1092.62	128.45	267.45	552.14	1740000	1.001	2.0.77	2026-08-03	gcround6
+control	none	200	4	express	3600	2	0.4860	0.1960	2.2610	480.51	133.05	234.55	1.86	1729600	1.000	2.0.77	2026-08-03	gcround6
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.4080	0.0690	4.5680	692.57	50.05	2.70	511.65	0	n/a	2.0.77	2026-08-03	gcround6
+control-idle	none	200	4	express	3600	2	0.1800	0.0700	2.0340	157.69	47.67	1.73	1.32	0	n/a	2.0.77	2026-08-03	gcround6
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.8180	0.1930	4.7480	1232.97	143.70	304.84	630.58	1740000	1.001	2.0.77	2026-08-03	gcround6
+control	none	200	4	express	3600	2	0.4990	0.2230	1.8480	497.25	134.84	243.77	1.80	1729600	1.000	2.0.77	2026-08-03	gcround6
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.4125	0.0780	4.4630	689.86	46.70	2.62	520.50	0	n/a	2.0.77	2026-08-03	gcround6
+control-idle	none	200	4	express	3600	2	0.1740	0.0670	1.7020	184.02	56.82	1.73	1.38	0	n/a	2.0.77	2026-08-03	gcround6
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.7980	0.2020	5.0830	1169.52	133.62	290.87	593.65	1740000	1.001	2.0.77	2026-08-03	gcround6
+control	none	200	4	express	3600	2	0.4620	0.1930	1.8550	464.94	133.73	219.97	1.88	1729600	1.000	2.0.77	2026-08-03	gcround6
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.4180	0.0880	4.6730	703.18	50.32	2.73	520.65	0	n/a	2.0.77	2026-08-03	gcround6
+control-idle	none	200	4	express	3600	2	0.1935	0.0680	1.8260	162.81	48.71	1.74	1.44	0	n/a	2.0.77	2026-08-03	gcround6
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.1795	0.0680	3.2480	169.20	50.81	2.61	1.36	0	n/a	2.0.77	2026-08-03	gcround6-leaking-arm
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.4775	0.0760	5.9910	880.77	65.46	4.31	652.34	0	n/a	2.0.77	2026-08-03	gcround6-collected-rerun
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.4910	0.0710	5.4150	792.60	63.10	3.61	575.15	0	n/a	2.0.77	2026-08-03	gcround6-prelatch-guest
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2295	0.0490	6.2240	179.97	52.96	2.56	1.53	0	n/a	2.0.77	2026-08-04	
+control-idle	none	200	4	express	3600	2	0.2025	0.0590	2.4620	125.04	34.15	1.77	1.65	0	n/a	2.0.77	2026-08-04	
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.6625	0.2040	5.6750	711.35	168.75	383.36	2.67	1740000	1.001	2.0.77	2026-08-04	
+control	none	200	4	express	3600	2	0.6035	0.2640	2.3290	541.70	127.15	280.24	1.98	1729600	1.000	2.0.77	2026-08-04	
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2205	0.0590	5.9750	203.02	56.68	2.90	2.06	0	n/a	2.0.77	2026-08-04	
+control-idle	none	200	4	express	3600	2	0.1875	0.0710	1.9590	177.63	53.79	1.74	1.40	0	n/a	2.0.77	2026-08-04	
+saturated	better-belt-balancer_0.1.0	200	4	express	3600	2	0.7625	0.2210	5.5330	758.79	192.01	406.76	2.75	1740000	1.001	2.0.77	2026-08-04	
+control	none	200	4	express	3600	2	0.5930	0.2300	2.5730	609.96	128.29	323.28	2.09	1729600	1.000	2.0.77	2026-08-04	
+idle	better-belt-balancer_0.1.0	200	4	express	3600	2	0.2075	0.0760	5.4400	199.96	57.52	2.90	1.81	0	n/a	2.0.77	2026-08-04	
+control-idle	none	200	4	express	3600	2	0.2050	0.0570	2.3610	168.01	46.35	2.09	1.47	0	n/a	2.0.77	2026-08-04	
+mega	better-belt-balancer_0.1.0	40	4	express	2400	1	1.9090	0.4700	408.4040					1864586	1.009	2.0.77	2026-08-05	mega hitch saturated
+mega-idle	better-belt-balancer_0.1.0	40	4	express	2400	1	0.6420	0.0750	158.8380					0	n/a	2.0.77	2026-08-05	mega hitch idle
+mega	better-belt-balancer_0.1.0	40	4	express	2400	1	1.9090	0.4590	423.7760					1864586	1.009	2.0.77	2026-08-05	mega hitch saturated r2
+mega	better-belt-balancer_0.1.0	40	4	express	3600	2	0.9345	0.4470	8.1650	881.27	218.96	529.04	3.60	3192037	1.003	2.0.77	2026-08-05	mega r1
+mega-control	none	40	4	express	3600	2	0.7870	0.3720	3.1330	781.10	201.90	457.39	3.44	3190402	1.000	2.0.77	2026-08-05	mega r1
+mega-idle	better-belt-balancer_0.1.0	40	4	express	3600	2	0.2240	0.0740	8.2640	188.42	56.33	2.47	2.80	0	n/a	2.0.77	2026-08-05	mega r1
+mega-control-idle	none	40	4	express	3600	2	0.1935	0.0730	3.1080	182.49	55.17	1.66	2.49	0	n/a	2.0.77	2026-08-05	mega r1
+mega	better-belt-balancer_0.1.0	40	4	express	3600	2	1.0160	0.4610	8.5740	946.26	237.57	551.68	3.89	3192037	1.003	2.0.77	2026-08-05	mega r2
+mega-control	none	40	4	express	3600	2	0.8145	0.3610	6.1010	859.53	234.10	480.84	3.74	3190402	1.000	2.0.77	2026-08-05	mega r2
+mega-idle	better-belt-balancer_0.1.0	40	4	express	3600	2	0.2110	0.0760	8.3590	171.91	50.86	2.50	3.09	0	n/a	2.0.77	2026-08-05	mega r2
+mega-control-idle	none	40	4	express	3600	2	0.1700	0.0820	3.0830	164.18	49.99	1.69	2.59	0	n/a	2.0.77	2026-08-05	mega r2
+mega	better-belt-balancer_0.1.0	40	4	express	3600	2	0.9485	0.4290	8.4960	863.58	217.52	515.63	3.69	3192037	1.003	2.0.77	2026-08-05	mega r3
+mega-control	none	40	4	express	3600	2	0.8225	0.4060	3.0860	769.95	205.12	445.12	3.92	3190402	1.000	2.0.77	2026-08-05	mega r3
+mega-idle	better-belt-balancer_0.1.0	40	4	express	3600	2	0.2240	0.0740	8.1620	186.10	55.39	2.45	2.89	0	n/a	2.0.77	2026-08-05	mega r3
+mega-control-idle	none	40	4	express	3600	2	0.1895	0.0680	2.9830	184.34	54.66	1.69	2.92	0	n/a	2.0.77	2026-08-05	mega r3

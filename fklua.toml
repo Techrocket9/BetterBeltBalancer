@@ -1,0 +1,43 @@
+# What this mod is. These become info.json.
+[mod]
+name = "better-belt-balancer"
+version = "0.1.0"
+title = "Better Belt Balancer"
+author = "BetterBeltBalancer"
+description = "Belt balancers that click together into arbitrary shapes. The brain is Go, compiled to Lua by FkLua."
+factorio_version = "2.0"
+# The DATA STAGE. `fklua mod` generates the control stage and rm -rf's its
+# output directory first, so nothing hand-written can live there; this key is
+# the default for --include, and the tree is merged into the package before
+# either writer runs -- so `--zip` carries it too.
+data = "mod-data"
+# info.json's dependencies, verbatim. The data stage extends base prototypes.
+dependencies = ["base >= 2.0.0"]
+
+# The API version the generated bindings come from.
+# PINNED: `fklua gen-bindings --check` fails if the tree drifts from it,
+# and `fklua api check --to <newer>` says whether an upgrade would break
+# anything this mod actually calls.
+[fklua]
+api = "2.0.77"
+lang = ["go"]
+
+# How the GUEST's own heap is managed, and it must match how the guest was
+# BUILT: "collected" means `tinygo -gc=custom` plus an import of
+# guest/go/fkgc (guest/go/gc.go is this mod's). `fklua mod` refuses
+# "collected" for a module that exports no collector, so a mismatch is a build
+# error and never a mod that silently fails to collect.
+#
+# COLLECTED IS THE SHIPPED ARM, decided three times and re-measured each time;
+# CLAUDE.md's "The third decision" is the one that flipped it and the Makefile's
+# GC block is the short form. `make GC=leaking` builds the other arm, which
+# stays green on all seven suites, by passing `--gc=leaking` here on the command
+# line -- a flag overrides this key, which is what makes one manifest able to
+# describe the arm that ships while the other stays buildable from the same
+# tree.
+gc = "collected"
+
+# THERE IS NO `persist` KEY and that is not an omission: `--persist` is a
+# command-line flag with no manifest form, so the Makefile passes
+# `--persist=packed` on every invocation. See the Makefile's PERSIST block for
+# why packed, which is also a decision taken three times.

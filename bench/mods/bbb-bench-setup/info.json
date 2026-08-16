@@ -1,0 +1,9 @@
+{
+  "name": "bbb-bench-setup",
+  "version": "0.1.0",
+  "title": "BBB Bench Setup",
+  "author": "BetterBeltBalancer",
+  "factorio_version": "2.0",
+  "dependencies": ["base >= 2.0.0", "(?) belt-balancer-2", "(?) belt-balancer-3", "(?) better-belt-balancer"],
+  "description": "Headless benchmark rig builder for BetterBeltBalancer. Not a gameplay mod."
+}

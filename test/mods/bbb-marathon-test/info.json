@@ -1,0 +1,9 @@
+{
+  "name": "bbb-marathon-test",
+  "version": "0.1.0",
+  "title": "BBB marathon: the permanent-heap slope per world operation",
+  "author": "BetterBeltBalancer",
+  "factorio_version": "2.0",
+  "description": "Runs hundreds of NET-ZERO world cycles -- place a balancer and remove it, lay a belt beside one and pick it up, rotate an edge, paste and undo -- and reads the guest's own heap probe after each one. Under -gc=leaking the slope of that number IS the marathon-save cost. Asserts nothing itself; test/assert-marathon.py does.",
+  "dependencies": ["base >= 2.0.0", "better-belt-balancer"]
+}
