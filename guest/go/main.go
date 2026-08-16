@@ -248,7 +248,11 @@ func onInit() {
 // joiner runs and nobody else -- and which this mod must never export.
 //
 // It fires AFTER `fk_migrate` on a load that is both, so the heap is settled
-// before the guest is told the world around it moved.
+// before the guest is told the world around it moved. And it fires on the load
+// that ADDS this mod, right after fk_on_init -- a newly added mod is itself a
+// mod-set change -- so that load reaches legacyRecheck twice; the second pass
+// finds nothing left to convert and says nothing, at the price of one by-name
+// scan per surface, once.
 //
 //go:wasmexport fk_on_configuration_changed
 func onConfigurationChanged() {

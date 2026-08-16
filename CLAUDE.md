@@ -2827,7 +2827,7 @@ is `legacyUnchecked`, which is what a fresh heap must mean.
 | trigger | what it does | reported as |
 |---|---|---|
 | `fk_on_init` | a new save, **or this mod added to one that already exists** -- the common half of the swap | `trigger=init` |
-| **`fk_on_configuration_changed`** | the MOD SET moved: a neighbour added, **removed**, or re-versioned | `trigger=configuration_changed` |
+| **`fk_on_configuration_changed`** | the MOD SET moved: a neighbour added, **removed**, or re-versioned. **It also fires on the load that ADDS this mod, right after `fk_on_init`** (a newly added mod is itself a mod-set change; measured in the `mig` suite's `added` leg, where the guest's `rebuilt from world` line lands before tick 0), so that load decides twice: `init` converts, and the second decision finds nothing and says nothing -- one extra by-name scan per surface, once | `trigger=configuration_changed` |
 | `fk_migrate` | a rebuilt guest, on a fresh heap | `trigger=migrate` |
 | `onEventBody`, after `ensureRegistry` | a fresh heap that reached an event before any hook | `trigger=first-dispatch` |
 | the tail of `fk_on_deferred` | re-tests a **Blocked** state only | `trigger=deferred` |
