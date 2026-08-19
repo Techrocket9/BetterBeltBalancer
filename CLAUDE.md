@@ -4168,6 +4168,31 @@ down, and no offset table to marshal on every draw. `dirIndex` inverts `dirOf`
 in four comparisons, for the same reason `plan.Opposite` is a lookup on the
 installed compass rather than arithmetic.
 
+**The shift is per FAMILY, and 0.3 is the DISTANCE rather than the number.**
+Both the generated placeholder and the 2026-08-19 artist delivery draw each
+chevron flush against its TAIL edge instead of centred in its 32 px cell, which
+puts the glyph's centroid **6.6 px** — 0.104 tiles — behind its tip. Measured,
+and identical in both sheets to the tenth of a pixel, so it is a property of the
+convention and not of one delivery. An input points INWARDS, so that bias
+pushes it further out and ADDS to the shift; an output points OUTWARDS, so the
+same bias pulls it in and SUBTRACTS. One shift of 0.3 therefore landed the two
+families at **0.404 and 0.196 tiles** from the tile centre: an output stopped
+reading as an edge marker and sat on the machine's own hub, and a corner part
+carrying two outputs collapsed both of them into one illegible blob.
+`sprite.lua` applies `0.3 -/+ ART_BIAS` per family now and all eight land at
+exactly **0.300**, checked by evaluating the table under `../FkLua/bin/lua52f`.
+If the art is ever redrawn centred, set `ART_BIAS` to 0 rather than editing the
+two distances.
+
+**The defect was ours and it shipped with M5**, which is the part worth keeping:
+the placeholder had the same centroid bias from the day the arrows were drawn,
+and the only thing the new art changed was making it visible by being bolder.
+Nothing headless can see it — the `m3` suite counts 58 rendering objects against
+58 interfaces and is satisfied by a sprite that exists, wherever it lands, and
+no assertion anywhere in this repo is about WHERE a cosmetic overlay sits. Found
+in interactive play, which is the third defect of that shape this file records
+after "The tan streak" and "The wake race".
+
 ### The zero-script property still holds
 
 Re-measured after M5, n=200 k=4 express idle, against its own in-session control
