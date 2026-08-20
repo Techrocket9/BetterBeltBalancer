@@ -3154,7 +3154,8 @@ measured rather than asserted:
 | **A Belt Balancer 2 or 3 save becomes one of ours** | Uninstall the incumbent and every `balancer-part` it left standing becomes one of this mod's, at load, once per save: 11 parts on 2 surfaces into 3 clusters that then deliver 3.997x and 2.995x one belt, with the items on the belts conserved exactly (48 copper before and after), the item stacks surviving and placing our parts, and the technology granted. Nothing at all happens while the incumbent is installed, or while any other mod owns the name. Proved against the real Belt Balancer 2 as well as the harness stand-in. "Adopting a Belt Balancer 2 or 3 save" |
 | **Nothing the compiler places draws anything** | The hidden prototypes are clones of base belts and kept base's pictures — including a three-by-three linked-belt `structure` on the one prototype that stands where a player looks. All four are blanked, and the `edge` suite asserts the structural half: 180–197 visible-surface entities of ours, **every one on a registered part tile, 0 off one**, across six samples. "The tan streak" |
 | **Its long-game cost is measured, not assumed** | Every net-zero world operation's permanent-heap slope, flat over hundreds of iterations, a 300-hour projection built on it, and — since 2026-08-02 — the one stall that projection predicted, measured at **782 ms** and then removed by shipping `--gc=collected`. See "The marathon save" and "The third decision" |
-| **It is not shipped** | No mod-portal release, no play-testing outside the suites, placeholder-quality (computed) art. Licensed MIT (`LICENSE`, 2026-08-15) |
+| **The art is drawn, not computed** | All four assets are an artist's, delivered 2026-08-19: the 47-cell sheet, the icon, the I/O arrows and the mod logo. They dropped in with no code change but one alignment constant, because the cell order and the eight arrow cells were a contract the spec stated and the delivery met. `tools/make-graphics.py` still generates the placeholders and still DEFINES that contract; it is the fallback and the specification, not the shipped pixels |
+| **It is not shipped** | No mod-portal release, and no play-testing beyond the suites and one guided pass. Licensed MIT (`LICENSE`, 2026-08-15) |
 
 Final verification, from `make clean`, **2026-08-02**, Factorio 2.0.77, in the
 SHIPPED configuration (`--persist=packed --gc=collected`): `make check` green;
@@ -3387,9 +3388,14 @@ master `6e3eb28`, and `bin/fklua` was rebuilt from it before either arm ran.
 
 1. **A licence.** Nothing can be released without one, and FkLua is in the same
    position — the two want the same answer.
-2. **The art.** `tools/make-graphics.py` computes all 47 cells and the contract
-   with the guest is one line ("cell *i* is the *i*-th ascending canonical
-   mask"). An artist replaces three PNGs and nothing else moves.
+2. **The icon's hard edge, if it is ever worth a round trip.** The art is in
+   (see the Status table). The one measured deviation left is that the icon
+   carries exactly two alpha values, 0 and 255, where all 18 base-game
+   building icons sampled carry 5-26% partial alpha on their silhouette. Its
+   COVERAGE is in family -- 93.4% opaque against a transport belt's 85.6% --
+   so the ask, if made, is antialiasing alone and not a redraw. It costs a
+   slightly cut-out edge at native 64 px and nothing once the GUI scales it
+   down. Polish, not a defect.
 3. **The module size, which is now the whole cost of the `-gc` decision.**
    `fk_module.lua` was 1,899,407 B under the shipped `--gc=collected` when that
    decision was taken and is **2,265,404 B** as of 2026-08-03 (the zip,
@@ -4086,6 +4092,12 @@ brightens north-facing edges and darkens south-facing ones; and a lit core in
 every part with a conduit running to each CONNECTED side, so two neighbours show
 one unbroken lit vein between their cores. Re-theming is the palette block at
 the top of the generator plus one `make graphics`.
+
+**That contract was exercised on 2026-08-19** and it held: an artist replaced
+all three entity PNGs plus a new 288x288 mod logo, and the only thing that had
+to move on this side was one alignment constant in `sprite.lua` -- which was
+fixing a defect of ours that the placeholder had carried since M5, not
+accommodating the new art. See "The I/O arrows" above.
 
 **A future artist replaces the PNGs and keeps the cell order.** The only
 contract is "cell *i* is the shape whose canonical mask is the *i*-th ascending
