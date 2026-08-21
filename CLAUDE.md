@@ -1070,7 +1070,7 @@ items** on the world. See the section below.
 
 The ninth suite, **seven legs and two name probes**, and **the only one whose two
 phases run under different mod sets** -- a mod is installed or uninstalled
-between `--create` and `--benchmark`. Its rigs, its numbers, its seven red proofs
+between `--create` and `--benchmark`. Its rigs, its numbers, its seventeen red proofs
 and the run against the real Belt Balancer 2 are in
 "Adopting a Belt Balancer 2 or 3 save", which is where the whole feature lives;
 what is worth knowing here is that `test/mods/belt-balancer-2` is a
@@ -3080,7 +3080,7 @@ nothing about the migration at all**, which is asserted as the absence of any
 
 **Leg 5, `readd`, is `Done -> Blocked` — the transition the hook exists for and
 the one nothing drove.** Its phase one is leg 4's: no incumbent, our own stub,
-eleven parts swapped through the build path, and the save written with the phase
+nineteen parts swapped through the build path, and the save written with the phase
 **Done**. Then `belt-balancer-2 2.0.9` is INSTALLED beside us. This is not an
 exotic order — a player installs this mod, uses it, and later installs a Belt
 Balancer to compare — and a save that had latched "scan done" would go on
@@ -3121,7 +3121,7 @@ get"* — and which nothing tested until it existed. It is not leg 6 with a
 different hook, and the difference is **when this mod is installed**: leg 6 has no
 guest at all in phase one, so the only thing it can watch a stranger's entities do
 is stand still. Here both mods are installed from the first byte, so the observer
-BUILDS eleven of the stranger's `balancer-part` entities with a guest watching —
+BUILDS nineteen of the stranger's `balancer-part` entities with a guest watching —
 and the guest must not touch one of them. Measured 2026-08-20:
 
 | | measured |
@@ -3172,6 +3172,12 @@ legs and two probes, **30.6 s** once the world grew to nineteen parts on three
 surfaces, all on the same machine. The probes are ~1.5 s each because they stop
 after `--create`.
 
+Re-measured on the review gate, back to back on one machine and against the SAME
+`dist/`, which is the only comparison worth having: **12.4 s** for master's four
+legs and **29.1 s** for the seven and two here. Master's four are green against
+this branch's guest, which is the expected result and is worth stating -- the
+quality fix can only help a leg that never built a quality part.
+
 **And it is the one base suite that is not base-only.** `mig_list` enables the
 **`quality`** mod, in BOTH phases of every leg, because `legacyConvertOne` passes
 the old entity's quality through to the new one and a game with only `normal` in
@@ -3205,6 +3211,51 @@ the maximum or the leg fails as vacuous. A game with only `normal` quality in it
 cannot tell a carried quality from a dropped key -- so phase one must report
 `uncommon`. And a fusion check over one force says nothing -- so the second force
 must own exactly the two parts the rig builds, at every sample.
+
+### A CHECK THAT SKIPS IS A CHECK THAT PASSED -- the review gate, 2026-08-20
+
+**Three of this suite's shared checks read `if got is None: continue`, and a
+phase the observer stopped reporting therefore took its whole assertion with it,
+silently, while the leg went on printing the phases that were still there and
+exiting zero.** Found by reviewing the coverage pass rather than by a run, and
+closed the same day; two of the three are the shape the original inline code had,
+and the third arrived with the fidelity rig.
+
+**It is a measurement, not a worry.** Delete three lines from the observer's
+tick-1 handler -- `report_counts("t1")`, `report_item("t1")`,
+`report_fidelity("t1")` -- and the pre-fix script prints
+
+    witness: 48 copper plates in phase one
+    witness: 48 at phase=post-audit
+    witness: 48 at phase=final
+    fidelity in phase one: 85.0 of 170.0 health, quality uncommon
+    fidelity at phase=final  bbb-balancer-part at 85.0 of 170.0 health
+    ...
+    the incumbent's balancers were adopted and they balance
+
+and **exits 0**, on a run in which the copper count at the one sample taken
+straight after the load was never made, the item stack was never compared with
+itself at all, and the health and the quality were never checked across the swap.
+Every one of those lines is written unconditionally by the observer at every
+phase named, so an absent one is a broken harness rather than a legitimate shape,
+and the run that says so is worth more than the run that does not. All three fail
+now, by name and by phase, and so does the `foreign` leg's own inline item check.
+
+**And the same review found the probe's success message telling a lie.** The two
+name probes asserted the SCAN had converted nothing (`if adopted`) and said
+nothing about the BUILD path -- and those two names are in front of the guest
+nowhere else in this repo, while the observer builds nineteen of the incumbent's
+entities with the guest listening. With `legacyBuilt`'s phase gate removed the
+probe printed *"belt-balancer is recognised by name and its balancers were left
+alone"* and exited 0 over a create log carrying **nineteen**
+`legacy: adopted a balancer-part built at` lines. One line of assertion, and the
+more expensive of the two failures is watched on the whole name list rather than
+on half of it.
+
+**The pattern to carry forward**, because this suite is entirely built of log
+lines and every future check here will be too: a missing line and a wrong line
+are not the same failure, and only one of them fails on its own. Assert the
+presence, then assert the value.
 
 **THE CLUSTER COUNT IS THE ONE NUMBER THAT HAD TO STOP COMING FROM THE GUEST.**
 `check_audit` compared the audit's cluster count against the count on the guest's
@@ -3263,7 +3314,7 @@ this suite, and the cheap repair for the two that matter is not cheap:
 
 | call site | what a non-normal-quality part does to it |
 |---|---|
-| `skin.go`, `restyle` | the part is never found, so `graphics_variation` is never set and an uncommon balancer draws **cell 1, the lone-part picture, forever**. The M5 mechanism's whole budget is *one byte per part*, and the two repairs are a second byte (the quality) or an allocating area query on the flush path -- and the `mar` suite asserts those slopes to the byte. **A design question, not a one-line fix** |
+| `skin.go`, `restyle` | the part is never found, so `graphics_variation` is never set and an uncommon balancer draws **cell 1, the lone-part picture, forever** -- and because `pvar` is written only after the engine takes the value, that part is RETRIED on every restyle of its cluster, which is one host call per flush that touches it rather than the zero the M5 budget is priced at. The mechanism's whole budget is *one byte per part*, and the two repairs are a second byte (the quality) or an allocating area query on the flush path -- and the `mar` suite asserts those slopes to the byte. **A design question, not a one-line fix**. The `mig` save has carried one such part since the `fid` rig existed, so the cost is being paid in this repo today |
 | `limit.go`, `forceOfCluster` | the cluster's force cannot be resolved, so an over-limit refusal on a balancer of uncommon parts is logged and **nobody is told** |
 | `limit.go`, `revertOne` | the over-limit piece is not found, so it is **not handed back** -- the negative the `edge` suite asserts (zero hand-backs) is unmoved, because a headless run has no player |
 | `fastreplace.go`, `reapFastReplaced` | it reads a standing uncommon part as GONE and **unregisters a part that is still there**. It needs a foreign belt-connectable to APPEAR on a part's tile, which in ordinary play only a fast replace does -- and a fast replace really did remove it, so the answer is right for the wrong reason on the gesture, and wrong for a script that builds a colliding belt |
@@ -3291,12 +3342,15 @@ also where this guest does everything else that reads the world, and it means th
 synchronous drain a `bbb-audit` marker forces, which is the only one a `--create`
 ever reaches.
 
-### Red-proven fourteen times, and every proof catches a different thing
+### Red-proven seventeen times, and every proof catches a different thing
 
 The first three are 2026-08-16 and are about the feature; the next four are
-2026-08-20 and are about the three legs and two probes added that day; the last
-seven are the same day's fidelity pass. Every one is an injected defect, built,
-run, and reverted.
+2026-08-20 and are about the three legs and two probes added that day; the next
+seven are the same day's fidelity pass; the last three are the same day's REVIEW
+gate, and they are the odd ones out -- the defect they inject is in the HARNESS
+rather than in the mod, because what they prove is that three checks which had
+never been able to fail now can. Every one is an injected defect, built, run,
+and reverted.
 
 **The first seven rows were measured against the FOUR-RIG, ELEVEN-PART world and
 are kept as measured.** The suite builds nineteen parts on three surfaces now, so
@@ -3320,6 +3374,9 @@ taken for it.
 | **the force check removed from `AddPart`'s adjacency loop** -- two forces' touching parts fuse | leg 1 fires **exactly two, and both are the cluster count**: *"the conversion made 6 clusters out of the observer's 7"* and *"the audit finds 6 clusters and the observer built 7"*. **19 parts, 48 copper, 3.997x, 2.995x, drift=0, unbuilt=0 -- every other number in the leg is byte-identical to the green run.** That is the whole reason the expected count stopped being the guest's own |
 | **`legacyScan` breaks out after the first surface it converts anything on** | leg 1 fires the surface cross-check by name -- *"the scan reports 2 surfaces and the world has 3 that are not the hidden one (nauvis, bbb-mig-a, bbb-mig-b)"* -- plus a cascade (17 adopted of 19, 6 clusters, and *"the migration ran 2 times in one save"*, because the `added` leg decides twice and the second decision finishes the job the first abandoned) |
 | **`legacyScan` VISITS every surface and converts on only the first one that had parts** | the same leg, and now the per-surface census is the assertion with the name on it: *"this mod's parts are standing on 1 surface(s) after the conversion and were built on 2"*. The surface COUNT is correct here -- 3 scanned, 3 in the world -- so the cross-check above says nothing and the census is the only thing that can see it. **The two surface statements fail on different defects, which is why there are two** |
+| **the observer's `report_counts("t1")`, `report_item("t1")` and `report_fidelity("t1")` deleted** -- the harness stops reporting a phase rather than the guest doing something wrong | the fixed script fires **exactly three**, by name and by phase: *"no copper count for phase=t1"*, *"no legacy-item line for phase=t1"*, *"no health line for phase=t1"*. **The same logs against the pre-fix script exit 0** and print the cheerful *"the incumbent's balancers were adopted and they balance"*, having skipped the copper count at the one sample straight after the load, the item comparison entirely, and the health and quality across the swap. That is the proof: not that a defect was caught, but that three checks which had never been able to fail now can |
+| **the observer reports the quality line only in phase one** (health untouched) | the fixed script fires **exactly two**: *"no quality line for phase=t1"* and *"...for phase=final"*. Pre-fix, **exit 0** again. The finer injection is needed because both lines come out of one function, so deleting the call reaches the health branch first -- what this one covers is the quality line's FORMAT drifting out from under its regex while the health line's does not |
+| **`legacyBuilt`'s phase gate removed**, read by the two NAME PROBES rather than by leg 5 | each probe fires **exactly one assertion**, the new one: *"19 `balancer-part` entities were swapped through the BUILD path while belt-balancer was still installed"*, over 19 `adopted a balancer-part built at` lines in the create log. **Pre-fix the same log exits 0 and prints "belt-balancer is recognised by name and its balancers were left alone"** -- a success message that was false in its own second clause. The probes were run in isolation, as leg 5's proof was and for the same reason |
 
 **The fourth and fifth rows are the ones worth reading twice**, because they are
 the shape this suite exists to catch and the shape that is hardest to catch: the
@@ -3455,6 +3512,29 @@ Blocked` was never driven, so the build path's phase gate -- the one thing
 standing between an incumbent that arrives late and having its freshly built
 entities swapped -- had no test. And `legacyCheck`'s promise to a stranger, that
 uninstalling gets them the same adoption an incumbent gets, was a comment.
+
+**And verified once more the same day, after the REVIEW GATE over both passes
+above.** Nothing in the guest, the observer or `run.sh` moved -- the whole change
+is four assertions in `test/assert-mig.py` that could not previously fail, plus
+two stale prose numbers in this file -- so `dist/` is byte-for-byte what the
+fidelity pass left (zip 413,608 B, `fk_module.lua` 2,746,726 B, 51 members) and
+no rebuild was needed to reach it. `make check` green with bindings and lock
+unmoved; **all nine suites green in BOTH arms**, each arm one invocation; the
+leaking arm's seven slopes back **identical to the byte** -- 1,216 / 352 / 1,180
+/ 32 / 736 / 3,736 / 1,712 B and **3.92 MiB** of linear memory, 0 items lost over
+200 teardowns, 681 audits at drift=0; **no other suite's numbers moved**, which
+for an assertion-only change is the only result available. Three red proofs, all
+of them injections into the HARNESS, are the last three rows of the table above.
+
+**What the gate found, and it is one shape seen twice.** Three shared checks and
+one probe could pass while measuring nothing -- a missing log line was a skipped
+assertion rather than a failed one, and the probe's own success sentence
+(*"...and its balancers were left alone"*) printed over a create log carrying
+nineteen conversions of a still-installed mod's entities. Both are written up in
+"A CHECK THAT SKIPS IS A CHECK THAT PASSED". What it did NOT find: nothing was
+weakened by either pass, the original four legs assert everything they always did
+and five things more, `bench/` was untouched, and every claim in the two passes'
+tables re-ran to the number recorded.
 
 <!-- END: adopting an incumbent's save -->
 

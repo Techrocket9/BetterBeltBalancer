@@ -158,6 +158,15 @@ def parse_sample(text):
 # The checks several legs share. Each one is exactly the body it was written as
 # inside the added/later path; they are functions so that a leg which needs the
 # same statement does not get a copy that can drift away from it.
+#
+# A MISSING LINE IS A FAILURE AND NOT A SKIP, in every one of them. Three of
+# these used to step over an absent phase -- `continue` in the witness and the
+# fidelity loops, an early `return` in the item check -- so a phase the observer
+# stopped reporting took its whole assertion with it, silently, and the leg went
+# on printing the phases that were still there and exiting zero. Every one of
+# these lines is written unconditionally by the observer at every phase named
+# here, so an absent one is a broken harness rather than a legitimate shape, and
+# the run that says so is worth more than the run that does not.
 # --------------------------------------------------------------------------
 
 def check_witness(counts, fail, phases=("t1", "post-audit", "final")):
@@ -175,6 +184,9 @@ def check_witness(counts, fail, phases=("t1", "post-audit", "final")):
     for phase in phases:
         got = counts.get(phase)
         if got is None:
+            fail.append("no copper count for phase=%s: the conservation claim is "
+                        "made of these lines, so a missing one is the claim not "
+                        "being made" % phase)
             continue
         if got != base:
             fail.append("copper %d -> %d at phase=%s: the swap, or the first "
@@ -187,7 +199,11 @@ def check_witness(counts, fail, phases=("t1", "post-audit", "final")):
 def check_item(items, fail, expect_place):
     """The item half: a stack of `balancer-part` in a chest survives the mod set
     moving, and places whatever the surviving prototype says it places."""
-    if "create" not in items or "t1" not in items:
+    missing = [p for p in ("create", "t1") if p not in items]
+    if missing:
+        fail.append("no legacy-item line for phase=%s; the stack is only ever "
+                    "compared against itself, so a missing end is a check that "
+                    "did not happen" % ", ".join(missing))
         return
     held0, place0 = items["create"]
     held1, place1 = items["t1"]
@@ -289,6 +305,14 @@ def check_fidelity(healths, qualities, fail, expect_name, phases=("t1", "final")
     if base is None:
         fail.append("no health was reported in phase one")
         return
+    # `part_at` reports `none` for a tile that holds neither prototype, which is
+    # the fidelity rig not having been built at all. Named rather than allowed to
+    # reach `float()` and come out as a traceback.
+    if base[1] == "none" or base[2] == "none":
+        fail.append("the fidelity rig's damaged tile held nothing in phase one "
+                    "(name=%s): there is no part to carry a health across the "
+                    "swap" % base[0])
+        return
     _, value0, max0 = base[0], float(base[1]), float(base[2])
     if value0 >= max0:
         fail.append("the fidelity part was at %.1f of %.1f in phase one: it was "
@@ -313,6 +337,14 @@ def check_fidelity(healths, qualities, fail, expect_name, phases=("t1", "final")
     for phase in phases:
         got = healths.get(phase)
         if got is None:
+            fail.append("no health line for phase=%s: the equality across the "
+                        "swap IS this check, so a phase that stopped reporting "
+                        "takes the whole of it away" % phase)
+            continue
+        if got[1] == "none":
+            fail.append("the damaged tile held nothing at phase=%s (name=%s): "
+                        "the part the conversion was supposed to carry is gone"
+                        % (phase, got[0]))
             continue
         name, value, mx = got[0], float(got[1]), float(got[2])
         print("  fidelity at phase=%-6s %s at %.1f of %.1f health"
@@ -329,6 +361,8 @@ def check_fidelity(healths, qualities, fail, expect_name, phases=("t1", "final")
                         % (value, phase, value0))
         gotq = qualities.get(phase)
         if gotq is None:
+            fail.append("no quality line for phase=%s, and the quality is the "
+                        "half of this rig that found a defect" % phase)
             continue
         print("  fidelity at phase=%-6s %s at quality %s"
               % (phase, gotq[0], gotq[1]))
@@ -455,12 +489,21 @@ def probe(create, name, version):
     the stranger path, which is Blocked with no log line at all. The named
     blocked line is the only observable that pins the row, so it is the only
     thing this probe asserts -- over a world that really does contain balancers
-    the guest declined to touch, which is the anti-vacuity half."""
+    the guest declined to touch, which is the anti-vacuity half.
+
+    IT WATCHES BOTH DOORS ALL THE SAME, and that is one line rather than a
+    second axis. `legacyIncumbents` gates the SCAN through the phase, and the
+    phase is also what gates the BUILD path -- and these two names are in front
+    of the guest nowhere else in this repo, while the observer builds nineteen
+    of the incumbent's entities with the guest listening. Asserting only the
+    scan would leave the more expensive of the two failures unwatched on half
+    the name list."""
     fail = []
     census = {m.group(1): (int(m.group(2)), int(m.group(3)))
               for m in find_all(create, CENSUS)}
     blocked = find_all(create, BLOCKED)
     adopted = find_all(create, ADOPTED)
+    built = find_all(create, BUILT)
 
     if "create" not in census:
         print("no census at all: the observer mod did not run")
@@ -489,6 +532,12 @@ def probe(create, name, version):
     if adopted:
         fail.append("something was converted while %s was still installed, which "
                     "is the one thing this feature promises not to do" % name)
+    if built:
+        fail.append("%d `balancer-part` entities were swapped through the BUILD "
+                    "path while %s was still installed: `legacyBuilt` is gated on "
+                    "the phase being Done, and a gate that let these through "
+                    "swaps a working mod's freshly built entity out from under it"
+                    % (len(built), name))
 
     report(fail, "%s is recognised by name and its balancers were left alone" % name)
 
@@ -735,7 +784,10 @@ def main():
                 fail.append("a `balancer-part` built beside the stranger came out "
                             "legacy=%d ours=%d: the build path converted a "
                             "prototype this mod does not own" % (lg, ou))
-        if "t1" in items and items["t1"][1] != "balancer-part":
+        if "t1" not in items:
+            fail.append("no legacy-item line for phase=t1; the stranger's stack "
+                        "is not being looked at")
+        elif items["t1"][1] != "balancer-part":
             fail.append("the stranger's item now places %r; this mod rewrote a "
                         "prototype it does not own" % items["t1"][1])
         # THE STRANGER'S DAMAGED PART IS STILL DAMAGED AND STILL UNCOMMON AND
