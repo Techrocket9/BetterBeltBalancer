@@ -222,8 +222,10 @@ test/                    headless verification, nine suites (see below), and
                          needs to be reached at all ("Stacked sushi").
                          `mig` is the only suite whose two phases run under
                          DIFFERENT MOD SETS, and mods/belt-balancer-2 is a
-                         data-stage-only stand-in under the real mod's own name
-                         and version
+                         data-stage-only stand-in that is staged under ALL FOUR
+                         of `legacyIncumbents`' names -- one directory, its
+                         info.json rewritten at staging time, because what
+                         differs between the four is the NAME and nothing else
 bench/                   the benchmark harness (separate concern, do not disturb)
 dist/                    build output, gitignored. NOTHING here is hand-written
 README.md                the outward-facing page: what the mod is, how it
@@ -258,7 +260,8 @@ make test     # headless verification, all nine suites. SUITES=m2 for one
               # needing Space Age, and carries the platform rig, the
               # belt-stacking leg and the stacked-sushi band; mar and edge
               # are the marathon pair; mig is the only one whose two phases
-              # run under DIFFERENT MOD SETS)
+              # run under DIFFERENT MOD SETS, and is seven legs plus two
+              # create-only name probes)
 make check    # the three pure packages' unit tests (plan, skin, carry);
               # bindings and lock current; gofmt
 make graphics # regenerate the sprite sheet, the icon and the I/O arrows
@@ -476,10 +479,19 @@ real.
 
 **Eight of the nine suites run both phases under ONE mod set. `mig` is the
 exception**, and it has to be: what it tests is what happens when a NEIGHBOUR is
-uninstalled, so its `BETWEEN` hooks rewrite `mod-list.json` AND delete a mod
-directory between the phases (a directory that is present but not listed is added
-back by Factorio as enabled, so "removed" has to mean both). Its own section is
+installed or uninstalled, so its `BETWEEN` hooks rewrite `mod-list.json` AND add
+or delete a mod directory between the phases (a directory that is present but not
+listed is added back by Factorio as enabled, so "removed" has to mean both, and
+Factorio requires a mod directory to be named for the mod it holds, so a renamed
+stand-in has to be staged under a matching directory name). Its own section is
 "Adopting a Belt Balancer 2 or 3 save".
+
+**`--benchmark` NEVER SAVES, so a leg is exactly two phases and a third is
+impossible.** That is the shape every leg is designed inside, and it is also why
+`mig`'s two name probes stop after `--create`: `create_only` runs the first phase
+and the same `guest_gate` over its log alone, because what those probes ask is
+answered by what the guest decided at load and a benchmark phase would cost a
+whole Factorio run to add nothing.
 
 **The audit has TWO DOORS and they are not interchangeable.** `commands.go`
 registers `/bbb-audit` and `remote.call('better-belt-balancer', 'audit')`, which
@@ -1050,15 +1062,25 @@ items** on the world. See the section below.
 
 ### `mig` -- `test/assert-mig.py`, a save that used to be somebody else's
 
-The ninth suite, four legs, and **the only one whose two phases run under
-different mod sets** -- an incumbent balancer mod builds the world in phase one
-and is uninstalled between the phases. Its rigs, its numbers, its three red proofs
+The ninth suite, **seven legs and two name probes**, and **the only one whose two
+phases run under different mod sets** -- a mod is installed or uninstalled
+between `--create` and `--benchmark`. Its rigs, its numbers, its seven red proofs
 and the run against the real Belt Balancer 2 are in
 "Adopting a Belt Balancer 2 or 3 save", which is where the whole feature lives;
-the one thing worth knowing here is that `test/mods/belt-balancer-2` is a
+what is worth knowing here is that `test/mods/belt-balancer-2` is a
 DATA-STAGE-ONLY stand-in carrying the real mod's own name and version, so
-`script.active_mods` sees what it would really see, and that the LAST leg is a
-mod which is NOT an incumbent and owns `balancer-part` anyway.
+`script.active_mods` sees what it would really see -- and that it is staged under
+**all four** of `legacyIncumbents`' names, by copying the one directory and
+rewriting its `info.json` at staging time.
+
+**The legs cover TWO AXES and neither is a subset of the other**: WHICH MOD owns
+`balancer-part` (four incumbent names and a stranger who is none of them), and
+WHICH TRANSITION of `legacy.go`'s state machine the load makes. The second axis
+is the one that was empty: until 2026-08-20 only `Blocked -> Done` by removal was
+ever driven, so the `Done -> Blocked` recheck that `fk_on_configuration_changed`
+exists for had no test at all, and neither did the promise
+`legacyCheck` makes to a stranger in as many words. `readd` and `fgone` are
+those two.
 
 ### The layout check is gone
 
@@ -2924,18 +2946,37 @@ Factorio deletes a removed mod's `storage` **with the mod**, before any script o
 ours could read it. A handful of items per balancer, stated in the README rather
 than glossed.
 
-### The `mig` suite — four legs, and the last is the one with teeth
+### The `mig` suite — seven legs, two name probes, and two axes
 
 The **ninth** suite, and the only one whose two phases run under **different mod
 sets**: `test/run.sh`'s `stage_mig` and its `BETWEEN` hooks rewrite
-`mod-list.json` and delete a mod DIRECTORY between `--create` and `--benchmark`
-(a directory that is present but not listed is added back by Factorio as
-enabled, so "removed" has to mean both).
+`mod-list.json` and add or delete a mod DIRECTORY between `--create` and
+`--benchmark` (a directory that is present but not listed is added back by
+Factorio as enabled, so "removed" has to mean both).
+
+**The suite covers two axes and neither is a subset of the other**: WHICH MOD
+owns `balancer-part`, and WHICH TRANSITION of the state machine above the load
+makes. Until 2026-08-20 the first axis was one name of five and the second was
+one transition of several — only `belt-balancer-2` had ever been in front of the
+guest, and only `Blocked -> Done` by removal was ever driven.
+
+| | the legs |
+|---|---|
+| **which mod** | `belt-balancer-2` (legs 1, 2, 5), `belt-balancer-3` (leg 3), `belt-balancer` and `belt-balancer-performance` (the two probes), a STRANGER who is none of them (legs 6, 7), and nobody at all (leg 4) |
+| **which transition** | `Unchecked -> Done` on a new save (1), `Blocked -> Done` when an incumbent is removed (2, 3), Done with nothing to find and the build path doing the work (4), **`Done -> Blocked` when an incumbent ARRIVES (5)**, Blocked and staying Blocked (6), **Blocked -> Done when the STRANGER is removed (7)** |
 
 `test/mods/belt-balancer-2` is a **DATA-STAGE-ONLY stand-in** under the real
 mod's own name and version, so `script.active_mods` sees what it would really
 see. It has no control stage at all, deliberately: the real mod's runtime is the
 one thing the migration cannot recover, and none of its art is used.
+
+**IT IS STAGED UNDER ALL FOUR INCUMBENT NAMES AND THERE IS ONE COPY OF IT.**
+What differs between the four rows of `legacyIncumbents` is the NAME and nothing
+else — the prototypes are the same prototypes — so `mig_standin` copies the one
+directory and rewrites `info.json`'s `name` and `version` at staging time, into a
+directory named for the target mod (Factorio requires that). The rewrite is
+checked by two greps, because a silently unrenamed copy would stage
+belt-balancer-2 under every name and pass every leg.
 
 `test/mods/bbb-mig-test` is present in BOTH phases and builds everything in
 `on_init` with `balancer-part`, which in phase one is the only balancer prototype
@@ -2949,28 +2990,31 @@ therefore exactly that rig's contents, before the swap and after it, which is
 what makes "the items on the belts survived" an equality rather than an estimate.
 Plus a steel chest holding 50 of the incumbent's item.
 
-Measured 2026-08-16, Factorio 2.0.77, base only, shipped configuration:
+**The three conversion legs, measured** — legs 1 and 2 on 2026-08-16, leg 3 on
+2026-08-20, Factorio 2.0.77, base only, shipped configuration:
 
-| | leg 1 `added` | leg 2 `later` |
-|---|---|---|
-| phase one | the incumbent alone, this mod absent | the incumbent AND this mod |
-| between the phases | incumbent out, this mod in | incumbent out |
-| coexistence in phase one | n/a | **exactly one** `belt-balancer-2 2.0.9 is active; its balancers are left alone`, **0 converted** |
-| parts adopted | **11 from 2 surfaces into 3 clusters** | **11 from 2 surfaces into 3 clusters** |
-| trigger | **`init`** | **`configuration_changed`** |
-| forces given the technology | 1 | 1 |
-| census, before -> after | 11 / 0 -> **0 / 11** | 11 / 0 -> **0 / 11** |
-| the witness's copper | **48 -> 48 -> 48 -> 48** over four samples | the same |
-| the item stack | **50 held**, `place_result` `balancer-part` -> `bbb-balancer-part` | the same |
-| technology after | `bbb-balancer=true`, `belt-balancer-1=absent` | the same |
-| `ctrl` over t=1800..3540 | 1306 items | 1306 |
-| `m4x4` | 1304 1306 1306 1304, **3.997x**, spread **0.15%** | identical |
-| `m3to5` | 783 782 782 783 782, **2.995x**, spread **0.13%** | identical |
-| final audit | `clusters=3 parts=11 nets=3 drift=0 unbuilt=0` | the same |
+| | leg 1 `added` | leg 2 `later` | leg 3 `bb3` |
+|---|---|---|---|
+| the incumbent | `belt-balancer-2 2.0.9` | the same | **`belt-balancer-3 1.0.1`** |
+| phase one | the incumbent alone, this mod absent | the incumbent AND this mod | the incumbent AND this mod |
+| between the phases | incumbent out, this mod in | incumbent out | incumbent out |
+| coexistence in phase one | n/a | **exactly one** `belt-balancer-2 2.0.9 is active; its balancers are left alone`, **0 converted** | **exactly one**, and it NAMES `belt-balancer-3 1.0.1`, **0 converted** |
+| parts adopted | **11 from 2 surfaces into 3 clusters** | the same | the same |
+| trigger | **`init`** | **`configuration_changed`** | **`configuration_changed`** |
+| forces given the technology | 1 | 1 | 1 |
+| census, before -> after | 11 / 0 -> **0 / 11** | the same | the same |
+| the witness's copper | **48 -> 48 -> 48 -> 48** over four samples | the same | the same |
+| the item stack | **50 held**, `place_result` `balancer-part` -> `bbb-balancer-part` | the same | the same |
+| technology after | `bbb-balancer=true`, `belt-balancer-1=absent` | the same | the same |
+| `ctrl` over t=1800..3540 | 1306 items | 1306 | 1306 |
+| `m4x4` | 1304 1306 1306 1304, **3.997x**, spread **0.15%** | identical | identical |
+| `m3to5` | 783 782 782 783 782, **2.995x**, spread **0.13%** | identical | identical |
+| the late build | `legacy=0 ours=1` | the same | the same |
+| final audit | `clusters=3 parts=11 nets=3 drift=0 unbuilt=0` | the same | the same |
 
 **The trigger word on the summary line is an assertion, not decoration.** Leg 1
-must be driven by `init` and leg 2 by `configuration_changed`; a leg that came
-out `first-dispatch` or `deferred` fails, because **a feature whose fallback
+must be driven by `init` and legs 2 and 3 by `configuration_changed`; a leg that
+came out `first-dispatch` or `deferred` fails, because **a feature whose fallback
 silently does its primary trigger's work passes every test and ships broken.**
 That is the same thing `upg` asserts about which trigger drove a
 rebuild-from-world, and it is asserted here for the same reason. **Leg 2's ONE
@@ -2983,7 +3027,19 @@ would say so twice.
 save. And `rebuildFromWorld` at the first event **ADOPTS all three networks, 0
 rebuilt** -- the migration's own flush had already built them correctly.
 
-**Leg 3, `built`, is the BUILD path and the PLAIN RELOAD.** No incumbent is ever
+**Leg 3, `bb3`, is the LIVE SUCCESSOR, and it is the coexistence shape rather
+than the swap shape on purpose.** Belt Balancer 3 is the one a player is most
+likely to be migrating off today and the one name in `legacyIncumbents` a typo
+would be most expensive in — and the reason the leg has to have both mods
+installed in phase one is that **a name this guest does not recognise does not
+fail loudly.** It falls through `legacyIncumbentActive` to the STRANGER branch,
+which is Blocked and **silent**, and then the removal load converts everything
+exactly as it should. Every conversion number in the column above is what a
+misspelled `belt-balancer-3` produces too. The NAMED blocked line from phase one
+is the only observable in this suite that can see a row of that list, which is
+what the leg is for and all it adds over leg 2.
+
+**Leg 4, `built`, is the BUILD path and the PLAIN RELOAD.** No incumbent is ever
 installed, so `balancer-part` is this mod's own stub from the first byte and the
 observer's eleven parts arrive one at a time through build events -- which is the
 path an old blueprint's ghosts take, minus the robot. Measured: **the whole-world
@@ -2996,25 +3052,94 @@ once-per-save flag can be seen surviving a save: on the reload the guest **says
 nothing about the migration at all**, which is asserted as the absence of any
 `[BBB] legacy:` line in the benchmark log.
 
-**Leg 4, `foreign`, is the stranger.** `test/mods/bbb-mig-foreign` defines
+**Leg 5, `readd`, is `Done -> Blocked` — the transition the hook exists for and
+the one nothing drove.** Its phase one is leg 4's: no incumbent, our own stub,
+eleven parts swapped through the build path, and the save written with the phase
+**Done**. Then `belt-balancer-2 2.0.9` is INSTALLED beside us. This is not an
+exotic order — a player installs this mod, uses it, and later installs a Belt
+Balancer to compare — and a save that had latched "scan done" would go on
+converting. Measured 2026-08-20:
+
+| | measured |
+|---|---|
+| phase one | **11 parts swapped through the build path**, no scan summary line, no blocked line |
+| the incumbent arrives | **exactly one** `belt-balancer-2 2.0.9 is active; its balancers are left alone`, and **0 converted** in phase two — no scan line and no build-path line |
+| the world | `balancer-part=0 bbb-balancer-part=11` at **t1, post-audit and final**: the balancers this mod already owns do not move in either direction |
+| the witness's copper | **48 -> 48 -> 48 -> 48** |
+| the item stack | **50 held**, `place_result` **`bbb-balancer-part` -> `balancer-part`** — the other way round from every other leg, and correct: our stub owned the name while nobody else did, and the incumbent owns it again now |
+| the technology | `bbb-balancer` **false -> true** (granted by phase one's own conversion, and an incumbent arriving takes nothing away) and `belt-balancer-1` **absent -> false** — PRESENT and unresearched, where every other leg requires it absent |
+| the standing networks | `ctrl` 1306, `m4x4` 1306 1304 1306 1304 **3.997x** at **0.15%**, `m3to5` 782 784 782 783 782 **2.996x** at **0.26%** — unmoved across the incumbent's arrival |
+| final audit | `clusters=3 parts=11 nets=3 drift=0 unbuilt=0` |
+| **the late build, which is the one with teeth** | it places the **INCUMBENT'S** `balancer-part` now, and comes out **`legacy=1 ours=0`** |
+
+**That last row is the whole reason the leg exists.** `legacyBuilt` is gated on
+the phase being Done, and a gate reading the wrong phase does not crash, does not
+lose an item and does not move a rate: it **silently swaps a working mod's
+freshly built entity out from under it**. Nothing else in this suite can see it.
+
+**Leg 6, `foreign`, is the stranger.** `test/mods/bbb-mig-foreign` defines
 `balancer-part` exactly as the incumbents do under a name this mod has never
 heard of, and it STAYS installed while this mod arrives beside it. Measured:
 **0 converted**, census `11 / 0` unmoved at every sample, the stranger's item
 still placing the stranger's entity, and the audit at **`clusters=0 parts=0
 nets=0 drift=0 unbuilt=0`** -- this mod owns nothing at all in that save.
 
+**Leg 7, `fgone`, is the stranger UNINSTALLED**, which `legacyCheck` promises in
+as many words — *"the stranger can be uninstalled too, and on that load the stub
+appears and their balancers become ours, which is the same promise the incumbents
+get"* — and which nothing tested until it existed. It is not leg 6 with a
+different hook, and the difference is **when this mod is installed**: leg 6 has no
+guest at all in phase one, so the only thing it can watch a stranger's entities do
+is stand still. Here both mods are installed from the first byte, so the observer
+BUILDS eleven of the stranger's `balancer-part` entities with a guest watching —
+and the guest must not touch one of them. Measured 2026-08-20:
+
+| | measured |
+|---|---|
+| phase one, with the stranger installed | **ZERO blocked lines** (the stranger branch is silent by design, and a line here would mean the guest had decided bbb-mig-foreign is a Belt Balancer), **0 converted by the scan** and **0 swapped through the build path** over eleven build events |
+| phase two, the stranger gone | **11 parts from 2 surfaces into 3 clusters, 1 force, trigger=`configuration_changed`** |
+| census | 11 / 0 -> **0 / 11** |
+| the witness's copper | **48 -> 48 -> 48 -> 48** |
+| the item stack | **50 held**, `place_result` `balancer-part` -> `bbb-balancer-part` |
+| the technology | `bbb-balancer` **false -> true**, `belt-balancer-1` **absent in both phases** |
+| rates | `ctrl` 1306, `m4x4` **3.997x** at 0.15%, `m3to5` **2.995x** at 0.13% |
+| the late build | `legacy=0 ours=1` |
+| final audit | `clusters=3 parts=11 nets=3 drift=0 unbuilt=0` |
+
+**The technology check in this leg is its own, and that is not tidiness.**
+`belt-balancer-1` is absent in BOTH phases here — the stranger never defined one
+— so the assertion every other conversion leg makes (*the incumbent's technology
+is gone*) says nothing at all and would pass on a guest that granted nothing.
+What IS a statement is `bbb-balancer` going **false -> true**: unresearched while
+the stranger stood, researched by the conversion that followed it out.
+
+**The two NAME PROBES, `belt-balancer` and `belt-balancer-performance`.** One
+`--create` each and nothing else. What a full leg would add over leg 2 is
+nothing — the conversion side of the feature is identical whichever name blocked
+it — and what it would cost is a benchmark phase, so the probe asserts the one
+thing that is not identical: the named blocked line, over a world that really
+does contain eleven balancers the guest declined to touch. Measured 2026-08-20:
+**`belt-balancer 3.4.4`** and **`belt-balancer-performance 1.0.5`**, one blocked
+line each naming exactly that, **11 standing and 0 of ours**, **0 converted**.
+The two versions are the harness's and are plausible rather than real; what they
+pin is that the guest read them back out of `script.active_mods`, not that any
+release carries them.
+
 **And every leg ends with a LATE BUILD**, which is the probe that found the one
 defect review missed. One `balancer-part` is placed by script in phase two, well
 clear of every rig and after the final audit so nothing else moves, and what it
 separates is "this game's `balancer-part` is MINE" from "somebody else's": the
-three conversion legs come out **`legacy=0 ours=1`** and the stranger leg
-**`legacy=1 ours=0`**. The scan alone could not tell them apart, because the scan
-is gated on the marker either way; the BUILD path is gated on the PHASE, and the
-first cut of `legacyCheck` put the stranger case in `Done` -- which is the guest
-saying the name is its own. It says `Blocked` now, and Blocked also gets the
-marker re-test, which is the right answer for a second reason: a stranger can be
-uninstalled too, and on that load our stub appears and their balancers become
-ours, which is the same promise the incumbents get.
+four conversion legs come out **`legacy=0 ours=1`** and the two legs where
+somebody else owns the name -- the stranger, and the incumbent that arrived after
+us -- come out **`legacy=1 ours=0`**. The scan alone could not tell them apart,
+because the scan is gated on the marker either way; the BUILD path is gated on the
+PHASE, and the first cut of `legacyCheck` put the stranger case in `Done` -- which
+is the guest saying the name is its own. It says `Blocked` now, and Blocked also
+gets the marker re-test, which is what leg 7 is about.
+
+**What the suite costs**: 12.7 s for the original four legs, **27.0 s** for seven
+legs and two probes, on the same machine in the same session. The probes are ~1.5 s
+each because they stop after `--create`.
 
 ### The build path DEFERS, and that is a correction the harness forced
 
@@ -3035,13 +3160,29 @@ also where this guest does everything else that reads the world, and it means th
 synchronous drain a `bbb-audit` marker forces, which is the only one a `--create`
 ever reaches.
 
-### Red-proven three times, and the three proofs catch different things
+### Red-proven seven times, and every proof catches a different thing
+
+The first three are 2026-08-16 and are about the feature; the last four are
+2026-08-20 and are about the three legs and two probes added that day. Every one
+is an injected defect, built, run, and reverted.
 
 | injected defect | what came out |
 |---|---|
 | **`data-final-fixes.lua`'s require commented out** -- no stub prototype | phase two's census is `balancer-part=0 bbb-balancer-part=0`: **all 11 entities deleted by the engine at load**, and the 50-item stack with them (`held=0 place_result=nil`). The suite fails on "nothing was adopted at all". **The witness's 48 copper plates survive**, which is the honest detail: the belts are vanilla, so what the missing stub loses is the machine and not the goods |
 | **`legacyStubPresent()` removed from `legacyCheck`** -- the marker guard | the foreign leg converts **11 of a stranger's entities** (`balancer-part=0 bbb-balancer-part=11`, `trigger=init`, audit `clusters=3 parts=11`) and **four assertions fire**. The other legs stay green, which is the whole point: the guard is invisible to every leg that is entitled to convert |
 | **the stranger case landing in `Done` rather than `Blocked`** | the SCAN still leaves the stranger alone -- `balancer-part=11 bbb-balancer-part=0` at every census, audit `clusters=0` -- and the **BUILD PATH does not**: one part built beside the stranger in phase two comes out `legacy=0 ours=1`. Exactly one assertion fires, and it is the late-build probe, which exists because of it |
+| **`"belt-balancer-3"` misspelled in `legacyIncumbents`** | leg 3 fails on **exactly one assertion** -- *"the guest said it was leaving the incumbent alone 0 times"* -- and **every other number in that leg is byte-identical to the green run**: 11 parts, 2 surfaces, 3 clusters, 1 force, `trigger=configuration_changed`, witness 48 at four samples, 3.997x at 0.15% and 2.995x at 0.13%, late build `legacy=0 ours=1`, audit `clusters=3 parts=11 nets=3 drift=0 unbuilt=0`. Leg 2 stays green with `belt-balancer-2 2.0.9` still named. **That is the proof, not a caveat**: an unrecognised name takes the silent stranger path, the removal converts everything anyway, and the blocked line is the only thing that ever knew |
+| **`"belt-balancer"` and `"belt-balancer-performance"` misspelled**, the same way | legs 1--7 all stay green and **each probe fails on its own line** -- *"...0 times and it is once per decision -- and ZERO means it did not recognise `belt-balancer` at all, which is the silent stranger path"*, and the same for `belt-balancer-performance`. Both probes still report **11 standing, 0 of ours**, so the failure is recognition and not staging |
+| **`legacyBuilt`'s phase gate removed** -- the build path stops asking whether this game's `balancer-part` is ours | leg 5 fires **exactly the two assertions that are about it**: *"a `balancer-part` was converted in phase two, with an incumbent installed"* and *"a `balancer-part` built while belt-balancer-2 is installed came out legacy=0 ours=1"*, with `[BBB] legacy: adopted a balancer-part built at 12,0` in the log to say so. Everything else in the leg is unmoved -- 11 swapped in phase one, one blocked line, census `0 / 11` throughout, witness 48, 3.997x/2.996x, audit `3 / 11 / 3 / 0 / 0`. **The injection is caught EARLIER in the suite too**, by leg 2, whose phase one has an incumbent installed and whose eleven live entities the ungated build path converts -- so leg 5 was re-run in isolation to see its own assertions fire |
+| **`legacyStubPresent()` removed from `legacyCheck`**, again -- but read by leg 7 rather than by leg 6 | leg 7 fires **exactly one assertion**, *"a `balancer-part` was swapped through the build path while the stranger owned the prototype"*, over **11** `adopted a balancer-part built at` lines in the CREATE log. **This is a moment leg 6 cannot see at all**: it has no guest in phase one, so the only thing it can watch a stranger's entities do is stand still, where leg 7 watches eleven of them being BUILT with the guest listening |
+
+**The fourth and fifth rows are the ones worth reading twice**, because they are
+the shape this suite exists to catch and the shape that is hardest to catch: the
+defect changes **nothing about what the mod does**. A misspelled incumbent name
+converts the same eleven parts into the same three clusters at the same rates on
+the same trigger. What it changes is that the guest stopped recognising a real mod
+by name — and the day that mod's balancers are standing in a save while it is
+still installed, it would convert them.
 
 ### The real Belt Balancer 2, once, by hand
 
@@ -3117,6 +3258,29 @@ with a real incumbent, swap the mods, and check the summary line, the plating,
 the belts, the chest, the technology -- then place one of the old blueprints and
 watch each revived ghost become one of this mod's parts.
 
+**And verified again 2026-08-20, after the COVERAGE PASS that took the suite from
+four legs to seven plus two probes.** No guest line changed -- `dist/bbb.wasm` and
+`fk_module.lua` (2,745,246 B) are the bytes the merge left, `make check` is green
+with bindings and lock unmoved, and the sprite checker is green at 10 references.
+**All nine suites green in BOTH arms**, the leaking arm's seven slopes back
+**identical to the byte** (1,216 / 352 / 1,180 / 32 / 736 / 3,736 / 1,712 B and
+**3.92 MiB** of linear memory, 0 items lost over 200 teardowns, 681 audits at
+drift=0), and **no other suite's numbers moved at all**, which is the only result
+a test-only pass may have. Inside `mig`, the four pre-existing legs report exactly
+what they always did -- 11 parts, 3 clusters, `trigger=init` and
+`trigger=configuration_changed`, witness 48 at every sample, 3.997x and 2.995x,
+audit `clusters=3 parts=11 nets=3 drift=0 unbuilt=0` -- and what the pass adds is
+three legs, two probes and four red proofs. The suite went 12.7 s to 27.0 s.
+
+**What the pass closed, in one sentence each.** `belt-balancer-3` was never in
+front of the guest and neither were the other two names, so three of the four rows
+of `legacyIncumbents` were unpinned and a typo in any of them would have converted
+that mod's balancers out from under it while it was still installed. `Done ->
+Blocked` was never driven, so the build path's phase gate -- the one thing
+standing between an incumbent that arrives late and having its freshly built
+entities swapped -- had no test. And `legacyCheck`'s promise to a stranger, that
+uninstalling gets them the same adoption an incumbent gets, was a comment.
+
 <!-- END: adopting an incumbent's save -->
 
 ## Status
@@ -3151,7 +3315,7 @@ measured rather than asserted:
 | **...and one it cannot build is refused without demolishing the one that works** | A 65th belt against a 64-port balancer is refused BEFORE the teardown: 0 items on the ground where the unfixed guest put 1,690, the standing network delivering 184 items over 246 ticks before the edit and 185 after, and the player told, with the belt back in their inventory. "The sixty-fifth belt" |
 | **...or the TWO that work** | A part bridging two working balancers into one that is over the limit is refused before their teardowns too, which are `AddPart`'s and not the compiler's: 0 items on the ground where the unfixed guest put 1,814, both halves still delivering 184 and 184 against 186 and 185 across the edit, and mining the part back out costing 0 teardowns and 0 builds. "The merge that would be over the limit" |
 | **...and a part clicks over a belt like a splitter does** | `fast_replaceable_group = "transport-belt"` on the part, which is base's own group: a balancer can be dropped straight into a belt line you already have, and the belt goes to the player. The group is symmetric, so a belt laid on a part replaces it too — and the engine raises NO event for the part it destroys, which is the whole of `guest/go/fastreplace.go`. "Fast replace" |
-| **A Belt Balancer 2 or 3 save becomes one of ours** | Uninstall the incumbent and every `balancer-part` it left standing becomes one of this mod's, at load, once per save: 11 parts on 2 surfaces into 3 clusters that then deliver 3.997x and 2.995x one belt, with the items on the belts conserved exactly (48 copper before and after), the item stacks surviving and placing our parts, and the technology granted. Nothing at all happens while the incumbent is installed, or while any other mod owns the name. Proved against the real Belt Balancer 2 as well as the harness stand-in. "Adopting a Belt Balancer 2 or 3 save" |
+| **A Belt Balancer 2 or 3 save becomes one of ours** | Uninstall the incumbent and every `balancer-part` it left standing becomes one of this mod's, at load, once per save: 11 parts on 2 surfaces into 3 clusters that then deliver 3.997x and 2.995x one belt, with the items on the belts conserved exactly (48 copper before and after), the item stacks surviving and placing our parts, and the technology granted. Nothing at all happens while the incumbent is installed, or while any other mod owns the name -- **including an incumbent that arrives AFTER this mod, on a save this mod has already converted**, where the balancers we own keep running and a `balancer-part` the newcomer places stays theirs. All four incumbent names are exercised, and so is the stranger being uninstalled in his turn. Proved against the real Belt Balancer 2 as well as the harness stand-in. "Adopting a Belt Balancer 2 or 3 save" |
 | **Nothing the compiler places draws anything** | The hidden prototypes are clones of base belts and kept base's pictures — including a three-by-three linked-belt `structure` on the one prototype that stands where a player looks. All four are blanked, and the `edge` suite asserts the structural half: 180–197 visible-surface entities of ours, **every one on a registered part tile, 0 off one**, across six samples. "The tan streak" |
 | **Its long-game cost is measured, not assumed** | Every net-zero world operation's permanent-heap slope, flat over hundreds of iterations, a 300-hour projection built on it, and — since 2026-08-02 — the one stall that projection predicted, measured at **782 ms** and then removed by shipping `--gc=collected`. See "The marathon save" and "The third decision" |
 | **The art is drawn, not computed** | All four assets are an artist's, delivered 2026-08-19: the 47-cell sheet, the icon, the I/O arrows and the mod logo. They dropped in with no code change but one alignment constant, because the cell order and the eight arrow cells were a contract the spec stated and the delivery met. `tools/make-graphics.py` still generates the placeholders and still DEFINES that contract; it is the fallback and the specification, not the shipped pixels |

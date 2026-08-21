@@ -5,5 +5,5 @@
   "author": "BetterBeltBalancer",
   "factorio_version": "2.0",
   "description": "Builds Belt Balancer 2 shaped balancers in phase one and reports, in phase two, what survived the swap and what the adopted balancers deliver. Asserts nothing itself.",
-  "dependencies": ["base >= 2.0.0", "(?) better-belt-balancer", "(?) belt-balancer-2", "(?) bbb-mig-foreign"]
+  "dependencies": ["base >= 2.0.0", "(?) better-belt-balancer", "(?) belt-balancer", "(?) belt-balancer-2", "(?) belt-balancer-3", "(?) belt-balancer-performance", "(?) bbb-mig-foreign"]
 }

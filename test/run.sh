@@ -19,14 +19,14 @@
 #   mix   MORE THAN ONE KIND of item through one balancer: two pure belts, a
 #         sushi belt, and 48 distinct kinds at once -- past the carry pool's
 #         bound, which used to DESTROY the overflow. Every count is per item NAME
-#   mig   ADOPTING A BELT BALANCER 2 SAVE. The only suite whose two phases run
-#         under DIFFERENT MOD SETS: an incumbent's balancers are built in phase
-#         one and the incumbent is uninstalled between the phases. Four legs --
-#         swapped in one edit, removed a session later, arriving one at a time
-#         through build events (which is also the only save written AFTER a
-#         conversion, so its second phase is a plain reload that must do
-#         nothing), and a stranger who owns the same prototype name and must
-#         never be touched
+#   mig   ADOPTING A BELT BALANCER 2 OR 3 SAVE. The only suite whose two phases
+#         run under DIFFERENT MOD SETS: a mod is installed or uninstalled between
+#         `--create` and `--benchmark`. Seven legs and two name probes, covering
+#         both axes -- WHICH MOD owns `balancer-part` (all four incumbent names,
+#         plus a stranger), and WHICH TRANSITION of legacy.go's state machine the
+#         load makes (swapped in one edit, removed a session later, arriving
+#         through build events and then a plain reload, an incumbent INSTALLED
+#         after this mod, a stranger left alone, and a stranger UNINSTALLED)
 #
 #   make test          # builds the mod first
 #   test/run.sh        # against whatever dist/ already holds
@@ -167,31 +167,80 @@ $extra_entry
 JSON
 }
 
-# stage_mig <workdir> <extra-mod-name> <bbb-in-phase-one>
+# THE STAND-IN IS PARAMETERIZED BY NAME, AND THERE IS ONE COPY OF IT IN THE
+# REPOSITORY.
+#
+# `guest/go/legacy.go` names FOUR incumbents -- belt-balancer, belt-balancer-2,
+# belt-balancer-3 and belt-balancer-performance -- and until this existed only
+# one of those names had ever been in front of the guest. The other three rows
+# of that list were unexercised, and a typo in one of them degrades SILENTLY: an
+# unrecognised mod owning `balancer-part` takes the STRANGER path, which is
+# Blocked with no log line at all, so every conversion assertion in this suite
+# would still pass while the guest quietly stopped recognising a real mod.
+#
+# What differs between the four is the NAME and nothing else -- the prototypes
+# are the same prototypes -- so the stand-in is copied and its info.json
+# rewritten at staging time rather than being checked in four times. Factorio
+# requires a mod directory to be named for the mod it holds, so the copy is
+# staged under the target name.
+#
+# mig_standin <workdir> <mod-name> <version>
+mig_standin() {
+  local work="$1" name="$2" version="$3"
+  cp -R "$ROOT/test/mods/belt-balancer-2" "$work/mods/$name"
+  perl -pi -e '
+    s/^(\s*)"name":\s*"[^"]*"/$1"name": "'"$name"'"/;
+    s/^(\s*)"version":\s*"[^"]*"/$1"version": "'"$version"'"/;
+  ' "$work/mods/$name/info.json"
+  # The rewrite is what the whole mechanism rests on, and a silently unrenamed
+  # copy would stage belt-balancer-2 under every name and pass every leg.
+  grep -q "\"name\": \"$name\"" "$work/mods/$name/info.json" || {
+    echo "the stand-in's info.json was not renamed to $name" >&2; exit 1; }
+  grep -q "\"version\": \"$version\"" "$work/mods/$name/info.json" || {
+    echo "the stand-in's info.json was not re-versioned to $version" >&2; exit 1; }
+}
+
+# stage_mig <workdir> <extra-mod-name> <standin-version-or-empty> <bbb-in-phase-one>
+#
+# A non-empty version means the extra mod is an INCUMBENT STAND-IN, staged under
+# that name by mig_standin. An empty one means it is a real directory under
+# test/mods (bbb-mig-foreign, the stranger).
 stage_mig() {
-  local work="$1" extra="$2" bbb="$3"
+  local work="$1" extra="$2" ver="$3" bbb="$4"
   rm -rf "$work"
   mkdir -p "$work/mods"
   cp -R "$ROOT/test/mods/bbb-mig-test" "$work/mods/bbb-mig-test"
-  [ -n "$extra" ] && cp -R "$ROOT/test/mods/$extra" "$work/mods/$extra"
+  if [ -n "$extra" ]; then
+    if [ -n "$ver" ]; then
+      mig_standin "$work" "$extra" "$ver"
+    else
+      cp -R "$ROOT/test/mods/$extra" "$work/mods/$extra"
+    fi
+  fi
   [ "$bbb" = true ] && cp -R "$MOD_DIR" "$work/mods/"
   mig_list "$work" "$extra" "$bbb"
 }
 
+# Which incumbent the leg being staged is about. The BETWEEN hooks below are the
+# only readers, and they need it because "remove the incumbent" has to know
+# which of the four names the stand-in went in under.
+MIG_INCUMBENT=belt-balancer-2
+MIG_INCUMBENT_VERSION=2.0.9
+
 # The incumbent goes, this mod arrives, in one edit of the mod list -- which is
 # what a player does when they read "use this instead".
 mig_swap_in() {
-  rm -rf "$1/mods/belt-balancer-2"
+  rm -rf "$1/mods/$MIG_INCUMBENT"
   cp -R "$MOD_DIR" "$1/mods/"
   mig_list "$1" "" true
-  echo "==> belt-balancer-2 uninstalled and $MOD_NAME installed: this is the swap"
+  echo "==> $MIG_INCUMBENT uninstalled and $MOD_NAME installed: this is the swap"
 }
 
 # This mod was already there; the incumbent leaves a session later.
 mig_drop_incumbent() {
-  rm -rf "$1/mods/belt-balancer-2"
+  rm -rf "$1/mods/$MIG_INCUMBENT"
   mig_list "$1" "" true
-  echo "==> belt-balancer-2 uninstalled; $MOD_NAME was already installed"
+  echo "==> $MIG_INCUMBENT uninstalled; $MOD_NAME was already installed"
 }
 
 # The stranger STAYS. This mod arrives beside it and must leave it alone.
@@ -201,9 +250,34 @@ mig_add_bbb_beside_foreign() {
   echo "==> $MOD_NAME installed beside bbb-mig-foreign, which still owns balancer-part"
 }
 
-# run <workdir> <ticks>
-run() {
-  local work="$1" ticks="$2"
+# THE STRANGER LEAVES, which is a promise `legacyCheck` makes in as many words --
+# "the stranger can be uninstalled too, and on that load the stub appears and
+# their balancers become ours, which is the same promise the incumbents get" --
+# and which nothing tested until this hook existed.
+mig_drop_foreign() {
+  rm -rf "$1/mods/bbb-mig-foreign"
+  mig_list "$1" "" true
+  echo "==> bbb-mig-foreign uninstalled; the stub appears and its balancers become ours"
+}
+
+# THE INCUMBENT ARRIVES AFTER US: the Done -> Blocked recheck that
+# fk_on_configuration_changed exists for, and the only transition of the state
+# machine that no leg drove. A player installs this mod, uses it, and then
+# installs a Belt Balancer beside it.
+mig_add_incumbent() {
+  mig_standin "$1" "$MIG_INCUMBENT" "$MIG_INCUMBENT_VERSION"
+  mig_list "$1" "$MIG_INCUMBENT" true
+  echo "==> $MIG_INCUMBENT INSTALLED beside $MOD_NAME, which was already there"
+}
+
+# create_phase <workdir> -- the first of the two phases, on its own.
+#
+# Split out of run() so that a leg which only needs to see what a guest DECIDES
+# at load can stop there: `--benchmark` never saves, so a phase costs a whole
+# Factorio run, and the mig suite's two name probes have nothing to measure past
+# the create log.
+create_phase() {
+  local work="$1"
   local save="$work/map.zip"
   echo "==> creating save (phase 1 runs in on_init)"
   if ! "$FACTORIO" -c "$CONFIG" --mod-directory "$work/mods" --create "$save" \
@@ -215,26 +289,15 @@ run() {
     echo "errors during map creation; see $work/create.log" >&2
     grep -inE "error|traceback" "$work/create.log" | head -20 >&2; exit 1
   fi
+}
 
-  [ -n "${BETWEEN:-}" ] && "$BETWEEN" "$work"
-
-  echo "==> benchmarking ${ticks}t"
-  # One run: each --benchmark-runs pass reloads the save and replays the same
-  # ticks, which would duplicate every phase in the log.
-  if ! "$FACTORIO" -c "$CONFIG" --mod-directory "$work/mods" --benchmark "$save" \
-        --benchmark-ticks "$ticks" --benchmark-runs 1 --disable-audio \
-        >"$work/run.log" 2>&1; then
-    echo "benchmark failed; see $work/run.log" >&2; tail -40 "$work/run.log" >&2; exit 1
-  fi
-  if grep -qE "stack traceback|Error while running" "$work/run.log"; then
-    echo "script error during benchmark; see $work/run.log" >&2
-    grep -nE "Error|traceback" "$work/run.log" | head >&2; exit 1
-  fi
+# guest_gate <logfile>... -- the two things no run of any suite may contain.
+guest_gate() {
   # A compile that failed leaves a loud line and no network. It is never
   # acceptable, in any suite.
-  if grep -qE "\[BBB\] error:" "$work/create.log" "$work/run.log"; then
+  if grep -qE "\[BBB\] error:" "$@"; then
     echo "the guest reported a compile error:" >&2
-    grep -hE "\[BBB\] error:" "$work/create.log" "$work/run.log" | head -20 >&2; exit 1
+    grep -hE "\[BBB\] error:" "$@" | head -20 >&2; exit 1
   fi
   # THE COLLECTOR'S OWN ROOT-SET LINE, and this assertion is what replaced a
   # hand-rolled check in guest/go/gc.go.
@@ -250,12 +313,42 @@ run() {
   # Only this line. The other `fkgc:` lines -- an outrun, a refused grow -- are
   # conditions about the allocation rate that a stress suite may legitimately
   # provoke, and the `mar` suite asserts `deadlines=0` over them directly.
-  if grep -qE "fkgc: this guest's ROOT SET is larger" "$work/create.log" "$work/run.log"; then
+  if grep -qE "fkgc: this guest's ROOT SET is larger" "$@"; then
     echo "the collector had to raise this guest's step budget to cover its own" >&2
     echo "globals re-scan: gcRootGranules in guest/go/gc.go is now too small." >&2
     echo "Compare 'roots=' against 'budget='/'eff=' on the [BBB] heap line." >&2
     exit 1
   fi
+}
+
+# create_only <workdir> -- one phase and no benchmark. For a leg whose whole
+# question is answered by what the guest logged at load.
+create_only() {
+  create_phase "$1"
+  guest_gate "$1/create.log"
+}
+
+# run <workdir> <ticks>
+run() {
+  local work="$1" ticks="$2"
+  local save="$work/map.zip"
+  create_phase "$work"
+
+  [ -n "${BETWEEN:-}" ] && "$BETWEEN" "$work"
+
+  echo "==> benchmarking ${ticks}t"
+  # One run: each --benchmark-runs pass reloads the save and replays the same
+  # ticks, which would duplicate every phase in the log.
+  if ! "$FACTORIO" -c "$CONFIG" --mod-directory "$work/mods" --benchmark "$save" \
+        --benchmark-ticks "$ticks" --benchmark-runs 1 --disable-audio \
+        >"$work/run.log" 2>&1; then
+    echo "benchmark failed; see $work/run.log" >&2; tail -40 "$work/run.log" >&2; exit 1
+  fi
+  if grep -qE "stack traceback|Error while running" "$work/run.log"; then
+    echo "script error during benchmark; see $work/run.log" >&2
+    grep -nE "Error|traceback" "$work/run.log" | head >&2; exit 1
+  fi
+  guest_gate "$work/create.log" "$work/run.log"
 }
 
 for suite in $SUITES; do
@@ -346,23 +439,40 @@ for suite in $SUITES; do
       python3 "$ROOT/test/assert-mix.py" "$TMP/mix/create.log" "$TMP/mix/run.log"
       ;;
     mig)
-      # THE ONLY SUITE WHOSE TWO PHASES RUN UNDER DIFFERENT MOD SETS. Four legs,
-      # and the last is the one with the blast radius.
-      echo "=== mig: adopting a Belt Balancer 2 save ==="
+      # THE ONLY SUITE WHOSE TWO PHASES RUN UNDER DIFFERENT MOD SETS. Seven legs
+      # and two name probes, covering both axes the feature has: WHICH MOD owns
+      # `balancer-part`, and WHICH TRANSITION of legacy.go's state machine the
+      # load makes.
+      echo "=== mig: adopting a Belt Balancer 2 or 3 save ==="
 
       echo "--- leg 1: the incumbent swapped out and this mod in, in one edit ---"
-      stage_mig "$TMP/mig1" belt-balancer-2 false
+      MIG_INCUMBENT=belt-balancer-2 MIG_INCUMBENT_VERSION=2.0.9
+      stage_mig "$TMP/mig1" belt-balancer-2 2.0.9 false
       BETWEEN=mig_swap_in run "$TMP/mig1" "${BBB_MIG_TICKS:-3600}"
       unset BETWEEN
       python3 "$ROOT/test/assert-mig.py" --leg added \
         "$TMP/mig1/create.log" "$TMP/mig1/run.log"
 
       echo "--- leg 2: this mod installed first, the incumbent removed later ---"
-      stage_mig "$TMP/mig2" belt-balancer-2 true
+      stage_mig "$TMP/mig2" belt-balancer-2 2.0.9 true
       BETWEEN=mig_drop_incumbent run "$TMP/mig2" "${BBB_MIG_TICKS:-3600}"
       unset BETWEEN
       python3 "$ROOT/test/assert-mig.py" --leg later \
         "$TMP/mig2/create.log" "$TMP/mig2/run.log"
+
+      # THE LIVE SUCCESSOR, and the leg is the coexistence shape rather than the
+      # swap shape on purpose. A name this guest does not recognise degrades into
+      # the STRANGER path, which is Blocked with no log line -- so a leg that only
+      # removed belt-balancer-3 and watched the conversion happen would pass with
+      # the name misspelled. The NAMED blocked line from phase one is the only
+      # observable that pins the row of `legacyIncumbents`.
+      echo "--- leg 3: Belt Balancer 3 installed beside this mod, then removed ---"
+      MIG_INCUMBENT=belt-balancer-3 MIG_INCUMBENT_VERSION=1.0.1
+      stage_mig "$TMP/mig3" belt-balancer-3 1.0.1 true
+      BETWEEN=mig_drop_incumbent run "$TMP/mig3" "${BBB_MIG_TICKS:-3600}"
+      unset BETWEEN
+      python3 "$ROOT/test/assert-mig.py" --leg bb3 \
+        "$TMP/mig3/create.log" "$TMP/mig3/run.log"
 
       # No incumbent has ever been installed here, so `balancer-part` is this
       # mod's own stub from the first byte and the observer's parts arrive one at
@@ -371,18 +481,60 @@ for suite in $SUITES; do
       # conversion and whose second phase changes no mod at all, so it is the
       # only one that can show the once-per-save flag surviving a save and
       # costing nothing on the way back.
-      echo "--- leg 3: legacy parts arriving through build events, then a plain reload ---"
-      stage_mig "$TMP/mig3" "" true
-      run "$TMP/mig3" "${BBB_MIG_TICKS:-3600}"
+      echo "--- leg 4: legacy parts arriving through build events, then a plain reload ---"
+      stage_mig "$TMP/mig4" "" "" true
+      run "$TMP/mig4" "${BBB_MIG_TICKS:-3600}"
       python3 "$ROOT/test/assert-mig.py" --leg built \
-        "$TMP/mig3/create.log" "$TMP/mig3/run.log"
+        "$TMP/mig4/create.log" "$TMP/mig4/run.log"
 
-      echo "--- leg 4: a stranger owns balancer-part and must be left alone ---"
-      stage_mig "$TMP/mig4" bbb-mig-foreign false
-      BETWEEN=mig_add_bbb_beside_foreign run "$TMP/mig4" "${BBB_MIG_TICKS:-3600}"
+      # DONE -> BLOCKED, the one transition fk_on_configuration_changed exists
+      # for that nothing drove: this mod first, an incumbent installed beside it
+      # afterwards. Phase one is leg 4's -- our stub, converted through the build
+      # path, the save written with the phase Done -- and then belt-balancer-2
+      # arrives. The teeth are in the late build: it places the INCUMBENT'S
+      # `balancer-part` now, and a build-path gate reading the wrong phase would
+      # swap a working mod's freshly built entity out from under it.
+      echo "--- leg 5: an incumbent INSTALLED after this mod, on a converted save ---"
+      MIG_INCUMBENT=belt-balancer-2 MIG_INCUMBENT_VERSION=2.0.9
+      stage_mig "$TMP/mig5" "" "" true
+      BETWEEN=mig_add_incumbent run "$TMP/mig5" "${BBB_MIG_TICKS:-3600}"
+      unset BETWEEN
+      python3 "$ROOT/test/assert-mig.py" --leg readd \
+        "$TMP/mig5/create.log" "$TMP/mig5/run.log"
+
+      echo "--- leg 6: a stranger owns balancer-part and must be left alone ---"
+      stage_mig "$TMP/mig6" bbb-mig-foreign "" false
+      BETWEEN=mig_add_bbb_beside_foreign run "$TMP/mig6" "${BBB_MIG_TICKS:-3600}"
       unset BETWEEN
       python3 "$ROOT/test/assert-mig.py" --leg foreign \
-        "$TMP/mig4/create.log" "$TMP/mig4/run.log"
+        "$TMP/mig6/create.log" "$TMP/mig6/run.log"
+
+      # THE STRANGER REMOVED. `legacyCheck` promises this in as many words and
+      # nothing tested it: a Blocked state re-tests the marker prototype, so the
+      # load on which the stranger leaves is a load on which our stub appears and
+      # their balancers become ours -- the same promise the incumbents get.
+      echo "--- leg 7: the stranger UNINSTALLED, and its balancers become ours ---"
+      stage_mig "$TMP/mig7" bbb-mig-foreign "" true
+      BETWEEN=mig_drop_foreign run "$TMP/mig7" "${BBB_MIG_TICKS:-3600}"
+      unset BETWEEN
+      python3 "$ROOT/test/assert-mig.py" --leg fgone \
+        "$TMP/mig7/create.log" "$TMP/mig7/run.log"
+
+      # THE OTHER TWO ROWS OF `legacyIncumbents`, one create phase each. What a
+      # full leg would add over leg 2 is nothing -- the conversion side is
+      # identical whichever name blocked it -- and what it would cost is a
+      # benchmark phase. The name is the only thing under test, so the blocked
+      # line is the only thing asserted.
+      echo "--- probes: the two incumbent names with no leg of their own ---"
+      stage_mig "$TMP/migp1" belt-balancer 3.4.4 true
+      create_only "$TMP/migp1"
+      python3 "$ROOT/test/assert-mig.py" --leg probe \
+        --incumbent belt-balancer --version 3.4.4 "$TMP/migp1/create.log"
+
+      stage_mig "$TMP/migp2" belt-balancer-performance 1.0.5 true
+      create_only "$TMP/migp2"
+      python3 "$ROOT/test/assert-mig.py" --leg probe \
+        --incumbent belt-balancer-performance --version 1.0.5 "$TMP/migp2/create.log"
       ;;
     *)
       echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix or mig)" >&2
