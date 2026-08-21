@@ -50,6 +50,16 @@ What is checked, and why each one is here:
   * THE ADOPTED BALANCERS BALANCE, against a bare express belt in the same save.
     A network adopted from the wrong edge list does not show up as a crash; it
     shows up as a rate.
+  * WHAT THE CONVERSION CARRIED. `legacyConvertOne` reads a HEALTH and a QUALITY
+    off the entity it destroys and writes both onto the one it creates, and both
+    are invisible on an undamaged normal-quality part -- which is what every
+    part in this suite was until the fidelity rig existed.
+  * WHOSE THE BALANCERS ARE. Two forces' parts TOUCHING are two balancers, and
+    the technology is granted per force. A fusion moves no item count anywhere.
+  * AND WHERE THEY ARE. The scan walks every surface; the summary line's own
+    surface number counts surfaces SCANNED rather than surfaces that had parts
+    on them, so the per-surface census is what can see a scan that stopped
+    early.
   * AND THE REGISTRY AGREES WITH THE WORLD afterwards: drift=0, unbuilt=0, and
     one network per cluster.
 
@@ -73,6 +83,12 @@ ITEM = re.compile(r"\[BBB-MIG\] legacy-item phase=(\S+) held=(-?\d+) place_resul
 TECH = re.compile(r"\[BBB-MIG\] tech phase=(\S+) bbb-balancer=(\S+) belt-balancer-1=(\S+)")
 SAMPLE = re.compile(r"\[BBB-MIG\] sample tick=(\d+) (.*)")
 LATE = re.compile(r"\[BBB-MIG\] late-build legacy=(\d+) ours=(\d+)")
+TECHF = re.compile(r"\[BBB-MIG\] tech-force phase=(\S+) force=(\S+) bbb-balancer=(\S+)")
+HEALTH = re.compile(
+    r"\[BBB-MIG\] health phase=(\S+) name=(\S+) value=(\S+) max=(\S+)")
+QUALITY = re.compile(r"\[BBB-MIG\] quality phase=(\S+) name=(\S+) value=(\S+)")
+SURFACES = re.compile(r"\[BBB-MIG\] surfaces phase=(\S+) (.*)")
+FORCEPARTS = re.compile(r"\[BBB-MIG\] force-parts phase=(\S+) (.*)")
 AUDIT = re.compile(
     r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) unbuilt=(\d+)"
 )
@@ -103,6 +119,26 @@ EXPECT_BLOCKED = {
 
 SPREAD = 0.01       # between live outputs of one balancer
 RATE_TOL = 0.02     # against the control belt
+
+# THE WORLD THE OBSERVER BUILDS, written down HERE and not derived from anything
+# the guest said. The cluster count is the one number in this suite that a
+# defect can move without moving a single item: two forces' parts touching are
+# two balancers, and a flood fill that lost its force check fuses them into one
+# while every census, every copper count and every rate stays exactly what it
+# was. Cross-checking the audit against the guest's own summary line -- which is
+# what this script did until the force rig existed -- cannot see that at all,
+# because both numbers come from the same fill.
+#
+#   m4x4 4 parts / m3to5 5 / wit 2 / fid 2 / frc 2+2 on two forces / surface B 2
+EXPECT_CLUSTERS = 7
+EXPECT_FORCES = 2                    # forces that owned a converted part
+FORCE_B = "bbb-mig-force-b"
+EXPECT_FORCE_B_PARTS = 2
+EXPECT_PART_SURFACES = 2             # surfaces that actually carry parts
+HIDDEN_SURFACE = "bbb-hidden"        # this mod's own, and never scanned
+
+FID_HEALTH = 85.0
+FID_QUALITY = "uncommon"
 
 
 def find_all(lines, rx):
@@ -197,7 +233,7 @@ def check_throughput(run, fail):
                         % (name, spread * 100, SPREAD * 100))
 
 
-def check_audit(audits, fail, expect_parts, expect_clusters):
+def check_audit(audits, fail, expect_parts, summary_clusters):
     """And the registry agrees with the world."""
     if not audits:
         fail.append("no audit ran after the migration")
@@ -214,9 +250,178 @@ def check_audit(audits, fail, expect_parts, expect_clusters):
     if p != expect_parts:
         fail.append("the audit counted %d parts and %d were adopted"
                     % (p, expect_parts))
-    if expect_clusters is not None and c != expect_clusters:
+    # THE ABSOLUTE ONE, and it is the only cluster check with teeth. The line
+    # below cross-checks two numbers the same flood fill produced, so a fill
+    # that fused two forces' touching parts moves both of them together and
+    # neither says anything.
+    if c != EXPECT_CLUSTERS:
+        fail.append("the audit finds %d clusters and the observer built %d: two "
+                    "forces' parts touching are two balancers, and a fill that "
+                    "fused them moves no item count in this suite at all"
+                    % (c, EXPECT_CLUSTERS))
+    if summary_clusters is not None and c != summary_clusters:
         fail.append("the migration reported %d clusters and the audit finds %d"
-                    % (expect_clusters, c))
+                    % (summary_clusters, c))
+
+
+def parse_pairs(text, sep):
+    """`a:1/2 b:3/4` -> {'a': '1/2', ...}, and `a=1 b=2` the same way."""
+    out = {}
+    for chunk in text.split():
+        name, _, rest = chunk.partition(sep)
+        out[name] = rest
+    return out
+
+
+def check_fidelity(healths, qualities, fail, expect_name, phases=("t1", "final")):
+    """WHAT THE CONVERSION CARRIED: the health and the quality.
+
+    `legacyConvertOne` reads both off the entity it is about to destroy and
+    writes them onto the one it creates -- two calls, on a path that until the
+    fidelity rig existed had only ever been handed undamaged normal-quality
+    parts. Both lines could have been absent and every other assertion in this
+    suite would have passed unchanged.
+
+    ANTI-VACUITY IS THE WHOLE RISK HERE and it is checked in phase one: a part
+    that was never damaged is at max_health, and an equality across the swap is
+    then satisfied by a guest that copies nothing at all."""
+    base = healths.get("create")
+    if base is None:
+        fail.append("no health was reported in phase one")
+        return
+    _, value0, max0 = base[0], float(base[1]), float(base[2])
+    if value0 >= max0:
+        fail.append("the fidelity part was at %.1f of %.1f in phase one: it was "
+                    "never damaged, so an equality across the swap is vacuous"
+                    % (value0, max0))
+    elif value0 != FID_HEALTH:
+        fail.append("the fidelity part was damaged to %.1f and the rig asks for "
+                    "%.1f" % (value0, FID_HEALTH))
+    q0 = qualities.get("create")
+    if q0 is None:
+        fail.append("no quality was reported in phase one")
+        return
+    if q0[1] != FID_QUALITY:
+        fail.append("the fidelity part was built at quality %r and the rig asks "
+                    "for %r -- the quality mod is enabled for both phases of "
+                    "every leg of this suite, and a game with only `normal` in "
+                    "it cannot tell a guest that carries the quality apart from "
+                    "one that drops the key" % (q0[1], FID_QUALITY))
+    print("  fidelity in phase one: %.1f of %.1f health, quality %s"
+          % (value0, max0, q0[1]))
+
+    for phase in phases:
+        got = healths.get(phase)
+        if got is None:
+            continue
+        name, value, mx = got[0], float(got[1]), float(got[2])
+        print("  fidelity at phase=%-6s %s at %.1f of %.1f health"
+              % (phase, name, value, mx))
+        if name != expect_name:
+            fail.append("the damaged tile holds a %s at phase=%s and should "
+                        "hold a %s" % (name, phase, expect_name))
+        if value != value0:
+            fail.append("the damaged part is at %.1f health at phase=%s and was "
+                        "at %.1f before the swap: legacyConvertOne reads the "
+                        "health off the old entity and writes it onto the new "
+                        "one, and a part silently repaired to full is a building "
+                        "this mod was not asked to touch"
+                        % (value, phase, value0))
+        gotq = qualities.get(phase)
+        if gotq is None:
+            continue
+        print("  fidelity at phase=%-6s %s at quality %s"
+              % (phase, gotq[0], gotq[1]))
+        if gotq[0] != expect_name:
+            fail.append("the quality tile holds a %s at phase=%s and should hold "
+                        "a %s" % (gotq[0], phase, expect_name))
+        if gotq[1] != q0[1]:
+            fail.append("the %s part came back at quality %r at phase=%s: the "
+                        "quality is passed to `create_entity` as the prototype "
+                        "HANDLE and a dropped key reads as `normal`"
+                        % (q0[1], gotq[1], phase))
+
+
+def check_forces(techf, forceparts, fail, expect_researched, phases=("t1", "final")):
+    """WHOSE THE BALANCERS ARE. The technology is granted per force that owned a
+    converted part, and a force left without it is a player holding balancers
+    they cannot craft a spare for.
+
+    The parts-per-force line is the anti-vacuity half: a run in which the second
+    force's parts were never built would satisfy every other statement here by
+    having only one force in it."""
+    for phase in ("create",) + tuple(phases):
+        got = forceparts.get(phase)
+        if got is None:
+            fail.append("no parts-per-force line for phase=%s" % phase)
+            continue
+        n = int(got.get(FORCE_B, -1))
+        if n != EXPECT_FORCE_B_PARTS:
+            fail.append("the second force owns %d parts at phase=%s and the "
+                        "force rig builds %d; a fusion check over one force is "
+                        "vacuous" % (n, phase, EXPECT_FORCE_B_PARTS))
+    print("  parts per force at phase=t1: %s"
+          % " ".join("%s=%s" % kv for kv in sorted(forceparts.get("t1", {}).items())))
+    for phase in phases:
+        got = techf.get(phase)
+        if got is None:
+            fail.append("no second-force technology line for phase=%s" % phase)
+            continue
+        if got != expect_researched:
+            fail.append("the second force's bbb-balancer is %s at phase=%s and "
+                        "should be %s: the grant is per force that owned a "
+                        "converted part" % (got, phase, expect_researched))
+        else:
+            print("  the second force's technology at phase=%-6s bbb-balancer=%s"
+                  % (phase, got))
+
+
+def check_surfaces(surfs, fail, scanned, expect_converted):
+    """AND WHERE THEY ARE.
+
+    THE SUMMARY LINE'S OWN SURFACE NUMBER COUNTS SURFACES SCANNED, not surfaces
+    that had anything on them -- `legacyScan` increments it once per non-hidden
+    surface before it looks -- so it reads the same whether the parts were on
+    one surface or on five, and a scan that stopped after the first surface it
+    converted something on would report exactly what it reports now. Two
+    statements, therefore, and they are not the same one:
+
+      * every surface in the game was scanned: the number on the summary line
+        equals the number of non-hidden surfaces the observer can see;
+      * parts on MORE THAN ONE surface were really converted, which only the
+        per-surface census can say."""
+    base = surfs.get("create")
+    if base is None:
+        fail.append("no per-surface census in phase one")
+        return
+    with_parts = [s for s, v in base.items() if int(v.split("/")[0]) > 0]
+    if len(with_parts) < EXPECT_PART_SURFACES:
+        fail.append("phase one put parts on %d surface(s) and the rigs cover %d; "
+                    "a multi-surface claim over one surface is vacuous"
+                    % (len(with_parts), EXPECT_PART_SURFACES))
+    print("  phase one: parts on %s" % ", ".join(sorted(with_parts)))
+
+    after = surfs.get("t1")
+    if after is None:
+        fail.append("no per-surface census for phase=t1")
+        return
+    print("  phase=t1  %s" % " ".join("%s:%s" % kv for kv in after.items()))
+    visible = [s for s in after if s != HIDDEN_SURFACE]
+    if scanned is not None and len(visible) != scanned:
+        fail.append("the scan reports %d surfaces and the world has %d that are "
+                    "not the hidden one (%s): that number counts surfaces "
+                    "SCANNED, so a scan that skipped one would say so here and "
+                    "nowhere else" % (scanned, len(visible), ", ".join(visible)))
+
+    if not expect_converted:
+        return
+    ours = [s for s, v in after.items() if int(v.split("/")[1]) > 0]
+    if len(ours) != EXPECT_PART_SURFACES:
+        fail.append("this mod's parts are standing on %d surface(s) after the "
+                    "conversion and were built on %d: a scan that stopped after "
+                    "the first surface it converted anything on leaves the rest "
+                    "as the incumbent's, forever, with nothing logged"
+                    % (len(ours), EXPECT_PART_SURFACES))
 
 
 def check_blocked_name(blocked, leg, fail):
@@ -425,6 +630,13 @@ def main():
     counts = {m.group(1): int(m.group(2)) for m in find_all(both, COUNT)}
     items = {m.group(1): (int(m.group(2)), m.group(3)) for m in find_all(both, ITEM)}
     techs = {m.group(1): (m.group(2), m.group(3)) for m in find_all(both, TECH)}
+    techf = {m.group(1): m.group(3) for m in find_all(both, TECHF)}
+    healths = {m.group(1): (m.group(2), m.group(3), m.group(4))
+               for m in find_all(both, HEALTH)}
+    qualities = {m.group(1): (m.group(2), m.group(3)) for m in find_all(both, QUALITY)}
+    surfs = {m.group(1): parse_pairs(m.group(2), ":") for m in find_all(both, SURFACES)}
+    forceparts = {m.group(1): parse_pairs(m.group(2), "=")
+                  for m in find_all(both, FORCEPARTS)}
     adopted = find_all(both, ADOPTED)
     blocked = find_all(both, BLOCKED)
     audits = find_all(run, AUDIT)
@@ -446,6 +658,13 @@ def main():
 
     # ------------------------------------------------------------------ readd
     if leg == "readd":
+        # The conversion happened in PHASE ONE here, through the build path, so
+        # the fidelity pair crossed a save as well as a swap and the force grant
+        # was legacyRunBuilds' rather than legacyScan's. There is no summary
+        # line to read a scanned-surface count off, hence `scanned=None`.
+        check_fidelity(healths, qualities, fail, "bbb-balancer-part")
+        check_forces(techf, forceparts, fail, "true")
+        check_surfaces(surfs, fail, None, True)
         readd(create, run, census, counts, items, techs, blocked, adopted, audits,
               legacy_before, fail)
         return
@@ -519,6 +738,16 @@ def main():
         if "t1" in items and items["t1"][1] != "balancer-part":
             fail.append("the stranger's item now places %r; this mod rewrote a "
                         "prototype it does not own" % items["t1"][1])
+        # THE STRANGER'S DAMAGED PART IS STILL DAMAGED AND STILL UNCOMMON AND
+        # STILL THEIRS. `check_fidelity`'s equality is the same statement it
+        # makes in every other leg; what differs is which prototype must be
+        # standing on the tile at the end of it.
+        check_fidelity(healths, qualities, fail, "balancer-part")
+        # The technology exists in phase two (this mod is installed beside the
+        # stranger) and must be UNRESEARCHED: a grant here would mean something
+        # of the stranger's had been converted.
+        check_forces(techf, forceparts, fail, "false")
+        check_surfaces(surfs, fail, None, False)
         if not audits:
             fail.append("no audit ran; the guest was never asked to look at this world")
         else:
@@ -576,6 +805,7 @@ def main():
         if fail:
             report(fail, "")
 
+    scanned = None
     clusters = None
     if leg != "built" and not adopted:
         print("nothing was adopted at all. Either the data stage did not keep the "
@@ -592,15 +822,22 @@ def main():
 
     if adopted:
         n, surfaces, clusters, forces, trigger = adopted[0].groups()
-        n, clusters, forces = int(n), int(clusters), int(forces)
+        n, scanned, clusters, forces = int(n), int(surfaces), int(clusters), int(forces)
         print("  adopted %d parts from %s surfaces into %d clusters, %d forces "
               "researched, trigger=%s" % (n, surfaces, clusters, forces, trigger))
         if n != legacy_before:
             fail.append("%d parts were standing and %d were adopted"
                         % (legacy_before, n))
-        if forces < 1:
-            fail.append("no force was given the balancer technology; a player with "
-                        "fifty balancers and no recipe is worse off than before")
+        if forces != EXPECT_FORCES:
+            fail.append("%d force(s) were given the balancer technology and the "
+                        "force rig puts parts on %d: the grant is per force that "
+                        "owned a converted part, and a player left holding "
+                        "balancers with no recipe is worse off than before"
+                        % (forces, EXPECT_FORCES))
+        if clusters != EXPECT_CLUSTERS:
+            fail.append("the conversion made %d clusters out of the observer's "
+                        "%d: two forces' parts touching are two balancers"
+                        % (clusters, EXPECT_CLUSTERS))
         want = EXPECT_TRIGGER.get(leg)
         if want is not None and trigger != want:
             fail.append("the conversion was driven by trigger=%s and this leg must "
@@ -617,6 +854,9 @@ def main():
 
     check_witness(counts, fail)
     check_item(items, fail, "bbb-balancer-part")
+    check_fidelity(healths, qualities, fail, "bbb-balancer-part")
+    check_forces(techf, forceparts, fail, "true")
+    check_surfaces(surfs, fail, scanned, True)
 
     # The technology half.
     if "t1" in techs:

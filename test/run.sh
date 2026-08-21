@@ -147,6 +147,18 @@ bump_build() {
 # Factorio as enabled, so "removed" here means the directory is deleted as well
 # as the entry -- which is also what a player does.
 
+# QUALITY IS ENABLED HERE AND IN NO OTHER SUITE'S BASE-ONLY LIST, and it is
+# enabled in BOTH PHASES OF EVERY LEG. `legacyConvertOne` passes the old entity's
+# quality through to the new one, and a game with only `normal` in it cannot tell
+# a guest that carries the quality apart from one that drops the key -- so the
+# fidelity rig builds one part at `uncommon`, which needs the prototype.
+#
+# A CONSTANT ACROSS THE TWO PHASES IS NOT A MOD-SET CHANGE, so no leg's trigger
+# moves: `fk_on_configuration_changed` fires for the mod that was added or
+# removed between the phases and quality is neither. It depends on `base` alone
+# (its own info.json, 2.0.77), so it loads without elevated-rails or space-age
+# and the suite stays base-plus-one rather than becoming a second Space Age run.
+#
 # mig_list <workdir> <extra-mod-name-or-empty> <bbb-enabled>
 mig_list() {
   local work="$1" extra="$2" bbb="$3"
@@ -157,7 +169,7 @@ mig_list() {
   "mods": [
     { "name": "base", "enabled": true },
     { "name": "elevated-rails", "enabled": false },
-    { "name": "quality", "enabled": false },
+    { "name": "quality", "enabled": true },
     { "name": "space-age", "enabled": false },
 $extra_entry
     { "name": "$MOD_NAME", "enabled": $bbb },

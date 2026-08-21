@@ -225,7 +225,13 @@ test/                    headless verification, nine suites (see below), and
                          data-stage-only stand-in that is staged under ALL FOUR
                          of `legacyIncumbents`' names -- one directory, its
                          info.json rewritten at staging time, because what
-                         differs between the four is the NAME and nothing else
+                         differs between the four is the NAME and nothing else.
+                         Its observer builds a DAMAGED part, an UNCOMMON one, a
+                         column of four parts across TWO FORCES and a SECOND
+                         SURFACE, because health, quality, the per-force
+                         technology grant and the every-surface walk are four
+                         things legacy.go claims and nothing measured -- and
+                         the first run of the first of them found a defect
 bench/                   the benchmark harness (separate concern, do not disturb)
 dist/                    build output, gitignored. NOTHING here is hand-written
 README.md                the outward-facing page: what the mod is, how it
@@ -2980,18 +2986,33 @@ belt-balancer-2 under every name and pass every leg.
 
 `test/mods/bbb-mig-test` is present in BOTH phases and builds everything in
 `on_init` with `balancer-part`, which in phase one is the only balancer prototype
-in the game. Four rigs on one scratch surface: `ctrl` (a bare express belt, the
-yardstick), `m4x4`, `m3to5` (P=8, loopbacks -- adoption re-derives the edge list,
-and an asymmetric shape is where a wrong one reads as a rate rather than as a
-crash), and **`wit`, the conservation witness**: 2 parts, 2 in and 2 out, **no
-source and no sink at all**, its belts hand-loaded with **COPPER PLATE** while
-every other rig in the save runs iron. A copper count across every surface is
-therefore exactly that rig's contents, before the swap and after it, which is
-what makes "the items on the belts survived" an equality rather than an estimate.
-Plus a steel chest holding 50 of the incumbent's item.
+in the game. Six rigs, and the last three are about what the conversion CARRIES
+rather than about a rate:
 
-**The three conversion legs, measured** — legs 1 and 2 on 2026-08-16, leg 3 on
-2026-08-20, Factorio 2.0.77, base only, shipped configuration:
+| rig | what it is |
+|---|---|
+| `ctrl` | a bare express belt, the yardstick |
+| `m4x4` | 4 parts, 4 in, 4 out, saturated -- the shape a migrating player is most likely to have |
+| `m3to5` | P=8 with loopbacks. Adoption re-derives the edge list, and an asymmetric shape is where a wrong one reads as a rate rather than as a crash |
+| `wit` | **the conservation witness**: 2 parts, 2 in and 2 out, **no source and no sink at all**, its belts hand-loaded with **COPPER PLATE** while every other rig runs iron. A copper count across every surface is therefore exactly that rig's contents, before the swap and after it, which is what makes "the items on the belts survived" an equality rather than an estimate |
+| `fid` | **the fidelity pair**: one part DAMAGED to 85 of 170 and one built at UNCOMMON quality. Those are the only two properties `legacyConvertOne` reads off the old entity and writes onto the new one, and both are invisible on an undamaged normal-quality part |
+| `frc` | **the force column**: four parts in one column, the top two on the player force and the bottom two on a second force, TOUCHING. Two forces' parts touching are two balancers |
+
+Plus **a second surface**, `bbb-mig-b`, carrying two more parts and their belts;
+and a steel chest holding 50 of the incumbent's item.
+
+**Every rig this suite adds carries a belt in and a belt out per part, fed or
+not**, and that is a constraint rather than decoration: a cluster with no inputs
+or no outputs compiles to nothing, which is a legitimate half-built state, and the
+audit's `nets == clusters` would then read as a cluster the classifier never saw.
+
+**Nineteen parts, seven clusters, three surfaces, two forces**, and the whole
+suite is measured against that world.
+
+**The three conversion legs, measured** — re-measured 2026-08-20 against the
+six-rig world (the four-rig numbers this table used to carry are in the
+verification note at the end of this section), Factorio 2.0.77, base plus the
+`quality` mod, shipped configuration:
 
 | | leg 1 `added` | leg 2 `later` | leg 3 `bb3` |
 |---|---|---|---|
@@ -2999,18 +3020,21 @@ Plus a steel chest holding 50 of the incumbent's item.
 | phase one | the incumbent alone, this mod absent | the incumbent AND this mod | the incumbent AND this mod |
 | between the phases | incumbent out, this mod in | incumbent out | incumbent out |
 | coexistence in phase one | n/a | **exactly one** `belt-balancer-2 2.0.9 is active; its balancers are left alone`, **0 converted** | **exactly one**, and it NAMES `belt-balancer-3 1.0.1`, **0 converted** |
-| parts adopted | **11 from 2 surfaces into 3 clusters** | the same | the same |
+| parts adopted | **19 from 3 surfaces into 7 clusters** | the same | the same |
 | trigger | **`init`** | **`configuration_changed`** | **`configuration_changed`** |
-| forces given the technology | 1 | 1 | 1 |
-| census, before -> after | 11 / 0 -> **0 / 11** | the same | the same |
+| forces given the technology | **2** | 2 | 2 |
+| census, before -> after | 19 / 0 -> **0 / 19** | the same | the same |
 | the witness's copper | **48 -> 48 -> 48 -> 48** over four samples | the same | the same |
 | the item stack | **50 held**, `place_result` `balancer-part` -> `bbb-balancer-part` | the same | the same |
 | technology after | `bbb-balancer=true`, `belt-balancer-1=absent` | the same | the same |
 | `ctrl` over t=1800..3540 | 1306 items | 1306 | 1306 |
 | `m4x4` | 1304 1306 1306 1304, **3.997x**, spread **0.15%** | identical | identical |
 | `m3to5` | 783 782 782 783 782, **2.995x**, spread **0.13%** | identical | identical |
+| the fidelity pair | **85.0 of 170.0 health** and quality **uncommon**, both on a `bbb-balancer-part` at t1 and again at final | the same | the same |
+| parts per force | **player=17, bbb-mig-force-b=2**, and the second force's `bbb-balancer` **researched** | the same | the same |
+| where they are | `nauvis:0/0 bbb-mig-a:0/17 bbb-hidden:0/0 bbb-mig-b:0/2` -- nothing left as the incumbent's anywhere, on either surface that had any | the same | the same |
 | the late build | `legacy=0 ours=1` | the same | the same |
-| final audit | `clusters=3 parts=11 nets=3 drift=0 unbuilt=0` | the same | the same |
+| final audit | `clusters=7 parts=19 nets=7 drift=0 unbuilt=0` | the same | the same |
 
 **The trigger word on the summary line is an assertion, not decoration.** Leg 1
 must be driven by `init` and legs 2 and 3 by `configuration_changed`; a leg that
@@ -3024,7 +3048,7 @@ would say so twice.
 
 **The rates are the M2 rates**, which is the point: an adopted 4x4 and an adopted
 3->5 deliver exactly what a built one does, against a control belt in the same
-save. And `rebuildFromWorld` at the first event **ADOPTS all three networks, 0
+save. And `rebuildFromWorld` at the first event **ADOPTS all seven networks, 0
 rebuilt** -- the migration's own flush had already built them correctly.
 
 **Leg 3, `bb3`, is the LIVE SUCCESSOR, and it is the coexistence shape rather
@@ -3041,12 +3065,14 @@ what the leg is for and all it adds over leg 2.
 
 **Leg 4, `built`, is the BUILD path and the PLAIN RELOAD.** No incumbent is ever
 installed, so `balancer-part` is this mod's own stub from the first byte and the
-observer's eleven parts arrive one at a time through build events -- which is the
-path an old blueprint's ghosts take, minus the robot. Measured: **the whole-world
-scan runs and finds nothing** (it is silent, as it is on every other save this
-mod has ever been benchmarked on), **11 parts swapped after their own build
-events**, and the rigs deliver 3.997x and 2.996x with the witness at 48
-throughout. It is also **the only leg whose save is written AFTER a conversion**
+observer's nineteen parts arrive one at a time through build events -- which is
+the path an old blueprint's ghosts take, minus the robot. Measured: **the
+whole-world scan runs and finds nothing** (it is silent, as it is on every other
+save this mod has ever been benchmarked on), **19 parts swapped after their own
+build events**, and the rigs deliver 3.997x and 2.996x with the witness at 48
+throughout. **This is the leg that found the quality defect below**: nineteen of
+nineteen is what it reports now and eighteen is what it reported the day the rig
+was written. It is also **the only leg whose save is written AFTER a conversion**
 and whose second phase changes no mod at all, so it is the only place the
 once-per-save flag can be seen surviving a save: on the reload the guest **says
 nothing about the migration at all**, which is asserted as the absence of any
@@ -3062,14 +3088,15 @@ converting. Measured 2026-08-20:
 
 | | measured |
 |---|---|
-| phase one | **11 parts swapped through the build path**, no scan summary line, no blocked line |
+| phase one | **19 parts swapped through the build path**, no scan summary line, no blocked line |
 | the incumbent arrives | **exactly one** `belt-balancer-2 2.0.9 is active; its balancers are left alone`, and **0 converted** in phase two — no scan line and no build-path line |
-| the world | `balancer-part=0 bbb-balancer-part=11` at **t1, post-audit and final**: the balancers this mod already owns do not move in either direction |
+| the world | `balancer-part=0 bbb-balancer-part=19` at **t1, post-audit and final**: the balancers this mod already owns do not move in either direction |
 | the witness's copper | **48 -> 48 -> 48 -> 48** |
 | the item stack | **50 held**, `place_result` **`bbb-balancer-part` -> `balancer-part`** — the other way round from every other leg, and correct: our stub owned the name while nobody else did, and the incumbent owns it again now |
 | the technology | `bbb-balancer` **false -> true** (granted by phase one's own conversion, and an incumbent arriving takes nothing away) and `belt-balancer-1` **absent -> false** — PRESENT and unresearched, where every other leg requires it absent |
 | the standing networks | `ctrl` 1306, `m4x4` 1306 1304 1306 1304 **3.997x** at **0.15%**, `m3to5` 782 784 782 783 782 **2.996x** at **0.26%** — unmoved across the incumbent's arrival |
-| final audit | `clusters=3 parts=11 nets=3 drift=0 unbuilt=0` |
+| the fidelity pair | **85.0 of 170.0** and **uncommon**, on a `bbb-balancer-part` — here they crossed a SAVE as well as a swap, the conversion having happened in phase one |
+| final audit | `clusters=7 parts=19 nets=7 drift=0 unbuilt=0` |
 | **the late build, which is the one with teeth** | it places the **INCUMBENT'S** `balancer-part` now, and comes out **`legacy=1 ours=0`** |
 
 **That last row is the whole reason the leg exists.** `legacyBuilt` is gated on
@@ -3080,9 +3107,12 @@ freshly built entity out from under it**. Nothing else in this suite can see it.
 **Leg 6, `foreign`, is the stranger.** `test/mods/bbb-mig-foreign` defines
 `balancer-part` exactly as the incumbents do under a name this mod has never
 heard of, and it STAYS installed while this mod arrives beside it. Measured:
-**0 converted**, census `11 / 0` unmoved at every sample, the stranger's item
+**0 converted**, census `19 / 0` unmoved at every sample, the stranger's item
 still placing the stranger's entity, and the audit at **`clusters=0 parts=0
-nets=0 drift=0 unbuilt=0`** -- this mod owns nothing at all in that save.
+nets=0 drift=0 unbuilt=0`** -- this mod owns nothing at all in that save. Its
+damaged part is still at **85.0 of 170.0**, still **uncommon**, and still a
+`balancer-part`; the second force's `bbb-balancer` is **false**, because a grant
+there would mean something of the stranger's had been converted.
 
 **Leg 7, `fgone`, is the stranger UNINSTALLED**, which `legacyCheck` promises in
 as many words — *"the stranger can be uninstalled too, and on that load the stub
@@ -3096,15 +3126,15 @@ and the guest must not touch one of them. Measured 2026-08-20:
 
 | | measured |
 |---|---|
-| phase one, with the stranger installed | **ZERO blocked lines** (the stranger branch is silent by design, and a line here would mean the guest had decided bbb-mig-foreign is a Belt Balancer), **0 converted by the scan** and **0 swapped through the build path** over eleven build events |
-| phase two, the stranger gone | **11 parts from 2 surfaces into 3 clusters, 1 force, trigger=`configuration_changed`** |
-| census | 11 / 0 -> **0 / 11** |
+| phase one, with the stranger installed | **ZERO blocked lines** (the stranger branch is silent by design, and a line here would mean the guest had decided bbb-mig-foreign is a Belt Balancer), **0 converted by the scan** and **0 swapped through the build path** over nineteen build events |
+| phase two, the stranger gone | **19 parts from 3 surfaces into 7 clusters, 2 forces, trigger=`configuration_changed`** |
+| census | 19 / 0 -> **0 / 19** |
 | the witness's copper | **48 -> 48 -> 48 -> 48** |
 | the item stack | **50 held**, `place_result` `balancer-part` -> `bbb-balancer-part` |
 | the technology | `bbb-balancer` **false -> true**, `belt-balancer-1` **absent in both phases** |
 | rates | `ctrl` 1306, `m4x4` **3.997x** at 0.15%, `m3to5` **2.995x** at 0.13% |
 | the late build | `legacy=0 ours=1` |
-| final audit | `clusters=3 parts=11 nets=3 drift=0 unbuilt=0` |
+| final audit | `clusters=7 parts=19 nets=7 drift=0 unbuilt=0` |
 
 **The technology check in this leg is its own, and that is not tidiness.**
 `belt-balancer-1` is absent in BOTH phases here — the stranger never defined one
@@ -3118,9 +3148,9 @@ the stranger stood, researched by the conversion that followed it out.
 nothing — the conversion side of the feature is identical whichever name blocked
 it — and what it would cost is a benchmark phase, so the probe asserts the one
 thing that is not identical: the named blocked line, over a world that really
-does contain eleven balancers the guest declined to touch. Measured 2026-08-20:
+does contain nineteen balancers the guest declined to touch. Measured 2026-08-20:
 **`belt-balancer 3.4.4`** and **`belt-balancer-performance 1.0.5`**, one blocked
-line each naming exactly that, **11 standing and 0 of ours**, **0 converted**.
+line each naming exactly that, **19 standing and 0 of ours**, **0 converted**.
 The two versions are the harness's and are plausible rather than real; what they
 pin is that the guest read them back out of `script.active_mods`, not that any
 release carries them.
@@ -3137,9 +3167,110 @@ PHASE, and the first cut of `legacyCheck` put the stranger case in `Done` -- whi
 is the guest saying the name is its own. It says `Blocked` now, and Blocked also
 gets the marker re-test, which is what leg 7 is about.
 
-**What the suite costs**: 12.7 s for the original four legs, **27.0 s** for seven
-legs and two probes, on the same machine in the same session. The probes are ~1.5 s
-each because they stop after `--create`.
+**What the suite costs**: 12.7 s for the original four legs, 27.0 s for seven
+legs and two probes, **30.6 s** once the world grew to nineteen parts on three
+surfaces, all on the same machine. The probes are ~1.5 s each because they stop
+after `--create`.
+
+**And it is the one base suite that is not base-only.** `mig_list` enables the
+**`quality`** mod, in BOTH phases of every leg, because `legacyConvertOne` passes
+the old entity's quality through to the new one and a game with only `normal` in
+it cannot tell a guest that carries it apart from one that drops the key. A
+constant across the two phases is not a mod-set change, so no leg's trigger moves;
+`quality` depends on `base` alone, so this stays base-plus-one rather than
+becoming a second Space Age run.
+
+### What the conversion CARRIES, and where the parts are
+
+Three things `legacy.go` claims in as many words and nothing measured until
+2026-08-20: that a converted part keeps its **health** and its **quality**, that
+the technology is granted **per force**, and that the scan walks **every
+surface**. Every part in every leg was an undamaged, normal-quality, player-force
+part on one surface, so all four claims were satisfied by a guest that did none
+of them.
+
+| what | how it is measured | measured |
+|---|---|---|
+| **health** | the `fid` rig damages one part to 85 of 170 in `on_init` and the observer reports the value it reads back, in phase one and again after the swap | **85.0 -> 85.0**, on a `bbb-balancer-part`, at t1 and at final, in every conversion leg |
+| **quality** | the other `fid` part is CREATED at `uncommon`, which needs the quality mod, which is why `mig_list` enables it | **uncommon -> uncommon** |
+| **per-force technology** | the `frc` rig puts two parts on a second force; the summary line's own force count, plus a per-force technology line for that force | **2 forces given the balancer technology**, and `bbb-mig-force-b`'s `bbb-balancer` **researched** |
+| **two forces' parts touching are two balancers** | the audit's cluster count, against **the number written down in `assert-mig.py`** rather than against the guest's own summary | **7 clusters** out of 19 parts; a fusion reads as 6 |
+| **every surface was scanned** | the summary line's surface count against the number of non-hidden surfaces the observer can see | **3 and 3** |
+| **parts on more than one surface were really converted** | the per-surface census | `bbb-mig-a:0/17 bbb-mig-b:0/2` -- nothing left as the incumbent's on either |
+
+**The anti-vacuity guards are the point of three of those rows.** A part that was
+never damaged sits at `max_health`, and an equality across the swap is then
+satisfied by a guest that copies nothing -- so phase one must report a value BELOW
+the maximum or the leg fails as vacuous. A game with only `normal` quality in it
+cannot tell a carried quality from a dropped key -- so phase one must report
+`uncommon`. And a fusion check over one force says nothing -- so the second force
+must own exactly the two parts the rig builds, at every sample.
+
+**THE CLUSTER COUNT IS THE ONE NUMBER THAT HAD TO STOP COMING FROM THE GUEST.**
+`check_audit` compared the audit's cluster count against the count on the guest's
+own summary line, and both come out of the same flood fill -- so a fill that
+fused two forces' touching parts moves them together and neither says anything,
+while every census, every copper count and every rate stays exactly what it was.
+The expected count is a constant in `assert-mig.py` now, derived from the rigs the
+observer builds, and the summary line is checked against it as well.
+
+**AND THE SUMMARY LINE'S SURFACE NUMBER COUNTS SURFACES SCANNED, NOT SURFACES
+THAT HAD PARTS.** `legacyScan` increments it once per non-hidden surface before it
+looks at one, so `adopted 19 parts from 3 surfaces` on a save whose parts are all
+on two of them is the literal truth and reads as something else. It is left
+as it is and the reading is written down here rather than changed, because the
+line is the assertion surface for this whole suite and its format is read by
+`assert-mig.py` and quoted a dozen times in this file. What the pass added instead
+is the observer's own **per-surface census**, which is the only thing that can see
+a scan that visited a surface and converted nothing on it -- red-proven below,
+and the two statements fail differently.
+
+### The quality nobody had ever built — what the fidelity rig found
+
+**A `balancer-part` standing at any quality but `normal` was invisible to the
+migration's build path, and stood there unconverted, unregistered and unlogged
+for the rest of the save.** Found on the first run of the `fid` rig, 2026-08-20,
+before a line of the assertion had been written: leg 4 swapped **18 of 19** parts
+and the one it missed was the uncommon one.
+
+**`LuaSurface.find_entity` takes an `EntityWithQualityID`, and the pinned
+runtime API says of a bare name that "Normal quality will be used".** So
+`find_entity("balancer-part", p)` is a query for a NORMAL-quality part at `p` and
+nothing else. Measured on 2.0.77 with a scratch mod, against a real uncommon
+entity at a known position:
+
+| | result |
+|---|---|
+| `find_entity("iron-chest", p)`, normal chest at p | the object |
+| `find_entity("iron-chest", p)`, **uncommon** chest at p | **nil** |
+| `find_entity({name = "iron-chest", quality = "uncommon"}, p)` | the object |
+| `find_entities_filtered{name = "iron-chest", position = p}` | **1**, whatever the quality |
+
+**The whole-world SCAN never had it**, which is why six of the nine legs were
+green over it: `legacyConvertOn` filters on the name alone through
+`findByNameAll`, and the engine returns every quality. Only `legacyRunBuilds` --
+the path that re-finds a stub one tick after its build event -- asked the
+quality-scoped question, and that path is **the blueprint book's**: a migrating
+player's ghosts revive as stubs and are swapped a tick later. An uncommon
+balancer-part in an old blueprint would have revived and stayed a stub.
+
+The fix is that call, and it is `setSearchBox` + `findByName` -- the idiom
+`registerPartsIn` already uses. One slice per stub built, on a once-per-save path.
+
+**FOUR MORE CALL SITES PASS A BARE NAME TO `find_entity` AND ARE NOT FIXED
+HERE**, because none of them is this pass's subject, none can be red-proven by
+this suite, and the cheap repair for the two that matter is not cheap:
+
+| call site | what a non-normal-quality part does to it |
+|---|---|
+| `skin.go`, `restyle` | the part is never found, so `graphics_variation` is never set and an uncommon balancer draws **cell 1, the lone-part picture, forever**. The M5 mechanism's whole budget is *one byte per part*, and the two repairs are a second byte (the quality) or an allocating area query on the flush path -- and the `mar` suite asserts those slopes to the byte. **A design question, not a one-line fix** |
+| `limit.go`, `forceOfCluster` | the cluster's force cannot be resolved, so an over-limit refusal on a balancer of uncommon parts is logged and **nobody is told** |
+| `limit.go`, `revertOne` | the over-limit piece is not found, so it is **not handed back** -- the negative the `edge` suite asserts (zero hand-backs) is unmoved, because a headless run has no player |
+| `fastreplace.go`, `reapFastReplaced` | it reads a standing uncommon part as GONE and **unregisters a part that is still there**. It needs a foreign belt-connectable to APPEAR on a part's tile, which in ordinary play only a fast replace does -- and a fast replace really did remove it, so the answer is right for the wrong reason on the gesture, and wrong for a script that builds a colliding belt |
+
+None of the four is reachable by any rig in this repo, because nothing outside
+`mig` builds a quality part at all. Fixing them is a pass of its own and it starts
+with a rig, not with a call site.
 
 ### The build path DEFERS, and that is a correction the harness forced
 
@@ -3160,11 +3291,18 @@ also where this guest does everything else that reads the world, and it means th
 synchronous drain a `bbb-audit` marker forces, which is the only one a `--create`
 ever reaches.
 
-### Red-proven seven times, and every proof catches a different thing
+### Red-proven fourteen times, and every proof catches a different thing
 
-The first three are 2026-08-16 and are about the feature; the last four are
-2026-08-20 and are about the three legs and two probes added that day. Every one
-is an injected defect, built, run, and reverted.
+The first three are 2026-08-16 and are about the feature; the next four are
+2026-08-20 and are about the three legs and two probes added that day; the last
+seven are the same day's fidelity pass. Every one is an injected defect, built,
+run, and reverted.
+
+**The first seven rows were measured against the FOUR-RIG, ELEVEN-PART world and
+are kept as measured.** The suite builds nineteen parts on three surfaces now, so
+the counts inside those rows are that day's world and not today's; which
+assertion fires is the claim, and the count beside it is the evidence that was
+taken for it.
 
 | injected defect | what came out |
 |---|---|
@@ -3175,6 +3313,13 @@ is an injected defect, built, run, and reverted.
 | **`"belt-balancer"` and `"belt-balancer-performance"` misspelled**, the same way | legs 1--7 all stay green and **each probe fails on its own line** -- *"...0 times and it is once per decision -- and ZERO means it did not recognise `belt-balancer` at all, which is the silent stranger path"*, and the same for `belt-balancer-performance`. Both probes still report **11 standing, 0 of ours**, so the failure is recognition and not staging |
 | **`legacyBuilt`'s phase gate removed** -- the build path stops asking whether this game's `balancer-part` is ours | leg 5 fires **exactly the two assertions that are about it**: *"a `balancer-part` was converted in phase two, with an incumbent installed"* and *"a `balancer-part` built while belt-balancer-2 is installed came out legacy=0 ours=1"*, with `[BBB] legacy: adopted a balancer-part built at 12,0` in the log to say so. Everything else in the leg is unmoved -- 11 swapped in phase one, one blocked line, census `0 / 11` throughout, witness 48, 3.997x/2.996x, audit `3 / 11 / 3 / 0 / 0`. **The injection is caught EARLIER in the suite too**, by leg 2, whose phase one has an incumbent installed and whose eleven live entities the ungated build path converts -- so leg 5 was re-run in isolation to see its own assertions fire |
 | **`legacyStubPresent()` removed from `legacyCheck`**, again -- but read by leg 7 rather than by leg 6 | leg 7 fires **exactly one assertion**, *"a `balancer-part` was swapped through the build path while the stranger owned the prototype"*, over **11** `adopted a balancer-part built at` lines in the CREATE log. **This is a moment leg 6 cannot see at all**: it has no guest in phase one, so the only thing it can watch a stranger's entities do is stand still, where leg 7 watches eleven of them being BUILT with the guest listening |
+| **the bare-name `find_entity` put back in `legacyRunBuilds`** -- the defect as it shipped | legs 1--3 stay **green**, which is the honest half: the whole-world scan is quality-agnostic and never had the bug. **Leg 4 fails**, on *"19 parts were placed and 18 were swapped through the build path"*, *"1 incumbent parts are still standing"*, *"19 parts went in and 18 of ours came out"*, *"the audit counted 18 parts"*, and -- naming the tile -- *"the quality tile holds a balancer-part at phase=t1 and should hold a bbb-balancer-part"*, twice |
+| **the `SetHealth` copy skipped in `legacyConvertOne`** | leg 1 fires **exactly the two health assertions**, one per phase: *"the damaged part is at 170.0 health at phase=t1 and was at 85.0 before the swap"*. Nothing else in the leg moves -- the part is converted, registered, compiled and balancing, and **silently repaired to full**, which is a building this mod was not asked to touch |
+| **the `quality` key dropped from `legacyCreateArgs`** | leg 1 fires **exactly the two quality assertions**: *"the uncommon part came back at quality 'normal' at phase=t1"*. Every other number is unmoved: a quality is not a rate and not a count |
+| **only the first force granted the technology** in `legacyScan` | leg 1 fires **exactly three**: *"1 force(s) were given the balancer technology and the force rig puts parts on 2"*, and the second force's `bbb-balancer` being false at t1 and at final. The parts, the clusters, the items and the rates are all unmoved -- a force that cannot craft a spare part is not a number any of them carry |
+| **the force check removed from `AddPart`'s adjacency loop** -- two forces' touching parts fuse | leg 1 fires **exactly two, and both are the cluster count**: *"the conversion made 6 clusters out of the observer's 7"* and *"the audit finds 6 clusters and the observer built 7"*. **19 parts, 48 copper, 3.997x, 2.995x, drift=0, unbuilt=0 -- every other number in the leg is byte-identical to the green run.** That is the whole reason the expected count stopped being the guest's own |
+| **`legacyScan` breaks out after the first surface it converts anything on** | leg 1 fires the surface cross-check by name -- *"the scan reports 2 surfaces and the world has 3 that are not the hidden one (nauvis, bbb-mig-a, bbb-mig-b)"* -- plus a cascade (17 adopted of 19, 6 clusters, and *"the migration ran 2 times in one save"*, because the `added` leg decides twice and the second decision finishes the job the first abandoned) |
+| **`legacyScan` VISITS every surface and converts on only the first one that had parts** | the same leg, and now the per-surface census is the assertion with the name on it: *"this mod's parts are standing on 1 surface(s) after the conversion and were built on 2"*. The surface COUNT is correct here -- 3 scanned, 3 in the world -- so the cross-check above says nothing and the census is the only thing that can see it. **The two surface statements fail on different defects, which is why there are two** |
 
 **The fourth and fifth rows are the ones worth reading twice**, because they are
 the shape this suite exists to catch and the shape that is hardest to catch: the
@@ -3198,7 +3343,8 @@ One label inserted at the end of that loop body and it loads. The released 2.0.9
 presumably carries the fix; the repository at HEAD (`456da9d`) does not.
 
 With that one line added, the same `assert-mig.py --leg added` passes against the
-real mod with **numbers identical to the stand-in's, to the item**: 11 parts
+real mod with **numbers identical to the stand-in's, to the item** -- measured
+2026-08-16 against the four-rig world, and not re-run since: 11 parts
 adopted from 2 surfaces into 3 clusters, 1 force researched, `trigger=init`,
 witness 48/48/48/48, 50 held with `place_result` flipped, `bbb-balancer=true`,
 control 1306, `m4x4` 3.997x at 0.15% and `m3to5` 2.995x at 0.13%, final audit
@@ -3249,7 +3395,7 @@ is a compare and the scan is never entered.
 
 **What a headless run does NOT reach is a ROBOT reviving a ghost**, and the look
 of the thing. The code path a revive takes IS exercised -- the `built` leg drives
-`legacyBuilt` eleven times through `script_raised_built`, and the late-build probe
+`legacyBuilt` nineteen times through `script_raised_built`, and the late-build probe
 drives it once more in every leg -- so what is behind the wall is the
 construction network and the blueprint, not the swap. Both they and the pixels
 are on the interactive checklist as gesture E
@@ -3271,6 +3417,35 @@ what they always did -- 11 parts, 3 clusters, `trigger=init` and
 `trigger=configuration_changed`, witness 48 at every sample, 3.997x and 2.995x,
 audit `clusters=3 parts=11 nets=3 drift=0 unbuilt=0` -- and what the pass adds is
 three legs, two probes and four red proofs. The suite went 12.7 s to 27.0 s.
+**Those eleven-part counts are that pass's world**; the fidelity pass below took
+it to nineteen parts on three surfaces, and every current number in this section
+is the later one.
+
+**And verified again the same day, after the FIDELITY PASS.** The suite claimed
+four things `legacyConvertOne` and `legacyScan` do -- health, quality, per-force
+technology and every surface -- and measured none of them, because every part in
+every leg was an undamaged normal-quality player-force part on one surface. Three
+rigs and a second surface later it measures all four, and **the first run of the
+first rig found a defect**: a legacy part at any quality but `normal` was
+invisible to the build path's `find_entity`, so leg 4 swapped 18 of 19. Fixed at
+that call site; the four other bare-name `find_entity` calls in the guest are
+written up above and are NOT fixed here.
+
+`make check` green with bindings and lock unmoved, sprite checker green at 10
+references, and **all nine suites green in BOTH arms**. The leaking arm's seven
+slopes came back **identical to the byte** -- 1,216 / 352 / 1,180 / 32 / 736 /
+3,736 / 1,712 B and **3.92 MiB** of linear memory, 0 items lost over 200
+teardowns, 681 audits at drift=0 -- which is the gate a guest change has to
+clear, and it clears it for the structural reason: the call that moved is on a
+once-per-save path that no other suite reaches. **No other suite's numbers moved
+at all.** Shipped config, forced clean rebuild either side of the fix:
+
+| | before | after | |
+|---|--:|--:|---|
+| `dist/better-belt-balancer_0.1.0.zip` | 413,460 B | **413,608 B** | +0.04% |
+| `fk_module.lua` | 2,745,246 B | **2,746,726 B** | +0.05% |
+| `dist/bbb.wasm` | 1,162,033 B | 1,162,312 B | |
+| members bound into the mod | 51 | **51** | of 4,257 -- none added; `find_entities_filtered` was already bound |
 
 **What the pass closed, in one sentence each.** `belt-balancer-3` was never in
 front of the guest and neither were the other two names, so three of the four rows
@@ -3315,7 +3490,7 @@ measured rather than asserted:
 | **...and one it cannot build is refused without demolishing the one that works** | A 65th belt against a 64-port balancer is refused BEFORE the teardown: 0 items on the ground where the unfixed guest put 1,690, the standing network delivering 184 items over 246 ticks before the edit and 185 after, and the player told, with the belt back in their inventory. "The sixty-fifth belt" |
 | **...or the TWO that work** | A part bridging two working balancers into one that is over the limit is refused before their teardowns too, which are `AddPart`'s and not the compiler's: 0 items on the ground where the unfixed guest put 1,814, both halves still delivering 184 and 184 against 186 and 185 across the edit, and mining the part back out costing 0 teardowns and 0 builds. "The merge that would be over the limit" |
 | **...and a part clicks over a belt like a splitter does** | `fast_replaceable_group = "transport-belt"` on the part, which is base's own group: a balancer can be dropped straight into a belt line you already have, and the belt goes to the player. The group is symmetric, so a belt laid on a part replaces it too — and the engine raises NO event for the part it destroys, which is the whole of `guest/go/fastreplace.go`. "Fast replace" |
-| **A Belt Balancer 2 or 3 save becomes one of ours** | Uninstall the incumbent and every `balancer-part` it left standing becomes one of this mod's, at load, once per save: 11 parts on 2 surfaces into 3 clusters that then deliver 3.997x and 2.995x one belt, with the items on the belts conserved exactly (48 copper before and after), the item stacks surviving and placing our parts, and the technology granted. Nothing at all happens while the incumbent is installed, or while any other mod owns the name -- **including an incumbent that arrives AFTER this mod, on a save this mod has already converted**, where the balancers we own keep running and a `balancer-part` the newcomer places stays theirs. All four incumbent names are exercised, and so is the stranger being uninstalled in his turn. Proved against the real Belt Balancer 2 as well as the harness stand-in. "Adopting a Belt Balancer 2 or 3 save" |
+| **A Belt Balancer 2 or 3 save becomes one of ours** | Uninstall the incumbent and every `balancer-part` it left standing becomes one of this mod's, at load, once per save: 19 parts across 3 surfaces and 2 forces into 7 clusters that then deliver 3.997x and 2.995x one belt, **at the health and the quality they were standing at**, with the items on the belts conserved exactly (48 copper before and after), the item stacks surviving and placing our parts, and the technology granted. Nothing at all happens while the incumbent is installed, or while any other mod owns the name -- **including an incumbent that arrives AFTER this mod, on a save this mod has already converted**, where the balancers we own keep running and a `balancer-part` the newcomer places stays theirs. All four incumbent names are exercised, and so is the stranger being uninstalled in his turn. Proved against the real Belt Balancer 2 as well as the harness stand-in. "Adopting a Belt Balancer 2 or 3 save" |
 | **Nothing the compiler places draws anything** | The hidden prototypes are clones of base belts and kept base's pictures — including a three-by-three linked-belt `structure` on the one prototype that stands where a player looks. All four are blanked, and the `edge` suite asserts the structural half: 180–197 visible-surface entities of ours, **every one on a registered part tile, 0 off one**, across six samples. "The tan streak" |
 | **Its long-game cost is measured, not assumed** | Every net-zero world operation's permanent-heap slope, flat over hundreds of iterations, a 300-hour projection built on it, and — since 2026-08-02 — the one stall that projection predicted, measured at **782 ms** and then removed by shipping `--gc=collected`. See "The marathon save" and "The third decision" |
 | **The art is drawn, not computed** | All four assets are an artist's, delivered 2026-08-19: the 47-cell sheet, the icon, the I/O arrows and the mod logo. They dropped in with no code change but one alignment constant, because the cell order and the eight arrow cells were a contract the spec stated and the delivery met. `tools/make-graphics.py` still generates the placeholders and still DEFINES that contract; it is the fallback and the specification, not the shipped pixels |

@@ -621,13 +621,32 @@ func legacyRunBuilds() {
 		}
 		// Re-found from the world, because a tick has passed and whatever placed
 		// it may have taken it away again.
-		o, err := s.FindEntity(fkapi.OfString(LegacyPartName), fkapi.MapPosition{
-			X: float64(k.x) + 0.5, Y: float64(k.y) + 0.5,
-		})
-		if err != nil || o == nil {
+		//
+		// AN AREA QUERY RATHER THAN `find_entity`, AND THAT IS A DEFECT THE
+		// FIDELITY RIG FOUND rather than a matter of taste. `find_entity` takes
+		// an `EntityWithQualityID`, and the pinned runtime API says of a bare
+		// name that "Normal quality will be used" -- so a `balancer-part`
+		// standing at any other quality is INVISIBLE to it. Measured on 2.0.77
+		// against a real uncommon entity: `find_entity(name, p)` is nil where
+		// `find_entities_filtered{name = ..., position = p}` returns it, and
+		// `find_entity({name = ..., quality = ...}, p)` returns it too.
+		//
+		// This is the BLUEPRINT BOOK'S path -- a robot reviving a ghost of an
+		// uncommon balancer-part -- so the stub stood there for the rest of the
+		// save, unconverted, unregistered and unlogged. The whole-world scan
+		// above never had the bug: `findByNameAll` filters on the name alone and
+		// the engine returns every quality.
+		//
+		// The slice this allocates is once per stub built on a once-per-save
+		// path, which is where the obvious thing is affordable and the wrong
+		// answer was not.
+		setSearchBox(k.x, k.y, k.x, k.y)
+		nameFilter = fkapi.OfString(LegacyPartName)
+		ents, err := s.FindEntitiesFiltered(findByName)
+		if err != nil || len(ents) == 0 {
 			continue
 		}
-		if !legacyConvertOne(s, k.s, *o) {
+		if !legacyConvertOne(s, k.s, ents[0]) {
 			continue
 		}
 		if verboseLog {

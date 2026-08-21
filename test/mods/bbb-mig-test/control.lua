@@ -32,6 +32,26 @@
 --           surface is exactly this rig's contents, before the swap and after
 --           it. That is what makes "the items on the belts survived" an
 --           equality rather than an estimate.
+--   fid     THE FIDELITY RIG. 2 parts, belts either side, and nothing feeding
+--           it: what it measures is not a rate but what the conversion CARRIED.
+--           One part is DAMAGED and the other is built at UNCOMMON quality, and
+--           those are the only two properties `legacyConvertOne` reads off the
+--           old entity and writes onto the new one. Until this rig existed every
+--           part in every leg was undamaged and normal, so both lines could have
+--           been absent and every assertion in this suite would still have
+--           passed.
+--   frc     THE FORCE RIG, and it is the SHARP case rather than a fourth copy of
+--           the others: FOUR PARTS IN ONE COLUMN, the top two on the player
+--           force and the bottom two on a second force, TOUCHING. Clusters are
+--           per force, so that is two balancers; a flood fill that lost its
+--           force check fuses them into one, silently, with every item count in
+--           this suite unmoved. It is also the only rig that makes the
+--           conversion grant the technology to more than one force.
+--
+-- And a SECOND SURFACE, `bbb-mig-b`, carrying two more parts and their belts.
+-- `legacyScan` walks every surface in index order; until that rig existed every
+-- part in this suite stood on one surface, so a scan that stopped after the
+-- first surface it converted anything on would have passed every leg.
 --
 -- Plus a steel chest holding a stack of the incumbent's ITEM, which is the
 -- other half of what a removed mod takes with it.
@@ -46,8 +66,22 @@ local FLOW_ITEM = "iron-plate"
 local E = defines.direction.east
 
 local SURF = "bbb-mig-a"
+local SURF_B = "bbb-mig-b"
 local PITCH = 12
 local HALFX = 20
+
+-- The second force, and the list of forces every per-force report walks. An
+-- ipairs over a written-down order rather than a pairs() over `game.forces`,
+-- which is a hash: nothing here is host-visible, but a report line whose columns
+-- swapped between runs would be read by an assertion.
+local FORCE_B = "bbb-mig-force-b"
+local FORCES = { "player", FORCE_B }
+
+-- What the fidelity rig is built with. The health is a real wound rather than a
+-- round number for its own sake -- it has to be BELOW max_health, or an equality
+-- across the swap is satisfied by a guest that copies nothing at all.
+local FID_HEALTH = 85
+local FID_QUALITY = "uncommon"
 
 --------------------------------------------------------------------------------
 -- surface and pieces
@@ -177,6 +211,89 @@ local function count_named(name)
   return n
 end
 
+-- Every surface in the game, in INDEX order. `game.surfaces` is a hash and the
+-- lines below it are read by an assertion, so the walk is sorted rather than
+-- left to pairs() -- the same habit `collectSurfaces` follows in the guest, and
+-- there for a much harder reason (surface order decides node ids, which decide
+-- slots, which is a desync).
+local function surfaces_in_order()
+  local list = {}
+  for _, s in pairs(game.surfaces) do list[#list + 1] = s end
+  table.sort(list, function(a, b) return a.index < b.index end)
+  return list
+end
+
+-- Guarded on the prototype for the reason `count_named` is: in phase one of the
+-- swap leg `bbb-balancer-part` is not a prototype at all, and after the swap
+-- `balancer-part` is only a prototype because this mod's data stage kept it
+-- alive. `find_entities_filtered{name = ...}` RAISES for a name the game does
+-- not have.
+local function count_named_on(s, name, force)
+  if not prototypes.entity[name] then return 0 end
+  local f = { name = name }
+  if force then f.force = force end
+  return #s.find_entities_filtered(f)
+end
+
+-- WHERE the parts are, which the whole-world census cannot say. The summary line
+-- the guest writes counts surfaces SCANNED rather than surfaces that had
+-- anything on them, so a scan that stopped after the first surface it converted
+-- something on would report the same number it reports now. This is the line
+-- that can see it.
+local function report_surfaces(phase)
+  local out = {}
+  for _, s in ipairs(surfaces_in_order()) do
+    out[#out + 1] = string.format("%s:%d/%d", s.name,
+      count_named_on(s, LEGACY_PART), count_named_on(s, BBB_PART))
+  end
+  log(string.format("[BBB-MIG] surfaces phase=%s %s", phase, table.concat(out, " ")))
+end
+
+-- WHOSE the parts are. The anti-vacuity half of the force rig: a run where the
+-- second force's parts were never built would satisfy "two forces stayed two
+-- clusters" by having only one force in it.
+local function report_force_parts(phase)
+  local out = {}
+  for _, fname in ipairs(FORCES) do
+    local n = 0
+    for _, s in ipairs(surfaces_in_order()) do
+      n = n + count_named_on(s, LEGACY_PART, fname) + count_named_on(s, BBB_PART, fname)
+    end
+    out[#out + 1] = string.format("%s=%d", fname, n)
+  end
+  log(string.format("[BBB-MIG] force-parts phase=%s %s", phase, table.concat(out, " ")))
+end
+
+-- The part standing on one tile, whichever prototype it is now. Both names are
+-- guarded, and the name is REPORTED rather than assumed: which of the two is
+-- there is exactly what the fidelity rig's tiles are being asked.
+local function part_at(x, y)
+  local s = game.surfaces[SURF]
+  local area = { { x + 0.1, y + 0.1 }, { x + 0.9, y + 0.9 } }
+  for _, name in ipairs { LEGACY_PART, BBB_PART } do
+    if prototypes.entity[name] then
+      local es = s.find_entities_filtered { name = name, area = area }
+      if es[1] and es[1].valid then return es[1], name end
+    end
+  end
+  return nil, "none"
+end
+
+-- THE TWO PROPERTIES THE CONVERSION CARRIES. `legacyConvertOne` reads the health
+-- and the quality off the entity it is about to destroy and writes them onto the
+-- one it creates; both are one call each and both are invisible on an undamaged
+-- normal-quality part, which is what every other part in every leg is.
+local function report_fidelity(phase)
+  local t = storage.fid
+  local e, name = part_at(t.health[1], t.health[2])
+  log(string.format("[BBB-MIG] health phase=%s name=%s value=%s max=%s", phase, name,
+    (e and e.health) and string.format("%.1f", e.health) or "none",
+    e and string.format("%.1f", e.max_health) or "none"))
+  e, name = part_at(t.quality[1], t.quality[2])
+  log(string.format("[BBB-MIG] quality phase=%s name=%s value=%s", phase, name,
+    (e and e.quality) and e.quality.name or "none"))
+end
+
 local function census(phase)
   log(string.format("[BBB-MIG] census phase=%s %s=%d %s=%d",
     phase, LEGACY_PART, count_named(LEGACY_PART), BBB_PART, count_named(BBB_PART)))
@@ -213,6 +330,16 @@ local function report_tech(phase)
     phase,
     ours and tostring(ours.researched) or "absent",
     theirs and tostring(theirs.researched) or "absent"))
+  -- THE SECOND FORCE, on a line of its own so the one above keeps the exact
+  -- shape every assertion in this suite already reads. `legacyScan` grants the
+  -- technology PER FORCE that owned a converted part, and a force left without
+  -- it is a player holding balancers they cannot craft a spare for -- which is
+  -- the thing the grant exists to prevent, one force further along than any leg
+  -- could see before the force rig existed.
+  local g = game.forces[FORCE_B]
+  local gours = g and g.technologies["bbb-balancer"]
+  log(string.format("[BBB-MIG] tech-force phase=%s force=%s bbb-balancer=%s",
+    phase, FORCE_B, gours and tostring(gours.researched) or "absent"))
 end
 
 local function report_counts(phase)
@@ -322,6 +449,70 @@ local function build_witness(base)
   log(string.format("[BBB-MIG] witness loaded=%d", loaded))
 end
 
+-- THE FIDELITY RIG. Two parts and four belts, nothing feeding it: what is
+-- measured here is not a rate. One part is DAMAGED and the other is created at
+-- UNCOMMON quality, so the two properties `legacyConvertOne` carries across the
+-- swap are both non-default on exactly one tile each, and the tiles are written
+-- into `storage` rather than into a constant -- the rig bases are computed.
+--
+-- IT HAS BELTS EITHER SIDE and it needs them: a cluster with no inputs or no
+-- outputs is a legitimate half-built state that compiles to nothing, and the
+-- audit's `nets == clusters` would then read as a cluster the classifier never
+-- saw. Every rig this suite adds carries one belt in and one belt out per part
+-- for that reason, fed or not.
+local function build_fidelity(base)
+  local s = game.surfaces[SURF]
+  local hurt = put(s, LEGACY_PART, 0, base)
+  hurt.health = FID_HEALTH
+  -- Guarded on the quality existing rather than on the mod list: `mig_list`
+  -- enables the quality mod for both phases of every leg, and a guard is what
+  -- turns a mod list that stopped doing so into a failed assertion instead of a
+  -- failed script.
+  local extra = nil
+  if prototypes.quality and prototypes.quality[FID_QUALITY] then
+    extra = { quality = FID_QUALITY }
+  end
+  put(s, LEGACY_PART, 0, base + 1, extra)
+  for i = 0, 1 do
+    put(s, BELT, -1, base + i, { direction = E })
+    put(s, BELT, 1, base + i, { direction = E })
+  end
+  storage.fid = { health = { 0, base }, quality = { 0, base + 1 } }
+end
+
+-- THE FORCE RIG. Four parts in one column, the top two on the player force and
+-- the bottom two on a second force, so the pair in the middle TOUCHES across a
+-- force boundary. Two forces' parts touching are two balancers -- the flood
+-- fill, the compiler's own fill and the edge search all agree about it -- and a
+-- fusion is invisible to every count in this suite: the same parts, the same
+-- items, one fewer cluster.
+local function build_forces(base)
+  local s = game.surfaces[SURF]
+  for i = 0, 1 do
+    put(s, LEGACY_PART, 0, base + i)
+    put(s, BELT, -1, base + i, { direction = E })
+    put(s, BELT, 1, base + i, { direction = E })
+  end
+  for i = 2, 3 do
+    put(s, LEGACY_PART, 0, base + i, { force = FORCE_B })
+    put(s, BELT, -1, base + i, { direction = E, force = FORCE_B })
+    put(s, BELT, 1, base + i, { direction = E, force = FORCE_B })
+  end
+end
+
+-- THE SECOND SURFACE. `legacyScan` walks every surface in index order and the
+-- summary line it writes counts surfaces SCANNED, so a scan that stopped after
+-- the first surface it converted something on would report the number it reports
+-- now and leave these two parts standing as the incumbent's forever.
+local function build_surface_b()
+  local s = make_surface(SURF_B, 4)
+  for i = 0, 1 do
+    put(s, LEGACY_PART, 0, i)
+    put(s, BELT, -1, i, { direction = E })
+    put(s, BELT, 1, i, { direction = E })
+  end
+end
+
 --------------------------------------------------------------------------------
 -- the schedule
 --------------------------------------------------------------------------------
@@ -346,6 +537,9 @@ local SCHEDULE = {
     report_counts("t1")
     report_item("t1")
     report_tech("t1")
+    report_fidelity("t1")
+    report_surfaces("t1")
+    report_force_parts("t1")
   end,
   [60] = function()
     audit_now()
@@ -359,6 +553,9 @@ local SCHEDULE = {
     census("final")
     report_counts("final")
     report_tech("final")
+    report_fidelity("final")
+    report_surfaces("final")
+    report_force_parts("final")
   end,
   -- After everything else, so nothing above can see it. The swap is deferred by
   -- one tick like every other build, hence the gap before the probe.
@@ -374,7 +571,14 @@ script.on_init(function()
     order[#order + 1] = cfg.name
   end
   local wit_base = base
-  make_surface(SURF, wit_base + 3 * PITCH)
+  local fid_base = wit_base + PITCH
+  local frc_base = fid_base + PITCH
+  make_surface(SURF, frc_base + PITCH)
+
+  -- BEFORE ANY PART OF ITS OWN IS PLACED, so `game.forces[FORCE_B]` is there for
+  -- the whole life of the save and every per-force report can name it without a
+  -- guard.
+  game.create_force(FORCE_B)
 
   storage.rigs = {}
   storage.order = order
@@ -382,6 +586,12 @@ script.on_init(function()
     storage.rigs[cfg.name] = build_rig(cfg, cfg.base)
   end
   build_witness(wit_base)
+  build_fidelity(fid_base)
+  build_forces(frc_base)
+  -- LAST, so the surface indices are fixed and deterministic: nauvis 1,
+  -- bbb-mig-a 2, bbb-mig-b 3, and the hidden surface -- when it exists at all --
+  -- after them.
+  build_surface_b()
 
   -- The other half of what a removed mod takes with it.
   local s = game.surfaces[SURF]
@@ -395,11 +605,15 @@ script.on_init(function()
   report_counts("create")
   report_item("create")
   report_tech("create")
+  report_fidelity("create")
+  report_surfaces("create")
+  report_force_parts("create")
   -- Only ever available in the phase where this mod IS installed, which is the
   -- coexistence leg's phase one. It is what makes that leg's "nothing was
   -- converted" a statement about a guest that was asked to look.
   audit_now()
-  log(string.format("[BBB-MIG] init complete: %d rigs plus the witness", #RIGS))
+  log(string.format("[BBB-MIG] init complete: %d rigs plus the witness, the "
+    .. "fidelity pair, the force column and a second surface", #RIGS))
 end)
 
 script.on_event(defines.events.on_tick, function(e)
