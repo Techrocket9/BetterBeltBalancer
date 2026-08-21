@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless verification. Nine suites, all real Factorio runs, not models:
+# Headless verification. Ten suites, all real Factorio runs, not models:
 #
 #   M1  do balancer parts merge and split correctly?
 #   M2  does the compiled hidden network actually balance?
@@ -19,6 +19,13 @@
 #   mix   MORE THAN ONE KIND of item through one balancer: two pure belts, a
 #         sushi belt, and 48 distinct kinds at once -- past the carry pool's
 #         bound, which used to DESTROY the overflow. Every count is per item NAME
+#   qual  A PART AT UNCOMMON QUALITY IS A PART. `find_entity` resolves a bare
+#         name as NORMAL QUALITY ONLY, so every lookup that used it worked on
+#         every other suite's save and silently failed on a quality-rolled
+#         part. Four rigs of uncommon parts drive the four fixed sites --
+#         restyle's picture write, the fast-replace reap in both directions,
+#         and the over-limit refusal's delivery -- plus the question nothing
+#         had asked: does an uncommon balancer balance (base + the quality mod)
 #   mig   ADOPTING A BELT BALANCER 2 OR 3 SAVE. The only suite whose two phases
 #         run under DIFFERENT MOD SETS: a mod is installed or uninstalled between
 #         `--create` and `--benchmark`. Seven legs and two name probes, covering
@@ -57,7 +64,7 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 [ -x "$FACTORIO" ] || { echo "factorio not found at: $FACTORIO (set FACTORIO_BIN)" >&2; exit 1; }
 [ -d "$MOD_DIR" ]  || { echo "no built mod at $MOD_DIR; run \`make mod\` first" >&2; exit 1; }
 
-SUITES="${*:-m1 m2 m3 upg plat mar edge mix mig}"
+SUITES="${*:-m1 m2 m3 upg plat mar edge mix mig qual}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.
@@ -73,9 +80,15 @@ write-data=$USERDIR
 locale=auto
 INI
 
-# stage <workdir> <test-mod-name> [space-age]
+# stage <workdir> <test-mod-name> [space-age] [quality]
+#
+# `quality` defaults to the Space Age flag (the DLC set moves together), and
+# the `qual` suite sets it alone: the quality mod is an official base-game mod
+# with no dependency on Space Age, and quality-blind lookups are a base-plus-
+# quality defect class, so gating their coverage behind the DLC would be wrong
+# in both directions.
 stage() {
-  local work="$1" testmod="$2" dlc="${3:-false}"
+  local work="$1" testmod="$2" dlc="${3:-false}" qual="${4:-${3:-false}}"
   rm -rf "$work"
   mkdir -p "$work/mods"
   cp -R "$MOD_DIR" "$work/mods/"
@@ -89,7 +102,7 @@ stage() {
   "mods": [
     { "name": "base", "enabled": true },
     { "name": "elevated-rails", "enabled": $dlc },
-    { "name": "quality", "enabled": $dlc },
+    { "name": "quality", "enabled": $qual },
     { "name": "space-age", "enabled": $dlc },
     { "name": "$MOD_NAME", "enabled": true },
     { "name": "$testmod", "enabled": true }
@@ -372,6 +385,18 @@ for suite in $SUITES; do
       echo "==> asserting cluster transitions"
       python3 "$ROOT/test/assert-log.py" "$TMP/m1/create.log" "$TMP/m1/run.log"
       ;;
+    qual)
+      # EVERY PART IN THIS SUITE IS UNCOMMON QUALITY. `find_entity` resolves a
+      # bare name as normal quality only, so a guest lookup that used it worked
+      # on every other suite's save and silently failed on a quality-rolled
+      # part -- see guest/go/findpart.go for the fix and CLAUDE.md for the four
+      # sites it covers. Base plus the quality mod, nothing from Space Age.
+      echo "=== qual: a part at uncommon quality is a part everywhere the guest asks ==="
+      stage "$TMP/qual" bbb-qual-test false true
+      run "$TMP/qual" "${BBB_QUAL_TICKS:-2160}"
+      echo "==> asserting the quality paths"
+      python3 "$ROOT/test/assert-qual.py" "$TMP/qual/create.log" "$TMP/qual/run.log"
+      ;;
     m2)
       echo "=== M2: compiled network balance ==="
       stage "$TMP/m2" bbb-m2-test
@@ -549,7 +574,7 @@ for suite in $SUITES; do
         --incumbent belt-balancer-performance --version 1.0.5 "$TMP/migp2/create.log"
       ;;
     *)
-      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix or mig)" >&2
+      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix, mig or qual)" >&2
       exit 1
       ;;
   esac

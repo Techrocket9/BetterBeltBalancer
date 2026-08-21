@@ -4,8 +4,8 @@
 #   make mod      fklua mod -> dist/<name>_<version>/, data stage included
 #   make zip      the same, as an installable dist/<name>_<version>.zip
 #   make install  the built mod into a Factorio mods directory
-#   make test     headless verification, eight suites: SUITES=m2 for one of
-#                 (m1 m2 m3 upg plat mar edge mix)
+#   make test     headless verification, ten suites: SUITES=m2 for one of
+#                 (m1 m2 m3 upg plat mar edge mix mig qual)
 #   make check    the generated bindings and the lock are current
 #
 # `fklua mod` GENERATES the control stage (control.lua, info.json, fk_abi.lua,
@@ -77,7 +77,7 @@ MOD_DIR := $(DIST)/$(MOD_NAME)_$(MOD_VERSION)
 # a fact about the growth law. The collected arm ended the same 3,400 operations
 # on 0.52 MiB of linear memory against 31.9, with a worst tick of 71 ms.
 #
-# `make GC=leaking` stays buildable and green, and all seven suites are run in
+# `make GC=leaking` stays buildable and green, and all ten suites are run in
 # both arms on every pass that touches this decision.
 #
 # THE SHIPPED ARM IS IN fklua.toml (`gc = "collected"`) AND NOT IN A FLAG HERE,

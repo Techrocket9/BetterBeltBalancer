@@ -639,14 +639,15 @@ func legacyRunBuilds() {
 		//
 		// The slice this allocates is once per stub built on a once-per-save
 		// path, which is where the obvious thing is affordable and the wrong
-		// answer was not.
-		setSearchBox(k.x, k.y, k.x, k.y)
-		nameFilter = fkapi.OfString(LegacyPartName)
-		ents, err := s.FindEntitiesFiltered(findByName)
-		if err != nil || len(ents) == 0 {
+		// answer was not. `findOnTile` (findpart.go) is this fix stated once --
+		// the same trap stood at four more call sites when it was found here,
+		// and a sixth question about the same identity should ask the same
+		// code or not ask at all.
+		o, found, ferr := findOnTile(s, LegacyPartName, k.x, k.y)
+		if ferr != nil || !found {
 			continue
 		}
-		if !legacyConvertOne(s, k.s, ents[0]) {
+		if !legacyConvertOne(s, k.s, o) {
 			continue
 		}
 		if verboseLog {

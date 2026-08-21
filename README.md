@@ -171,7 +171,7 @@ headless tests and the benchmarks also need a Factorio 2.0 install; set
 make zip      # dist/better-belt-balancer_<version>.zip, a complete mod
 make install  # unpacked, into your Factorio mods directory (MODS_DIR overrides)
 make check    # pure-Go unit tests, bindings and lockfile current, gofmt
-make test     # headless verification: nine suites in a real Factorio
+make test     # headless verification: ten suites in a real Factorio
 ```
 
 `make test` creates saves with the rigs already built, benchmarks them in a real
@@ -183,7 +183,7 @@ Factorio, and asserts against the guest's own log lines. Two build switches:
   collector. The shipped build is collected: over 3,400 teardown-and-rebuild
   cycles the leaking arm's heap doubled its way to 32 MiB with a 782 ms tick at
   the last doubling, where the collected arm ended at 0.5 MiB with a worst tick
-  of 71 ms and no measurable steady-state difference. Both arms pass all nine
+  of 71 ms and no measurable steady-state difference. Both arms pass all ten
   suites.
 
 ## Status
@@ -212,7 +212,7 @@ Factorio, and asserts against the guest's own log lines. Two build switches:
 | `guest/go/` | the Go guest; `plan/` is the network planner, `fkapi/` the generated FkLua bindings |
 | `mod-data/` | the hand-written data stage: prototypes, graphics, locale |
 | [`bench/`](bench/README.md) | the head-to-head benchmark harness, its setup mod and the results |
-| `test/` | the nine headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the six player gestures a headless run cannot make |
+| `test/` | the ten headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the six player gestures a headless run cannot make |
 | `fklua.toml` | mod identity, the API pin (2.0.77), guest language and GC mode |
 | `CLAUDE.md`, `agents/` | maintainer design notes and the full measurement record |
 

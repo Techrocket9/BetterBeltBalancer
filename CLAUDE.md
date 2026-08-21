@@ -201,7 +201,7 @@ mod-data/                the DATA STAGE, hand-written Lua: data.lua, prototypes/
 tools/                   make-graphics.py -- the 47-cell adaptive sprite
                          sheet, the icon and the I/O arrows, all COMPUTED
                          rather than drawn, and their committed PNGs
-test/                    headless verification, nine suites (see below), and
+test/                    headless verification, ten suites (see below), and
                          interactive/ -- the rig-staging mod and checklist for
                          the five PLAYER gestures no headless run can make
                          (`make interactive-install`), plus the migration
@@ -261,13 +261,14 @@ make mod      # fklua mod: identity, deps and mod-data/ all from fklua.toml
 make zip      # the same, as dist/<name>_<version>.zip -- a complete
               # installable mod, data stage included
 make install  # into $MODS_DIR (defaults to the Factorio user mods dir)
-make test     # headless verification, all nine suites. SUITES=m2 for one
-              # (m1 m2 m3 upg plat mar edge mix mig -- plat is the only one
-              # needing Space Age, and carries the platform rig, the
+make test     # headless verification, all ten suites. SUITES=m2 for one
+              # (m1 m2 m3 upg plat mar edge mix mig qual -- plat is the only
+              # one needing Space Age, and carries the platform rig, the
               # belt-stacking leg and the stacked-sushi band; mar and edge
               # are the marathon pair; mig is the only one whose two phases
               # run under DIFFERENT MOD SETS, and is seven legs plus two
-              # create-only name probes)
+              # create-only name probes; qual runs base plus the quality
+              # mod, every part in it uncommon)
 make check    # the three pure packages' unit tests (plan, skin, carry);
               # bindings and lock current; gofmt
 make graphics # regenerate the sprite sheet, the icon and the I/O arrows
@@ -483,7 +484,7 @@ because Factorio locks its user dir and a second instance -- another agent, an
 open game -- would otherwise fail the run on the `.lock` rather than on anything
 real.
 
-**Eight of the nine suites run both phases under ONE mod set. `mig` is the
+**Nine of the ten suites run both phases under ONE mod set. `mig` is the
 exception**, and it has to be: what it tests is what happens when a NEIGHBOUR is
 installed or uninstalled, so its `BETWEEN` hooks rewrite `mod-list.json` AND add
 or delete a mod directory between the phases (a directory that is present but not
@@ -1087,6 +1088,20 @@ ever driven, so the `Done -> Blocked` recheck that `fk_on_configuration_changed`
 exists for had no test at all, and neither did the promise
 `legacyCheck` makes to a stranger in as many words. `readd` and `fgone` are
 those two.
+
+### `qual` -- `test/assert-qual.py`, a part at uncommon quality is a part
+
+The tenth suite, base plus the official `quality` mod, and **every part in every
+rig is UNCOMMON**, because the defect class it exists for is invisible at
+normal: `find_entity` resolves a bare name as normal quality only, so a lookup
+that used it worked on every other suite's save and silently failed on a
+quality-rolled part. Four rigs drive the four fixed call sites -- `qblk` the
+sprite write, `qlone` and `qcol` the two directions of the fast-replace reap,
+`qlim` the over-limit refusal's delivery -- and the suite's numbers, its red
+proof and the one thing still behind the player wall are in
+"A part at uncommon quality is a part", where the whole pass lives. It is also
+the only place anything asserts that **an uncommon balancer balances at all**:
+2.000x one belt at 0.00% spread.
 
 ### The layout check is gone
 
@@ -3323,6 +3338,13 @@ None of the four is reachable by any rig in this repo, because nothing outside
 `mig` builds a quality part at all. Fixing them is a pass of its own and it starts
 with a rig, not with a call site.
 
+> **ALL FOUR ARE FIXED SINCE 2026-08-20**, by exactly that pass:
+> `findOnTile` (guest/go/findpart.go) is the fix stated once, the `qual` suite
+> is the rig it starts with, and "A part at uncommon quality is a part" below
+> is the write-up -- including the answer to the `restyle` design question,
+> which turned out to cost nothing the `mar` suite can see. The table above is
+> kept as the record of what each site did while it stood.
+
 ### The build path DEFERS, and that is a correction the harness forced
 
 The obvious version of `legacyBuilt` converts in place, inside the build event.
@@ -3486,7 +3508,8 @@ rigs and a second surface later it measures all four, and **the first run of the
 first rig found a defect**: a legacy part at any quality but `normal` was
 invisible to the build path's `find_entity`, so leg 4 swapped 18 of 19. Fixed at
 that call site; the four other bare-name `find_entity` calls in the guest are
-written up above and are NOT fixed here.
+written up above and were NOT fixed here -- they got their own pass and their
+own suite the same week ("A part at uncommon quality is a part" below).
 
 `make check` green with bindings and lock unmoved, sprite checker green at 10
 references, and **all nine suites green in BOTH arms**. The leaking arm's seven
@@ -3538,6 +3561,117 @@ tables re-ran to the number recorded.
 
 <!-- END: adopting an incumbent's save -->
 
+## A part at uncommon quality is a part — the quality-blind lookups, closed
+
+**The four bare-name `find_entity` call sites the migration pass wrote up as
+NOT fixed are fixed, and the tenth suite exists because none of them was
+reachable by any rig this repo had.** The defect class, once more in one
+sentence: `find_entity` takes an `EntityWithQualityID` and resolves a bare name
+as **normal quality only** (the probe table is in the migration section), so a
+lookup that used it worked on every normal-quality save this repo has ever run
+and silently failed on a part a player built from a quality-rolled item. Closed
+2026-08-20; `guest/go/findpart.go` is the fix and its header is the long form.
+
+**`findOnTile` is the fix stated once** — a one-tile area query with a name
+filter, which is the question every caller was actually asking (is a thing of
+OURS with this name standing on this tile), with the quality left out of it the
+way `setSearchBox` + `findByName` already leaves it out everywhere else. All
+five sites go through it now, `legacyRunBuilds` included, so a sixth question
+about the same identity asks the same code or does not ask at all. Two details
+are decisions rather than plumbing:
+
+- **Dedicated buffers, not `findByName`'s.** One caller (`reapFastReplaced`)
+  runs on the EVENT path and the shared `searchArea`/`nameFilter` scratch
+  belongs to the flush; a private filter struct costs a few static bytes and
+  removes the aliasing question instead of answering it.
+- **`found` and `err` are separate returns, on purpose.** `reapFastReplaced`
+  unregisters a part on the strength of a MISS, and the old code deliberately
+  refused to edit the registry on a failed query. A helper that collapsed the
+  two would have turned a host error into a registry edit — which is exactly
+  the class of quiet semantic change a mechanical refactor ships.
+
+### What each site did while it stood, measured rather than recited
+
+The migration section's table said what a non-normal part would do to each
+site; the `qual` suite's red proof ran the pre-fix guest and watched all of it
+happen at once (below). The sharpest two: `reapFastReplaced` really does
+unregister a standing part when a script builds a colliding belt on it — the
+audit went `clusters=4` → `3` with the part still in the world — and `restyle`
+really is an eternal retry, not a one-time miss: **24 skin lines instead of 6**
+over one 2,160-tick run, every one `set=0`, because a part it can never find is
+re-queried by every flush that touches its cluster.
+
+### The `qual` suite — the tenth, base plus the quality mod
+
+Every part in every rig is uncommon (`[BBB-QUAL] quality rig=… value=uncommon`
+is asserted per rig, so a run where the quality silently failed to apply fails
+as vacuous). One 2,160-tick run, four rigs plus a control belt:
+
+| rig | what it is | what came out |
+|---|---|---|
+| `qblk` | a 2x2 BLOCK, two in and two out, saturated | skin line `parts=4 set=4 vars=21,27,17,35` (m1's own literals for the shape) exactly ONCE — a mid-run poke inside the neighbour gate provokes the extra flush that the unfixed guest turns into another `set=0` line — and **900 900 against the control's 900: 2.000x one belt, 0.00% spread**, which is the first evidence anywhere that an uncommon balancer BALANCES |
+| `qcol` | a 1→1 column of four, the fast-replace TRUE POSITIVE | `can_fast_replace` **true** over an uncommon interior part (the engine does not gate the gesture on quality either), the replace really removes it, the guest unregisters it exactly once, and the column splits 1 cluster → 2 with the halves' skin lines carrying the right variations (`5,2` with `set=1` — the bottom part's picture was already right and is not re-set) |
+| `qlone` | one lone part, the TRIPWIRE | a script builds a COLLIDING belt on its very tile; the part is still standing, and the registry does not move — `clusters=4 parts=41` before and after, and **zero** `fast-replaced the part` lines for its tile |
+| `qlim` | the edge suite's 64-input column, uncommon, given its sixty-fifth belt | **exactly one** refusal alert (128 ports for 65 inputs over the limit of 64) and **exactly one clean `told force 1` line** — the refusal is DELIVERED, which is the whole point: `forceOfCluster` reads the force off a part of the cluster, and every part is uncommon. Delivery holds across the edit (900 items over the window) and the audit stands at `drift=1 unbuilt=0` for the rest of the run |
+
+The audit walk is asserted at every step — `(4, 41, nets=0, 0, unbuilt=3)` at
+t0 (the audit inside `on_init`'s marker dispatch reports BEFORE the drain it
+forces compiles anything, and qlone's edgeless cluster is never "unbuilt"),
+`(4, 41, 3, 0, 0)` post-collide, `(5, 40, 2, 0, 0)` post-replace, and
+`(5, 40, 2, 1, 0)` from the refusal to the end. The skin assertion is an
+**exact multiset of six lines** for the whole run, which is what makes both
+halves of the restyle claim — found once, and never retried — one comparison.
+
+### Red-proven, one pre-fix build, every family firing at once
+
+The whole fix stashed, the guest rebuilt, the same suite run. Three rigs, three
+sites, three failure families, each naming itself:
+
+| site | what fired on the pre-fix guest |
+|---|---|
+| `restyle` | **24 skin lines instead of 6, every one `set=0`, every variation 0** — the retry-forever half and the never-found half in one number |
+| `reapFastReplaced` | *"the guest unregistered the lone part at (0, 40) under a COLLIDING belt"*, plus the audit walk failing at every post-collide sample (`clusters=3 parts=40` where the world holds 4 and 41) |
+| `forceOfCluster` | *"the force was told about the refusal 0 time(s)"* — the alert fired and nobody was told |
+
+And the true positives stayed true on BOTH arms, which is what makes them
+controls rather than assertions of the fix: the colliding belt was created, the
+real fast replace removed its part and was reaped exactly once, and the
+uncommon block delivered 2.000x at 0.00% in the pre-fix run too — conservation
+and throughput were never the defect.
+
+### What is still behind the player wall
+
+`revertOne`'s isPart arm shares the lookup and the fix, and its observable —
+the over-limit part arriving back in the inventory — needs a player, which no
+headless run has. Same wall as always ("The sixty-fifth belt"); the suite
+asserts the standing negative (**zero hand-backs**), and the interactive
+gesture, if anyone wants it, is the over-limit gesture from the checklist done
+with a quality part in hand.
+
+### What it costs
+
+Package built 2026-08-20, shipped config (`--persist=packed --gc=collected`):
+
+| | before | after | |
+|---|--:|--:|---|
+| `dist/better-belt-balancer_0.1.0.zip` | 413,608 B | **414,060 B** | +0.11% |
+| `fk_module.lua` | 2,746,726 B | **2,747,461 B** | +0.03% |
+| `dist/bbb.wasm` | 1,162,312 B | 1,163,064 B | |
+| members bound into the mod | 51 | **51** | none added — `find_entities_filtered` was always bound and `find_entity` stays bound for nothing (the binding is generated either way) |
+
+**Nothing on any hot path moves, and the `restyle` design question dissolved
+under measurement.** The migration write-up priced the repair as "a second byte
+or an allocating query on the flush path" against `mar` slopes asserted to the
+byte — and the seven slopes came back **identical to the byte** (1,216 / 352 /
+1,180 / 32 / 736 / 3,736 / 1,712 B, 3.92 MiB of linear memory), because the
+one-element slice `find_entities_filtered` returns lands in the same TinyGo
+allocation size class as the boxed Object `find_entity` returned. The retry
+cost the old code was PAYING — one host call per unfound part per flush,
+forever, on any save with a quality part — is gone with the defect.
+`reapFastReplaced`'s ordinary-play cost is unchanged: the point-query miss
+returns before any host call, and `mar`'s leg B (352 B) and leg D (32 B) say
+so. `make test` went 1m27.8s → 1m34.9s for the tenth suite.
+
 ## Status
 
 Design fixed 2026-07-31: **compile, don't interpret** -- balancer clusters compile
@@ -3571,6 +3705,7 @@ measured rather than asserted:
 | **...or the TWO that work** | A part bridging two working balancers into one that is over the limit is refused before their teardowns too, which are `AddPart`'s and not the compiler's: 0 items on the ground where the unfixed guest put 1,814, both halves still delivering 184 and 184 against 186 and 185 across the edit, and mining the part back out costing 0 teardowns and 0 builds. "The merge that would be over the limit" |
 | **...and a part clicks over a belt like a splitter does** | `fast_replaceable_group = "transport-belt"` on the part, which is base's own group: a balancer can be dropped straight into a belt line you already have, and the belt goes to the player. The group is symmetric, so a belt laid on a part replaces it too — and the engine raises NO event for the part it destroys, which is the whole of `guest/go/fastreplace.go`. "Fast replace" |
 | **A Belt Balancer 2 or 3 save becomes one of ours** | Uninstall the incumbent and every `balancer-part` it left standing becomes one of this mod's, at load, once per save: 19 parts across 3 surfaces and 2 forces into 7 clusters that then deliver 3.997x and 2.995x one belt, **at the health and the quality they were standing at**, with the items on the belts conserved exactly (48 copper before and after), the item stacks surviving and placing our parts, and the technology granted. Nothing at all happens while the incumbent is installed, or while any other mod owns the name -- **including an incumbent that arrives AFTER this mod, on a save this mod has already converted**, where the balancers we own keep running and a `balancer-part` the newcomer places stays theirs. All four incumbent names are exercised, and so is the stranger being uninstalled in his turn. Proved against the real Belt Balancer 2 as well as the harness stand-in. "Adopting a Belt Balancer 2 or 3 save" |
+| **A part at any quality is a part** | Every place the guest asks the world for one of its own entities by name is quality-blind since 2026-08-20 -- `findOnTile`, one helper for all five sites, after the migration pass found `find_entity` resolves a bare name as normal quality only. An uncommon balancer draws its shape, balances at 2.000x with 0.00% spread, is refused past the port limit WITH the refusal delivered, and survives a scripted colliding belt without losing a registry entry. The tenth suite (`qual`) is every part of that, red-proven against the pre-fix guest in one run. "A part at uncommon quality is a part" |
 | **Nothing the compiler places draws anything** | The hidden prototypes are clones of base belts and kept base's pictures — including a three-by-three linked-belt `structure` on the one prototype that stands where a player looks. All four are blanked, and the `edge` suite asserts the structural half: 180–197 visible-surface entities of ours, **every one on a registered part tile, 0 off one**, across six samples. "The tan streak" |
 | **Its long-game cost is measured, not assumed** | Every net-zero world operation's permanent-heap slope, flat over hundreds of iterations, a 300-hour projection built on it, and — since 2026-08-02 — the one stall that projection predicted, measured at **782 ms** and then removed by shipping `--gc=collected`. See "The marathon save" and "The third decision" |
 | **The art is drawn, not computed** | All four assets are an artist's, delivered 2026-08-19: the 47-cell sheet, the icon, the I/O arrows and the mod logo. They dropped in with no code change but one alignment constant, because the cell order and the eight arrow cells were a contract the spec stated and the delivery met. `tools/make-graphics.py` still generates the placeholders and still DEFINES that contract; it is the fallback and the specification, not the shipped pixels |
@@ -3784,8 +3919,8 @@ prototypes added. The one thing it needed from upstream is
 landed in the same round and is what makes the removed-later case convert at load
 rather than at the next thing the player happens to do.
 
-**And verified 2026-08-16 once more with BOTH of that day's passes merged**,
-which is the last thing this file records. The two were built on sibling
+**And verified 2026-08-16 once more with BOTH of that day's passes merged**.
+The two were built on sibling
 branches from the same base and rebased into one line — fast replace first, the
 migration on top — and the merged tree was gated from clean rather than trusted
 from its halves: `make check` green (bindings and lock unmoved), sprite checker
@@ -3802,6 +3937,25 @@ each half recorded alone — 11 parts, 2 surfaces, 3 clusters, `trigger=init` an
 against a 327,613 B base and add up to this within the two bytes of zip
 timestamp noise the harness carries. `fk_on_configuration_changed` is FkLua
 master `6e3eb28`, and `bin/fklua` was rebuilt from it before either arm ran.
+
+**And verified 2026-08-20 after the QUALITY PASS** — "A part at uncommon
+quality is a part", the pass that closed the four bare-name `find_entity` call
+sites the migration round wrote up, and the TENTH suite. (The migration round's
+own three verifications from earlier the same week are recorded in its section
+rather than here.) `make check` green (bindings and lock unmoved: nothing new
+crosses the boundary, members **51, none added**), sprite checker green at 10
+references, **all ten suites green in BOTH arms** (`make test` 1m34.9s,
+`make GC=leaking test` one invocation), and the leaking arm's seven slopes back
+**identical to the byte** — 1,216 / 352 / 1,180 / 32 / 736 / 3,736 / 1,712 B
+and **3.92 MiB** of linear memory — which is the gate the `restyle` half of the
+fix was priced against, and it clears it exactly: the one-element slice the
+area query returns lands in the same allocation size class as the boxed return
+it replaced. **No other suite's numbers moved.** The red proof is one pre-fix
+build firing all three headless families at once: 24 `set=0` skin lines where
+the fixed guest writes 6 real ones, a standing part unregistered under a
+scripted colliding belt, and an over-limit refusal delivered to nobody. Shipped
+zip 413,608 → **414,060 B** (+0.11%), `fk_module.lua` 2,746,726 →
+**2,747,461 B**.
 
 **What a future session should pick up first**, in order:
 

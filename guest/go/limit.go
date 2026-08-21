@@ -450,13 +450,16 @@ func forceOfCluster(tiles []key, force uint32) (fkapi.LuaForce, bool) {
 	if !ok {
 		return fkapi.LuaForce{}, false
 	}
-	limPartPos.X = float64(tiles[0].x) + 0.5
-	limPartPos.Y = float64(tiles[0].y) + 0.5
-	o, err := surf.FindEntity(fkapi.OfString(PartName), limPartPos)
-	if err != nil || o == nil {
+	// `findOnTile` rather than `find_entity`: a part at any quality but normal
+	// is invisible to a bare-name `find_entity` (findpart.go), and this lookup
+	// failing quietly is a refusal delivered to NOBODY -- the balancer is
+	// protected either way, and the player watches their belt do nothing with
+	// no message at all.
+	o, found, ferr := findOnTile(surf, PartName, tiles[0].x, tiles[0].y)
+	if ferr != nil || !found {
 		return fkapi.LuaForce{}, false
 	}
-	f, err := fkapi.LuaEntity{Object: *o}.Force()
+	f, err := fkapi.LuaEntity{Object: o}.Force()
 	if err != nil {
 		return fkapi.LuaForce{}, false
 	}
@@ -885,11 +888,15 @@ func revertOne(n buildNote) {
 	limPartPos.X = float64(n.x) + 0.5
 	limPartPos.Y = float64(n.y) + 0.5
 	if n.isPart {
-		e, err := surf.FindEntity(fkapi.OfString(PartName), limPartPos)
-		if err != nil || e == nil {
+		// `findOnTile`, not `find_entity`: a player can build an over-limit
+		// part at any quality their cursor holds, and a bare-name lookup
+		// (findpart.go) would leave a non-normal one standing instead of
+		// handing it back.
+		e, found, ferr := findOnTile(surf, PartName, n.x, n.y)
+		if ferr != nil || !found {
 			return
 		}
-		ent = *e
+		ent = e
 	} else {
 		// findByPos filters by belt-connectable TYPE and by FORCE, both in C++,
 		// so what comes back is a belt of the right force on that tile and

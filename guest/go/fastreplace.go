@@ -71,12 +71,6 @@ package main
 // (CLAUDE.md) exactly as it already reads for a mod calling `entity.destroy()`
 // on a part, and it is not new.
 
-import "github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
-
-// frPos is the one position this file passes to the host, package level so the
-// check allocates nothing on the one path that reaches a host call.
-var frPos fkapi.MapPosition
-
 // reapFastReplaced removes a part that a belt-connectable has just replaced.
 //
 // Called from onEventBody for an APPEARANCE and from nowhere else, BEFORE
@@ -93,14 +87,17 @@ func reapFastReplaced(surf uint32, tx, ty int32, builtBy uint32) {
 	if !ok {
 		return
 	}
-	frPos.X = float64(tx) + 0.5
-	frPos.Y = float64(ty) + 0.5
-	o, err := s.FindEntity(fkapi.OfString(PartName), frPos)
-	if err != nil || o != nil {
-		// Still standing, so this is not a replace: a script that built a
-		// colliding belt-connectable on top of a part (which `create_entity`
-		// permits and a player cannot do), or a query that failed. Either way
-		// the registry is right and must not be edited on a guess.
+	// `findOnTile`, not `find_entity`, and HERE the difference edits the
+	// registry: a bare-name `find_entity` reads NORMAL QUALITY ONLY
+	// (findpart.go), so an uncommon part that is still standing came back nil
+	// and was unregistered as replaced -- right for the wrong reason on a real
+	// fast replace (the part really is gone, at any quality), and wrong for a
+	// script that builds a colliding belt-connectable on top of one.
+	if _, standing, err := findOnTile(s, PartName, tx, ty); err != nil || standing {
+		// Still standing, so this is not a replace: a script built a colliding
+		// belt-connectable on top of a part (which `create_entity` permits and
+		// a player cannot do), or a query that failed. Either way the registry
+		// is right and must not be edited on a guess.
 		return
 	}
 	if !RemovePartMinedBy(k, builtBy) {

@@ -46,7 +46,6 @@ var (
 	skinWant []uint8
 	skinNode []uint32
 	skinSort []key
-	skinPos  fkapi.MapPosition
 )
 
 // maskAt builds the neighbour mask for one tile. No host call: the registry
@@ -105,17 +104,20 @@ func restyle(root uint32) {
 	}
 	set := uint32(0)
 	for i := range skinTile {
-		// A part sits at its tile's centre. `find_entity` by name is one call
-		// and returns the one thing that can be on that tile under that name;
-		// the alternative -- one area query for the whole cluster and a position
-		// read per entity -- costs O(parts) whatever changed.
-		skinPos.X = float64(skinTile[i].x) + 0.5
-		skinPos.Y = float64(skinTile[i].y) + 0.5
-		o, err := surf.FindEntity(fkapi.OfString(PartName), skinPos)
-		if err != nil || o == nil {
+		// One query per part whose picture changed, never per part; the
+		// alternative -- one area query for the whole cluster and a position
+		// read per entity -- costs O(parts) whatever changed. `findOnTile`
+		// rather than `find_entity`, because a part at any quality but normal
+		// is invisible to a bare-name `find_entity` (findpart.go) -- and this
+		// loop was the WORST home that trap had: a part it can never find is
+		// left at pvar 0 and re-queried on every flush that touches its
+		// cluster, forever, so an uncommon balancer drew the lone-part picture
+		// on every tile AND paid a host call per part per flush for it.
+		o, found, ferr := findOnTile(surf, PartName, skinTile[i].x, skinTile[i].y)
+		if ferr != nil || !found {
 			continue
 		}
-		if err := (fkapi.LuaEntity{Object: *o}).SetGraphicsVariation(skinWant[i]); err != nil {
+		if err := (fkapi.LuaEntity{Object: o}).SetGraphicsVariation(skinWant[i]); err != nil {
 			continue
 		}
 		// Only after the engine took it. A part the world does not have (a
