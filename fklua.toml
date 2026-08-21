@@ -3,7 +3,7 @@
 name = "better-belt-balancer"
 version = "0.1.0"
 title = "Better Belt Balancer"
-author = "BetterBeltBalancer"
+author = "Techrocket9"
 description = "Belt balancers that click together into arbitrary shapes. The brain is Go, compiled to Lua by FkLua."
 factorio_version = "2.0"
 # The DATA STAGE. `fklua mod` generates the control stage and rm -rf's its
