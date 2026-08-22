@@ -67,6 +67,7 @@ cannot ask a question. Every rule below follows from that.
   `→` inside tables and diagrams. Prefer ASCII where it reads as well.
 - Every document starts with a `# Title` and one or two sentences saying what it is,
   and ends with a trailing newline.
+- Do not hard-wrap prose. A paragraph, list item or quoted paragraph is one source line, however long; the viewer wraps it. Newlines belong between blocks, in tables, and in code fences only.
 
 ## Structure by document type
 
