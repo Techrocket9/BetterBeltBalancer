@@ -2,11 +2,11 @@
 
 A Factorio 2.0 mod. Balancer parts are 1x1 tiles: place several next to each other and they become one balancer, of whatever shape you built. The belts feeding it are its inputs and the belts it feeds are its outputs; orientation alone decides, so there is nothing to configure. Items are balanced across every output exactly, per lane, under every load condition: saturated, starved, partially blocked, asymmetric.
 
-The mod's logic is written in Go, compiled to WebAssembly by TinyGo and then to Lua by [FkLua](https://github.com/Techrocket9/FkLua). It was FkLua's first downstream mod; [FKLUA-GAPS.md](FKLUA-GAPS.md) records what building it asked of the compiler.
+The mod's logic is written in Go, compiled to WebAssembly by TinyGo and then to Lua by [FkLua](https://github.com/Techrocket9/FkLua).
 
 ## How it works
 
-Existing balancer mods move items from Lua on every tick: they hold the transport lines of every belt in every balancer and shuffle items between them, so their cost grows with how many balancers exist and how busy they are.
+[Existing balancer mods](https://mods.factorio.com/mod/belt-balancer-3) move items from Lua on every tick: they hold the transport lines of every belt in every balancer and shuffle items between them, so their cost grows with how many balancers exist and how busy they are.
 
 This mod compiles instead. When a cluster of parts changes, the guest (the Go program FkLua compiled to Lua) reads the belts around it, plans a network, and builds that network out of real splitters and belts on a hidden surface, stitched to the visible world with linked belts. Then it stops. A running balancer executes no script at all: every item that moves through it is moved by the engine, exactly as if you had built the splitter tree by hand.
 
@@ -28,7 +28,7 @@ This mod compiles instead. When a cluster of parts changes, the guest (the Go pr
 
 The network is a butterfly over P = next_pow2(max(inputs, outputs)) lines, log2(P) stages of P/2 splitters, with a lane-splitter stage on entry that makes it lane-accurate rather than only belt-accurate. A 4x4 balancer is 32 hidden entities; an 8x8 is 84.
 
-One balancer supports up to 64 belts per side (inputs and outputs counted separately); the limit is the size of the hidden-surface slot a network compiles into. A cluster asking for more is refused before anything is touched: the balancer you already had keeps running, you get the standard cannot-build sound and a flying text naming the limit, and the belt or part comes back to your inventory. A construction robot or another mod placing it gets a force-wide message and the piece is left standing unconnected. Bridging two balancers into one that would be over the limit is refused the same way, with both left running. [`agents/maxports.md`](agents/maxports.md) records what raising the limit would take.
+One balancer supports up to 64 belts per side (inputs and outputs counted separately); the limit is the size of the hidden-surface slot a network compiles into.
 
 ## Fast replace
 
@@ -57,26 +57,15 @@ Measured on Factorio 2.0.77 headless, base only, Apple M3 Pro, against belt-bala
 
 - Editing a running balancer never deletes items or drops them on the floor: it drains the hidden network and puts the items straight back into the network it rebuilds (1,173 in, 1,173 out, checked inside one tick; zero items on the ground across a hundred add/remove cycles on a saturated rig). Only a real removal, the last part mined or the surface deleted, returns them to the world.
 - Mining a balancer hands the drained items to the miner's inventory at every step, not only when the last part goes, and mining a belt off its edge counts too. Only what the inventory cannot take spills, as when mining a splitter that was holding items; a robot deconstruction still spills.
-- Space Age stacked belts come back stacked after a recompile: 928 items in 232 four-stacks return as 232 four-stacks, exact per (name, quality), nothing spilled. Base Factorio pays nothing for the path, which is gated on the force's belt-stacking bonus.
+- Space Age stacked belts come back stacked.
 
 ## Migrating from Belt Balancer 2 or 3
 
-If you are already using Belt Balancer, Belt Balancer 2, Belt Balancer 3 or Belt Balancer Performance, this mod adopts what they built. Uninstall the old mod and load your save: every balancer part it left standing becomes one of this mod's parts, at the same tiles, on the same force, at the same quality and health, and the belts around it become that balancer's inputs and outputs exactly as they were. The conversion happens once, at load, before the first tick, and the log carries one line saying how many parts on how many surfaces became how many balancers.
+If you are already using Belt Balancer 2 or Belt Balancer 3 this mod adopts what they built. Uninstall the old mod and load your save with BetterBeltBalancer installed: every balancer part left standing from the incumbant mod becomes one of this mod's parts and the belts around it become that balancer's inputs and outputs exactly as they were. The conversion happens once, at load, before the first tick, and the log carries one line saying how many parts on how many surfaces became how many balancers.
 
 Nothing happens while the old mod is still installed. Both can sit in a mod list together for as long as you like; this mod does not touch a `balancer-part` that belongs to a mod that is running, and it does not touch one that belongs to any other mod either.
 
-What comes across:
-
-- **The balancers**, as balancers, working. They compile into hidden networks on the load that adopts them, so a save that had 50 of them has 50 of them.
-- **Everything on the belts.** Those belts are vanilla and are not touched.
-- **Your parts in chests and inventories.** A stack of the old mod's part item survives and places this mod's parts, so a chest full of them is still a chest full of balancer parts. The stacks keep the old name.
-- **Your blueprints.** A blueprint or book taken with the old mod installed still places balancers; each part a robot builds from it becomes one of this mod's a tick later.
-- **The ability to craft.** The old mod's technologies go with it, so any force that owned a balancer is given this mod's balancer technology.
-
-What does not:
-
-- **The items the old mod was holding.** Belt Balancer 2 and 3 take items off the belts and hold them in a Lua table of their own, up to two per output lane per balancer, and Factorio deletes a removed mod's saved state along with the mod before any script can read it. That is a handful of items per balancer and there is no mechanism that could recover them.
-- **The old mod's technologies and recipes**, which the engine removes.
+**Make Sure **you don't have anything of very high value inside your legacy balancer when you make your cutover save -- items inside the balancers are **lost** in the migration.
 
 ## Building
 
@@ -94,11 +83,7 @@ make test     # headless verification: ten suites in a real Factorio
 - `QUIET=1` compiles out every `[BBB]` log line below the error level. The default build is verbose because the suites assert on those lines.
 - `GC=leaking` builds the guest on FkLua's leaking arena instead of its paced collector. The shipped build is collected: over 3,400 teardown-and-rebuild cycles the leaking arm's heap doubled its way to 32 MiB with a 782 ms tick at the last doubling, where the collected arm ended at 0.5 MiB with a worst tick of 71 ms and no measurable steady-state difference. Both arms pass all ten suites.
 
-## Status
-
-- Works and is benchmarked: cluster registry, network compiler, 2.0 lifecycle handling (clones, blueprints, ghosts, robots, undo, surface deletion, mod upgrade, space platforms), adaptive graphics. Not on the mod portal: no release, and no play-testing beyond the suites and the interactive checklist.
-- The art is by [Edjie Arts](https://edjie.carrd.co): the 47-variant sprite sheet, the item icon, the input and output arrows and the mod logo. A balancer reads as one continuous machine across any shape, with trim only along its real outline. `tools/make-graphics.py` remains in the repository as the generator for the placeholder set it replaced, and as the definition of the 47-mask cell order the guest and the sheet must agree on.
-- One visual residual. The edge interfaces are invisible, but an item reaching the far end of an interface belt overhangs the tile edge by about a sixth of a tile, so a balancer with a notch in it (a 2x2 missing a corner) shows a thin band of moving items in the empty corner. Factorio 2.0.77 has no prototype field that suppresses item drawing on a belt-connectable and no linked-belt equivalent of a loader's `belt_length`.
+- The icon, logo, and sprites were created by [Edjie Arts](https://edjie.carrd.co). A balancer reads as one continuous machine across any shape, with trim only along its real outline.
 
 ## Repository layout
 
