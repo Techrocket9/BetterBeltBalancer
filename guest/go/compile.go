@@ -1551,10 +1551,14 @@ func flush() {
 	// and for the same reason: the merge pre-pass that reads them has run. So do
 	// the condemnations, whose teardowns the drain has either performed or made
 	// moot -- a condemned cluster that dissolved before it was compiled took its
-	// network down with it.
+	// network down with it. And so does the conversion's own root list, whose
+	// whole span is exactly this: the migration made those clusters and this drain
+	// is what refused them, so past here they are ordinary balancers like any
+	// other and an edit to one is an edit (legacy.go, legacyRoots).
 	forgetBuildNotes()
 	forgetAddedParts()
 	forgetCondemned()
+	forgetLegacyConverted()
 }
 
 // The log helpers -- logError, logAlert, and the builder every line is

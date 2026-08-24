@@ -221,3 +221,81 @@ func TestOneScanTwoOutcomesChosenByTheMarker(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// THE CONVERSION ORIGIN, 2026-08-24
+// ---------------------------------------------------------------------------
+//
+// Until the legacy conversion became a producer of the migration summary, every
+// caller reached this fold with clusters the rebuild had ADOPTED: standing
+// networks, built by an earlier release, running. A Belt Balancer 2 or 3
+// conversion is the other shape entirely -- `legacyScan` creates those parts and
+// the very next flush REFUSES them, so they have no network at all and never had
+// one -- and it reaches the same fold on the same load.
+//
+// The two tests below are what that origin obliges, and neither is reachable
+// from a headless 2.1 run: the marker is absent there, so `GrandfatherNeeded` is
+// false whatever else is true, and this package is the only machine in the
+// repository that can execute the 2.0 arm.
+
+// PROVENANCE DOES NOT ENTER THE FOLD, and that is the decision rather than an
+// accident of the signature. A player who uninstalls Belt Balancer on 2.0 is
+// exactly the base-must-survive case grandfathering exists for: their balancers
+// are the incumbent's idiom, which is two belts on every part, so a fold that
+// treated a converted cluster as somehow less deserving would refuse every one
+// of them on the load that adopted them -- the mod breaking a base at the moment
+// it took responsibility for it.
+func TestAConvertedSaveIsGrandfatheredLikeAnyOther(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		marker  bool
+		setting Setting
+		n       uint32
+		want    bool
+	}{
+		{"a 2.0 save updated from the release with no setting", true, SettingOff, 21, true},
+		{"a 2.0 Belt Balancer save just converted, same count", true, SettingOff, 21, true},
+		{"...and one balancer is enough", true, SettingOff, 1, true},
+		{"...with the setting unreadable, which is still a 2.0 world", true, SettingAbsent, 7, true},
+		{"...already grandfathered on an earlier load", true, SettingOn, 7, false},
+		{"a conversion that produced nothing multi-edge", true, SettingOff, 0, false},
+		{"the same conversion on 2.1, where the key does not exist", false, SettingOff, 7, false},
+	} {
+		if got := GrandfatherNeeded(tc.marker, tc.setting, tc.n); got != tc.want {
+			t.Errorf("%s: GrandfatherNeeded(%v, %v, %d) = %v, want %v",
+				tc.name, tc.marker, tc.setting, tc.n, got, tc.want)
+		}
+	}
+}
+
+// AND WHAT THE WRITE OBLIGES, which the conversion origin is the first caller to
+// need at all.
+//
+// Grandfathering moves the anchor to Multi from Single (a save reconciled under
+// the rule) or from Unknown (a fresh heap, which is every load that declines a
+// guest heap and therefore every load that can grandfather). Both are gaining
+// multi-edge, and Reconcile says both oblige a REQUEUE -- so the guest asks it
+// rather than assuming, and every cluster goes back on the build queue after the
+// flip. For an adopted cluster that requeue is a fingerprint skip; for a
+// converted one it is the ONLY thing that will ever give it a network, because
+// the flush that refused it is the flush that just closed.
+func TestGrandfatheringObligesARequeue(t *testing.T) {
+	for _, anchor := range []Mode{ModeUnknown, ModeSingle} {
+		want, act := Reconcile(true, SettingOn, anchor)
+		if want != ModeMulti || act != ActRequeue {
+			t.Errorf("a grandfather taken on anchor=%v gave (%v, %v), want "+
+				"(multi, requeue): a converted balancer was refused seconds ago "+
+				"and nothing but a requeue can compile it", anchor, want, act)
+		}
+	}
+	// The one anchor a grandfather cannot be taken on, stated so that the guest's
+	// `if act == ActRequeue` is known to be exhaustive rather than hopeful: an
+	// anchor already at Multi means the setting was on at the last reconciliation,
+	// GrandfatherNeeded is false, and there is nothing to re-queue.
+	if _, act := Reconcile(true, SettingOn, ModeMulti); act != ActNone {
+		t.Errorf("a save already reconciled under multi-edge obliged %v", act)
+	}
+	if GrandfatherNeeded(true, SettingOn, 21) {
+		t.Fatal("...and it should not have been asked to grandfather at all")
+	}
+}

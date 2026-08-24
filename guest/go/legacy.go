@@ -316,7 +316,72 @@ var (
 	// made rather than only how many parts there were. Read after the flush,
 	// when every root has settled.
 	legacyKeys []key
+
+	// legacyRoots is those tiles resolved to the clusters they made, and it
+	// exists for ONE READER: refuseSingleEdge, which has to tell a balancer this
+	// guest created seconds ago apart from a piece somebody just placed.
+	//
+	// WHY A ROOT LIST AND NOT A FLAG. The obvious form is a bool spanning the
+	// conversion and its flush, read the way `rebuildingFromWorld` is -- and it
+	// is wrong for the same reason a blanket answer usually is: the flush that
+	// compiles a conversion also compiles whatever else the tick queued, so a
+	// player laying a second belt on an unrelated balancer in the same dispatch
+	// (a robot reviving a legacy ghost while they build is the realistic shape)
+	// would be handed the MIGRATION summary -- which says their contents are on
+	// the ground -- for an edit that spilled nothing. Swapping one false sentence
+	// for another is not a fix. Asking per cluster costs a slice that is nil in
+	// every save that never had an incumbent.
+	//
+	// ROOTS ARE SETTLED THE MOMENT THE CONVERSION LOOP ENDS: `AddPart` does the
+	// union-find inside the call, and nothing between there and the compile
+	// re-roots anything. `legacyConvertedRoot` re-resolves through `find` anyway,
+	// which costs nothing and makes the list robust to a merge nobody predicted.
+	legacyRoots []uint32
 )
+
+// noteLegacyRoots resolves this conversion's tiles to the clusters they made.
+//
+// Called by both conversion paths after their loop and before the compile that
+// follows it -- from `legacyScan` before its own `flush()`, and from
+// `legacyRunBuilds` before the `flushDead`/`flushLive` of the flush it is the top
+// of. Linear, through the `gen`/`mark` dedupe `legacyScan` already uses for its
+// own cluster count; the list is truncated by every flush.
+func noteLegacyRoots() {
+	gen++
+	for i := range legacyKeys {
+		id, ok := index[legacyKeys[i]]
+		if !ok {
+			continue
+		}
+		r := find(id)
+		if mark[r] == gen {
+			continue
+		}
+		mark[r] = gen
+		legacyRoots = append(legacyRoots, r)
+	}
+}
+
+// legacyConvertedRoot reports whether this cluster is one the migration just
+// made. Reached only from a REFUSAL, which is already the coldest path in this
+// guest, and a scan of an empty slice everywhere else.
+func legacyConvertedRoot(root uint32) bool {
+	for i := range legacyRoots {
+		r := legacyRoots[i]
+		if int(r) >= len(alive) || !alive[r] {
+			continue
+		}
+		if find(r) == root {
+			return true
+		}
+	}
+	return false
+}
+
+// forgetLegacyConverted ends the conversion's span. Called from the tail of
+// flush() beside the build notes and the condemnations, and for the same reason:
+// the drain that could have used it has run.
+func forgetLegacyConverted() { legacyRoots = legacyRoots[:0] }
 
 // legacyScan converts every stub in the world and compiles what it made.
 //
@@ -364,6 +429,12 @@ func legacyScan() {
 		}
 	}
 	legacyForceObj = legacyForceObj[:0]
+
+	// BEFORE THE FLUSH, because the flush is what refuses them. A cluster this
+	// scan just made is a MIGRATION and not a piece somebody placed, and
+	// refuseSingleEdge is the only thing that can tell the two apart. See
+	// legacyRoots.
+	noteLegacyRoots()
 
 	flush()
 
@@ -665,6 +736,10 @@ func legacyRunBuilds() {
 		legacyGrantTech(legacyForceObj[i])
 	}
 	legacyForceObj = legacyForceObj[:0]
+	// The same note legacyScan takes, at the same point in the sequence: this runs
+	// at the TOP of flush(), so the compile that refuses these clusters is a few
+	// statements away. See legacyRoots.
+	noteLegacyRoots()
 	legacyKeys = legacyKeys[:0]
 	logState()
 }

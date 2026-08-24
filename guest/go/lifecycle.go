@@ -589,13 +589,28 @@ func rebuildFromWorld() {
 		// world with the worst information anything will ever have and may not
 		// address a player (see refuseAdmit). It notes, and the flush it asks for
 		// speaks.
-		if multi {
-			noteAnnounce(r)
+		//
+		// AND IT SAYS NOTHING ABOUT A REFUSAL ALREADY DELIVERED. A save this mod
+		// was just ADDED to converts a Belt Balancer world from `fk_on_init` and
+		// then reaches this rebuild from the `fk_on_configuration_changed` that
+		// follows in the same load -- so without the guard the player is handed the
+		// same checklist twice, one dispatch apart. The conversion's own flush has
+		// already spoken and the memo says so (limit.go, refusalDelivered); there
+		// is nothing left for the rebuild to carry forward.
+		if multi && !refusalDelivered(r) {
+			// WHETHER A STANDING NETWORK COMES DOWN WITH IT, which is what decides
+			// the sentence the summary uses. On 2.1 the engine pruned the interfaces
+			// before any script ran, so the comparison cannot match and the remnant
+			// is condemned and spilled; on 2.0 the cluster is adopted whole and
+			// nothing moves. See sedge.go, the msgMigrated pair.
+			stood := false
 			if !exact {
 				if _, had := nets[r]; had {
 					condemnStanding(r)
+					stood = true
 				}
 			}
+			noteAnnounce(r, stood)
 		}
 		if slot > 0 {
 			if _, taken := rfwClaim[slot]; taken {

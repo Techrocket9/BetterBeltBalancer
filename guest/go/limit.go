@@ -219,6 +219,27 @@ func overLimitShape(edges []plan.Edge) (plan.Ports, bool) {
 	return pt, pt.N > 0 && pt.M > 0 && pt.P > plan.MaxPorts
 }
 
+// refusalDelivered asks the feedback gate a yes/no: has a refusal for this root
+// already been put in front of somebody?
+//
+// The memo is armed by `refuseAdmit` only on `refuseSpeak`, so its presence means
+// exactly that -- and its absence covers both "never refused" and "refused only
+// from inside the rebuild, which tells nobody". sedge.go uses it to keep the
+// MIGRATION summary from being spoken twice in one load: on a save this mod was
+// just added to, the conversion speaks and then a rebuild-from-world walks the
+// same clusters, and without this it would announce every one of them again.
+//
+// Point-queried like every other read of this map, so no iteration order reaches
+// anything host-visible; free on the nil map a save that never refused anything
+// carries.
+func refusalDelivered(root uint32) bool {
+	if len(overLimit) == 0 {
+		return false
+	}
+	_, ok := overLimit[root]
+	return ok
+}
+
 // forgetOverLimit clears the feedback gate for a root.
 //
 // Called from every compile that did NOT refuse -- a success, a skip, a cluster

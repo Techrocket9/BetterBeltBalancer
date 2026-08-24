@@ -87,13 +87,27 @@ const (
 	msgSingleEdgeStand = "bbb.single-edge-refused-unconnected"
 )
 
-// The two SUMMARY keys, which are a different act from the pair above: those
-// answer a piece somebody just placed, these answer a whole SAVE that was built
-// to a rule that has since changed. One is spoken per affected force, once, and
-// neither mentions a hand-back because nothing was placed.
+// The SUMMARY keys, which are a different act from the pair above: those answer
+// a piece somebody just placed, these answer a whole SAVE that was built to a
+// rule that has since changed. One is spoken per affected force, once, and none
+// of them mentions a hand-back because nothing was placed.
+//
+// THE TWO MIGRATED KEYS DIFFER IN ONE CLAUSE, AND THAT CLAUSE IS THE WHOLE
+// REASON THERE ARE TWO. A balancer whose network was STANDING when the save
+// opened has that network torn down, and everything it held reaches the ground
+// beside it -- which is what `single-edge-migrated` says and what the `mig21`
+// fixtures measure to the item. A balancer this guest created SECONDS AGO out of
+// a Belt Balancer save never had a network at all: there is no teardown, no
+// spill and nothing on the ground, and its items are on the player's own belts
+// where they always were (the `mig` suite asserts 0 teardowns and 0 spills over
+// every leg). Telling that player their contents are on the floor is the same
+// defect class this whole pass exists to close -- a sentence about an event that
+// never happened -- so the guest says which of the two really happened, from the
+// `stood` flag every announcement carries. See annNote.
 const (
-	msgMigrated      = "bbb.single-edge-migrated"
-	msgGrandfathered = "bbb.single-edge-grandfathered"
+	msgMigrated          = "bbb.single-edge-migrated"
+	msgMigratedUntouched = "bbb.single-edge-migrated-untouched"
+	msgGrandfathered     = "bbb.single-edge-grandfathered"
 )
 
 // ---------------------------------------------------------------------------
@@ -353,10 +367,35 @@ func refuseSingleEdge(root uint32, fp uint64, worst uint32, tiles []key, force u
 		// rebuild's own fold found, because a multi-edge cluster with no standing
 		// network is never classified by inspectNetwork and would otherwise reach
 		// the informed flush unannounced.
-		noteAnnounce(root)
+		//
+		// UNLESS THE REFUSAL HAS ALREADY BEEN DELIVERED, and that guard is what
+		// keeps the summary from becoming a nag. A conversion speaks from its own
+		// flush; on the `added` shape a rebuild-from-world follows it in the same
+		// LOAD (this mod is new to the save, so `fk_on_configuration_changed`
+		// finds registryReady false), and without this the rebuild would re-announce
+		// seven balancers the player was told about one dispatch earlier and the
+		// summary would be spoken twice. There is nothing to carry forward when the
+		// message is already delivered -- that is exactly what the feedback gate's
+		// memo means (limit.go, refusalDelivered).
+		if !refusalDelivered(root) {
+			noteAnnounce(root, false)
+		}
 		return
 	}
 	logRefusedSingleEdge(root, worst, sedgeTiles)
+	// AND THE THIRD PRODUCER: A CLUSTER THE MIGRATION JUST CONVERTED. `legacyScan`
+	// and `legacyRunBuilds` turn a Belt Balancer save's parts into ours and the
+	// very next flush -- this one -- refuses every one of them that is laid the
+	// incumbent's way, which is all of them built the incumbent's idiom. No
+	// rebuild is involved anywhere in the dispatch, so neither of the two producers
+	// above ever sees these, and until 2026-08-24 they fell through to the
+	// per-piece message below: "the extra piece was left in place, unconnected",
+	// about a piece nobody placed. `stood` is FALSE by construction -- a cluster
+	// created seconds ago has never had a network, so nothing came down and nothing
+	// reached the ground.
+	if legacyConvertedRoot(root) {
+		noteAnnounce(root, false)
+	}
 	if announcedRefusal(root) {
 		// Into the summary, and nothing said here: settleEdgeMode speaks once per
 		// affected force at the end of this flush, with a ping per balancer.
@@ -605,13 +644,40 @@ var (
 	// sedgeAnnounce is the roots whose refusal belongs in the SUMMARY rather than
 	// in the ordinary "the extra piece was left in place" message.
 	//
-	// Two producers, and their union is what makes it complete: rebuildFromWorld's
-	// fold, which sees every cluster it classifies including the ones it adopts
-	// (that is the 2.0 grandfather case, where nothing is ever refused), and
-	// refuseSingleEdge's rebuild arm, which catches a multi-edge cluster that had
-	// no standing network for the fold to inspect.
-	sedgeAnnounce []uint32
+	// THREE PRODUCERS, and their union is what makes it complete:
+	//
+	//	rebuildFromWorld's fold, which sees every cluster it classifies including
+	//	the ones it ADOPTS -- that is the 2.0 grandfather case, where nothing is
+	//	ever refused and there is therefore no refusal to hang the note on;
+	//	refuseSingleEdge's rebuild arm, which catches a multi-edge cluster that
+	//	had no standing network for the fold to inspect;
+	//	and a LEGACY CONVERSION, which is neither of the above and was the
+	//	2026-08-24 defect: `legacyScan` and `legacyRunBuilds` build a Belt
+	//	Balancer save's clusters out of nothing and the very next flush refuses
+	//	them, with no rebuild anywhere in the dispatch. Five of the six conversion
+	//	shapes therefore reached the ORDINARY per-piece message -- a sentence
+	//	about an extra piece left in place unconnected, when nobody placed
+	//	anything. See legacy.go, legacyConvertedRoot.
+	//
+	// The first two are the rebuild's and may not speak; the third runs in an
+	// ordinary flush and does. Nothing about that breaks the wake-race
+	// discipline, which is a statement about `rebuildFromWorld` and not about
+	// deferral: a conversion has walked every surface before its flush begins,
+	// it involves no build note, and no later tick can falsify what it found.
+	sedgeAnnounce []annNote
 )
+
+// annNote is one announced refusal: which cluster, and whether a STANDING
+// network came down with it.
+//
+// The second field decides which of the two migration sentences the summary
+// uses, and it is a fact about the world rather than a nicety -- see the
+// msgMigrated pair. A producer that watched a network come down sets it; a
+// producer that found nothing standing does not.
+type annNote struct {
+	root  uint32
+	stood bool
+}
 
 func condemnStanding(root uint32) {
 	for i := range sedgeCondemned {
@@ -640,13 +706,20 @@ func takeCondemned(root uint32) bool {
 // that dissolved before it could be compiled. Its network went down with it.
 func forgetCondemned() { sedgeCondemned = sedgeCondemned[:0] }
 
-func noteAnnounce(root uint32) {
+// noteAnnounce records one cluster for the summary.
+//
+// `stood` is OR-ed rather than overwritten when a cluster is announced twice in
+// one flush: two announcements of one root are one balancer on the checklist,
+// and a producer that watched a network come down outranks one that did not --
+// the sentence has to name what really happened to the items.
+func noteAnnounce(root uint32, stood bool) {
 	for i := range sedgeAnnounce {
-		if sedgeAnnounce[i] == root {
+		if sedgeAnnounce[i].root == root {
+			sedgeAnnounce[i].stood = sedgeAnnounce[i].stood || stood
 			return
 		}
 	}
-	sedgeAnnounce = append(sedgeAnnounce, root)
+	sedgeAnnounce = append(sedgeAnnounce, annNote{root: root, stood: stood})
 }
 
 // announcedRefusal is a membership TEST and not a take: settleEdgeMode walks the
@@ -654,7 +727,7 @@ func noteAnnounce(root uint32) {
 // here would be a balancer missing from its own checklist.
 func announcedRefusal(root uint32) bool {
 	for i := range sedgeAnnounce {
-		if sedgeAnnounce[i] == root {
+		if sedgeAnnounce[i].root == root {
 			return true
 		}
 	}
@@ -702,12 +775,8 @@ func onEdgeModeSettingChanged(name string) {
 		// a network -- so every cluster is simply re-queued: the refused ones
 		// compile, because their stored fingerprint never matched the world, and
 		// every other one skips on the fingerprint it never lost.
-		auditRoots = liveRootList(auditRoots)
-		for i := range auditRoots {
-			markLive(auditRoots[i])
-		}
 		logStart("single-edge: multiple belts per part turned ON; ")
-		logU(uint32(len(auditRoots)))
+		logU(requeueEveryCluster())
 		logS(" clusters re-queued")
 		logEnd()
 	}
@@ -750,7 +819,10 @@ func sweepStackedInterfaces() uint32 {
 		}
 		found++
 		condemnStanding(r)
-		noteAnnounce(r)
+		// STOOD, unconditionally: this sweep only ever looks at clusters that HAVE
+		// a network (`if !had { continue }` above), and every one of them is about
+		// to be torn down and spilled.
+		noteAnnounce(r, true)
 		ni.fp = ^ni.fp
 		nets[r] = ni
 		markLive(r)
@@ -785,11 +857,20 @@ func settleEdgeMode() {
 	if len(sedgeAnnounce) == 0 || rebuildingFromWorld {
 		return
 	}
-	n := gatherAffected()
+	n, stood := gatherAffected()
 	sedgeAnnounce = sedgeAnnounce[:0]
 	if n == 0 {
 		return
 	}
+	// THE FOLD IS ASKED THE SAME QUESTION WHATEVER MADE THE CLUSTERS, and that is
+	// a decision rather than an oversight. On 2.0 a player who uninstalls Belt
+	// Balancer is exactly the base-must-survive case grandfathering exists for:
+	// without it the default-false setting refuses every balancer the conversion
+	// just adopted, on the load that adopts them. `GrandfatherNeeded` takes a
+	// COUNT and carries no provenance, so a converted cluster and a standing one
+	// contribute alike -- proved over the whole decision table by
+	// `go test ./edgemode/`, which is the only machine that can reach the 2.0 arm
+	// at all.
 	if edgemode.GrandfatherNeeded(stackCapable(), settingMultiEdge(), n) {
 		grandfatherMultiEdge(n)
 		return
@@ -800,7 +881,7 @@ func settleEdgeMode() {
 		// gate, not a nag on every load.
 		return
 	}
-	tellMigrated(n)
+	tellMigrated(n, stood)
 }
 
 // grandfatherMultiEdge keeps a save that predates the rule working, and says so.
@@ -816,7 +897,21 @@ func settleEdgeMode() {
 // -- on 2.0 all their interfaces are still standing, so the adoption comparison
 // matched exactly -- and they are running. The flip is so that the NEXT edit to
 // one of them is compiled rather than refused.
+//
+// AND IT RE-QUEUES, WHICH THE CONVERSION ORIGIN IS THE FIRST CALLER TO NEED. The
+// sentence above is true of the clusters this pass was written for -- a save
+// updated from the release that had no setting, whose balancers the rebuild
+// ADOPTED and which are running. A converted Belt Balancer save is the other
+// shape: `legacyScan` made those clusters seconds ago and the flush that is
+// closing REFUSED them, so they have no network at all and the flip alone would
+// leave the player told their base was kept working and looking at seven dead
+// balancers. What the flip obliges is asked of the fold rather than assumed:
+// grandfathering moves the anchor to Multi from Single or from Unknown, and
+// `Reconcile` says both oblige a REQUEUE. For an adopted cluster that requeue is
+// a fingerprint skip and costs a classification; for a converted one it is the
+// only thing that will ever give it a network.
 func grandfatherMultiEdge(n uint32) {
+	before := edgeAnchor
 	edgeAnchor = edgemode.ModeMulti
 	if !writeMultiEdgeSetting(true) {
 		// The write is the feature. If it did not land the save is single-edge
@@ -836,19 +931,57 @@ func grandfatherMultiEdge(n uint32) {
 	logS(MultiEdgeSetting)
 	logS(" = true")
 	logEnd()
+	if _, act := edgemode.Reconcile(true, edgemode.SettingOn, before); act == edgemode.ActRequeue {
+		logStart("single-edge: ")
+		logU(requeueEveryCluster())
+		logS(" clusters re-queued after grandfathering; the refused ones compile")
+		logS(" and the rest skip on the fingerprint they never lost")
+		logEnd()
+		requestFlush()
+	}
 	tellAffected(msgGrandfathered, false)
+}
+
+// requeueEveryCluster puts every standing cluster back on the build queue and
+// says how many that was.
+//
+// A WHOLE-SAVE RE-QUEUE, which is affordable for the reason `sweepStackedInterfaces`
+// gives about itself: both of its callers are once-per-save events -- a player
+// flipping a Map setting, and the one load that grandfathers -- and a cluster
+// whose edge list did not move skips on its fingerprint. It does NOT flush: both
+// callers run from places where a flush inside a flush would be the hazard
+// `mine_entity` posed, so they queue and ask for the next tick's.
+func requeueEveryCluster() uint32 {
+	auditRoots = liveRootList(auditRoots)
+	for i := range auditRoots {
+		markLive(auditRoots[i])
+	}
+	return uint32(len(auditRoots))
 }
 
 // tellMigrated is the 2.1 half: the balancers cannot be kept, so what is offered
 // instead is a checklist.
-func tellMigrated(n uint32) {
+//
+// `stood` picks the sentence, and the two are not interchangeable -- see the
+// msgMigrated pair. It is a property of the announcements this summary is made
+// of rather than of the engine, so a save that somehow carried both shapes at
+// once gets the one that is true of at least one of them and never the one that
+// invents a spill.
+func tellMigrated(n uint32, stood bool) {
+	msgKey := msgMigrated
 	logStart("single-edge: ")
 	logU(n)
 	logS(" balancers were built with several belts per part; this Factorio")
-	logS(" cannot stack belt-connectables, so they are refused and their")
-	logS(" contents are on the ground beside them")
+	logS(" cannot stack belt-connectables, so they are refused")
+	if stood {
+		logS(" and their contents are on the ground beside them")
+	} else {
+		msgKey = msgMigratedUntouched
+		logS("; none of them had a network standing to come down, so the items")
+		logS(" on their belts are where they were")
+	}
 	logEnd()
-	tellAffected(msgMigrated, true)
+	tellAffected(msgKey, true)
 }
 
 // ---------------------------------------------------------------------------
@@ -878,12 +1011,20 @@ var (
 // Node ids in append order, which is the rebuild's node-id order and then event
 // order: deterministic on every client, which matters because what comes out of
 // it reaches `force.print`.
-func gatherAffected() uint32 {
+//
+// The second return is whether ANY of them had a standing network come down,
+// which is what picks the summary's sentence. OR-ed across the set rather than
+// per cluster because the message is per FORCE and one sentence has to cover
+// what it names; the two shapes cannot mix in any save this repository has, and
+// the direction the OR errs in is the honest one -- it never claims a spill that
+// did not happen.
+func gatherAffected() (uint32, bool) {
 	affected = affected[:0]
 	affForces = affForces[:0]
+	stood := false
 	gen++
 	for i := range sedgeAnnounce {
-		r := sedgeAnnounce[i]
+		r := sedgeAnnounce[i].root
 		if int(r) >= len(alive) || !alive[r] {
 			continue
 		}
@@ -892,6 +1033,7 @@ func gatherAffected() uint32 {
 			continue
 		}
 		mark[r] = gen
+		stood = stood || sedgeAnnounce[i].stood
 		k := ppos[r]
 		f := pforce[r]
 		affected = append(affected, affCluster{force: f, surf: k.s, x: k.x, y: k.y})
@@ -906,7 +1048,7 @@ func gatherAffected() uint32 {
 			affForces = append(affForces, f)
 		}
 	}
-	return uint32(len(affected))
+	return uint32(len(affected)), stood
 }
 
 // tellAffected says one thing to each force that owns an affected balancer.

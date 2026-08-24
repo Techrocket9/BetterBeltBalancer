@@ -240,36 +240,45 @@ WORKING = (("sok2", 2.0), ("sok4", 4.0))
 # that was built when it should not have been.
 STOPPED = ("m4x4", "m3to5")
 
-# WHICH LEGS SPEAK THE MIGRATION SUMMARY, and this table is a MEASUREMENT of the
-# shipped guest rather than a statement of what it ought to do.
+# WHICH LEGS SPEAK THE MIGRATION SUMMARY: ALL OF THEM, ONCE EACH, and none of
+# them reaches the ordinary per-piece message at all.
 #
-# `sedgeAnnounce` -- the list of roots whose refusal belongs in the summary
-# rather than in the ordinary per-piece message -- has two producers, and both
-# of them are `rebuildFromWorld` (guest/go/sedge.go: the rebuild's own fold, and
-# refuseSingleEdge's rebuild arm). A LEGACY CONVERSION is neither. So whether
-# the player gets the checklist depends on whether a rebuild-from-world happens
-# to run AFTER the conversion in the same session:
+# THIS TABLE USED TO SAY SOMETHING ELSE, AND WHAT IT SAID WAS A MEASUREMENT OF A
+# DEFECT. `sedgeAnnounce` -- the roots whose refusal belongs in the summary
+# rather than in the per-piece message -- had two producers and both of them
+# were `rebuildFromWorld`; a LEGACY CONVERSION is neither, so only `added` spoke
+# the summary. There, and only there, a rebuild follows the conversion in the
+# same load: this mod is new to the save, so the `fk_on_configuration_changed`
+# after `fk_on_init` finds registryReady false and rebuilds. The other five legs
+# handed the player seven copies of a sentence about an extra piece being left in
+# place unconnected, when nobody had placed anything -- the defect class
+# `mig21`'s third red proof exists for, reached through the other door -- and
+# `added` gave them both.
 #
-#   added   this mod is new to the save, so `fk_on_init` converts and the
-#           `fk_on_configuration_changed` that follows it -- a newly added mod
-#           is itself a mod-set change -- finds registryReady false and rebuilds.
-#           That rebuild re-refuses all seven and the informed flush speaks.
-#   the rest  this mod was already installed, so the rebuild happened in phase
-#           one over an empty registry and phase two's conversion is followed by
-#           nothing. The player gets seven ordinary per-cluster lines instead.
+# The conversion is the THIRD PRODUCER since 2026-08-24 (guest/go/sedge.go's
+# refuseSingleEdge, over guest/go/legacy.go's legacyConvertedRoot), so every leg
+# that converts speaks the checklist and no leg speaks the per-piece copy.
+# `added` speaks it ONCE rather than twice: the rebuild that follows the
+# conversion finds the refusal already delivered and does not re-announce it
+# (guest/go/limit.go, refusalDelivered).
 #
-# BOTH ARMS ARE PINNED, in both directions, because the fix for the asymmetry --
-# whatever it turns out to be -- has to move a number here. See the report in
-# CLAUDE.md's migration section: the ordinary message says an extra piece was
-# left in place unconnected, and in a migration nobody placed anything.
+# BOTH DIRECTIONS ARE STILL PINNED. A leg that stops speaking fails, a leg that
+# speaks twice fails, and a single per-piece line anywhere fails -- which is the
+# assertion the fix had to be able to move.
 EXPECT_SUMMARY = {
     "added": True,
-    "later": False,
-    "bb3": False,
-    "built": False,
-    "readd": False,
-    "fgone": False,
+    "later": True,
+    "bb3": True,
+    "built": True,
+    "readd": True,
+    "fgone": True,
 }
+
+# ...AND HOW MANY ORDINARY PER-PIECE MESSAGES A CONVERSION MAY PRODUCE, which is
+# the other half of the same statement and is its own constant so that a
+# regression in either direction has a number to move. Zero: nobody placed a
+# piece, so no cluster in this suite may be told one was left in place.
+EXPECT_TOLDPIECE = 0
 
 
 def find_all(lines, rx):
@@ -478,16 +487,17 @@ def check_refusals(lines, leg, fail):
                     "idiom puts an input on one face and an output on the other, "
                     "which is two" % worst)
 
-    # ONE ORDINARY MESSAGE PER REFUSED CLUSTER. See EXPECT_SUMMARY: a legacy
-    # conversion reaches the per-piece message rather than the migration summary,
-    # because neither producer of `sedgeAnnounce` is a conversion.
+    # NOT ONE ORDINARY PER-PIECE MESSAGE, which is the half of this that a player
+    # reported. See EXPECT_SUMMARY: a converted balancer is a MIGRATION and gets
+    # the checklist; "the extra piece was left in place, unconnected" is a
+    # sentence about an event that never happened, because nobody placed anything.
     told = {int(m.group(2)) for m in find_all(lines, TOLDPIECE)}
     print("  told per cluster: %d" % len(told))
-    if told != set(seen):
-        fail.append("the ordinary refusal message went to clusters %s and %s "
-                    "were refused: it is once per refused cluster, and the "
-                    "feedback gate is what stops it being once per audit"
-                    % (sorted(told), sorted(seen)))
+    if len(told) != EXPECT_TOLDPIECE:
+        fail.append("the ORDINARY per-piece refusal message went to clusters %s "
+                    "and a conversion must produce %d of them: nobody placed a "
+                    "piece, so nothing may be told one was left in place "
+                    "unconnected" % (sorted(told), EXPECT_TOLDPIECE))
 
     # THE MIGRATION SUMMARY, in both directions.
     summ = find_all(lines, SUMMARY)
@@ -495,11 +505,12 @@ def check_refusals(lines, leg, fail):
     want_summary = EXPECT_SUMMARY.get(leg, False)
     if want_summary:
         if len(summ) != 1:
-            fail.append("the migration summary was spoken %d times and this leg "
-                        "adds this mod to the save, so the "
-                        "on_configuration_changed that follows on_init rebuilds "
-                        "from world, re-refuses every converted cluster and the "
-                        "informed flush speaks once" % len(summ))
+            fail.append("the migration summary was spoken %d times and a "
+                        "conversion speaks it exactly once: the flush that "
+                        "refuses the converted clusters is the flush that "
+                        "summarises them, and a rebuild-from-world following in "
+                        "the same load must find the refusal already delivered "
+                        "and stay quiet" % len(summ))
         elif int(summ[0].group(1)) != EXPECT_REFUSED:
             fail.append("the migration summary named %s balancers and %d were "
                         "refused" % (summ[0].group(1), EXPECT_REFUSED))
@@ -517,12 +528,22 @@ def check_refusals(lines, leg, fail):
             if "FAILED" in m.group(3):
                 fail.append("the summary to force %s did not reach it"
                             % m.group(1))
+        # AND WHICH OF THE TWO MIGRATION SENTENCES IT USED. A conversion tears
+        # nothing down -- the clusters are seconds old and never had a network --
+        # so the summary must NOT be the one that says their contents are on the
+        # ground. That claim is true of `mig21`'s fixtures, where the networks
+        # were standing when the save opened, and false here; getting it wrong
+        # would be the same defect this whole assertion block is about, moved one
+        # sentence to the left.
+        for m in summ:
+            if "on the ground beside them" in m.group(0):
+                fail.append("the summary says the refused balancers' contents "
+                            "are on the ground, and a conversion spills nothing: "
+                            "these clusters never had a network to tear down, "
+                            "which is what the 0 teardowns and 0 spills below say")
     elif summ or sumtold:
-        fail.append("the migration summary was spoken in a leg where no "
-                    "rebuild-from-world follows the conversion (%s). If this "
-                    "started passing because the guest learned to announce a "
-                    "CONVERSION, EXPECT_SUMMARY is what has to move"
-                    % (summ or sumtold)[0].group(0).strip()[-80:])
+        fail.append("the migration summary was spoken in a leg that should not "
+                    "speak it (%s)" % (summ or sumtold)[0].group(0).strip()[-80:])
 
     # NOTHING WAS STANDING, SO NOTHING CAME DOWN.
     torn = find_all(lines, TORNDOWN)

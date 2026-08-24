@@ -1,15 +1,16 @@
 # single-edge.md — the 2.1 port: one belt per part
 
-Status: **PHASES 1 THROUGH 7 SHIPPED 2026-08-24** — the rule and its
+Status: **PHASES 1 THROUGH 8 SHIPPED 2026-08-24** — the rule and its
 refusal, then the setting, the grandfather pass and the migration, then the
 interactive and demo worlds, then the rebuilt test estate in four tranches
-(`m2`, `mar` and `upg`; `mix`, `plat` and `qual`; `m3` and `edge`; `mig`).
+(`m2`, `mar` and `upg`; `mix`, `plat` and `qual`; `m3` and `edge`; `mig`), and
+finally the message a converted balancer gets.
 Drafted the same day from the 2026-08-23 investigation and boskid's answer to
 the interface request (forums t=135830). Read CLAUDE.md's migration and
 over-limit sections first; this design reuses both wholesale.
 
 
-What is implemented and what is not is the seven "Implementation status"
+What is implemented and what is not is the eight "Implementation status"
 sections at the end of this file. The short form: the rule enforces, the refusal
 reaches the player through the sixty-fifth belt's own machinery, the merge is
 spared, a 2.0 multi-edge save opened on 2.1 has its remnants torn down and its
@@ -22,11 +23,12 @@ re-capture, which needs a graphical client; the setting-flip legs and the
 multi-edge regression run need a 2.0 binary and belong on the `release/2.0`
 branch.
 
-**One defect this estate work found and did not fix**, because it is a guest
-decision rather than a test one: a BB2/BB3 conversion reaches the ORDINARY
-per-piece refusal message rather than the migration summary, unless a
-rebuild-from-world happens to follow it in the same session. Phase 7's "The
-message a converted balancer gets" is the measurement and the proposed fix.
+**The one defect the estate work found and did not fix is FIXED, as phase 8**: a
+BB2/BB3 conversion is the third producer of the migration summary now, so every
+conversion shape speaks the checklist once and none of them reaches the ordinary
+per-piece message. Phase 7's "The message a converted balancer gets" is the
+measurement it was found by; phase 8 is the fix, the SECOND false sentence it
+found on the way, and the 2.0 grandfather arm it had to settle.
 
 
 ## Why, in three sentences
@@ -1596,9 +1598,11 @@ about an extra piece being left in place unconnected, when nobody placed
 anything"* — reached through the other door. And in the `added` leg the player
 gets **both**: seven per-piece lines and then the summary.
 
-**Not fixed here, deliberately, and the reasoning is worth keeping.** It is a
-guest-behaviour decision inside a test-estate pass, the fix has an untestable
-arm, and the suite that would have to prove it now exists:
+**FIXED THE SAME DAY, AS PHASE 8 BELOW.** Everything from here to the end of this
+section is the report as it was written, kept because it is the measurement the
+fix was taken on; what actually landed differs from the sketch in two places and
+both are written up there. Not fixed *in this pass*, deliberately, and the
+reasoning was:
 
 - the shape of the fix is `legacyScan`/`legacyRunBuilds` noting the converted
   roots the way the rebuild does — a flag around the conversion and its flush,
@@ -1655,3 +1659,176 @@ thirteen suites**. The `mar` slopes came back **identical to the byte** to phase
 test-estate pass is the only result available. The suite costs **43 s** for
 seven legs and two probes, against 30.6 s for the pre-port world of nineteen
 parts.
+
+## Implementation status — phase 8, the message a converted balancer gets, 2026-08-24
+
+**Shipped: a legacy conversion is the third producer of the migration summary,
+and the summary has two sentences because a conversion spills nothing.** Measured
+on Factorio 2.1.14, shipped configuration, both `-gc` arms.
+
+| what | where |
+|---|---|
+| the third producer, and the guard that keeps it from speaking twice | `refuseSingleEdge`, `guest/go/sedge.go` |
+| the converted-root list it asks, and the two conversion paths that fill it | `legacyRoots` / `noteLegacyRoots` / `legacyConvertedRoot`, `guest/go/legacy.go` |
+| "has a refusal for this root already been delivered", asked of the feedback gate | `refusalDelivered`, `guest/go/limit.go` |
+| whether a STANDING network came down, carried on every announcement | `annNote`, `noteAnnounce`, `gatherAffected`, `guest/go/sedge.go` |
+| the second migration sentence, and the choice between them | `tellMigrated` + `msgMigratedUntouched`, and `mod-data/locale/en/better-belt-balancer.cfg` |
+| the rebuild's fold, now carrying `stood` and not re-announcing a delivered refusal | `rebuildFromWorld`, `guest/go/lifecycle.go` |
+| the grandfather's requeue, asked of the fold rather than assumed | `grandfatherMultiEdge` + `requeueEveryCluster`, `guest/go/sedge.go` |
+| the conversion-origin rows of the decision table | `guest/go/edgemode/edgemode_test.go`, run by `make check` |
+| the constants, moved from a measurement of the defect to a statement of the rule | `EXPECT_SUMMARY` and the new `EXPECT_TOLDPIECE`, `test/assert-mig.py` |
+
+### The fix, and the two places it is not the sketch
+
+Phase 7's proposed shape was *"a flag around the conversion and its flush, read
+by `refuseSingleEdge` exactly as `rebuildingFromWorld` is"*. Both halves of that
+moved under measurement.
+
+**1. IT IS A ROOT LIST AND NOT A FLAG, and the flag is wrong for the reason this
+whole pass is about.** The flush that compiles a conversion also compiles
+whatever else the tick queued -- a robot reviving a legacy ghost while a player
+lays a belt is the realistic shape -- so a blanket "this dispatch is a migration"
+would hand that player the MIGRATION summary, which says their contents are on
+the ground, for an edit that spilled nothing. Swapping one false sentence for
+another is not a fix. `legacyScan` and `legacyRunBuilds` resolve their converted
+tiles to roots instead (`AddPart` does the union-find inside the call, so the
+roots are settled the moment the loop ends), and `refuseSingleEdge` asks per
+cluster. The list is nil in every save that never had an incumbent and is
+truncated by every flush, beside the build notes and the condemnations.
+
+**2. THE CONVERSION'S OWN FLUSH SPEAKS, and that does not weaken the wake-race
+discipline.** The sketch had the conversion hand off to a later flush the way
+`rebuildFromWorld` does. It does not need to: the wake-race rule is a statement
+about `rebuildFromWorld` specifically -- a pass that reconstructs a whole
+session's registry inside one dispatch with none of that dispatch's own events
+delivered, so any verdict it reaches about a PLAYER is provisional. A conversion
+has walked every surface before its flush begins, involves no build note, and
+nothing a later tick can do falsifies what it found. `settleEdgeMode` still runs
+where it always did, at the end of `flush()` after `endCarry()`, and still
+returns untouched under `rebuildingFromWorld`.
+
+**And that is exactly why the ONCE-NESS needed a guard.** On the `added` shape --
+this mod and the incumbent's removal in one edit -- the conversion speaks from
+`fk_on_init`'s flush, and then `fk_on_configuration_changed` finds
+`registryReady` false and rebuilds over the same clusters in the same LOAD. Both
+the rebuild's fold and `refuseSingleEdge`'s rebuild arm would have re-announced
+all seven, and the player would have been handed the same checklist twice, one
+dispatch apart. `refusalDelivered` is the feedback gate asked as a yes/no: the
+memo is armed only on `refuseSpeak`, so its presence means the message really
+went out and there is nothing left to carry forward. Its absence still covers
+both "never refused" and "refused only from inside the rebuild, which tells
+nobody", which is what keeps `mig21` unmoved -- a fixture opens on a fresh heap
+with an empty memo.
+
+### The second false sentence, which the fix would have shipped
+
+**`single-edge-migrated` says the refused balancers' contents are on the ground
+beside them, and a conversion puts nothing there.** True of `mig21`'s fixtures,
+whose networks were STANDING when the save opened and had to be torn down; false
+of a Belt Balancer save, whose clusters this guest created seconds earlier and
+whose refusal has no teardown to be in front of -- which is the property the
+`mig` suite already asserts from the other side, at **0 teardowns and 0 spills
+over every leg**. Routing a conversion into that key verbatim would have replaced
+one sentence about an event that never happened with another.
+
+So every announcement carries `stood` -- did a standing network come down with it
+-- and `tellMigrated` picks the key. Producers: the rebuild's fold sets it when
+it condemns a remnant, `sweepStackedInterfaces` sets it unconditionally (it only
+ever looks at clusters that HAVE a network), and the rebuild arm and the
+conversion do not. Measured, on every conversion leg:
+
+    [BBB] single-edge: 7 balancers were built with several belts per part; this
+    Factorio cannot stack belt-connectables, so they are refused; none of them
+    had a network standing to come down, so the items on their belts are where
+    they were
+
+`mig21`'s fixtures still get the ground clause, unmoved. The suite asserts the
+choice as well as the count: a summary carrying "on the ground beside them" fails
+the `mig` legs by name.
+
+**And the README was already promising the fixed behaviour.** *"each affected
+force gets one chat message naming how many balancers need rebuilding with a
+clickable map ping per balancer"* was written for the design and was false in
+five of the six conversion shapes for as long as the defect stood. It needed no
+edit; the fix is what made it true.
+
+### The 2.0 grandfather arm, and the one thing the fold had to learn
+
+**On 2.0 a converted Belt Balancer save takes the GRANDFATHER path, and that is a
+decision rather than a fall-through.** A player who uninstalls Belt Balancer
+there is exactly the base-must-survive case grandfathering exists for: the
+incumbent's idiom is two belts on every part, so without the flip the
+default-false setting refuses every balancer on the load that adopts them -- the
+mod breaking a base at the moment it takes responsibility for it.
+`GrandfatherNeeded` takes a COUNT and carries no provenance, so it needed no
+change; what it needed was to be asked, and `settleEdgeMode` asks it before it
+reaches either migration sentence.
+
+**What the conversion origin DID add is the requeue, and it is asked of the fold
+rather than assumed.** Every earlier caller reached the grandfather with clusters
+the rebuild had ADOPTED: standing networks, running, where the flip is only so
+that the NEXT edit compiles. A converted cluster is the other shape -- the flush
+that is closing REFUSED it, so it has no network at all -- and the flip alone
+would leave the player told their base was kept working and looking at seven dead
+balancers. `Reconcile(marker, SettingOn, anchorBefore)` says a grandfather is a
+Single-to-Multi (or Unknown-to-Multi) transition and therefore obliges
+`ActRequeue`, which is the same obligation the flip handler's own ON arm has, so
+`requeueEveryCluster` is now shared by both. For an adopted cluster that requeue
+is a fingerprint skip; for a converted one it is the only thing that will ever
+give it a network.
+
+**Two new tests in `guest/go/edgemode`, which is the only machine in this
+repository that can execute any of it**: a table over the conversion-origin rows
+(`TestAConvertedSaveIsGrandfatheredLikeAnyOther`), and the obligation over every
+anchor a grandfather can be taken on plus the one it cannot
+(`TestGrandfatheringObligesARequeue`). **The positive is unreachable on 2.1 by
+construction** -- the marker is absent, so `GrandfatherNeeded` is false whatever
+else is true -- and what the suites pin is the NEGATIVE they already pinned: the
+`mig` legs fail on any grandfather line, any failed-write alert and any
+setting-changed line at all, and they are green. The 2.0 arm joins the
+setting-flip legs and the multi-edge regression run on the `release/2.0` branch.
+
+### What changed, measured
+
+The `mig` suite, all six conversion legs, before and after:
+
+| | before | after |
+|---|--:|--:|
+| ordinary per-piece messages, per leg | **7** | **0** |
+| migration summaries, `added` | 1 | **1** |
+| migration summaries, `later` / `bb3` / `built` / `readd` / `fgone` | **0** | **1** |
+| which sentence | "on the ground beside them" | **"the items on their belts are where they were"** |
+| forces told, per leg | -- | **{1: 6, 4: 1}**, adding to the 7 refused |
+
+**No other number in the suite moved**: 31 parts from 3 surfaces into 9 clusters,
+2 forces researched, the witness's copper at 48 at all four samples, `sok2` at
+2.000x and `sok4` at 3.997x, the refusal shape multiset `[2, 2, 2, 2, 2, 3, 4]`,
+0 teardowns, 0 spills, and the audit at `clusters=9 parts=31 nets=2 drift=0
+unbuilt=0 refused=7` in every conversion leg. **And no other suite moved at all**
+-- `mig21`'s two fixtures report exactly what phase 2 recorded, and `sedge`'s
+eight audit tuples and seven rig rates are the digits they have always been.
+
+### Red-proven three times, and the three catch different halves
+
+Every one is an injected defect, built, run against the whole `mig` suite, and
+reverted.
+
+| injected defect | what came out |
+|---|---|
+| **the third producer disabled** -- the fix itself, reverted | **four assertions**, and they are both directions at once: the resurrected wrong copy (*"the ORDINARY per-piece refusal message went to clusters [1, 5, 22, 24, 26, 28, 30] and a conversion must produce 0 of them"*), the summary spoken **0 times**, and the two per-force checks behind it. `added` loses its summary as well, because the conversion still arms the memo and the rebuild that follows correctly declines to re-announce a refusal it believes was delivered |
+| **`settleEdgeMode` returning immediately** -- the summary suppressed, `mig21`'s second red proof reached through this door | **exactly three**, all about the message, and **`told per cluster: 0`**: the announcement is still made and still suppresses the per-piece copy, so this catches a SILENT migration and nothing else. That is what says the first proof and this one are not redundant |
+| **`refusalDelivered` removed from both guards** | **exactly one**: *"the migration summary was spoken 2 times"*, with `told per cluster: 0` and the per-force totals unmoved. The only proof of the once-ness, and nothing else in the suite can see it |
+
+### Gates
+
+`make check` green, with the two new `edgemode` tests and with bindings and lock
+unmoved -- no member, define, prototype or setting was added, and the only
+data-stage change is one locale line. **`make test` and `make GC=leaking test`
+each ONE invocation, both green over all thirteen suites.** The `mar` slopes came
+back **identical to the byte** to phase 4's record -- 1,280 / 352 / 1,209 / 32 /
+560 / 3,736 / 2,080 B per primitive, 1,136 B of calibration at **0.0% spread**,
+linearity x1.00-x1.07, and **3.92 MiB** of linear memory -- which is the gate a
+pass that adds a list to the conversion path and a map probe to the rebuild had
+to clear, and it clears it structurally: every new slice is nil in a save that
+never had an incumbent, `refusalDelivered` is a length test on a nil map, and
+nothing was added to the event path, the neighbour gate or the flush proper.
