@@ -2,5 +2,5 @@
 # Regenerate with `fklua lock`; verify with `fklua gen-bindings --check`.
 api = "2.0.77"
 api_sha256 = "594b4ec98cc5fbee322d7380db49a388ab38b0d69c06f00ead877cffbb37f578"
-bindings_sha256 = "dd3cd8b508068adcf64a7fe895e0325c61fd76ff946e2f874430369def8e940d"
+bindings_sha256 = "6d43fc37f2b4b36569b81122b9819143ad27951bd2dae757b22d61d94ca2a40f"
 fklua = "0.1.0"
