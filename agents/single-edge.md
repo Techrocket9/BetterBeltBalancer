@@ -307,6 +307,15 @@ not a follow-up:
 
 ## Packaging: one tree, two releases
 
+**Release identity, decided 2026-08-24**: the first GA release is the
+multi-edge 2.0 mod as it stands, and the port ships as **0.2.0** on both
+engine arms — the version bump is what makes `fk_migrate(old_version)` the
+grandfather trigger's front door (with the build stamp doing the actual heap
+decline; see S2 result 6). `fklua.toml` carries 0.2.0 on trunk already, along
+with the portal description rewrite ("Belt balancers that click together into
+arbitrary shapes. Highly performant; megabase-ready (UPS hit is ~equal to
+vanilla hand-crafted belt balancers).").
+
 `factorio_version` is one value per release; the portal serves the right
 release per game version. Plan:
 
@@ -371,19 +380,66 @@ was rewritten `helpers.create_profiler`, which works. Every test mod and the
 bench harness carry that call; it goes on the port checklist. The guest calls
 no profiler.
 
-Still open, in order:
+**3. The settings surface (MEASURED 2026-08-24, all on 2.1.14).** The engine
+side supports the grandfather pass; the binding side is one new member and one
+hard gap:
 
-3. **`settings.global` written from script**: the write itself, whether it
-   raises `on_runtime_mod_setting_changed` for the writer, and whether
-   FkLua's generated bindings cover LuaSettings' dictionary read AND write
-   plus the event subscription — the grandfather pass stands on all three
-   (candidate FKLUA-GAPS items if not).
-4. `mods` availability in the settings stage (decides where the setting is
-   defined vs hidden).
-5. `fklua api check --to <2.1 pin>`: what this mod actually calls that moved
-   (`create_profiler` says the answer is not "nothing").
-6. Adoption of a VALID single-edge network across a 2.0→2.1 upgrade (the
-   happy-path half of the fixture suite).
+- `mods` IS visible in the settings stage (and so is `feature_flags`), so
+  define-on-2.0-only stands and the `hidden` fallback is not needed.
+- Reading an undefined setting returns nil with no raise — so the guest's
+  policy read needs no gate at all: nil IS the "not defined on this engine"
+  answer. **Writing an undefined key RAISES** (`LuaCustomTable doesn't
+  contain key …`), so the grandfather WRITE must be gated on the capability
+  marker — the gate is load-bearing against a raise, not merely policy.
+- The script write works, round-trips through save/load, and is **per-save**
+  (never written back to `mod-settings.dat`) — the latch cannot escape the
+  save it was taken on, which is exactly right. `settings.startup` is
+  confirmed read-only (`LuaCustomTable is read only`).
+- `on_runtime_mod_setting_changed` fires **synchronously, inside the
+  assigning statement**, with NO `player_index` for a script write, does not
+  fire in an `on_init` dispatch, does not fire on load — and **fires on a
+  same-value write too**, so the handler's heap-byte comparison is
+  load-bearing, not defensive. The synchronous dispatch is a re-entrancy
+  hazard of the `mine_entity` class: a write issued mid-flush re-enters
+  `fk_on_event` with the compile buffers live, so the write belongs after
+  `endCarry()` exactly as `revertOverLimit` does, with byte-before-setting
+  making the re-entrant handler a no-op.
+- **Bindings**: the event is fully generated (id constant, reader, PlayerIndex
+  mask); the READ costs one new bound member (`LuaSettings.global` as the
+  handle-returning GETH form, then the already-bound `LuaCustomTable` index —
+  the `prototypes.entity` idiom from legacy.go). **The WRITE is inexpressible
+  — FKLUA-GAPS.md item 23**: the runtime API declares no write side on
+  `LuaCustomTable`'s index operator (prose only) and the ABI has no
+  index-assign member kind. Upstream ask filed; the shippable fallback if it
+  does not land is the latch living in the heap byte with the setting as
+  input only (effective = marker AND (setting OR grandfatheredByte); any
+  setting-changed event clears the byte and hands control to the setting) —
+  works, but the settings UI shows false on a grandfathered save, so the
+  warning copy must explain it.
+
+4. **Answered with 3**: settings-stage `mods` is available.
+
+5. **DONE — the api-pin recon**: exactly 2 of 2.1's 202 breaking changes touch
+   this guest and both are additive-at-the-end and unreadable by construction
+   (the ABI marshals by field name Lua-side); zero removed fields across all
+   22 subscribed events; the 2.0.77 pin is safe for the implementation work,
+   and the trial re-pin branch (`api-pin-2.1`) is green and parked. FkLua
+   already carries the 2.1.14 API descriptions committed. The only Lua-side
+   breakage in the repo was `game.create_profiler` (12 sites), fixed on
+   master with the version-agnostic `helpers.create_profiler`.
+
+6. **DONE — adoption happy path**: a single-edge world built on 2.1.14 and
+   loaded by a build-stamp-bumped mod reports `2 networks adopted, 0 rebuilt`
+   with `compiles=0 builds=0 teardowns=0 creates=0` and delivery identical to
+   the item across all arms (rig1 1310, rig2 1306/1306 against ctrl 1294),
+   audit `drift=0 unbuilt=0`. **One correction to the design's premise: a
+   VERSION bump alone does not decline the guest heap — the BUILD STAMP
+   does.** A real release moves both by construction, but any fixture-suite
+   leg that bumps only `info.json` silently tests nothing (the heap adopts
+   and `rebuildFromWorld` never runs); `test/run.sh`'s `bump_build` moves
+   both, and the migration suite must too. The grandfather trigger is
+   therefore honestly "`fk_migrate`, which fires on a build-stamp change",
+   not "a version bump".
 
 ## Open decisions, with recommendations
 

@@ -1,10 +1,10 @@
 # What this mod is. These become info.json.
 [mod]
 name = "better-belt-balancer"
-version = "0.1.0"
+version = "0.2.0"
 title = "Better Belt Balancer"
 author = "Techrocket9"
-description = "Belt balancers that click together into arbitrary shapes. The brain is Go, compiled to Lua by FkLua."
+description = "Belt balancers that click together into arbitrary shapes. Highly performant; megabase-ready (UPS hit is ~equal to vanilla hand-crafted belt balancers)."
 factorio_version = "2.0"
 # The DATA STAGE. `fklua mod` generates the control stage and rm -rf's its
 # output directory first, so nothing hand-written can live there; this key is
