@@ -15,6 +15,15 @@ same save under the same conditions, measured over the SAME window (t=540 to
 t=1500). Every rig below was disturbed in some specific way before that window
 opens; what is being asserted is that it came back.
 
+Every rig is built to Factorio 2.1's rule, one belt per balancer part, so a
+2-in/2-out rig is FOUR parts: a west column carrying the row's input and an east
+column carrying its output. Not one lifecycle claim moved with the geometry --
+every rate, every spread and every "exactly zero" below is the number it has
+always been -- and what did move is a part count. The rule's own refusal is
+asserted here only as a NEGATIVE: this suite drives twelve lifecycle paths and
+600 ticks of churn, and every edge list any of them produces has to be one the
+mod can build.
+
     python3 test/assert-m3.py create.log run.log
 """
 
@@ -34,8 +43,13 @@ RECOVERED = re.compile(r"\[BBB-M3\] stress recovered=(\d+)")
 RENDERS = re.compile(r"\[BBB-M3\] t=\d+ renders=(\d+) visible_interfaces=(\d+)")
 
 AUDIT = re.compile(
-    r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) unbuilt=(\d+)"
+    r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) unbuilt=(\d+) "
+    r"refused=(\d+)"
 )
+# The one-belt-per-part refusal. It must never fire in this suite: see
+# SEDGE_REFUSED below.
+SEDGEREFUSED = re.compile(
+    r"\[BBB\] alert: cluster (\d+) has (\d+) parts? carrying more than one belt")
 STATE = re.compile(r"\[BBB\] state clusters=(\d+) parts=(\d+) sizes=([\d,]+)")
 COMPILED = re.compile(r"\[BBB\] compiled cluster (\d+) (\d+)->(\d+)")
 RECONCILED = re.compile(r"\[BBB\] (area|brush) clone: reconciled surface (\d+) box ")
@@ -46,6 +60,35 @@ HIDDEN_BACK = re.compile(r"\[BBB\] hidden surface recreated; (\d+) clusters rebu
 FROM_WORLD = re.compile(r"\[BBB\] rebuilt from world: (\d+) surfaces, (\d+) parts, (\d+) clusters")
 
 T0, T1 = 540, 1500
+
+# THE WORLD THE FINAL AUDIT MUST FIND, written down here rather than read off the
+# guest's own report. `(clusters, parts, networks)`:
+#
+#   bbb-m3-a  live 8, clone 4, died 3 (one part killed), bdie 4, noev 4, swap 4,
+#             forceA 4, forceB 4, bp 4, paste 4, ghost 4, bots 4
+#             = 12 clusters over 51 parts
+#   bbb-m3-b  the area clone's 4 and the brush clone's 4 = 2 clusters, 8 parts
+#   bbb-m3-s  nothing: the stress phase mines every part it built
+#   bbb-m3-doomed  deleted at tick 420
+#
+# `nets == clusters` IS THE HALF `unbuilt` CANNOT MAKE. A cluster with inputs and
+# no outputs is a legitimate half-built state and is never counted unbuilt, so
+# `unbuilt=0` is satisfied by a world in which a rig quietly lost its network --
+# which is exactly what a mis-classified edge, or a refusal nobody expected,
+# would leave behind. Every cluster in this save has both an input and an output
+# by construction, so every one of them must HAVE a network.
+FINAL_WORLD = (14, 59, 14)
+
+# The cluster sizes at the end of `--create`, as an exact multiset: thirteen
+# four-part rigs (clone, died, bdie, noev, swap, forceA, forceB, bp, the doomed
+# surface's rig and the four stress rigs) and `live`'s eight.
+#
+# EXACT RATHER THAN A PREDICATE, because the predicate this replaces --
+# "one 4 and the rest 2" -- cannot be written under the one-belt rule: `live` is
+# legitimately eight parts, so "no cluster of eight" is no longer available as
+# the statement that forceA and forceB did not fuse. A fusion moves the multiset
+# (twelve 4s and two 8s), and so does any other rig gaining or losing a part.
+CREATE_SIZES = sorted([4] * 13 + [8])
 
 # rig -> (live outputs, what the total should be in units of one saturated belt,
 #         allowed shortfall, allowed excess, allowed spread) -- all fractions.
@@ -145,21 +188,21 @@ def main():
         need(ours == ["bbb-balancer-part"],
              "a blueprint over a compiled balancer captured %s; the hidden "
              "prototypes must never enter one" % ours)
-        need(names.count("bbb-balancer-part") == 2,
-             "the blueprint captured %d parts, expected 2"
-             % names.count("bbb-balancer-part"))
+        need(names.count("bbb-balancer-part") == 4,
+             "the blueprint captured %d parts, expected 4 (two rows of two "
+             "under the one-belt rule)" % names.count("bbb-balancer-part"))
         need(any(n.endswith("transport-belt") for n in names),
              "the blueprint captured no belts -- was it taken of nothing?")
         print("  blueprint captured %d entities, and of ours only "
               "bbb-balancer-part" % len(names))
 
     ghosts = {m.group(1): int(m.group(2)) for m in all_of(GHOSTS, run)}
-    need(ghosts.get("placed") == 2, "expected 2 ghosts, got %s" % ghosts.get("placed"))
-    need(ghosts.get("revived") == 2, "expected 2 revives, got %s" % ghosts.get("revived"))
+    need(ghosts.get("placed") == 4, "expected 4 ghosts, got %s" % ghosts.get("placed"))
+    need(ghosts.get("revived") == 4, "expected 4 revives, got %s" % ghosts.get("revived"))
 
     m = first(BOTS, run)
-    need(m is not None and int(m.group(1)) == 2,
-         "construction robots built %s parts, expected 2" % (m and m.group(1)))
+    need(m is not None and int(m.group(1)) == 4,
+         "construction robots built %s parts, expected 4" % (m and m.group(1)))
 
     # ------------------------------------------------- compiles under a paste
     # The guest batches (`fk.defer`): every event in a tick updates the registry
@@ -193,18 +236,17 @@ def main():
     m = first(PASTED, run)
     need(m is not None and int(m.group(1)) == int(m.group(2)),
          "the paste placed %s of %s entities" % (m and m.group(1), m and m.group(2)))
-    need(registered == 2,
+    need(registered == 4,
          "the paste registered %d parts inside the tick it happened in, expected "
-         "2; the registry update is the half that cannot be deferred" % registered)
+         "4; the registry update is the half that cannot be deferred" % registered)
     need(in_tick == 0,
          "pasting a 2-part balancer built %d networks INSIDE the paste tick; the "
          "compile is supposed to be deferred to the next tick" % in_tick)
     need(by_flush == 1,
-         "the deferred flush after the paste built %d networks; a 12-entity "
-         "paste makes exactly one cluster and must cost exactly one build"
-         % by_flush)
+         "the deferred flush after the paste built %d networks; the paste makes "
+         "exactly one cluster and must cost exactly one build" % by_flush)
     if m:
-        print("  blueprint paste: %s entities in one tick -> 2 parts registered, "
+        print("  blueprint paste: %s entities in one tick -> 4 parts registered, "
               "0 builds in the tick, %d build by the flush on the next"
               % (m.group(2), by_flush))
 
@@ -214,7 +256,7 @@ def main():
         got = clones.get(kind)
         need(got is not None, "no clone-%s result" % kind)
         if got:
-            need(got[0] == 2, "clone-%s put %d parts on the destination, expected 2"
+            need(got[0] == 4, "clone-%s put %d parts on the destination, expected 4"
                  % (kind, got[0]))
             need(got[1] == 0, "clone-%s leaked %d hidden network entities onto the "
                  "destination surface" % (kind, got[1]))
@@ -229,8 +271,8 @@ def main():
 
     # ---------------------------------------------------------------- surfaces
     m = first(DROPPED, run)
-    need(m is not None and int(m.group(2)) == 2 and int(m.group(3)) == 1,
-         "deleting a surface did not unregister its 2 parts in 1 cluster (got %r)"
+    need(m is not None and int(m.group(2)) == 4 and int(m.group(3)) == 1,
+         "deleting a surface did not unregister its 4 parts in 1 cluster (got %r)"
          % (m.groups() if m else None,))
     need(first(HIDDEN_ALERT, run) is not None,
          "deleting the HIDDEN surface did not produce a loud alert")
@@ -255,15 +297,51 @@ def main():
         need(int(audits[0].group(4)) >= 1,
              "the first audit found no drift, but a belt had just been turned "
              "around with no event at all -- re-validation is not seeing the world")
-        need(int(audits[1].group(4)) == 0,
-             "the final audit found %s clusters whose stored fingerprint does not "
-             "match a from-scratch classification of the world" % audits[1].group(4))
-        need(int(audits[1].group(5)) == 0,
-             "the final audit found %s clusters with belts on both sides and no "
-             "network" % audits[1].group(5))
-        print("  audit: drift=%s after a silent rotation; drift=0 unbuilt=0 after "
-              "600 ticks of churn (%s clusters, %s parts)"
-              % (audits[0].group(4), audits[1].group(1), audits[1].group(2)))
+        final = tuple(int(g) for g in audits[1].groups())
+        need(final[3] == 0,
+             "the final audit found %d clusters whose stored fingerprint does not "
+             "match a from-scratch classification of the world" % final[3])
+        need(final[4] == 0,
+             "the final audit found %d clusters with belts on both sides and no "
+             "network" % final[4])
+        # THE WORLD, against a constant rather than against the guest's own idea
+        # of it. `unbuilt=0` alone is weak evidence: a cluster with inputs and no
+        # outputs is a legitimate half-built state and is never counted, so a rig
+        # that quietly lost its network satisfies it. Every cluster in this save
+        # has an input and an output, so `nets` must equal `clusters` and both
+        # must be the number the rigs build.
+        need(final[:3] == FINAL_WORLD,
+             "the final audit found a world of (clusters=%d, parts=%d, nets=%d) "
+             "and the rigs leave (%d, %d, %d): %s"
+             % (final[:3] + FINAL_WORLD +
+                ("a network short of a cluster is a rig that stopped balancing "
+                 "and said nothing"
+                 if final[2] != final[0] else
+                 "the churn did not put the world back as it found it",)))
+        need(final[5] == 0,
+             "the final audit reports refused=%d: a cluster in this suite asked "
+             "for more than the mod can build" % final[5])
+        print("  audit: drift=%s after a silent rotation; drift=0 unbuilt=0 "
+              "refused=0 after 600 ticks of churn, over a world of %d clusters, "
+              "%d parts and %d networks"
+              % ((audits[0].group(4),) + final[:3]))
+
+    # AND NOT ONE ONE-BELT-PER-PART REFUSAL, ANYWHERE. This is a decision about
+    # the churn as much as an assertion about the rigs: the six randomised edits
+    # are aimed at a row's own single input, its own single output and an
+    # EDGELESS part below the column, so no tile in this save can ever be asked
+    # for a second belt. A refusal here would make the compile, build and
+    # teardown counters above a function of the RULE rather than of the lifecycle
+    # path under test, and would leave a cluster standing refused at the final
+    # audit. The rule's three trigger shapes are the `sedge` suite's subject.
+    sedge = all_of(SEDGEREFUSED, run) + all_of(SEDGEREFUSED, create)
+    need(not sedge,
+         "%d cluster(s) were refused for the one-belt-per-part rule: %r. Every "
+         "rig and every churn edit in this suite is laid so that no tile ever "
+         "carries two belts"
+         % (len(sedge), [m.group(0).strip()[:70] for m in sedge[:3]]))
+    print("  one-belt-per-part refusals over the whole run: 0, as every rig and "
+          "every churn edit is laid to avoid one")
 
     # ------------------------------------------------------------------ forces
     # The last registry state of the build phase. Two forces built against each
@@ -271,10 +349,12 @@ def main():
     states = all_of(STATE, create)
     need(bool(states), "no registry state was ever logged")
     if states:
-        sizes = [int(v) for v in states[-1].group(3).split(",")]
-        need(sizes.count(4) == 1 and set(sizes) == {2, 4},
-             "final cluster sizes are %s; two forces' parts touching must not "
-             "merge (expected one 4 and the rest 2)" % sizes)
+        sizes = sorted(int(v) for v in states[-1].group(3).split(","))
+        need(sizes == CREATE_SIZES,
+             "cluster sizes at the end of --create are %s, expected %s. Two "
+             "forces' parts touching must not merge -- a fusion reads as one "
+             "fewer four and one more eight -- and nothing else may have gained "
+             "or lost a part either" % (sizes, CREATE_SIZES))
         print("  forces: %d clusters, sizes %s -- the two forces did not merge"
               % (len(sizes), sizes))
 

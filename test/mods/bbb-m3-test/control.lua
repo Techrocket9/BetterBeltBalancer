@@ -8,15 +8,51 @@
 -- -- what a blueprint captured, how many items are on a surface -- the numbers
 -- are logged raw under [BBB-M3] and judged there too.
 --
+-- EVERY RIG HERE IS BUILT TO FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART.
+-- Every edge of a cluster is an interface linked belt standing on the cluster's
+-- own tile, so a part carrying an input on its west side and an output on its
+-- east carried TWO belt-connectables on one tile, which 2.1's collision
+-- validator forbids. See agents/single-edge.md and guest/go/sedge.go.
+--
+-- What that costs this suite is GEOMETRY AND NOTHING ELSE. Every column of parts
+-- becomes TWO columns -- a west part carrying the row's input and an east part
+-- carrying its output -- so a 2-in/2-out rig is four parts and `live` is eight.
+-- The lifecycle path each rig exists to drive is untouched; what moved is where
+-- the belts stand. Per row:
+--
+--   x=-6 source chest   -5 loader   -4..-1 belts   0 WEST PART   1 EAST PART
+--   x=2..4 belts        5 sink loader              6 chest
+--
+-- TWO PLACES NEEDED MORE THAN A RE-LAY, and both are the same shape: an edit
+-- that used to land on a working balancer's free face has no free face to land
+-- on any more. `phase_silent_notice` lays its belt DIAGONALLY from the cluster
+-- instead -- inside the two-tile neighbour gate, so the cluster is re-classified,
+-- and adjacent to nothing, so no tile gains a second belt. `died` kills the EAST
+-- part of the second row rather than the west one, which is what keeps that
+-- row's output orphaned and exactly frozen.
+--
+-- AND THE STRESS CHURN AVOIDS THE REFUSAL RATHER THAN EMBRACING IT. Its six
+-- randomised edits are aimed so that no tile can ever carry two belts: the two
+-- belt edits are the row's own single input and its own single output, and the
+-- part edit adds and removes an EDGELESS part below the west column. That is a
+-- decision and assert-m3.py asserts the negative -- zero one-belt-per-part
+-- refusals over the whole run. This suite's subject is the twelve lifecycle
+-- paths and its sharpest assertion is `drift=0 unbuilt=0` after 600 ticks of
+-- churn; a churn that generated refusals would make its compile, build and
+-- teardown counters a function of the rule rather than of the path under test,
+-- and would leave clusters standing refused at the final audit. The refusal has
+-- its own suite (`sedge`), which drives all three ways of reaching it.
+--
 -- The rigs, one per y band on a flat scratch surface:
 --
 --   ctrl    a bare express belt, chest to chest: the throughput yardstick
---   live    4 in / 4 out, saturated, and NOTHING is ever done to it. It is the
---           witness: every phase below happens around it, including deleting
---           the surface its hidden network lives on, and it has to still be
---           delivering four belts at the end
---   clone   2 in / 2 out; the source of clone_area and clone_brush
---   died    2 in / 2 out; a PART is killed with die() while the network is full
+--   live    4 in / 4 out over EIGHT parts, saturated, and NOTHING is ever done
+--           to it. It is the witness: every phase below happens around it,
+--           including deleting the surface its hidden network lives on, and it
+--           has to still be delivering four belts at the end
+--   clone   2 in / 2 out over four parts; the source of clone_area/clone_brush
+--   died    2 in / 2 out; the EAST part of the second row is killed with die()
+--           while the network is full, which orphans that row's output
 --   bdie    2 in / 2 out; an input BELT is killed with die()
 --   noev    2 in / 2 out; an input belt is destroy()ed with NO EVENT AT ALL --
 --           the incumbent's killer -- and then put back at the same tile, which
@@ -28,8 +64,8 @@
 --   forceB  force "bbb-other". They touch and must NOT become one cluster
 --   bp      2 in / 2 out; the area a blueprint is taken of
 --   paste   the same blueprint pasted as real entities, all in one tick
---   ghost   ghosts of the same parts, then revived
---   bots    a roboport with construction robots builds ghosts of two parts
+--   ghost   ghosts of the same four parts, then revived
+--   bots    a roboport with construction robots builds ghosts of four parts
 --
 -- Plus three surfaces that are not rigs: bbb-m3-b (clone destination),
 -- bbb-m3-doomed (deleted mid-run), bbb-m3-s (the stress surface, whose items
@@ -150,6 +186,11 @@ local function sink(s, x, y, force)
   return s.create_entity { name = "steel-chest", position = P(x + 1, y), force = force or "player" }
 end
 
+-- The sink loader's column, one tile east of the last output belt. Under the
+-- one-belt rule the output belts start at x=2 rather than x=1, because x=1 is
+-- the east part.
+local SINKX = 5
+
 local function chest_count(c)
   if not (c and c.valid) then return -1 end
   local total = 0
@@ -162,20 +203,24 @@ end
 --------------------------------------------------------------------------------
 -- rigs
 --
---   x=-6 source chest  -5 loader  -4..-1 belts  0 PART  1..3 belts
---   x=4 sink loader    5 chest
+--   x=-6 source chest  -5 loader  -4..-1 belts  0 WEST PART  1 EAST PART
+--   x=2..4 belts       5 sink loader            6 chest
+--
+-- `rows` is the number of ROWS; the part count is twice it, because one tile may
+-- carry only one belt and a row's input and output cannot stand against the same
+-- one.
 --------------------------------------------------------------------------------
 
 local RIGS = {
   { name = "ctrl" },
-  { name = "live",   parts = 4, ins = 4, outs = 4 },
-  { name = "clone",  parts = 2, ins = 2, outs = 2 },
-  { name = "died",   parts = 2, ins = 2, outs = 2 },
-  { name = "bdie",   parts = 2, ins = 2, outs = 2 },
-  { name = "noev",   parts = 2, ins = 2, outs = 2 },
-  { name = "swap",   parts = 2, ins = 2, outs = 2 },
-  { name = "forceA", parts = 2, ins = 2, outs = 2 },
-  { name = "bp",     parts = 2, ins = 2, outs = 2 },
+  { name = "live",   rows = 4, ins = 4, outs = 4 },
+  { name = "clone",  rows = 2, ins = 2, outs = 2 },
+  { name = "died",   rows = 2, ins = 2, outs = 2 },
+  { name = "bdie",   rows = 2, ins = 2, outs = 2 },
+  { name = "noev",   rows = 2, ins = 2, outs = 2 },
+  { name = "swap",   rows = 2, ins = 2, outs = 2 },
+  { name = "forceA", rows = 2, ins = 2, outs = 2 },
+  { name = "bp",     rows = 2, ins = 2, outs = 2 },
   { name = "paste",  outs = 2 },
   { name = "ghost",  outs = 2 },
   { name = "bots",   outs = 2 },
@@ -187,16 +232,22 @@ local function rigbase(name)
   end
 end
 
-local function build_rig(s, base, parts, ins, outs, force, finite)
+local function build_rig(s, base, rows, ins, outs, force, finite)
   local r = { surface = s.name, base = base, outs = outs, out = {} }
-  for i = 0, parts - 1 do put(s, PART, 0, base + i, { force = force }) end
+  -- TWO PER ROW: the west one carries the row's input and the east one its
+  -- output. Parts first, belts after, so the belt-adjacency trigger is on the
+  -- critical path of every rig.
+  for i = 0, rows - 1 do
+    put(s, PART, 0, base + i, { force = force })
+    put(s, PART, 1, base + i, { force = force })
+  end
   for i = 0, ins - 1 do
     source(s, -6, base + i, force, finite)
     for x = -4, -1 do put(s, BELT, x, base + i, { direction = E, force = force }) end
   end
   for i = 0, outs - 1 do
-    for x = 1, 3 do put(s, BELT, x, base + i, { direction = E, force = force }) end
-    r.out[i + 1] = sink(s, 4, base + i, force)
+    for x = 2, 4 do put(s, BELT, x, base + i, { direction = E, force = force }) end
+    r.out[i + 1] = sink(s, SINKX, base + i, force)
   end
   return r
 end
@@ -210,14 +261,14 @@ local function feed_and_drain(name, rows, belts)
     source(s, -6, r.base + i)
     if belts then
       for x = -4, -1 do put(s, BELT, x, r.base + i, { direction = E }) end
-      for x = 1, 3 do put(s, BELT, x, r.base + i, { direction = E }) end
+      for x = 2, 4 do put(s, BELT, x, r.base + i, { direction = E }) end
     else
-      -- The paste brought its own belts from x=-2 to x=3 (create_blueprint
-      -- takes every entity whose box INTERSECTS the area, so the belt one tile
-      -- outside it came too); only the run-up from the loader is missing.
+      -- The paste brought its own belts from x=-2 to x=4 (create_blueprint takes
+      -- every entity whose box INTERSECTS the area, so the belt one tile outside
+      -- each end came too); only the run-up from the loader is missing.
       for x = -4, -3 do put(s, BELT, x, r.base + i, { direction = E }) end
     end
-    r.out[i + 1] = sink(s, 4, r.base + i)
+    r.out[i + 1] = sink(s, SINKX, r.base + i)
   end
 end
 
@@ -301,10 +352,12 @@ local function phase_ghost_revive()
   local base = rigbase("ghost")
   local ghosts = {}
   for i = 0, 1 do
-    ghosts[#ghosts + 1] = s.create_entity {
-      name = "entity-ghost", inner_name = PART, position = P(0, base + i),
-      force = "player", raise_built = true,
-    }
+    for x = 0, 1 do
+      ghosts[#ghosts + 1] = s.create_entity {
+        name = "entity-ghost", inner_name = PART, position = P(x, base + i),
+        force = "player", raise_built = true,
+      }
+    end
   end
   log(string.format("[BBB-M3] ghosts placed=%d", #ghosts))
   local revived = 0
@@ -372,10 +425,12 @@ local function phase_bots_start()
   chest.get_inventory(defines.inventory.chest).insert { name = PART, count = 8 }
   storage.port = port
   for i = 0, 1 do
-    s.create_entity {
-      name = "entity-ghost", inner_name = PART, position = P(0, base + i),
-      force = "player", raise_built = true,
-    }
+    for x = 0, 1 do
+      s.create_entity {
+        name = "entity-ghost", inner_name = PART, position = P(x, base + i),
+        force = "player", raise_built = true,
+      }
+    end
   end
 end
 
@@ -384,7 +439,7 @@ local function phase_bots_check()
   local s = game.surfaces["bbb-m3-a"]
   local base = rigbase("bots")
   local n = s.count_entities_filtered {
-    area = { { -1, base }, { 1, base + 2 } }, name = PART,
+    area = { { -1, base }, { 2, base + 2 } }, name = PART,
   }
   log(string.format("[BBB-M3] bots built=%d", n))
   if n > 0 then feed_and_drain("bots", 2, true) end
@@ -419,7 +474,7 @@ local function phase_clone_brush()
   local a, b = game.surfaces["bbb-m3-a"], game.surfaces["bbb-m3-b"]
   local base = rigbase("clone")
   local positions = {}
-  for x = -7, 6 do
+  for x = -7, 7 do
     for y = base, base + 1 do positions[#positions + 1] = { x = x, y = y } end
   end
   a.clone_brush {
@@ -501,11 +556,22 @@ local function phase_silent_destroy()
   log("[BBB-M3] noev: belt gone, no event raised")
 end
 
+-- The placement is DIAGONAL from the nearest part and that is the whole of what
+-- the one-belt rule changed here. It used to be a south-facing belt on the top
+-- west part's north face, which was an extra input -- and under the rule that
+-- part already carries its own input on its west side, so the same belt would
+-- now be REFUSED and this phase would measure a refusal instead of a
+-- re-classification. A belt at (-1, base-1) is inside the two-tile neighbour
+-- gate, so the cluster is queued and re-derived from the world; it is
+-- orthogonally adjacent to no part at all, so no tile gains a second belt. The
+-- fingerprint moves anyway, because the belt phase 11 destroyed silently is
+-- missing from the classification this placement provokes -- which is the thing
+-- under test.
 local function phase_silent_notice()
-  mark(12, "an unrelated placement next to the same cluster")
+  mark(12, "an unrelated placement inside the cluster's neighbour gate")
   local s = game.surfaces["bbb-m3-a"]
-  put(s, BELT, 0, rigbase("noev") - 1, { direction = S })
-  log("[BBB-M3] noev: unrelated edge added, cluster re-classified")
+  put(s, BELT, -1, rigbase("noev") - 1, { direction = E })
+  log("[BBB-M3] noev: unrelated placement made, cluster re-classified")
 end
 
 local function phase_silent_recover()
@@ -542,7 +608,14 @@ local function phase_part_died()
   local base = rigbase("died")
   local box = { { -20, base - 6 }, { 20, base + 10 } }
   local before = count_everywhere(s, box)
-  at(s, 0, base + 1, { name = PART }).die()
+  -- THE EAST PART OF THE SECOND ROW, not the west one. Under the one-belt rule
+  -- a row's output stands against its east part, so killing that part is what
+  -- takes the row's OUTPUT off the machine and leaves its chest orphaned -- the
+  -- property this rig has always been about. Killing the west part would take an
+  -- INPUT off instead and leave both outputs live at half a belt each, which is
+  -- a different measurement. Three parts survive and stay one cluster: the row
+  -- above is intact and the east part below it is still attached to it.
+  at(s, 1, base + 1, { name = PART }).die()
   audit_marker(1)
   log(string.format("[BBB-M3] died: part killed, items %d -> %d",
     before, count_everywhere(s, box)))
@@ -574,6 +647,12 @@ local function phase_stress_start()
   log(string.format("[BBB-M3] stress inserted=%d", #STRESS_ROWS * 2 * STRESS_STOCK))
 end
 
+-- EVERY ONE OF THE SIX IS AIMED SO THAT NO TILE CAN CARRY TWO BELTS. The two
+-- belt edits are the row's own single input (west of the west part) and its own
+-- single output (east of the east part), so a tile that gains a belt had none;
+-- the part edit adds and removes an EDGELESS part below the west column, whose
+-- three free faces are bare ground. See the header for why this churn avoids the
+-- one-belt-per-part refusal rather than embracing it.
 local function stress_step()
   local s = game.surfaces["bbb-m3-s"]
   local row = STRESS_ROWS[rnd(#STRESS_ROWS)]
@@ -586,11 +665,11 @@ local function stress_step()
       put_soft(s, BELT, -1, row, { direction = E })
     end
   elseif action == 3 then
-    local b = at(s, 1, row + 1, { type = "transport-belt" })
+    local b = at(s, 2, row + 1, { type = "transport-belt" })
     if b then b.destroy { raise_destroy = true } end
   elseif action == 4 then
-    if not at(s, 1, row + 1, { type = "transport-belt" }) then
-      put_soft(s, BELT, 1, row + 1, { direction = E })
+    if not at(s, 2, row + 1, { type = "transport-belt" }) then
+      put_soft(s, BELT, 2, row + 1, { direction = E })
     end
   elseif action == 5 then
     if not at(s, 0, row + 2, { name = PART }) then put_soft(s, PART, 0, row + 2) end
@@ -699,10 +778,10 @@ script.on_init(function()
     local base = (i - 1) * PITCH
     if cfg.name == "ctrl" then
       source(a, -6, base)
-      for x = -4, 3 do put(a, BELT, x, base, { direction = E }) end
-      storage.rigs.ctrl = { base = base, outs = 1, out = { sink(a, 4, base) } }
-    elseif cfg.parts then
-      storage.rigs[cfg.name] = build_rig(a, base, cfg.parts, cfg.ins, cfg.outs, "player")
+      for x = -4, 4 do put(a, BELT, x, base, { direction = E }) end
+      storage.rigs.ctrl = { base = base, outs = 1, out = { sink(a, SINKX, base) } }
+    elseif cfg.rows then
+      storage.rigs[cfg.name] = build_rig(a, base, cfg.rows, cfg.ins, cfg.outs, "player")
     else
       storage.rigs[cfg.name] = { base = base, outs = cfg.outs, out = {} }
     end
@@ -711,13 +790,16 @@ script.on_init(function()
   -- The second force, directly below forceA's parts so the two touch. They must
   -- not merge, and each must get its own network out of its own belts.
   local fb = rigbase("forceA") + 2
-  for i = 0, 1 do put(a, PART, 0, fb + i, { force = OTHER_FORCE }) end
+  for i = 0, 1 do
+    put(a, PART, 0, fb + i, { force = OTHER_FORCE })
+    put(a, PART, 1, fb + i, { force = OTHER_FORCE })
+  end
   storage.rigs.forceB = { base = fb, outs = 2, out = {} }
   for i = 0, 1 do
     source(a, -6, fb + i, OTHER_FORCE)
     for x = -4, -1 do put(a, BELT, x, fb + i, { direction = E, force = OTHER_FORCE }) end
-    for x = 1, 3 do put(a, BELT, x, fb + i, { direction = E, force = OTHER_FORCE }) end
-    storage.rigs.forceB.out[i + 1] = sink(a, 4, fb + i, OTHER_FORCE)
+    for x = 2, 4 do put(a, BELT, x, fb + i, { direction = E, force = OTHER_FORCE }) end
+    storage.rigs.forceB.out[i + 1] = sink(a, SINKX, fb + i, OTHER_FORCE)
   end
 
   -- A rig on the surface that gets deleted.
@@ -725,12 +807,15 @@ script.on_init(function()
 
   -- The stress rigs: finite sources, so the items can be counted.
   for _, row in ipairs(STRESS_ROWS) do
-    for i = 0, 1 do put(stress, PART, 0, row + i) end
+    for i = 0, 1 do
+      put(stress, PART, 0, row + i)
+      put(stress, PART, 1, row + i)
+    end
     for i = 0, 1 do
       source(stress, -6, row + i, "player", STRESS_STOCK)
       for x = -4, -1 do put(stress, BELT, x, row + i, { direction = E }) end
-      for x = 1, 3 do put(stress, BELT, x, row + i, { direction = E }) end
-      sink(stress, 4, row + i)
+      for x = 2, 4 do put(stress, BELT, x, row + i, { direction = E }) end
+      sink(stress, SINKX, row + i)
     end
   end
 

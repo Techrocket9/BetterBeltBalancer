@@ -40,6 +40,19 @@ reach it: both halves were demolished before anything discovered that what they
 became could not be built. The BRDG section carries the unfixed guest's numbers
 for the same reason.
 
+Every rig is built to Factorio 2.1's rule, one belt per balancer part, and three
+of them are a redesign rather than a re-lay because the EDIT they take is what
+the rule changed. `aout` and `ain` carry a spare row of parts holding nothing,
+and `bmin` an attached edgeless fifth part, because a belt laid on a working
+balancer has no free face to land on any more; `lim` is sixty-four belts over
+sixty-six parts with a spare part of its own; `brdg`'s gap tile is flanked by ONE
+belt rather than two, so the merge reaches the PORT limit rather than the
+one-belt bound; and `frepa`'s belt line ENDS on the tile the part is dropped
+onto. THE ONE-BELT BOUND ITSELF IS ASSERTED HERE ONLY AS A NEGATIVE -- not one
+refusal for it over the whole run -- because every edit in this suite is meant to
+be one the mod can honour, and the three ways of reaching that refusal are the
+`sedge` suite's subject.
+
     python3 test/assert-edge.py create.log run.log
 """
 
@@ -54,7 +67,8 @@ RIG = re.compile(r"\[BBB-EDGE\] t=(\S+) rig=(\w+) out=\[([-\d ]*)\]")
 DONE = re.compile(r"\[BBB-EDGE\] done")
 
 AUDIT = re.compile(
-    r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) unbuilt=(\d+)"
+    r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) unbuilt=(\d+) "
+    r"refused=(\d+)"
 )
 COMPILED = re.compile(r"\[BBB\] compiled cluster (\d+) (\d+)->(\d+)")
 TORNDOWN = re.compile(r"\[BBB\] torn down cluster (\d+), returned (\d+) items")
@@ -83,10 +97,15 @@ BRDG = re.compile(r"\[BBB-EDGE\] brdg tag=(\S+) tick=(\d+) a=(\d+) b=(\d+)")
 # The direct evidence that the teardowns were taken off the queue rather than
 # merely regretted afterwards. Written by limit.go's spareMerge, at the top of
 # flushDead, before anything has been touched.
+# The line NAMES NO BOUND: there are two of them, and which one a merge would
+# have broken is on the `alert:` the refusal itself writes a moment later.
 SPARED = re.compile(
-    r"\[BBB\] cluster (\d+) would merge past the port limit; left (\d+) "
-    r"standing network\(s\) alone"
+    r"\[BBB\] cluster (\d+) would merge into a cluster this mod cannot build; "
+    r"left (\d+) standing network\(s\) alone"
 )
+# The one-belt-per-part refusal, which must never fire here. See SEDGE below.
+SEDGEREFUSED = re.compile(
+    r"\[BBB\] alert: cluster (\d+) has (\d+) parts? carrying more than one belt")
 OVERLIMIT = re.compile(
     r"\[BBB\] alert: cluster (\d+) would need (\d+) ports for (\d+) inputs and "
     r"(\d+) outputs, over the limit of (\d+)"
@@ -96,7 +115,15 @@ OVERLIMIT = re.compile(
 # `revertOne` returns before it mines anything. Asserted at zero for the same
 # reason the pocketed lines are -- a revert leaking onto a path that has no
 # player behind it would be the feature firing for a robot.
-HANDEDBACK = re.compile(r"\[BBB\] handed the over-limit piece at ")
+# EITHER ARM OF THE HAND-BACK, matched on the shape both of them share rather
+# than on one sentence. This is a NEGATIVE assertion -- a headless --create has
+# no players, so `revertOne` returns before it mines anything -- and an exact
+# regex over a negative is the one shape a rename in the guest can make
+# VACUOUS: the line stops matching, the assertion stops being able to fail, and
+# nothing says so. "piece at x,y" is what `handed the refused piece at 4,7 (over
+# the port limit) back to player 1` and its could-not-be-handed-back twin have
+# in common, and nothing else in this guest's vocabulary produces it.
+HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
 # The other side of the same fork: nobody built it, so the force is told instead.
 # This IS reachable headlessly -- every build in every suite is a script build --
 # and it is the only part of the feedback that is.
@@ -135,7 +162,7 @@ PROBE_WANT = [
 ]
 
 # What taking a balancer apart BY HAND must put somewhere other than back in the
-# machine. Three shrinks into ever-smaller networks, so the reinsertion runs out
+# machine. Nine shrinks into ever-smaller networks, so the reinsertion runs out
 # of room and the overflow falls through -- to the miner where there is one, and
 # to the floor here, because a headless run has no player. The bound is a FLOOR
 # rather than a ceiling: it is the assertion that the quantity the miner's pocket
@@ -153,171 +180,206 @@ PLACE_TAGS = ("init", "post-merge", "post-add-out", "flowing", "final", "brdg",
 # empty sample a failure instead of a silent success.
 PLACE_MIN = 20
 
-# The save has FIFTEEN clusters and NINETY-FIVE parts: chn 2, same 2, mrg 2+2,
-# rot 2, frcA 2, frcB 2, the three four-part recompile-under-load rigs (aout,
-# ain, shrk), ntch -- the field report's 2x2-minus-a-corner, 3 parts -- bmin,
-# the port-boundary rig, 2 parts, lim, the port-LIMIT rig, 32, and brdg, the
-# over-limit MERGE rig, two halves of 16. What every tagged audit must find, and
-# WHY -- an expected number that is merely copied from a passing run asserts
-# nothing.
+# THE SAVE HAS FIFTEEN CLUSTERS AND ONE HUNDRED AND NINETY-EIGHT PARTS, and every
+# one of the counts below is derived from the rigs rather than copied from a
+# passing run. Under the one-belt rule a row of a balancer is TWO parts -- a west
+# one carrying the row's input and an east one carrying its output -- so a
+# 2-in/2-out rig is four parts and a 4x4 is eight:
 #
-# brdg is untouched until the very last leg, so like ntch and lim it widens
-# every baseline below by a constant -- two clusters and thirty-two parts -- and
-# moves nothing else.
+#   chn   4   a dead-ended 2->2 that the churn leg grows and shrinks
+#   same  4   the same-tick and pending-flush rig
+#   mrg   4+4 two of them with a one-tile gap, bridged and un-bridged
+#   rot   4   the silently rotated edge
+#   frcA  4   two forces' balancers, touching
+#   frcB  4
+#   aout 10   a saturated 4x4 (eight parts) PLUS a fifth row carrying nothing
+#   ain  10   the same
+#   shrk  8   a saturated 4x4; its edit takes a belt away, so it needs no spare
+#   ntch  5   a C of parts around a hole, two in and two out
+#   bmin  5   a dead-ended 2->2 plus an attached EDGELESS fifth part
+#   lim  66   a 2x32 block carrying 64 input belts, an output part and a spare
+#   brdg 33+33  two of the same shape at half the size, one tile apart
 #
-# ntch is never edited: it is saturated at t=0 and still saturated at the end,
-# so it widens every baseline by exactly one cluster and three parts and moves
-# nothing else. bmin does the same with one cluster and two parts -- both of the
-# edits it takes are EDGE edits, so its part count never moves either. lim is
-# the same again with one cluster and thirty-two parts: it is a column of parts
-# carrying sixty-four input belts, so P is plan.MaxPorts exactly, and both edits
-# it takes are a single belt laid at its foot and mined off again.
+# THE SPARE PARTS ARE THE RULE SHOWING THROUGH and are not padding. `aout`,
+# `ain`, `bmin` and `lim` all exist to take a belt ON A WORKING BALANCER, and
+# under the rule a working balancer has no free face: every part that carries a
+# belt has its one belt. An attached part carrying nothing is the only place a
+# player's belt can still change a machine's port count, which is the same
+# conclusion m2's conservation rig and the interactive checklist's band B reached
+# independently.
 #
-# NONE of the recompile-under-load rigs changes a part count: every edit they
-# take is a belt added or mined beside a running balancer, so they sit at their
-# four parts through the whole run and only widen the baseline.
+# brdg, ntch, bmin and lim are never edited in a way that moves a part, so like
+# the recompile-under-load rigs they widen every baseline below by a constant and
+# move nothing else.
 #
-# tag -> (clusters, parts, drift, unbuilt)
-# `drift` is None where any value is legitimate; every other entry is exact.
-BASELINE = (15, 95)
+# tag -> (clusters, parts, nets, drift, unbuilt)
+#
+# `nets` IS ASSERTED AND `unbuilt` IS NOT ENOUGH ON ITS OWN. A cluster with
+# inputs and no outputs is a legitimate half-built state and is never counted
+# unbuilt, so `unbuilt=0` is satisfied by a save in which a rig quietly lost its
+# network -- which is exactly what a mis-classified edge or an unexpected refusal
+# leaves behind. Every cluster here has both an input and an output except where
+# a leg has deliberately taken one away, and those are the two rows below that
+# say so.
+BASELINE = (15, 198)
 EXPECT = {
-    "pre-sametick":            (15, 95, 0, 0),
+    "pre-sametick":            (15, 198, 15, 0, 0),
     # A part placed and removed inside one dispatch chain leaves nothing behind:
     # the node is allocated and freed, and the flush on the next tick is handed
     # a root whose slot is on the free list and must DROP it rather than compile
     # a cluster that no longer exists.
-    "post-sametick":           (15, 95, 0, 0),
+    "post-sametick":           (15, 198, 15, 0, 0),
     # A part placed the tick before and another placed on the tick its deferred
-    # flush lands. `same` is four parts and still one cluster.
-    "post-pending":            (15, 97, 0, 0),
-    "post-pending-undo":       (15, 95, 0, 0),
-    "pre-merge":               (15, 95, 0, 0),
+    # flush lands. Both are EDGELESS parts hanging off `same`'s west column, so
+    # the cluster gains two parts and no edges at all.
+    "post-pending":            (15, 200, 15, 0, 0),
+    "post-pending-undo":       (15, 198, 15, 0, 0),
+    "pre-merge":               (15, 198, 15, 0, 0),
     # The bridge. Two SATURATED networks come down in one flush and one comes
-    # up: thirteen clusters become twelve and the mrg pair becomes one of five
+    # up: fifteen clusters become fourteen and the mrg pair becomes one of nine
     # parts.
-    "post-merge":              (14, 96, 0, 0),
+    "post-merge":              (14, 199, 14, 0, 0),
     # And the undo of that merge: the split path, still under load.
-    "post-split":              (15, 95, 0, 0),
-    "pre-rot":                 (15, 95, 0, 0),
-    # `entity.direction = …` raises nothing at all, so the audit is the only
+    "post-split":              (15, 198, 15, 0, 0),
+    "pre-rot":                 (15, 198, 15, 0, 0),
+    # `entity.direction = ...` raises nothing at all, so the audit is the only
     # thing that can find it -- and it must REPORT the drift before repairing
     # it, which is what makes this an assertion rather than a tautology.
-    "post-rot-silent":         (15, 95, 1, 0),
-    "post-rot-restored":       (15, 95, 1, 0),
+    "post-rot-silent":         (15, 198, 15, 1, 0),
+    "post-rot-restored":       (15, 198, 15, 1, 0),
     # The same edge through the event path: the recompile already happened, so
     # there is nothing left for the audit to find.
-    "post-rot-event":          (15, 95, 0, 0),
-    "post-rot-event-back":     (15, 95, 0, 0),
-    "pre-forces":              (15, 95, 0, 0),
-    # Two forces edited in one tick, alternating. Their parts touch and they
-    # must STILL be two clusters, so the cluster count does not move at all.
-    "post-forces-interleaved": (15, 97, 0, 0),
-    # And then they are one force. The two touching clusters become one, which
-    # is eleven clusters over the same thirty-three parts, and nothing drifted.
-    "post-forces-merge":       (14, 97, 0, 0),
-    # A part built on the HIDDEN surface. It must not become a cluster: still
-    # fourteen clusters of ninety-seven parts, and the guest said so.
-    "post-hidden-part":        (14, 97, 0, 0),
+    "post-rot-event":          (15, 198, 15, 0, 0),
+    "post-rot-event-back":     (15, 198, 15, 0, 0),
+    "pre-forces":              (15, 198, 15, 0, 0),
+    # Two forces edited in one tick, alternating: A WHOLE ROW EACH, because a row
+    # is two parts and one part cannot take both the new input and the new
+    # output. Their parts touch and they must STILL be two clusters, so the
+    # cluster count does not move at all and the part count goes up by four.
+    "post-forces-interleaved": (15, 202, 15, 0, 0),
+    # And then they are one force. The two touching clusters become one, and
+    # nothing drifted.
+    "post-forces-merge":       (14, 202, 14, 0, 0),
+    # A part built on the HIDDEN surface. It must not become a cluster.
+    "post-hidden-part":        (14, 202, 14, 0, 0),
     # The three recompile-under-load rigs, in order. Every one of these is an
-    # edge edit on a saturated 4x4 and none of them moves a part or a cluster.
-    "pre-add-out":             (14, 97, 0, 0),
-    "post-add-out":            (14, 97, 0, 0),
-    # The port-boundary rig's GROWING half: a third output belt laid on a
-    # saturated two-part balancer, which takes P from 2 to 4. Same shape as
-    # add-out and the same requirement -- nothing on the ground.
-    "pre-bmin":                (14, 97, 0, 0),
-    "post-bmin-add":           (14, 97, 0, 0),
-    "pre-add-in":              (14, 97, 0, 0),
-    "post-add-in":             (14, 97, 0, 0),
-    "pre-shrink":              (14, 97, 0, 0),
-    "post-shrink":             (14, 97, 0, 0),
-    # And then every part of the shrk rig is mined. The cluster DISSOLVES, which
-    # is a removal and not a recompile: ten clusters over twenty-nine parts, and
-    # the items come back to the world rather than into a network that no longer
-    # exists.
-    "post-remove":             (13, 93, 0, 0),
+    # edge edit on a saturated 4x4 and none of them moves a part or a cluster --
+    # the belt each of them adds lands on the SPARE ROW those rigs carry.
+    "pre-add-out":             (14, 202, 14, 0, 0),
+    "post-add-out":            (14, 202, 14, 0, 0),
+    # The port-boundary rig's GROWING half: a third output belt laid against the
+    # attached edgeless part, which takes P from 2 to 4. Same shape as add-out
+    # and the same requirement -- nothing on the ground.
+    "pre-bmin":                (14, 202, 14, 0, 0),
+    "post-bmin-add":           (14, 202, 14, 0, 0),
+    "pre-add-in":              (14, 202, 14, 0, 0),
+    "post-add-in":             (14, 202, 14, 0, 0),
+    "pre-shrink":              (14, 202, 14, 0, 0),
+    "post-shrink":             (14, 202, 14, 0, 0),
+    # And then every part of the shrk rig is mined -- eight of them now. The
+    # cluster DISSOLVES, which is a removal and not a recompile, and the items
+    # come back to the world rather than into a network that no longer exists.
+    "post-remove":             (13, 194, 13, 0, 0),
     # The port-boundary rig's SHRINKING half: that same third output belt mined
     # again, P back from 4 to 2. Still an edge edit, so the cluster and part
     # counts do not move -- what moves is the ground.
-    "pre-bmin-remove":         (13, 93, 0, 0),
-    "post-bmin-remove":        (13, 93, 0, 0),
+    "pre-bmin-remove":         (13, 194, 13, 0, 0),
+    "post-bmin-remove":        (13, 194, 13, 0, 0),
     # The `aout` rig taken apart ONE PART PER TICK, which is what a player does
-    # by hand. Three SHRINKS and then the dissolve: the cluster count does not
-    # move until the last part goes.
-    "pre-hand":                (13, 93, 0, 0),
-    "hand-1":                  (13, 92, 0, 0),
-    "hand-2":                  (13, 91, 0, 0),
-    "hand-3":                  (13, 90, 0, 0),
-    "hand-4":                  (12, 89, 0, 0),
-    "final":                   (12, 89, 0, 0),
+    # by hand: TEN parts, so ten steps. The spare row goes first and then the
+    # block row by row, west part then east part, so every prefix leaves a
+    # CONNECTED cluster and eight of the nine shrinks leave a machine with at
+    # least one input and one output.
+    "pre-hand":                (13, 194, 13, 0, 0),
+    "hand-1":                  (13, 193, 13, 0, 0),
+    "hand-2":                  (13, 192, 13, 0, 0),
+    "hand-3":                  (13, 191, 13, 0, 0),
+    "hand-4":                  (13, 190, 13, 0, 0),
+    "hand-5":                  (13, 189, 13, 0, 0),
+    "hand-6":                  (13, 188, 13, 0, 0),
+    "hand-7":                  (13, 187, 13, 0, 0),
+    "hand-8":                  (13, 186, 13, 0, 0),
+    # THE NINTH STEP LEAVES ONE PART, AND ONE PART CARRIES ONE BELT. So the last
+    # survivor has an input or an output and never both, which `plan.Build`
+    # reads as a legitimate half-built cluster: no network, and NOT `unbuilt`.
+    # It is the one place in this suite where `nets` is legitimately short of
+    # `clusters`, and it is a consequence of the rule rather than of the leg.
+    "hand-9":                  (13, 185, 12, 0, 0),
+    "hand-10":                 (12, 184, 12, 0, 0),
+    "final":                   (12, 184, 12, 0, 0),
     # THE PORT LIMIT. `lim` is sixty-four inputs and one output, which is
     # P = plan.MaxPorts exactly, and it has been running untouched since t=0.
-    "pre-lim":                 (12, 89, 0, 0),
-    # ... and then a sixty-fifth input belt. P would have to be 128 and the
-    # compile is REFUSED -- before the teardown, so the network is still there
-    # and `nets` still holds it. The audit therefore reports it as a cluster
-    # WITH a network (unbuilt stays 0) whose stored fingerprint no longer
-    # describes the world (drift becomes 1), which is the exact truth: the guest
-    # knows the edge list has moved and knows it cannot honour it.
+    "pre-lim":                 (12, 184, 12, 0, 0),
+    # ... and then a sixty-fifth input belt, against the SPARE PART -- the only
+    # tile of that rig with a free face, and the only way to reach the port bound
+    # rather than the one-belt one. P would have to be 128 and the compile is
+    # REFUSED, before the teardown, so the network is still there and `nets`
+    # still holds it. The audit therefore reports a cluster WITH a network
+    # (unbuilt stays 0) whose stored fingerprint no longer describes the world
+    # (drift becomes 1), which is the exact truth.
     #
     # A `drift=0 unbuilt=1` here would mean the network came down -- the defect.
-    "post-lim":                (12, 89, 1, 0),
-    "post-lim-window":         (12, 89, 1, 0),
+    "post-lim":                (12, 184, 12, 1, 0),
+    "post-lim-window":         (12, 184, 12, 1, 0),
     # The belt mined off again. The edge list is back to sixty-four, which is
     # the fingerprint the netInfo already holds, so the compile is a SKIP and
     # the drift is gone without anything having been rebuilt.
-    "post-lim-back":           (12, 89, 0, 0),
-    # THE MERGE THAT WOULD BE OVER THE LIMIT. Two working sixteen-part balancers
-    # with a one-tile gap; the gap tile already carries two input belts, so a
-    # part in it makes one cluster of 66 inputs and 2 outputs and P would have to
-    # be 128.
-    "pre-brdg":                (12, 89, 0, 0),
+    "post-lim-back":           (12, 184, 12, 0, 0),
+    # THE MERGE THAT WOULD BE OVER THE LIMIT. Two working thirty-three-part
+    # balancers with a one-tile gap; ONE input belt stands beside the gap, so a
+    # part in it makes one cluster of 65 inputs and 2 outputs and P would have to
+    # be 128. A second flanking belt would put two belts on the bridging part
+    # itself and the merge would be refused for the OTHER bound.
+    "pre-brdg":                (12, 184, 12, 0, 0),
     # Twelve clusters become eleven and the two halves become one cluster of
-    # thirty-three parts -- the registry took the part, as it takes every part.
+    # sixty-seven parts -- the registry took the part, as it takes every part.
     # What must NOT have happened is the teardown: BOTH networks are still
     # standing, keyed by roots that are not roots any more, so the audit counts
-    # them (nets stays at twelve, asserted below) and reports the cluster they
-    # now belong to as drifted -- an edge list past what this mod builds, and a
-    # guest that knows it.
+    # them -- `nets` stays at twelve while `clusters` falls to eleven -- and
+    # reports the cluster they now belong to as drifted.
     #
     # `drift=0 unbuilt=1` here is the defect: it means flushDead demolished two
     # working balancers before flushLive found out that what they became could
     # not be built. That is exactly what the unfixed guest reports, measured.
-    "post-brdg":               (11, 90, 1, 0),
+    "post-brdg":               (11, 185, 12, 1, 0),
     # ... and it STAYS that way. No second refusal, nothing torn down, nothing
     # rebuilt, and the same report every time it is asked.
-    "brdg-hold-1":             (11, 90, 1, 0),
-    "brdg-hold-2":             (11, 90, 1, 0),
-    "post-brdg-window":        (11, 90, 1, 0),
+    "brdg-hold-1":             (11, 185, 12, 1, 0),
+    "brdg-hold-2":             (11, 185, 12, 1, 0),
+    "post-brdg-window":        (11, 185, 12, 1, 0),
     # The bridging part mined off. The cluster splits back into the two it was,
     # each re-roots at its smallest node id -- which is the root it already had
     # -- and each half's fingerprint is the one its netInfo never lost, so both
     # compiles are a SKIP.
-    "post-brdg-back":          (12, 89, 0, 0),
-    "post-brdg-final":         (12, 89, 0, 0),
+    "post-brdg-back":          (12, 184, 12, 0, 0),
+    "post-brdg-final":         (12, 184, 12, 0, 0),
     # FAST REPLACE. Its two rigs are the only ones in this suite that are built
-    # MID-RUN, and that is why every number above this line is the number it was
-    # before the feature existed: nothing until here has ever seen them. Building
-    # them adds two clusters and six parts -- frepa's two and frepb's four.
-    "frep-built":              (14, 95, 0, 0),
-    "pre-frep":                (14, 95, 0, 0),
-    # A PART fast-replaced onto the belt line running past frepa. The belt is
-    # gone, the part joined the cluster, and the balancer that was two in and two
-    # out is three and three.
-    "post-frep-fwd":           (14, 96, 0, 0),
+    # MID-RUN, and that is why every number above this line is a statement about
+    # the same world it has always been about. Building them adds two clusters
+    # and eleven parts -- frepa's four and frepb's seven.
+    "frep-built":              (14, 195, 14, 0, 0),
+    "pre-frep":                (14, 195, 14, 0, 0),
+    # A PART fast-replaced onto the LAST TILE of the belt line running past
+    # frepa. The belt is gone, the part joined the cluster, and the balancer that
+    # was two in and two out is three in and two out. The line ends there because
+    # a part dropped MID-line would take the belt behind it as an input and the
+    # belt ahead as an output, which is two belts on one tile.
+    "post-frep-fwd":           (14, 196, 14, 0, 0),
     # A belt refused over an EDGE part -- one carrying an interface. Nothing
     # moves: `can_fast_replace` is false there and the rig puts back what
     # `create_entity` mined behind the engine's own check.
-    "post-frep-edge":          (14, 96, 0, 0),
-    # And a belt laid on an INTERIOR part, which is the half nothing tells the
-    # guest about. The four-part column SPLITS into two and one: fifteen clusters
-    # over ninety-five parts.
+    "post-frep-edge":          (14, 196, 14, 0, 0),
+    # And a belt laid on the middle of frepb's NECK, which is the half nothing
+    # tells the guest about. The column SPLITS into two three-part clusters, and
+    # both of them are buildable because the target's two vertical neighbours
+    # carry nothing: the new belt is the upper half's second output and the lower
+    # half's second input.
     #
-    # `(14, 96)` here is the defect, and it is what the guest without
+    # `(14, 196)` here is the defect, and it is what the guest without
     # guest/go/fastreplace.go reports -- a tile it calls a balancer part which is
     # holding somebody's belt, for the rest of the session.
-    "post-frep-rev":           (15, 95, 0, 0),
-    "frep-final":              (15, 95, 0, 0),
+    "post-frep-rev":           (15, 195, 15, 0, 0),
+    "frep-final":              (15, 195, 15, 0, 0),
 }
 
 # THE TAGS AT WHICH A REFUSED MERGE IS STANDING, and what the audit's `nets=`
@@ -488,21 +550,51 @@ def main():
     print()
 
     # ---- the one-off edges -------------------------------------------------
-    print("%-26s %9s %7s %7s %9s %8s"
-          % ("edge", "clusters", "parts", "drift", "items", "ground"))
-    for tag, (c, p, d, u) in EXPECT.items():
+    print("%-26s %9s %7s %6s %7s %9s %8s"
+          % ("edge", "clusters", "parts", "nets", "drift", "items", "ground"))
+    for tag, (c, p, n, d, u) in EXPECT.items():
         if tag not in audits:
             fail("the %s phase never ran" % tag)
         got = audits[tag]
-        print("%-26s %9d %7d %7d %9d %8d"
-              % (tag, got[0], got[1], got[3], counts[tag], ground[tag]))
+        print("%-26s %9d %7d %6d %7d %9d %8d"
+              % (tag, got[0], got[1], got[2], got[3], counts[tag], ground[tag]))
         if (got[0], got[1]) != (c, p):
             fail("%s: the guest saw %d clusters of %d parts, expected %d of %d"
                  % (tag, got[0], got[1], c, p))
+        # `nets` IS THE HALF `unbuilt` CANNOT MAKE. A cluster with inputs and no
+        # outputs is a legitimate half-built state and is never counted unbuilt,
+        # so `unbuilt=0` is satisfied by a save in which a rig quietly lost its
+        # network. Every count here is written down beside its reason.
+        if got[2] != n:
+            fail("%s: the audit counted %d standing networks over %d clusters "
+                 "and the rigs leave %d. %s"
+                 % (tag, got[2], got[0], n,
+                    "A network short of a cluster is a rig that stopped "
+                    "balancing and said nothing -- `unbuilt` cannot see it, "
+                    "because a cluster with no outputs is a legitimate "
+                    "half-built state" if got[2] < n else
+                    "More networks than the save should hold means something "
+                    "was left standing under a key nothing will reclaim"))
         if got[3] != d:
             fail("%s: drift=%d, expected %d" % (tag, got[3], d))
         if got[4] != u:
             fail("%s: unbuilt=%d, expected %d" % (tag, got[4], u))
+    print()
+
+    # AND NOT ONE ONE-BELT-PER-PART REFUSAL, ANYWHERE IN THE RUN. Every rig here
+    # is laid so that no tile ever carries two belts, and every edit is aimed at
+    # a spare part, at an edge the rig already has, or at a tile with nothing on
+    # it. This is the assertion that says so: a refusal for the other bound would
+    # mean a rig or an edit had quietly stopped being the thing it is named for,
+    # and every count above it would go on passing. The three ways of REACHING
+    # that refusal are the `sedge` suite's subject.
+    sedge = [m for m in (SEDGEREFUSED.search(l) for l in lines) if m]
+    if sedge:
+        fail("%d cluster(s) were refused for the one-belt-per-part rule: %r. No "
+             "rig in this suite may ask a part for a second belt"
+             % (len(sedge), [m.group(0).strip()[:72] for m in sedge[:3]]))
+    print("one-belt-per-part refusals over the whole run: 0, as every rig and "
+          "every edit is laid to avoid one")
     print()
 
     # ---- conservation across every one of them -----------------------------
@@ -663,7 +755,7 @@ def main():
     # is pinned is that it is a REAL quantity: a leg where every shrink happened
     # to fit would satisfy every other assertion in this suite and would say
     # nothing at all about the thing that was fixed.
-    hand_tags = ["pre-hand", "hand-1", "hand-2", "hand-3", "hand-4"]
+    hand_tags = ["pre-hand"] + ["hand-%d" % i for i in range(1, 11)]
     if any(t not in ground for t in hand_tags):
         fail("the by-hand teardown leg did not run: %s"
              % ", ".join(t for t in hand_tags if t not in ground))
@@ -671,14 +763,14 @@ def main():
     print("taking a saturated balancer apart ONE PART PER TICK:")
     print("  cumulative on the ground: %s"
           % " ".join("%s=%d" % (t, g) for t, g in zip(hand_tags, steps)))
-    shrink_overflow = ground["hand-3"] - ground["pre-hand"]
-    dissolve = ground["hand-4"] - ground["hand-3"]
-    print("  the three SHRINKS put %d items there and the dissolve %d"
+    shrink_overflow = ground["hand-9"] - ground["pre-hand"]
+    dissolve = ground["hand-10"] - ground["hand-9"]
+    print("  the nine SHRINKS put %d items there and the dissolve %d"
           % (shrink_overflow, dissolve))
     print("  (with a player, all %d go to the miner before the floor)"
           % (shrink_overflow + dissolve))
     if shrink_overflow < HAND_OVERFLOW_MIN:
-        fail("the three shrinks overflowed by %d items, under the %d floor: "
+        fail("the nine shrinks overflowed by %d items, under the %d floor: "
              "this rig was not full enough for the by-hand teardown to say "
              "anything about where a shrink's overflow goes"
              % (shrink_overflow, HAND_OVERFLOW_MIN))
@@ -864,8 +956,10 @@ def main():
     m = merged[-1]
     print("forces merged: %s -> %s, %s parts remapped, %s clusters of the "
           "surviving force re-derived" % m.groups())
-    if int(m.group(3)) != 3:
-        fail("the merge remapped %s parts, expected 3" % m.group(3))
+    # SIX, not three: the other force's rig is four parts under the one-belt rule
+    # and the interleaved leg gave it a whole row of two more.
+    if int(m.group(3)) != 6:
+        fail("the merge remapped %s parts, expected 6" % m.group(3))
     # Every cluster of the surviving force, which is the whole save less the two
     # the other force never had: the merge re-derives them all rather than only
     # the ones near it, because a belt of the source force beside a balancer of
@@ -964,18 +1058,20 @@ def main():
     #
     # Four things are asserted, and the first is the one with teeth.
     #
-    # TWO refusals happen in this suite now and they are told apart by the shape
-    # they name: `lim` is 65 inputs and 1 output, `brdg` is 66 and 2. Splitting
+    # TWO refusals happen in this suite and they are told apart by the OUTPUT
+    # count: both are 65 inputs now -- `lim` gains its sixty-fifth belt on a
+    # spare part and `brdg`'s gap tile carries one flanking belt rather than two
+    # -- so `lim` is 65 in and 1 out and `brdg` is 65 in and 2 out. Splitting
     # them here rather than counting the total is what keeps each leg's
-    # once-per-edge-state assertion sharp -- a second refusal for one edit has to
+    # once-per-edge-state assertion sharp: a second refusal for one edit has to
     # fail on that edit's own count.
     over_all = [m for m in (OVERLIMIT.search(l) for l in lines) if m]
     if len(over_all) != 2:
         fail("the guest refused %d times over the whole run, expected exactly 2 "
              "-- one for the sixty-fifth belt and one for the over-limit merge: %r"
              % (len(over_all), [m.group(0) for m in over_all]))
-    over = [m for m in over_all if m.group(3) == "65"]
-    over_brdg = [m for m in over_all if m.group(3) == "66"]
+    over = [m for m in over_all if m.group(4) == "1"]
+    over_brdg = [m for m in over_all if m.group(4) == "2"]
     told_all = [m for m in (TOLDFORCE.search(l) for l in lines) if m]
     for tag in ("pre-lim", "post-lim", "post-lim-window", "post-lim-back"):
         if tag not in ground:
@@ -1140,10 +1236,10 @@ def main():
              "every event within two tiles re-queues the merged cluster and its "
              "fingerprint can never match, so limit.go's feedback gate must fire "
              "ONCE per distinct edge state" % len(over_brdg))
-    if int(over_brdg[0].group(2)) != 128 or int(over_brdg[0].group(4)) != 2:
-        fail("the refused merge names %s ports and %s outputs, expected 128 and "
-             "2: the rig is not the shape this leg is about"
-             % (over_brdg[0].group(2), over_brdg[0].group(4)))
+    if int(over_brdg[0].group(2)) != 128 or int(over_brdg[0].group(3)) != 65:
+        fail("the refused merge names %s ports for %s inputs, expected 128 for "
+             "65: the rig is not the shape this leg is about"
+             % (over_brdg[0].group(2), over_brdg[0].group(3)))
 
     # 2. AND THE TEARDOWNS WERE TAKEN OFF THE QUEUE, which is the fix itself.
     #    The guest says how many networks it left alone; it must be BOTH, and it
@@ -1316,10 +1412,10 @@ def main():
         fail("the forward replace put %d machine items on the ground, expected "
              "exactly 1 (the belt)" % machine)
 
-    # 2. AND THE BALANCER IT BECAME BALANCES. Three in and three out over four
-    #    ports, measured as a rate over the window after the edit -- the third
-    #    output's chest has been taking a full belt from the pass line since
-    #    t=0, so a cumulative total would say nothing.
+    # 2. AND THE BALANCER IT BECAME BALANCES. Three in and TWO out over four
+    #    ports -- the line the part was dropped into ends on that tile, so it
+    #    brings an input and no output -- measured as a rate over the window
+    #    after the edit rather than as a cumulative total.
     fa, fb = windows_out.get("frep-after-open"), windows_out.get("frep-after-close")
     ba, bb = windows_out.get("frep-before-open"), windows_out.get("frep-before-close")
     for w, n in ((fa, "frep-after-open"), (fb, "frep-after-close"),
@@ -1327,17 +1423,17 @@ def main():
         if not w or "frepa" not in w or "frepb" not in w:
             fail("the fast-replace window %s did not run" % n)
     da = [y - x for x, y in zip(fa["frepa"], fb["frepa"])]
-    if len(da) != 3:
-        fail("the frepa rig has %d outputs after the edit, expected 3" % len(da))
-    mean = sum(da) / 3.0
+    if len(da) != 2:
+        fail("the frepa rig has %d outputs after the edit, expected 2" % len(da))
+    mean = sum(da) / float(len(da))
     spread = (max(da) - min(da)) / mean if mean else 1.0
-    print("  the 3->3 balancer the replace built, over the window after it:")
+    print("  the 3->2 balancer the replace built, over the window after it:")
     print("    per-output %r, spread %.2f%%" % (da, 100 * spread))
     if mean < 100:
         fail("the frepa rig delivered %.0f items per output: it stopped running "
              "after the part was dropped into the line" % mean)
     if spread > 0.02:
-        fail("the 3->3 network is %.2f%% out of balance: a part dropped into a "
+        fail("the 3->2 network is %.2f%% out of balance: a part dropped into a "
              "live belt line must produce a balancer like any other"
              % (100 * spread))
 
@@ -1362,8 +1458,8 @@ def main():
              "returned an entity where it has always returned nil")
 
     # 4. THE REVERSE, and the guest noticing it. `can_fast_replace` is true for
-    #    an interior part, the part goes, the belt takes the tile -- and the ONLY
-    #    thing that tells the guest is the belt's own build event.
+    #    the middle of frepb's NECK, the part goes, the belt takes the tile --
+    #    and the ONLY thing that tells the guest is the belt's own build event.
     rev = FREPREV.search("\n".join(lines))
     if not rev:
         fail("the reverse fast-replace leg did not report")
@@ -1426,6 +1522,12 @@ def main():
     #    belt between its own output and the belt feeding downstairs and delivers
     #    0.5. 1.5 belts of 2.0, measured at 76%: [262, 262] -> [132, 264]. What
     #    must not happen is a half that STOPS.
+    #
+    #    THE NECK IS WHAT MAKES THIS SHAPE POSSIBLE AT ALL under the one-belt
+    #    rule. The belt that splits the column becomes an edge of the part above
+    #    it AND of the part below it, so both of those must be otherwise
+    #    edgeless -- and a second column of parts beside the target would keep
+    #    the cluster connected around the belt and there would be no split.
     b_tot = [y - x for x, y in zip(ba["frepb"], bb["frepb"])]
     a_tot = [y - x for x, y in zip(fa["frepb"], fb["frepb"])]
     print("  frepb either side of the split: %r -> %r (%.0f%% of the column)"

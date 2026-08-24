@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "title": "BBB M3 lifecycle verification",
   "author": "BetterBeltBalancer",
-  "factorio_version": "2.0",
+  "factorio_version": "2.1",
   "description": "Drives every 2.0 lifecycle path that can change what the compiler compiled from -- blueprints, ghosts, robots, clones, surface deletion, rotation, silent script destruction, part death, two forces, and 600 ticks of randomised churn -- and reports what happened. Asserts nothing itself.",
   "dependencies": ["base >= 2.0.0", "better-belt-balancer"]
 }

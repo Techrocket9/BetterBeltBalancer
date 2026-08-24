@@ -133,37 +133,57 @@ local OTHER_FORCE = "bbb-other"
 
 local CHN, SAME, MRG, ROT, FRC = 0, PITCH, 2 * PITCH, 3 * PITCH, 4 * PITCH
 local DET1, DET2 = 5 * PITCH, 5 * PITCH + 15
--- The three recompile-under-load rigs. Each is a 4-part balancer, four in and
--- four out, saturated -- and each has three rows of clearance ABOVE it, because
--- the edge that is added or removed is on the NORTH side of its top part.
+-- The three recompile-under-load rigs. Each is four in and four out over EIGHT
+-- parts, saturated, plus a FIFTH ROW OF PARTS CARRYING NOTHING -- which is the
+-- one thing the one-belt rule forced on this suite. Two of the three exist to
+-- take a fifth belt while they run, and under the rule every part of a working
+-- balancer already has its belt, so a belt laid on any of them would be REFUSED
+-- rather than compiled. The spare row is where a player's belt can still change
+-- a balancer's port count, and it is the same trick m2's conservation rig and
+-- the interactive checklist's band B arrived at independently.
 local AOUT, AIN, SHRK = 6 * PITCH, 7 * PITCH, 8 * PITCH
--- The field report's own shape, in its own band because it is the only rig that
--- is two tiles wide and the only one whose outputs do not all leave eastwards.
+-- The field report's own shape, in its own band because it is the only rig with
+-- a hole in it.
 local NTCH = 9 * PITCH
--- The port-boundary rig. Two parts, dead-ended, and the only rig in the suite
--- whose edge count crosses a power of two in both directions.
+-- The port-boundary rig: a 2->2 over four parts plus an attached EDGELESS fifth,
+-- and the only rig in the suite whose edge count crosses a power of two in both
+-- directions.
 local BMIN = 10 * PITCH
 -- THE PORT LIMIT, and it is the only rig in this suite that is not about items.
--- A column of thirty-two parts carrying SIXTY-FOUR input belts -- one on each
--- side of every part -- and one output: P = next_pow2(max(64, 1)) = 64, which is
--- plan.MaxPorts exactly. One more input belt is one more than this mod builds.
--- It gets a band of its own because it is thirty-two rows tall where everything
--- else here is two to four.
-local LIM = 11 * PITCH
-local LIM_PARTS = 32
--- THE MERGE THE MOD CANNOT HONOUR. Two columns of sixteen parts, each with a
--- belt on both sides pointing inwards -- thirty-two inputs and one output apiece,
--- so P = next_pow2(32) = 32 and each half is a real network of its own -- with
--- ONE TILE between them. That tile has its own two input belts standing on it
--- from t=0, so the part that goes into it takes the merged cluster to 66 inputs
--- and 2 outputs: P = 128, twice plan.MaxPorts.
+-- A 2x32 BLOCK carrying SIXTY-FOUR input belts -- one on each part, which is the
+-- rule -- plus one part below it carrying the single output and one spare part
+-- above it carrying nothing. P = next_pow2(max(64, 1)) = 64, which is
+-- plan.MaxPorts exactly, over sixty-six parts.
 --
--- Sixteen and sixteen is the cheapest shape that reaches it. A connected cluster
--- of C parts has at most 2C+2 exterior sides, so sixty-five edges needs
--- thirty-two parts however they are arranged; and splitting them evenly is what
--- keeps each HALF at P = 32 instead of one of them being a second 64-port
--- network like `lim`.
-local BRDG = LIM + LIM_PARTS + 8
+-- THE SPARE PART IS FORCED RATHER THAN FREE. Every one of the sixty-five parts
+-- that carry a belt already has its one belt, so a sixty-fifth INPUT has nowhere
+-- legal to land: laid against any of them it would reach the one-belt-per-part
+-- bound instead, which is a different refusal in a different suite. The spare
+-- part above the block is what keeps this the PORT-limit gesture.
+local LIM = 11 * PITCH
+local LIM_ROWS = 32
+-- THE MERGE THE MOD CANNOT HONOUR. Two 2x16 BLOCKS carrying thirty-two input
+-- belts each -- one per part -- with an output part of their own, so each half
+-- is thirty-three parts at P = next_pow2(32) = 32 and a real network in its own
+-- right. ONE TILE between them, with ONE input belt standing beside that tile
+-- from t=0: the part that goes into the gap therefore brings one edge of its own
+-- and takes the merged cluster to 65 inputs and 2 outputs, which is P = 128,
+-- twice plan.MaxPorts.
+--
+-- ONE FLANKING BELT AND NOT TWO, and that is the rule rather than economy. A
+-- second belt would have to stand on the bridging part's OWN east face to be an
+-- edge of it at all, and it would then take that tile to two belts as well as
+-- taking the merged cluster to sixty-six inputs -- a shape that is illegal
+-- twice. Measured: compile() asks the port bound first and returns, so the
+-- refusal still reads as a port refusal and the one-belt break is never
+-- reported. One belt keeps the rig exactly the shape this leg names, and the
+-- input count in test/assert-edge.py is what says so.
+--
+-- Sixteen and sixteen is the cheapest shape that reaches it: under the rule a
+-- cluster of C parts has at most C edges, so sixty-five needs sixty-five parts
+-- carrying belts however they are arranged, and splitting them evenly keeps each
+-- HALF at P = 32 instead of one of them being a second 64-port network.
+local BRDG = LIM + LIM_ROWS + 12
 local BRDG_HALF = 16
 local BRDG_FED = 3
 -- FAST REPLACE, two rigs in one band, and they are the only rigs in this suite
@@ -174,17 +194,29 @@ local BRDG_FED = 3
 -- same, because `count_all` is a conserved quantity and inserting twenty-four
 -- thousand items into it mid-run would read as this mod minting matter.
 --
---   frepa  the forward gesture: a saturated two-part balancer with a PLAIN BELT
---          LINE running east one tile below it. From the bottom part that belt
---          is neither `dir` nor `back`, so it is not an edge at all (M2's `pass`
---          shape) -- until a part is fast-replaced onto it, at which point the
---          line is cut and the balancer is three in and three out.
---   frepb  the reverse: four parts in a column, fed and drained on the top and
---          bottom rows only, so the two middle parts carry no interface and are
---          the only parts in this save a belt can legally be laid on.
-local FREP = BRDG + 2 * BRDG_HALF + 8
-local FREPB = FREP + 6
-local ROWS = FREPB + 10
+--   frepa  the forward gesture: a saturated 2->2 over four parts with a PLAIN
+--          BELT LINE running east one tile below it that ENDS on the tile the
+--          part is dropped onto. From the parts above, that belt is neither
+--          `dir` nor `back`, so it is not an edge at all (M2's `pass` shape) --
+--          until a part is fast-replaced onto its last tile, at which point the
+--          line feeds the balancer and it is three in and two out.
+--
+--          THE LINE ENDS THERE RATHER THAN RUNNING PAST, and that is the one
+--          belt rule again: a part dropped into the MIDDLE of a line takes the
+--          belt behind it as an input and the belt ahead as an output, which is
+--          two belts on one tile and is refused. Dropping a part into a line is
+--          a gesture that works at the line's end now.
+--   frepb  the reverse: a 1->1 row of two parts, a THREE-PART NECK, and another
+--          1->1 row -- nine parts in a T-less column whose middle three carry no
+--          belt at all. The belt that replaces the middle of the neck becomes an
+--          edge of the part above it and of the part below it, so BOTH of those
+--          have to be otherwise edgeless or the split would hand one half a part
+--          with two belts and that half would be refused instead of built. The
+--          neck is also what makes the split a split: a second column of parts
+--          beside the target would keep the cluster connected around it.
+local FREP = BRDG + 2 * BRDG_HALF + 12
+local FREPB = FREP + 8
+local ROWS = FREPB + 12
 
 -- Everything the compiler is allowed to put on the visible surface. All four are
 -- named rather than just the linked belt: the assertion is about the CONTRACT
@@ -200,8 +232,11 @@ local STOCK = 6000
 local HIDDEN_AREA = { { 0, 0 }, { 640, 288 } }
 local VIS_AREA = { { -24, -18 }, { 28, ROWS + 18 } }
 
--- The determinism rigs: {x, parts}, and the order their first parts are placed.
-local DET_SHAPES = { { 8, 1 }, { 12, 2 }, { 16, 3 }, { 20, 4 } }
+-- The determinism rigs: {x of the west part column, rows}, and the order their
+-- first parts are placed. Each is a 2-wide block with its input belt at x-1 and
+-- its output at x+2, and the columns are five apart so that no rig's output belt
+-- is adjacent to the next rig's input.
+local DET_SHAPES = { { 8, 1 }, { 13, 2 }, { 18, 3 }, { 23, 4 } }
 local DET_ORDER = { 3, 1, 4, 2 }
 
 --------------------------------------------------------------------------------
@@ -282,16 +317,33 @@ local function source(s, y, force)
 end
 
 local function sink(s, y, force)
-  put(s, LOADER, 4, y, { direction = E, type = "input", force = force or "player" })
+  put(s, LOADER, 5, y, { direction = E, type = "input", force = force or "player" })
   return s.create_entity {
-    name = "steel-chest", position = P(5, y), force = force or "player",
+    name = "steel-chest", position = P(6, y), force = force or "player",
   }
 end
 
+-- ONE BELT PER PART, so a row is TWO parts: the west one carries the input and
+-- the east one the output.
+--
+--   x=-6 source chest   -5 loader   -4..-1 belts   0 WEST PART   1 EAST PART
+--   x=2..4 belts        5 sink loader              6 chest
 local function feed(s, y, force)
   source(s, y, force)
   for x = -4, -1 do put(s, BELT, x, y, { direction = E, force = force or "player" }) end
-  for x = 1, 3 do put(s, BELT, x, y, { direction = E, force = force or "player" }) end
+  for x = 2, 4 do put(s, BELT, x, y, { direction = E, force = force or "player" }) end
+  return sink(s, y, force)
+end
+
+-- The input side alone, for a row whose output is somewhere other than due east.
+local function feed_in(s, y, force)
+  source(s, y, force)
+  for x = -4, -1 do put(s, BELT, x, y, { direction = E, force = force or "player" }) end
+end
+
+-- ... and the output side alone.
+local function drain_out(s, y, force)
+  for x = 2, 4 do put(s, BELT, x, y, { direction = E, force = force or "player" }) end
   return sink(s, y, force)
 end
 
@@ -494,15 +546,21 @@ end
 
 -- Two forces editing in one tick, alternating. Their parts touch and must stay
 -- two balancers; each edit must reach only its own.
+-- A WHOLE ROW EACH, because a row is two parts under the one-belt rule: a west
+-- part taking the new input and an east part giving the new output. The old
+-- version added one part and put a belt on both sides of it, which is the shape
+-- the rule forbids.
 local function p_forces_interleaved()
   local s = surf()
   log("[BBB-EDGE] forces interleaved begin")
   put_soft(s, PART, 0, FRC - 1)
   put_soft(s, PART, 0, FRC + 4, { force = OTHER_FORCE })
+  put_soft(s, PART, 1, FRC - 1)
+  put_soft(s, PART, 1, FRC + 4, { force = OTHER_FORCE })
   put_soft(s, BELT, -1, FRC - 1, { direction = E })
   put_soft(s, BELT, -1, FRC + 4, { direction = E, force = OTHER_FORCE })
-  put_soft(s, BELT, 1, FRC - 1, { direction = E })
-  put_soft(s, BELT, 1, FRC + 4, { direction = E, force = OTHER_FORCE })
+  put_soft(s, BELT, 2, FRC - 1, { direction = E })
+  put_soft(s, BELT, 2, FRC + 4, { direction = E, force = OTHER_FORCE })
   log("[BBB-EDGE] forces interleaved end")
 end
 
@@ -529,14 +587,17 @@ local function det_paste(base, tag)
   for step = 1, 4 do
     for _, k in ipairs(DET_ORDER) do
       local cx, n = DET_SHAPES[k][1], DET_SHAPES[k][2]
-      if step <= n then put_soft(s, PART, cx, base + step - 1) end
+      if step <= n then
+        put_soft(s, PART, cx, base + step - 1)
+        put_soft(s, PART, cx + 1, base + step - 1)
+      end
     end
   end
   for _, k in ipairs(DET_ORDER) do
     local cx, n = DET_SHAPES[k][1], DET_SHAPES[k][2]
     for r = 0, n - 1 do
       put_soft(s, BELT, cx - 1, base + r, { direction = E })
-      put_soft(s, BELT, cx + 1, base + r, { direction = E })
+      put_soft(s, BELT, cx + 2, base + r, { direction = E })
     end
   end
   log(string.format("[BBB-EDGE] det-end tag=%s", tag))
@@ -552,8 +613,9 @@ local function det_clear(base)
     local cx, n = shape[1], shape[2]
     for r = 0, n - 1 do
       kill(s, cx, base + r, { name = PART })
+      kill(s, cx + 1, base + r, { name = PART })
       kill(s, cx - 1, base + r, { type = "transport-belt" })
-      kill(s, cx + 1, base + r, { type = "transport-belt" })
+      kill(s, cx + 2, base + r, { type = "transport-belt" })
     end
   end
 end
@@ -577,9 +639,12 @@ end
 --------------------------------------------------------------------------------
 -- The three recompile-under-load rigs: an edge edit on an OPERATING balancer.
 --
--- All three are 4-part, four-in four-out and saturated, and all three edit the
--- NORTH side of the top part -- the one side of that tile the rig does not
--- already use. What changes is only what the edit does to the network:
+-- All three are four-in four-out over EIGHT parts and saturated. `aout` and
+-- `ain` carry a ninth and tenth part below them that hold nothing at all, and
+-- the belt each of those legs adds goes THERE: under the one-belt rule every
+-- part of a working balancer already has its belt, so a belt laid against one of
+-- them would be refused rather than compiled and the leg would measure the wrong
+-- thing entirely. What changes is only what the edit does to the network:
 --
 --   aout  4->5 outputs: the network is rebuilt over eight ports instead of four
 --   ain   5->4 inputs:  the same, from the other side
@@ -588,15 +653,17 @@ end
 --------------------------------------------------------------------------------
 
 -- The fifth OUTPUT, with a loader and a chest to drain it, so the rig after the
--- edit is a real 4->5 balancer rather than one with a blocked port.
+-- edit is a real 4->5 balancer rather than one with a blocked port. It leaves
+-- SOUTH off the spare row's west part, which is the only tile of this cluster
+-- with a free face.
 local function p_add_output()
   local s = surf()
   log("[BBB-EDGE] add-out begin")
   local c = s.create_entity {
-    name = "steel-chest", position = P(0, AOUT - 3), force = "player",
+    name = "steel-chest", position = P(0, AOUT + 7), force = "player",
   }
-  put_soft(s, LOADER, 0, AOUT - 2, { direction = N, type = "input" })
-  put_soft(s, BELT, 0, AOUT - 1, { direction = N })
+  put_soft(s, LOADER, 0, AOUT + 6, { direction = S, type = "input" })
+  put_soft(s, BELT, 0, AOUT + 5, { direction = S })
   storage.out.aout[#storage.out.aout + 1] = c
   log("[BBB-EDGE] add-out end")
 end
@@ -608,14 +675,14 @@ end
 -- is carrying anything.
 local function p_add_input()
   log("[BBB-EDGE] add-in begin")
-  put_soft(surf(), BELT, 0, AIN - 1, { direction = S })
+  put_soft(surf(), BELT, 0, AIN + 5, { direction = N })
   log("[BBB-EDGE] add-in end")
 end
 
 -- One OUTPUT BELT mined off a running 4x4. Four in, three out afterwards.
 local function p_remove_output()
   log("[BBB-EDGE] shrink begin")
-  kill(surf(), 1, SHRK, { type = "transport-belt" })
+  kill(surf(), 2, SHRK, { type = "transport-belt" })
   log("[BBB-EDGE] shrink end")
 end
 
@@ -628,7 +695,10 @@ end
 local function p_remove_cluster()
   local s = surf()
   log("[BBB-EDGE] remove begin")
-  for r = 0, 3 do kill(s, 0, SHRK + r, { name = PART }) end
+  for r = 0, 3 do
+    kill(s, 0, SHRK + r, { name = PART })
+    kill(s, 1, SHRK + r, { name = PART })
+  end
   log("[BBB-EDGE] remove end")
 end
 
@@ -651,10 +721,35 @@ end
 -- Headless has no player, so the items still spill here and every number in this
 -- suite is what it was. What is pinned is the MAGNITUDE; what the arithmetic
 -- does with it is pinned by the insert probe below.
-local function p_hand_mine(r)
+-- TEN PARTS AND TEN MINES, because a 4x4 is eight parts under the one-belt rule
+-- and this rig carries the spare row as well.
+--
+-- THE ORDER IS THE SPARE ROW AND THEN ROW BY ROW, WEST PART THEN EAST PART, and
+-- it is chosen rather than convenient. Every prefix of it leaves a CONNECTED
+-- cluster, so no step is a split -- a split is a different carry decision and a
+-- different measurement. And every step but the last two leaves a machine with
+-- at least one input and one output, so it is a real shrink into a smaller
+-- butterfly: N and M come down together, P crosses 4 -> 2 and 2 -> 1 on the way,
+-- and each rebuild has less room than the teardown it followed. Taking a whole
+-- column first instead would strip every input in four mines and leave a
+-- five-output machine with nothing feeding it, which is a balancer dying rather
+-- than a balancer shrinking.
+--
+-- THE NINTH STEP HAS NO NETWORK AND THAT IS STRUCTURAL. One part can carry one
+-- belt, so the last part standing has an input or an output and never both --
+-- which `plan.Build` reads as a legitimate half-built cluster, not an unbuilt
+-- one. Under the old rule the last part carried both and the leg never saw it.
+local HAND_ORDER = { { 0, 4 }, { 1, 4 } }
+for r = 0, 3 do
+  HAND_ORDER[#HAND_ORDER + 1] = { 0, r }
+  HAND_ORDER[#HAND_ORDER + 1] = { 1, r }
+end
+
+local function p_hand_mine(i)
   return function()
-    log("[BBB-EDGE] hand mine " .. r)
-    kill(surf(), 0, AOUT + r, { name = PART })
+    local xy = HAND_ORDER[i]
+    log("[BBB-EDGE] hand mine " .. i)
+    kill(surf(), xy[1], AOUT + xy[2], { name = PART })
   end
 end
 
@@ -678,27 +773,31 @@ end
 -- the quantity the pocket redirects. Which is precisely what `shrk` did.
 local function p_bmin_add()
   log("[BBB-EDGE] bmin-add begin")
-  put_soft(surf(), BELT, 0, BMIN + 2, { direction = S })
+  put_soft(surf(), BELT, 0, BMIN + 3, { direction = S })
   log("[BBB-EDGE] bmin-add end")
 end
 
 local function p_bmin_remove()
   log("[BBB-EDGE] bmin-remove begin")
-  kill(surf(), 0, BMIN + 2, { type = "transport-belt" })
+  kill(surf(), 0, BMIN + 3, { type = "transport-belt" })
   log("[BBB-EDGE] bmin-remove end")
 end
 
 --------------------------------------------------------------------------------
 -- THE SIXTY-FIFTH BELT: the edit the mod cannot honour
 --
--- `lim` is thirty-two parts in a column with a belt on BOTH sides of every one
--- of them, all pointing inwards -- sixty-four inputs -- and one output leaving
--- north off the top. P = next_pow2(max(64, 1)) = 64, which is plan.MaxPorts
--- exactly, so the network is the largest one this mod builds and it is a real
--- one: 1,026 entities on the hidden surface, compiled during `--create` like
--- everything else here.
+-- `lim` is a 2x32 BLOCK of parts with one input belt against each of them --
+-- sixty-four inputs, which is the rule -- plus one part below the block carrying
+-- the single output and one SPARE PART above it carrying nothing at all.
+-- P = next_pow2(max(64, 1)) = 64, which is plan.MaxPorts exactly, so the network
+-- is the largest one this mod builds and it is a real one: 1,026 entities on the
+-- hidden surface, compiled during `--create` like everything else here.
 --
--- Then one more input belt goes in at the bottom, and P would have to be 128.
+-- Then one more input belt goes against the SPARE PART, and P would have to be
+-- 128. The spare part is what makes that possible: every other part in the rig
+-- has its one belt, so a sixty-fifth belt laid anywhere else would break the
+-- one-belt-per-part rule instead and this leg would be measuring the other
+-- bound.
 --
 -- WHAT USED TO HAPPEN, and it is the whole reason this leg exists: compile()
 -- classified the edges, saw the fingerprint move, tore the network down, and
@@ -719,13 +818,13 @@ end
 
 local LIM_FED = 3
 
--- The sixty-fifth input: one belt at the foot of the column pointing NORTH,
--- into the bottom part. Nothing feeds it, exactly as `ain`'s fifth input is
--- unfed -- the classifier does not care whether an input belt is carrying
--- anything, and the edit under test is the edge COUNT going 64 -> 65.
+-- The sixty-fifth input: one belt below the spare part pointing NORTH, into it.
+-- Nothing feeds it, exactly as `ain`'s fifth input is unfed -- the classifier
+-- does not care whether an input belt is carrying anything, and the edit under
+-- test is the edge COUNT going 64 -> 65.
 local function p_lim_add()
   log("[BBB-EDGE] lim-add begin")
-  put_soft(surf(), BELT, 0, LIM + LIM_PARTS, { direction = N })
+  put_soft(surf(), BELT, 0, LIM + LIM_ROWS + 1, { direction = N })
   log("[BBB-EDGE] lim-add end")
 end
 
@@ -734,7 +833,7 @@ end
 -- network that was never torn down is never rebuilt either.
 local function p_lim_remove()
   log("[BBB-EDGE] lim-remove begin")
-  kill(surf(), 0, LIM + LIM_PARTS, { type = "transport-belt" })
+  kill(surf(), 0, LIM + LIM_ROWS + 1, { type = "transport-belt" })
   log("[BBB-EDGE] lim-remove end")
 end
 
@@ -753,17 +852,20 @@ end
 -- not be built. Both came back on the next tick EMPTY, with everything they had
 -- been holding in a heap on the floor between them.
 --
--- Each half is thirty-two inputs and one output (P = 32); together with the two
--- belts already standing on the gap tile they are 66 inputs and 2 outputs, so
--- P would have to be 128. Three of each half's thirty-two inputs are fed, for
--- the same reason `lim` feeds three: this leg is about the refusal, not about
--- throughput, and thirty-two more source chests would be thirty-two more numbers
--- in a total whose whole job is to be conserved.
+-- Each half is thirty-two inputs and one output (P = 32); together with the ONE
+-- belt already standing beside the gap tile they are 65 inputs and 2 outputs, so
+-- P would have to be 128. One belt and not two: a second would put two on the
+-- bridging part's own tile, and the merge would then be refused for the
+-- one-belt-per-part bound before it ever reached the port limit. Three of each
+-- half's thirty-two inputs are fed, for the same reason `lim` feeds three: this
+-- leg is about the refusal, not about throughput, and thirty-two more source
+-- chests would be thirty-two more numbers in a total whose whole job is to be
+-- conserved.
 --------------------------------------------------------------------------------
 
--- The bridging part. Its own tile's two input belts have been standing since
--- t=0, so this one placement takes the merged cluster from 64 possible edges to
--- 66 -- the smallest step over the limit this rig can make.
+-- The bridging part. The one input belt beside its tile has been standing since
+-- t=0, so this one placement takes the merged cluster from 64 edges to 65 --
+-- the smallest step over the limit this rig can make.
 local function p_brdg_add()
   log("[BBB-EDGE] brdg-add begin")
   put_soft(surf(), PART, 0, BRDG + BRDG_HALF)
@@ -921,27 +1023,40 @@ end
 
 -- The source half of `feed`, minus the chest: the chests are made in on_init so
 -- their stock is inside the conserved total from t=0.
-local function frep_feed(s, y)
+-- The input side minus the chest: the frep chests are made in on_init so their
+-- stock is inside the conserved total from t=0, and `feed_in` would try to build
+-- a second one on the same tile.
+local function frep_in(s, y)
   put(s, LOADER, -5, y, { direction = E, type = "output" })
   for x = -4, -1 do put(s, BELT, x, y, { direction = E }) end
-  for x = 1, 3 do put(s, BELT, x, y, { direction = E }) end
-  return sink(s, y)
+end
+
+local function frep_feed(s, y)
+  frep_in(s, y)
+  return drain_out(s, y)
 end
 
 local function p_frep_build()
   local s = surf()
   log("[BBB-EDGE] frep-build begin")
-  for r = 0, 1 do put(s, PART, 0, FREP + r) end
-  local a = { frep_feed(s, FREP), frep_feed(s, FREP + 1) }
-  -- The belt line that runs PAST the balancer, x = -4 through 3 with no gap at
-  -- x = 0. Its chest is the third output the balancer will have.
+  for r = 0, 1 do put(s, PART, 0, FREP + r); put(s, PART, 1, FREP + r) end
+  storage.out.frepa = { frep_feed(s, FREP), frep_feed(s, FREP + 1) }
+  -- The belt line, x = -4 through 0, ENDING on the tile the part is dropped
+  -- onto. It is an edge of nothing until then: an east-facing belt on a part's
+  -- SOUTH face is neither `dir` nor `back` and falls through classifySide.
   put(s, LOADER, -5, FREP + 2, { direction = E, type = "output" })
-  for x = -4, 3 do put(s, BELT, x, FREP + 2, { direction = E }) end
-  a[3] = sink(s, FREP + 2)
-  storage.out.frepa = a
+  for x = -4, 0 do put(s, BELT, x, FREP + 2, { direction = E }) end
 
-  for r = 0, 3 do put(s, PART, 0, FREPB + r) end
-  storage.out.frepb = { frep_feed(s, FREPB), frep_feed(s, FREPB + 3) }
+  -- frepb: a 1->1 row, a three-part NECK carrying nothing, and another 1->1 row.
+  -- The target is the middle of the neck; its two vertical neighbours must be
+  -- edgeless, or the belt that lands on it would be a second belt for one of
+  -- them and that half would be refused rather than built.
+  for r = 0, 4 do put(s, PART, 0, FREPB + r) end
+  put(s, PART, 1, FREPB)
+  put(s, PART, 1, FREPB + 4)
+  local b = {}
+  for _, r in ipairs { 0, 4 } do b[#b + 1] = frep_feed(s, FREPB + r) end
+  storage.out.frepb = b
   log("[BBB-EDGE] frep-build end")
 end
 
@@ -1051,7 +1166,7 @@ local function p_frep_edge()
   if not still then
     s.create_entity { name = PART, position = P(0, FREPB), force = "player" }
   end
-  frep_sweep("edge", FREPB - 3, FREPB + 7)
+  frep_sweep("edge", FREPB - 3, FREPB + 8)
   log("[BBB-EDGE] frep-edge end")
 end
 
@@ -1079,7 +1194,7 @@ local function p_frep_reverse()
     tostring(made ~= nil),
     tostring(at(s, 0, FREPB + 2, { name = PART }) ~= nil),
     tostring(at(s, 0, FREPB + 2, { type = "transport-belt" }) ~= nil)))
-  frep_sweep("rev", FREPB - 3, FREPB + 7)
+  frep_sweep("rev", FREPB - 3, FREPB + 8)
   log("[BBB-EDGE] frep-rev end")
 end
 
@@ -1210,20 +1325,35 @@ local ONE_OFFS = {
   -- The field report's own gesture: the `aout` rig taken apart ONE PART PER
   -- TICK. Its balance windows closed 140 ticks ago, so it is free, and it is a
   -- saturated four-part rig that has been running for the whole suite.
+  -- TEN STEPS, because the rig is ten parts: eight for a 4x4 under the one-belt
+  -- rule and two more for the spare row `p_add_output` needed. Nine shrinks and
+  -- a dissolve, one part per four ticks with an audit between each pair.
   [CHN_END + 1200] = function() audit_and_count("pre-hand") end,
-  [CHN_END + 1204] = p_hand_mine(0),
+  [CHN_END + 1204] = p_hand_mine(1),
   [CHN_END + 1208] = function() audit_and_count("hand-1") end,
-  [CHN_END + 1212] = p_hand_mine(1),
+  [CHN_END + 1212] = p_hand_mine(2),
   [CHN_END + 1216] = function() audit_and_count("hand-2") end,
-  [CHN_END + 1220] = p_hand_mine(2),
+  [CHN_END + 1220] = p_hand_mine(3),
   [CHN_END + 1224] = function() audit_and_count("hand-3") end,
-  [CHN_END + 1228] = p_hand_mine(3),
+  [CHN_END + 1228] = p_hand_mine(4),
   [CHN_END + 1232] = function() audit_and_count("hand-4") end,
+  [CHN_END + 1236] = p_hand_mine(5),
+  [CHN_END + 1240] = function() audit_and_count("hand-5") end,
+  [CHN_END + 1244] = p_hand_mine(6),
+  [CHN_END + 1248] = function() audit_and_count("hand-6") end,
+  [CHN_END + 1252] = p_hand_mine(7),
+  [CHN_END + 1256] = function() audit_and_count("hand-7") end,
+  [CHN_END + 1260] = p_hand_mine(8),
+  [CHN_END + 1264] = function() audit_and_count("hand-8") end,
+  [CHN_END + 1268] = p_hand_mine(9),
+  [CHN_END + 1272] = function() audit_and_count("hand-9") end,
+  [CHN_END + 1276] = p_hand_mine(10),
+  [CHN_END + 1280] = function() audit_and_count("hand-10") end,
 
-  [CHN_END + 1240] = p_insert_probe,
-  [CHN_END + 1246] = p_insert_probe_read,
+  [CHN_END + 1288] = p_insert_probe,
+  [CHN_END + 1294] = p_insert_probe_read,
 
-  [CHN_END + 1250] = function()
+  [CHN_END + 1298] = function()
     audit_and_count("final"); report("final"); probe_placement("final")
   end,
 
@@ -1236,17 +1366,17 @@ local ONE_OFFS = {
   -- They have to be: sixty-three of this rig's output ports dead-end, so the
   -- share of the input that reaches the live one climbs all run as they fill,
   -- and a constant would be a number copied from a passing run.
-  [CHN_END + 1256] = function() lim_report("before-open") end,
-  [CHN_END + 1500] = function() audit_and_count("pre-lim") end,
-  [CHN_END + 1502] = function() lim_report("before-close") end,
-  [CHN_END + 1504] = p_lim_add,
-  [CHN_END + 1508] = function()
+  [CHN_END + 1304] = function() lim_report("before-open") end,
+  [CHN_END + 1548] = function() audit_and_count("pre-lim") end,
+  [CHN_END + 1550] = function() lim_report("before-close") end,
+  [CHN_END + 1552] = p_lim_add,
+  [CHN_END + 1556] = function()
     audit_and_count("post-lim"); lim_report("after-open")
   end,
-  [CHN_END + 1754] = function() lim_report("after-close") end,
-  [CHN_END + 1758] = function() audit_and_count("post-lim-window") end,
-  [CHN_END + 1762] = p_lim_remove,
-  [CHN_END + 1766] = function() audit_and_count("post-lim-back") end,
+  [CHN_END + 1802] = function() lim_report("after-close") end,
+  [CHN_END + 1806] = function() audit_and_count("post-lim-window") end,
+  [CHN_END + 1810] = p_lim_remove,
+  [CHN_END + 1814] = function() audit_and_count("post-lim-back") end,
 
   -- THE BRIDGE THAT WOULD BE OVER THE LIMIT, last of all and for the same
   -- reason `lim` is next-to-last: nothing else in the save is being edited any
@@ -1255,62 +1385,62 @@ local ONE_OFFS = {
   -- compared as ratios, because both halves back-fill all run (thirty-one of
   -- each half's thirty-two output ports dead-end) and a constant would be a
   -- number copied from a passing run.
-  [CHN_END + 1800] = function() brdg_report("before-open") end,
-  [CHN_END + 2044] = function() audit_and_count("pre-brdg") end,
-  [CHN_END + 2046] = function() brdg_report("before-close") end,
-  [CHN_END + 2048] = p_brdg_add,
-  [CHN_END + 2052] = function()
+  [CHN_END + 1848] = function() brdg_report("before-open") end,
+  [CHN_END + 2092] = function() audit_and_count("pre-brdg") end,
+  [CHN_END + 2094] = function() brdg_report("before-close") end,
+  [CHN_END + 2096] = p_brdg_add,
+  [CHN_END + 2100] = function()
     audit_and_count("post-brdg"); brdg_report("after-open"); probe_placement("brdg")
   end,
   -- Two more audits while the refusal STANDS. The state a refused merge leaves
   -- is the only one in this guest where `nets` holds a network under a key that
   -- is no longer a root, and it has to be stable: the same report, no second
   -- alert, and nothing torn down or rebuilt in between.
-  [CHN_END + 2150] = function() audit_and_count("brdg-hold-1") end,
-  [CHN_END + 2250] = function() audit_and_count("brdg-hold-2") end,
-  [CHN_END + 2298] = function() brdg_report("after-close") end,
-  [CHN_END + 2302] = function() audit_and_count("post-brdg-window") end,
-  [CHN_END + 2306] = p_brdg_remove,
-  [CHN_END + 2310] = function() audit_and_count("post-brdg-back") end,
+  [CHN_END + 2198] = function() audit_and_count("brdg-hold-1") end,
+  [CHN_END + 2298] = function() audit_and_count("brdg-hold-2") end,
+  [CHN_END + 2346] = function() brdg_report("after-close") end,
+  [CHN_END + 2350] = function() audit_and_count("post-brdg-window") end,
+  [CHN_END + 2354] = p_brdg_remove,
+  [CHN_END + 2358] = function() audit_and_count("post-brdg-back") end,
   -- The recovery window opens a hundred ticks after the un-merge: the half whose
   -- root the merged cluster had been using is torn down and rebuilt from its own
   -- carry pool, and a rebuild puts every reinserted item back at the HEAD of the
   -- butterfly, so its output is briefly starved by construction.
-  [CHN_END + 2410] = function() brdg_report("back-open") end,
-  [CHN_END + 2656] = function() brdg_report("back-close") end,
-  [CHN_END + 2660] = function() audit_and_count("post-brdg-final") end,
+  [CHN_END + 2458] = function() brdg_report("back-open") end,
+  [CHN_END + 2704] = function() brdg_report("back-close") end,
+  [CHN_END + 2708] = function() audit_and_count("post-brdg-final") end,
 
   -- FAST REPLACE, after everything else, and that is deliberate: these two rigs
   -- are BUILT HERE rather than in on_init so that every baseline above -- the
-  -- fifteen clusters, the ninety-five parts, the placement-probe counts -- is a
-  -- statement about the same world it has always been about. Only the tags below
-  -- see the frep rigs at all.
-  [CHN_END + 2680] = p_frep_build,
+  -- fifteen clusters, the one hundred and ninety-eight parts, the
+  -- placement-probe counts -- is a statement about the same world it has always
+  -- been about. Only the tags below see the frep rigs at all.
+  [CHN_END + 2728] = p_frep_build,
   -- Three hundred and twenty ticks to fill: source chest, loader, four belts, a
   -- P=2 hidden network and three more belts before the first item reaches a
   -- chest.
-  [CHN_END + 3000] = function()
+  [CHN_END + 3048] = function()
     audit_and_count("frep-built"); report("frep-before-open")
   end,
-  [CHN_END + 3350] = function() report("frep-before-close") end,
-  [CHN_END + 3354] = function() audit_and_count("pre-frep") end,
-  [CHN_END + 3358] = p_frep_forward,
-  [CHN_END + 3362] = function() audit_and_count("post-frep-fwd") end,
-  [CHN_END + 3366] = p_frep_edge,
-  [CHN_END + 3370] = function() audit_and_count("post-frep-edge") end,
-  [CHN_END + 3374] = p_frep_reverse,
-  [CHN_END + 3378] = function() audit_and_count("post-frep-rev") end,
+  [CHN_END + 3398] = function() report("frep-before-close") end,
+  [CHN_END + 3402] = function() audit_and_count("pre-frep") end,
+  [CHN_END + 3406] = p_frep_forward,
+  [CHN_END + 3410] = function() audit_and_count("post-frep-fwd") end,
+  [CHN_END + 3414] = p_frep_edge,
+  [CHN_END + 3418] = function() audit_and_count("post-frep-edge") end,
+  [CHN_END + 3422] = p_frep_reverse,
+  [CHN_END + 3426] = function() audit_and_count("post-frep-rev") end,
   -- The after-window opens 162 ticks past the last edit and is the same length
   -- as the before-window, so the two are a ratio. A rebuild puts every
   -- reinserted item back at the HEAD of the butterfly, so an output is briefly
   -- starved by construction -- the same reason the brdg recovery window waits.
-  [CHN_END + 3540] = function() report("frep-after-open") end,
-  [CHN_END + 3890] = function() report("frep-after-close") end,
-  [CHN_END + 3894] = function()
+  [CHN_END + 3588] = function() report("frep-after-open") end,
+  [CHN_END + 3938] = function() report("frep-after-close") end,
+  [CHN_END + 3942] = function()
     audit_and_count("frep-final"); probe_placement("frep")
   end,
 
-  [CHN_END + 3898] = function() log("[BBB-EDGE] done") end,
+  [CHN_END + 3946] = function() log("[BBB-EDGE] done") end,
 }
 
 --------------------------------------------------------------------------------
@@ -1320,138 +1450,155 @@ script.on_init(function()
   game.create_force(OTHER_FORCE)
   storage.out = {}
 
-  local function rig(name, base, rows, force)
-    for r = 0, rows - 1 do put(s, PART, 0, base + r, { force = force }) end
+  -- One rig: `rows` rows of TWO parts, of which the first `fed` are fed and
+  -- drained. A row that is not fed carries nothing at all on either of its
+  -- parts, which is the only place in a working balancer a player's belt can
+  -- still land.
+  local function rig(name, base, rows, force, fed)
+    fed = fed or rows
+    for r = 0, rows - 1 do
+      put(s, PART, 0, base + r, { force = force })
+      put(s, PART, 1, base + r, { force = force })
+    end
     local chests = {}
-    for r = 0, rows - 1 do chests[r + 1] = feed(s, base + r, force) end
-    storage.out[name] = chests
+    for r = 0, fed - 1 do chests[r + 1] = feed(s, base + r, force) end
+    if name then storage.out[name] = chests end
+    return chests
   end
 
   -- chn's outputs DEAD-END: belts, and nothing to take the items off them. The
   -- whole hidden network backs up and stays full, so every one of the two
   -- hundred teardowns below drains a network that is carrying items.
-  for r = 0, 1 do put(s, PART, 0, CHN + r) end
+  for r = 0, 1 do put(s, PART, 0, CHN + r); put(s, PART, 1, CHN + r) end
   for r = 0, 1 do
     source(s, CHN + r)
     for x = -4, -1 do put(s, BELT, x, CHN + r, { direction = E }) end
-    for x = 1, 3 do put(s, BELT, x, CHN + r, { direction = E }) end
+    for x = 2, 4 do put(s, BELT, x, CHN + r, { direction = E }) end
   end
   rig("same", SAME, 2)
   -- Two clusters with a one-tile gap at MRG+2. Row MRG+2 gets no belts, so the
   -- bridging part brings no edge of its own -- the whole change is the merge.
-  for r = 0, 1 do put(s, PART, 0, MRG + r) end
-  for r = 3, 4 do put(s, PART, 0, MRG + r) end
+  for r = 0, 1 do put(s, PART, 0, MRG + r); put(s, PART, 1, MRG + r) end
+  for r = 3, 4 do put(s, PART, 0, MRG + r); put(s, PART, 1, MRG + r) end
   local mrg = {}
   for _, r in ipairs { 0, 1, 3, 4 } do mrg[#mrg + 1] = feed(s, MRG + r) end
   storage.out.mrg = mrg
   rig("rot", ROT, 2)
   rig("frcA", FRC, 2)
   rig("frcB", FRC + 2, 2, OTHER_FORCE)
-  -- The three recompile-under-load rigs. Four parts each, four in and four out,
-  -- saturated -- and the edits below touch only the NORTH side of the top part,
-  -- so the part count never moves and every one of them is a pure edge edit.
-  rig("aout", AOUT, 4)
-  rig("ain", AIN, 4)
+  -- The three recompile-under-load rigs. Four in and four out over eight parts,
+  -- saturated -- and `aout` and `ain` carry a fifth row that holds nothing, so
+  -- that the belt each of them is given mid-run has somewhere legal to land.
+  -- The part count never moves in any of the three: every edit is a belt.
+  rig("aout", AOUT, 5, nil, 4)
+  rig("ain", AIN, 5, nil, 4)
   rig("shrk", SHRK, 4)
 
-  -- ntch: the field report's own shape, saturated and left running for the
-  -- whole suite. Parts at (0,b), (1,b) and (0,b+1); THE CORNER AT (1,b+1) IS
-  -- EMPTY AND MUST STAY EMPTY -- it is the one tile in this save enclosed by
-  -- parts that is not one, so it is the tile a stray visible entity would be
-  -- most visible on. Two inputs from the west; one output leaves EAST off the
-  -- top-right part and the other leaves SOUTH off the bottom-left one, which is
-  -- what keeps the notch a notch instead of filling it with an output belt.
+  -- ntch: the field report's own shape, saturated and left running for the whole
+  -- suite. A C of five parts around a HOLE at (1, b+1) -- the one tile in this
+  -- save enclosed by parts on three sides and not one itself, so it is where a
+  -- stray visible entity would be most visible. Two inputs on the west parts of
+  -- rows b and b+1, two outputs on the east parts of rows b and b+2, and
+  -- (0, b+2) carrying nothing, which is what keeps every tile to one belt.
   do
     local b = NTCH
     put(s, PART, 0, b)
     put(s, PART, 1, b)
     put(s, PART, 0, b + 1)
-    for r = 0, 1 do
-      source(s, b + r)
-      for x = -4, -1 do put(s, BELT, x, b + r, { direction = E }) end
-    end
-    for x = 2, 3 do put(s, BELT, x, b, { direction = E }) end
-    local east = sink(s, b)
-    for r = 2, 3 do put(s, BELT, 0, b + r, { direction = S }) end
-    put(s, LOADER, 0, b + 4, { direction = S, type = "input" })
-    local south = s.create_entity {
-      name = "steel-chest", position = P(0, b + 5), force = "player",
-    }
-    storage.out.ntch = { east, south }
+    put(s, PART, 0, b + 2)
+    put(s, PART, 1, b + 2)
+    for _, r in ipairs { 0, 1 } do feed_in(s, b + r) end
+    local north = drain_out(s, b)
+    local south = drain_out(s, b + 2)
+    storage.out.ntch = { north, south }
   end
 
-  -- bmin: two parts, two in, two out, and DEAD-ENDED like chn -- the outputs are
-  -- belts with nothing to take items off them, so the hidden network fills and
-  -- stays full. It is registered in no `storage.out` because it has no chests to
-  -- report; what is measured about it is the ground, not a rate.
-  for r = 0, 1 do put(s, PART, 0, BMIN + r) end
+  -- bmin: a 2->2 over four parts, DEAD-ENDED like chn -- the outputs are belts
+  -- with nothing to take items off them, so the hidden network fills and stays
+  -- full -- plus an attached FIFTH PART carrying nothing. That fifth part is
+  -- where the third output belt goes: under the one-belt rule the four working
+  -- parts have no free face between them, and this rig's whole subject is a port
+  -- count crossing a power of two in both directions. It is registered in no
+  -- `storage.out` because it has no chests; what is measured about it is the
+  -- ground.
+  for r = 0, 1 do put(s, PART, 0, BMIN + r); put(s, PART, 1, BMIN + r) end
+  put(s, PART, 0, BMIN + 2)
   for r = 0, 1 do
     source(s, BMIN + r)
     for x = -4, -1 do put(s, BELT, x, BMIN + r, { direction = E }) end
-    for x = 1, 3 do put(s, BELT, x, BMIN + r, { direction = E }) end
+    for x = 2, 4 do put(s, BELT, x, BMIN + r, { direction = E }) end
   end
 
-  -- lim: THE BIGGEST BALANCER THIS MOD BUILDS, one belt short of refusing.
-  -- Thirty-two parts in a column, a belt on both sides of each pointing INWARDS
-  -- (sixty-four inputs, which is P = 64 = plan.MaxPorts exactly) and one output
-  -- leaving north off the top with a loader and a chest to drain it. Only three
-  -- of the sixty-four are fed: see the header above p_lim_add for why.
+  -- lim: THE BIGGEST BALANCER THIS MOD BUILDS, one belt short of refusing. A
+  -- 2x32 block with one input belt against each of its sixty-four parts, one
+  -- part above it carrying the single output, and one SPARE PART below it
+  -- carrying nothing -- sixty-six parts, sixty-four inputs, P = 64 =
+  -- plan.MaxPorts exactly. Only three of the sixty-four are fed: see the header
+  -- above p_lim_add for why.
   do
-    for r = 0, LIM_PARTS - 1 do put(s, PART, 0, LIM + r) end
-    for r = 0, LIM_PARTS - 1 do
+    put(s, PART, 0, LIM - 1)
+    put(s, BELT, 0, LIM - 2, { direction = N })
+    put(s, LOADER, 0, LIM - 3, { direction = N, type = "input" })
+    storage.lim_chest = s.create_entity {
+      name = "steel-chest", position = P(0, LIM - 4), force = "player",
+    }
+    for r = 0, LIM_ROWS - 1 do
+      put(s, PART, 0, LIM + r)
+      put(s, PART, 1, LIM + r)
       put(s, BELT, -1, LIM + r, { direction = E })
-      put(s, BELT, 1, LIM + r, { direction = W })
+      put(s, BELT, 2, LIM + r, { direction = W })
     end
+    put(s, PART, 0, LIM + LIM_ROWS)
     for r = 0, LIM_FED - 1 do
       source(s, LIM + r)
       for x = -4, -2 do put(s, BELT, x, LIM + r, { direction = E }) end
     end
-    put(s, BELT, 0, LIM - 1, { direction = N })
-    put(s, LOADER, 0, LIM - 2, { direction = N, type = "input" })
-    storage.lim_chest = s.create_entity {
-      name = "steel-chest", position = P(0, LIM - 3), force = "player",
-    }
   end
 
-  -- brdg: TWO balancers with a one-tile gap, whose MERGE is over the limit.
-  -- Sixteen parts each, a belt on both sides of every one of them pointing
-  -- inwards (thirty-two inputs, P = 32) and one output -- A's leaving north off
-  -- its top, B's leaving south off its bottom, so neither of them is anywhere
-  -- near the gap. The GAP TILE gets its two input belts here and keeps them for
-  -- the whole run: they are edges of nothing until a part stands between them,
-  -- and then they are the two that take the merged cluster to 66.
+  -- brdg: TWO balancers with a one-tile gap, whose MERGE is over the limit. A
+  -- 2x16 block each with one input belt per part (thirty-two inputs, P = 32) and
+  -- an output part of its own -- A's above, B's below, so neither is anywhere
+  -- near the gap. The GAP TILE gets ONE input belt beside it here and keeps it
+  -- for the whole run: it is an edge of nothing until a part stands there, and
+  -- then it is the one that takes the merged cluster to sixty-five.
   do
     local gap = BRDG + BRDG_HALF
+    local foot = BRDG + 2 * BRDG_HALF
+    put(s, PART, 0, BRDG - 1)
+    put(s, BELT, 0, BRDG - 2, { direction = N })
+    put(s, LOADER, 0, BRDG - 3, { direction = N, type = "input" })
+    storage.brdg_a = s.create_entity {
+      name = "steel-chest", position = P(0, BRDG - 4), force = "player",
+    }
     for r = 0, 2 * BRDG_HALF do
-      if r ~= BRDG_HALF then put(s, PART, 0, BRDG + r) end
-      put(s, BELT, -1, BRDG + r, { direction = E })
-      put(s, BELT, 1, BRDG + r, { direction = W })
+      if r ~= BRDG_HALF then
+        put(s, PART, 0, BRDG + r)
+        put(s, PART, 1, BRDG + r)
+        put(s, BELT, -1, BRDG + r, { direction = E })
+        put(s, BELT, 2, BRDG + r, { direction = W })
+      end
     end
+    put(s, BELT, -1, gap, { direction = E })
+    put(s, PART, 0, foot + 1)
+    put(s, BELT, 0, foot + 2, { direction = S })
+    put(s, LOADER, 0, foot + 3, { direction = S, type = "input" })
+    storage.brdg_b = s.create_entity {
+      name = "steel-chest", position = P(0, foot + 4), force = "player",
+    }
     for r = 0, BRDG_FED - 1 do
       for _, y in ipairs { BRDG + r, gap + 1 + r } do
         source(s, y)
         for x = -4, -2 do put(s, BELT, x, y, { direction = E }) end
       end
     end
-    put(s, BELT, 0, BRDG - 1, { direction = N })
-    put(s, LOADER, 0, BRDG - 2, { direction = N, type = "input" })
-    storage.brdg_a = s.create_entity {
-      name = "steel-chest", position = P(0, BRDG - 3), force = "player",
-    }
-    local foot = BRDG + 2 * BRDG_HALF
-    put(s, BELT, 0, foot + 1, { direction = S })
-    put(s, LOADER, 0, foot + 2, { direction = S, type = "input" })
-    storage.brdg_b = s.create_entity {
-      name = "steel-chest", position = P(0, foot + 3), force = "player",
-    }
   end
 
   -- THE FAST-REPLACE RIGS' SOURCE CHESTS, AND NOTHING ELSE OF THEM. The rigs
   -- themselves are built at CHN_END + 2680 so that no baseline above moves, but
   -- their stock has to be inside the conserved total from t=0: `count_all` is
-  -- the instrument this whole suite rests on, and twenty-four thousand items
+  -- the instrument this whole suite rests on, and thirty thousand items
   -- appearing in it halfway through would read as the mod minting matter.
-  for _, y in ipairs { FREP, FREP + 1, FREP + 2, FREPB, FREPB + 3 } do
+  for _, y in ipairs { FREP, FREP + 1, FREP + 2, FREPB, FREPB + 4 } do
     local c = s.create_entity {
       name = "steel-chest", position = P(-6, y), force = "player",
     }
@@ -1470,7 +1617,7 @@ script.on_init(function()
   -- The real number, not the requested one: a steel chest holds 48 stacks, so
   -- an insert of STOCK stops at 4,800 whatever STOCK says.
   log(string.format("[BBB-EDGE] plan chn_end=%d end_tick=%d stock=%d",
-    CHN_END, CHN_END + 2664, count_all()))
+    CHN_END, CHN_END + 3950, count_all()))
 end)
 
 script.on_event(defines.events.on_tick, function(ev)

@@ -1,9 +1,9 @@
 # single-edge.md — the 2.1 port: one belt per part
 
-Status: **PHASES 1, 2, 3, 4 AND 5 SHIPPED 2026-08-24** — the rule and its
+Status: **PHASES 1 THROUGH 6 SHIPPED 2026-08-24** — the rule and its
 refusal, then the setting, the grandfather pass and the migration, then the
-interactive and demo worlds, then the first tranche of the rebuilt test estate
-(`m2`, `mar` and `upg`), then the second (`mix`, `plat` and `qual`). Drafted the
+interactive and demo worlds, then the rebuilt test estate in three tranches
+(`m2`, `mar` and `upg`; `mix`, `plat` and `qual`; `m3` and `edge`). Drafted the
 same day from the 2026-08-23 investigation and boskid's answer to the interface
 request (forums t=135830). Read CLAUDE.md's migration and over-limit sections
 first; this design reuses both wholesale.
@@ -15,13 +15,13 @@ reaches the player through the sixty-fifth belt's own machinery, the merge is
 spared, a 2.0 multi-edge save opened on 2.1 has its remnants torn down and its
 owning forces told with a ping per balancer, every gesture rig and every demo
 scene is single-edge and headlessly verified, and `m1`, `sedge`, `mig21`, `m2`,
-`mar`, `upg`, `mix`, `plat`, `qual` and `iact` — ten of the thirteen — are green
-on 2.1.14 in both `-gc` arms. **The `mar` slopes are measured again**, which is
-the gate the first three phases shipped without and which their "nothing on any
-hot path moves" claims were waiting on. What is left is `m3`, `edge` and `mig`,
-and the GIF re-capture, which needs a graphical client; the setting-flip legs
-and the multi-edge regression run need a 2.0 binary and belong on the
-`release/2.0` branch.
+`m3`, `mar`, `upg`, `edge`, `mix`, `plat`, `qual` and `iact` — twelve of the
+thirteen — are green on 2.1.14 in both `-gc` arms. **The `mar` slopes are
+measured again**, which is the gate the first three phases shipped without and
+which their "nothing on any hot path moves" claims were waiting on. What is left
+is `mig` and the GIF re-capture, which needs a graphical client; the
+setting-flip legs and the multi-edge regression run need a 2.0 binary and belong
+on the `release/2.0` branch.
 
 
 ## Why, in three sentences
@@ -364,7 +364,7 @@ The bulk of the labor, and it splits by which binary can run it:
 
 | work | binary | notes |
 |---|---|---|
-| ~~every suite's rigs rebuilt single-edge~~ **`m2`, `mar`, `upg`, `mix`, `plat` and `qual` DONE 2026-08-24; `m3`, `edge`, `mig` remain** | 2.1 | the geometry doubles; every calibrated number in CLAUDE.md's tables gets re-recorded. The suites' assertions themselves mostly survive — what changes is the worlds their `on_init` builds. Confirmed by both tranches: **not one assertion in `m2`, `upg`, `plat` or `qual` had to be weakened**, every rate and every port count is the number it was, and `plat`'s whole stacking leg came back identical to the item. See "Implementation status — phase 4" for the two rigs that needed a redesign rather than a re-lay and "phase 5" for the one assertion that had to be retired rather than re-recorded |
+| ~~every suite's rigs rebuilt single-edge~~ **`m2`, `mar`, `upg`, `mix`, `plat`, `qual`, `m3` and `edge` DONE 2026-08-24; `mig` remains** | 2.1 | the geometry doubles; every calibrated number in CLAUDE.md's tables gets re-recorded. The suites' assertions themselves mostly survive — what changes is the worlds their `on_init` builds. Confirmed by all three tranches: **not one assertion in `m2`, `upg`, `plat`, `qual`, `m3` or `edge` had to be weakened**, every rate and every port count is the number it was, and `plat`'s whole stacking leg came back identical to the item. See "Implementation status — phase 4" for the two rigs that needed a redesign rather than a re-lay, "phase 5" for the one assertion that had to be retired rather than re-recorded, and "phase 6" for the four `edge` rigs whose GESTURE the rule changed |
 | new `sedge` legs: second belt refused (build, rotation, robot), handed back negative, merge-spare via the bridge-tile path, feedback-gate once | 2.1 | the `lim`/`brdg` idiom verbatim |
 | migration suite: fixture 2.0 saves loaded under 2.1 | 2.1 + fixtures | **the fixtures exist and are committed**: `test/fixtures-2.0/` carries the m2, edge, m3 and qual saves from the last 2.0.77 suite run (2026-08-22), preserved 2026-08-24 minutes ahead of anything overwriting `test/tmp` — they cannot be regenerated without a 2.0 binary. Covers: the load survives with per-tile pruning (S2 probe 1's numbers graduate into assertions), the rebuild tears down the remnants, hidden items recovered and spilled conserved, GPS summary logged, audit stable after |
 | setting-flip suite (ON→OFF sweep, OFF→ON recompile) | **2.0.77 only** | multi-edge cannot be enabled on 2.1 at all; this and the multi-edge regression run of the old rigs live on the release/2.0 branch and need the old headless binary pinned |
@@ -1124,6 +1124,9 @@ landed the same day, as phase 5 below** — all three re-lays, and the paragraph
   is now a refusal rather than a recompile, so each has to be re-aimed at an
   edgeless part exactly as `m2`'s conservation rig was. `bmin`'s port-boundary
   crossing and `brdg`'s over-limit merge both need re-deriving from scratch.
+  **DONE the same day, in phase 5 below**, and every sentence of this paragraph
+  turned out to be right except the arithmetic: `lim` is 64 belts over SIXTY-SIX
+  parts, because the spare part the sixty-fifth belt lands on is a sixty-sixth.
 - **`mig`** changes OUTCOME and not only geometry: every adopted incumbent
   balancer is multi-edge by construction, so on 2.1 each converts and is then
   refused. Its expectations move wholesale — adopted yes, networks no — which is
@@ -1289,3 +1292,176 @@ for a 2 -> 2 recompile, 3,736 for a 4x4, 1,280 for a whole balancer in and out,
 audit, and **3.92 MiB** of linear memory — with linearity x1.00–x1.07, 9,600
 items in and 9,600 out over 200 teardowns, and 681 audits at drift=0. **No other
 suite's numbers moved**, which for a test-only pass is the only result available.
+
+## Implementation status — phase 6, the estate's third tranche, 2026-08-24
+
+**Shipped: `m3` and `edge`, rebuilt single-edge, and one guest fix the rebuild
+asked for.** `test/run.sh` now defaults to **`m1 sedge mig21 m2 m3 mar upg edge
+mix plat qual iact`** — twelve of the thirteen, everything but `mig`. Measured
+on Factorio 2.1.14, shipped configuration, both `-gc` arms.
+
+### `m3`: a re-lay, plus two edits that had to be re-aimed
+
+Every column of parts became two, exactly as phase 4's rule says, and **not one
+rate, spread or "exactly zero" in the suite moved**: the control belt still
+delivers 720 over t=540..1500, `live` is 4.000x, `swap` is 1.667x, `died`'s
+orphaned row still receives exactly none, and the stress phase still recovers
+15,856 of 16,000. What moved is part counts (a 2-in/2-out rig is four parts) and
+the blueprint's 12 entities becoming 14.
+
+Two edits needed more than a re-lay, and both are the shape phase 4 named:
+
+- **`phase_silent_notice`'s "unrelated placement"** was a south-facing belt on
+  the top west part's north face, which under the rule is that part's second
+  belt. It goes DIAGONALLY from the cluster now — inside the two-tile neighbour
+  gate, so the cluster is re-classified, and orthogonally adjacent to nothing, so
+  no tile gains an edge. The fingerprint still moves, because the belt phase 11
+  destroyed silently is missing from the classification the placement provokes,
+  which is the thing under test.
+- **`died` kills the EAST part of the second row.** A row's output stands against
+  its east part, so that is the kill that takes the row's OUTPUT off the machine
+  and leaves its chest orphaned. Killing the west part takes an INPUT off instead
+  and leaves both outputs live at half a belt each, which is a different
+  measurement.
+
+**And the stress churn AVOIDS the refusal rather than embracing it**, which is a
+decision the brief asked to be taken deliberately. Its six randomised edits are
+aimed at a row's own single input, its own single output and an EDGELESS part
+below the west column, so no tile can ever be asked for a second belt — and
+`assert-m3.py` asserts that negative over the whole run. The reason is that this
+suite's subject is the twelve lifecycle paths and its sharpest assertion is
+`drift=0 unbuilt=0` after 600 ticks of churn: a churn that generated refusals
+would make the compile, build and teardown counters a function of the RULE rather
+than of the path under test, and would leave clusters standing refused at the
+final audit. The refusal has its own suite, which drives all three of its trigger
+shapes.
+
+**The final audit asserts a WORLD TUPLE now** — `(clusters, parts, networks)` =
+`(14, 59, 14)` against constants in the script — because `unbuilt=0` is weak
+evidence: a cluster with inputs and no outputs is a legitimate half-built state
+and is never counted, so a rig that quietly lost its network satisfies it. That
+is the `mar` suite's own idiom, applied here for the same reason it was added
+there. `refused=0` is asserted beside it.
+
+**Red-proven**: put the notice belt back where it used to be. Four assertions
+fire — `noev` at **0 0, 0.000x**, one cluster refused for the one-belt rule
+(twice, once per audit that reaches it), `refused=1` on the final audit, and the
+world tuple at **(14, 59, 13)** — and **`unbuilt` stayed 0 through all of it**,
+which is exactly why the `nets` column had to exist.
+
+### `edge`: four rigs redesigned, not re-laid
+
+Fifteen clusters over **one hundred and ninety-eight parts**. The re-lay is the
+same rule, and what phase 4 chartered as needing real work needed exactly that:
+
+| rig | what the rule did to it |
+|---|---|
+| `aout`, `ain` | each carries a **fifth ROW of parts holding nothing**. Both exist to take a belt on a working balancer, and a working balancer has no free face; the belt goes on the spare row. `aout`'s fifth output leaves south off it and `ain`'s fifth input arrives north into it |
+| `bmin` | a 2->2 over four parts plus an **attached edgeless fifth**, which is where the third output belt lands. P still goes 2 -> 4 and back, which is the boundary crossing the rig exists for |
+| `lim` | a **2x32 block** carrying one input belt per part (sixty-four inputs), an output part below it and a **spare part above it**: sixty-six parts. Every part that carries a belt has its one belt, so a sixty-fifth belt laid anywhere but the spare would reach the one-belt bound instead and the leg would measure the wrong refusal |
+| `brdg` | two **thirty-three-part** halves, and the gap tile is flanked by **ONE** belt. Sixty-five inputs over two outputs |
+| `ntch` | a **C of five parts** around a hole at (1, b+1), two in and two out. The old shape put an input and an output on one tile |
+| `frepa` | the belt line **ENDS** on the tile the part is dropped onto, so the part takes one input and gives no output: 3 -> 2 over four ports. A part dropped mid-line takes the belt behind it as an input and the belt ahead as an output |
+| `frepb` | a 1->1 row, a **three-part NECK carrying nothing**, and another 1->1 row: nine parts. The belt that replaces the middle of the neck is an edge of the part above it AND of the part below it, so both must be otherwise edgeless or one half would be refused; and a second column beside the target would keep the cluster connected around the belt, so there would be no split at all |
+| the by-hand teardown | **ten parts and ten mines**, spare row first and then row by row, west part then east part. Every prefix leaves a CONNECTED cluster and eight of the nine shrinks leave a machine with at least one input and one output, so P really comes down 4 -> 2 -> 1 rather than the machine simply dying |
+
+**The two over-limit refusals are told apart by their OUTPUT count now.** Both
+are sixty-five inputs — `lim` gains its belt on a spare part and `brdg`'s gap
+carries one flanking belt — so the discriminator moved from `inputs == 65 or 66`
+to `outputs == 1 or 2`.
+
+**And `compile()` asks the port bound FIRST, measured.** The obvious red proof
+for `brdg` was "give the gap tile a second flanking belt, and the merge becomes a
+single-edge refusal". It does not: a second belt has to stand on the bridging
+part's own east face to be an edge of it at all, and the merged shape is then
+illegal twice — sixty-six inputs AND two belts on one tile — and `compile()`
+returns on the port check before it reaches the other one. So the refusal still
+reads as a port refusal, and the only thing that can see the difference is the
+INPUT COUNT in the assertion. Which is what fired: *"the refused merge names 128
+ports for 66 inputs, expected 128 for 65"*. That is the red proof, and it is
+worth more than the one that was expected because it is a fact about the guest
+rather than about the rig.
+
+**Everything else in the suite is the number it was**, which is the result this
+tranche wanted: `lim` delivers 184 items over 246 ticks before its refusal and
+185 after; `brdg`'s halves 186 and 185 before, 184 and 184 across the refusal and
+after the un-merge; the dissolve spills 118; `bmin`'s port-boundary removal
+spills 128; the aout recompile's 4->5 network delivers **300 300 300 300 300 at
+0.00% spread**; `ntch` delivers **376 376** while the placement probe is sampled;
+the probe reads **180-197 entities of ours, 0 off a part tile, every one of seven
+samples**; the insert probe is 50/37/23/7 asked, taken and held; and `frepb`
+goes **[262, 262] -> [132, 264]**, 76% of the column, which is the cascade the
+2.0 rig measured to the item.
+
+**`nets` is asserted at every tagged audit**, for `m3`'s reason. The one place it
+is legitimately short of `clusters` is the ninth by-hand step: one part is left
+standing, one part carries one belt, so the survivor has an input or an output
+and never both — which `plan.Build` reads as a legitimate half-built cluster.
+Under the old rule the last part carried both and the leg never met the case.
+
+**And a NEGATIVE the suite did not have**: zero one-belt-per-part refusals over
+the whole run. Every rig here is laid so that no tile ever carries two belts and
+every edit is aimed at a spare part, at an edge the rig already has, or at a tile
+with nothing on it; a refusal for the other bound would mean a rig or an edit had
+quietly stopped being the thing it is named for, and every count above it would
+go on passing.
+
+### The rider: the hand-back lines name the bound that refused the piece
+
+`revertOne` said "the over-limit piece" in both of its lines, and `tellRefusal`
+and `revertOne` are shared by both bounds — so a belt handed back for the
+one-belt-per-part rule was reported as an over-limit piece. That is the same
+defect `spareMerge`'s line had one level up, and phase 1 fixed that one by making
+it name NO bound, because a merge pre-pass genuinely cannot know which. Here the
+guest does know: the refusal that queues the note is the one moment anything
+does, and it knows for free, because `tellRefusal` already takes the clause for
+its own force-wide line.
+
+So `limPending` carries a `pendingPiece{note, why}` rather than a bare note, and
+the two lines read
+
+    handed the refused piece at 20,-2 (over the port limit) back to player 1
+    player 1 could not be handed back the refused piece at 20,-2 (past the
+      one-belt-per-part rule) -- no room in the inventory; it stays where it is,
+      unconnected
+
+The bound is CARRIED rather than looked up because by revert time there is
+nothing left to look it up from: `revertOverLimit` runs after the drain, the
+cluster may have been re-rooted or dissolved by then, and `overLimit` remembers a
+fingerprint and not a reason.
+
+**It costs nothing and the `mar` suite now says so rather than the comment
+saying so.** `limPending` is empty on every tick nobody's build was refused, and
+a headless run never appends to it at all; the seven slopes came back
+**identical to the byte** — 1,280 / 352 / 1,209 / 32 / 560 / 3,736 / 2,080 B per
+primitive, 1,136 B of calibration at 0.0% spread, **3.92 MiB** of linear memory
+— against phase 4's record.
+
+**And the package got SMALLER**, which was not the point but is worth recording:
+`fk_module.lua` 3,043,634 → **3,036,333 B**, measured either side of the change
+in one session with the same flags and the same pin. The struct field and the
+extra `logS` are less generated code than the two hand-written sentences they
+replaced parts of.
+
+**Four assertion scripts and two documents moved with it**, and the four regexes
+became LOOSER on purpose. All four are NEGATIVE assertions — a headless run has
+no players, so `revertOne` returns before it mines anything — and an exact regex
+over a negative is the one shape a rename in the guest can make VACUOUS: the line
+stops matching, the assertion stops being able to fail, and nothing says so. They
+match `piece at x,y` now, which is what both arms have in common and which
+nothing else in this guest's vocabulary produces.
+
+### Gates
+
+`make check` green. `make test` and `make GC=leaking test` each ONE invocation,
+both green over all nine suites. The `mar` slopes byte-identical to phase 4's
+record in the leaking arm; the collected arm ends on 0.46 MiB. **No suite outside
+`m3` and `edge` moved by a number**, which for a test-estate pass plus a log-line
+change on a cold path is the only result available.
+
+### What this leaves
+
+**`mig` alone**, and it is the one the design has always said changes OUTCOME
+rather than only geometry: every adopted incumbent balancer is multi-edge by
+construction, so on 2.1 each converts and is then refused, and its expectations
+move wholesale.

@@ -57,10 +57,10 @@
 #         the geometry intended, or any refusal at all -- the gestures create
 #         the refusals and the staging must not
 #
-# THREE OF THE THIRTEEN ARE STILL BUILT IN THE MULTI-EDGE IDIOM AND DO NOT RUN
-# ON FACTORIO 2.1: every rig in them puts two belts on one part, which is what
-# 2.1 forbids. The default runs the other ten -- see the SUITES line below for
-# why those ten and not the rest.
+# ONE OF THE THIRTEEN IS STILL BUILT IN THE MULTI-EDGE IDIOM AND DOES NOT RUN
+# ON FACTORIO 2.1: every rig in it puts two belts on one part, which is what
+# 2.1 forbids. The default runs the other twelve -- see the SUITES line below
+# for why those twelve and not `mig`.
 #
 #   make test          # builds the mod first
 #   test/run.sh        # against whatever dist/ already holds
@@ -91,9 +91,9 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 [ -x "$FACTORIO" ] || { echo "factorio not found at: $FACTORIO (set FACTORIO_BIN)" >&2; exit 1; }
 [ -d "$MOD_DIR" ]  || { echo "no built mod at $MOD_DIR; run \`make mod\` first" >&2; exit 1; }
 
-# THE DEFAULT IS WHAT RUNS ON FACTORIO 2.1 TODAY, which is ten of the thirteen.
-# The other three are still reachable by name and are still the estate this mod
-# is verified by; what stops them is measured rather than assumed, in two
+# THE DEFAULT IS WHAT RUNS ON FACTORIO 2.1 TODAY, which is twelve of the
+# thirteen. `mig` is still reachable by name and is still part of the estate
+# this mod is verified by; what stops it is measured rather than assumed, in two
 # layers:
 #
 #   `Incompatible Factorio version (current: 2.1, required: 2.0)` -- 2.1 refuses
@@ -107,21 +107,24 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 #   2.1 binary can ever be shown one. Its two fixtures are the m2 and edge saves
 #   from the last 2.0.77 suite run.
 #
-#   and then the RULE. Every rig in the remaining three puts two belts on one
+#   and then the RULE. Every rig in `mig` puts two belts on one
 #   part, which is what 2.1 forbids -- so bumping their manifests would only
-#   move the failure from the loader to the compiler. `m2`, `mar`, `upg`, `mix`,
-#   `plat` and `qual` have had their rigs REBUILT single-edge (every column of
-#   parts is two columns now, and the belt every conservation check used to lay
-#   on a cluster's free face goes against an EDGELESS part instead, because
-#   under this rule a working balancer has no free face); `m3`, `edge` and `mig`
-#   are the tranche that has not, and agents/single-edge.md's test-estate table
-#   is the list.
+#   part, which is what 2.1 forbids -- so bumping its manifest would only
+#   move the failure from the loader to the compiler. `m2`, `mar`, `upg`,
+#   `mix`, `plat`, `qual`, `m3` and `edge` have had their rigs REBUILT
+#   single-edge (every column of parts is two columns now, and the belt an
+#   edit used to lay on a cluster's free face goes against an EDGELESS part
+#   instead, because under this rule a working balancer has no free face);
+#   `mig` is what is left, and agents/single-edge.md's test-estate table is
+#   the list. `mig` changes OUTCOME rather than only geometry: every adopted
+#   incumbent balancer is multi-edge by construction, so on 2.1 each converts
+#   and is then refused.
 #
 #   `iact` is not about the mod's behaviour at all; it is about the world the
 #   INTERACTIVE checklist stages. It runs here because a rig that stopped
 #   landing, or one this mod refuses, costs a human a session to discover and
 #   costs this a single `--create` to catch.
-SUITES="${*:-m1 sedge mig21 m2 mar upg mix plat qual iact}"
+SUITES="${*:-m1 sedge mig21 m2 m3 mar upg edge mix plat qual iact}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.
@@ -582,6 +585,12 @@ for suite in $SUITES; do
       python3 "$ROOT/test/assert-m2.py" "$TMP/m2/create.log" "$TMP/m2/run.log"
       ;;
     m3)
+      # Twelve lifecycle rigs and 600 ticks of randomised churn, all built to
+      # the one-belt rule. The churn AVOIDS the refusal rather than embracing
+      # it -- its edits are aimed at a row's own single input, its own single
+      # output and an EDGELESS part below the column -- and the suite asserts
+      # that negative, because a refusal would make its compile and teardown
+      # counters a function of the rule rather than of the path under test.
       echo "=== M3: lifecycle hardening ==="
       stage "$TMP/m3" bbb-m3-test
       run "$TMP/m3" "${BBB_M3_TICKS:-1560}"
@@ -629,9 +638,15 @@ for suite in $SUITES; do
       # WHERE they end up: a recompile must put them back inside the network it
       # just built and only a real removal may spill them. Every count carries a
       # ground-item total and the recompile tags must read zero.
+      # Fifteen clusters over one hundred and ninety-eight parts under the
+      # one-belt rule. Four rigs are a redesign rather than a re-lay, because
+      # the EDIT they take is what the rule changed: `aout`, `ain` and `bmin`
+      # carry a spare part with nothing against it, `lim` is sixty-four belts
+      # over sixty-six parts, `brdg`'s gap tile is flanked by one belt rather
+      # than two, and `frepa`'s belt line ends on the tile the part lands on.
       echo "=== edge: mid-operation churn, merges, splits and forces ==="
       stage "$TMP/edge" bbb-edge-test
-      run "$TMP/edge" "${BBB_EDGE_TICKS:-5850}"
+      run "$TMP/edge" "${BBB_EDGE_TICKS:-5900}"
       echo "==> asserting conservation and the edge cases"
       python3 "$ROOT/test/assert-edge.py" "$TMP/edge/create.log" "$TMP/edge/run.log"
       ;;
