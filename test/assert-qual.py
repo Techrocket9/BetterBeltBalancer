@@ -30,6 +30,15 @@ site; this suite drives the other four through `findOnTile` (findpart.go):
 Plus the question nothing anywhere had asked: an uncommon 2->2 must BALANCE,
 against a bare express belt in the same save.
 
+EVERY RIG IS BUILT TO FACTORIO 2.1'S ONE-BELT-PER-PART RULE, and three of the
+four always were: `qblk`'s west column carries its inputs and its east column
+its outputs, `qcol`'s two INTERIOR parts carry nothing (which is what makes the
+fast replace legal), and `qlone` has no belts at all. `qlim` moved -- it was
+thirty-two parts with a belt on both sides of each -- and is sixty-six now, one
+output part, a 2x32 input block and an EDGELESS part for the sixty-fifth belt
+to land on, without which the gesture would ask the OTHER bound and would stop
+being a test of forceOfCluster.
+
     python3 test/assert-qual.py create.log run.log
 """
 
@@ -37,15 +46,23 @@ import re
 import sys
 
 QUALITY = re.compile(r"\[BBB-QUAL\] quality rig=(\S+) value=(\S+)")
-SKIN = re.compile(r"\[BBB\] skin cluster=\d+ parts=(\d+) set=(\d+) vars=([\d,]*)")
+# `vars` is matched with \S* rather than [\d,]* so that the guest's own
+# TRUNCATION is part of what is asserted. logSkin caps the list at 32
+# variations and writes a literal "..." after it (guest/go/skin.go), which no
+# cluster in any other suite is big enough to reach -- qlim's sixty-six parts
+# are, and a cap that moved would otherwise pass silently.
+SKIN = re.compile(r"\[BBB\] skin cluster=\d+ parts=(\d+) set=(\d+) vars=(\S*)")
 COLLIDE = re.compile(r"\[BBB-QUAL\] collide created=(\S+) part-standing=(\d+)")
 FREPCAN = re.compile(r"\[BBB-QUAL\] frep-can value=(\S+)")
 FREP = re.compile(r"\[BBB-QUAL\] frep created=(\S+) parts-left-on-tile=(\d+)")
 REAP = re.compile(r"\[BBB\] a belt-connectable fast-replaced the part at (-?\d+),(-?\d+)")
 AUDIT = re.compile(
     r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) unbuilt=(\d+)"
+    r"(?: refused=(\d+))?"
 )
 AUDITED = re.compile(r"\[BBB-QUAL\] audited tag=(\S+)")
+SEDGE_REFUSED = re.compile(
+    r"\[BBB\] alert: cluster (\d+) has (\d+) parts? carrying more than one belt")
 OVERLIMIT = re.compile(
     r"\[BBB\] alert: cluster (\d+) would need (\d+) ports for (\d+) inputs and "
     r"(\d+) outputs, over the limit of (\d+)"
@@ -59,6 +76,17 @@ SAMPLE = re.compile(r"\[BBB-QUAL\] sample tick=(\d+) (.*)")
 # The rig geometry the probes aim at (must match bbb-qual-test/control.lua).
 QCOL_REPLACED = (0, 27)   # QCOL + 1: the interior part the belt replaces
 QLONE_TILE = (0, 40)      # the lone part the colliding belt lands on
+
+# WHAT THE RIGS BUILD, written down here rather than read off the guest's own
+# report. Four clusters: qblk's 2x2, qcol's 4-column, qlone's single part, and
+# qlim's sixty-six -- an output part, a 2x32 input block and the edgeless part
+# the sixty-fifth belt lands on. Under Factorio 2.1's one-belt-per-part rule
+# qlim is the only one of the four that moved (it was thirty-two parts with a
+# belt on both sides of each), and it moved because the rule forbids the shape
+# it had. A rig that quietly lost a row still delivers a plausible number on
+# the outputs it still has; this is the line that sees that.
+WANT_CLUSTERS = 4
+WANT_PARTS = 75
 
 # The skin lines the whole run may produce, as an exact multiset. The
 # variation numbers are m1's known literals (assert-log.py, SKIN_EXPECT) for
@@ -75,36 +103,53 @@ QLONE_TILE = (0, 40)      # the lone part the colliding belt lands on
 # never find an uncommon part to touch), and MORE lines than these, because a
 # part it never touched is retried by every flush that queues its cluster --
 # which is what the qblk poke at t=500/510 exists to provoke.
+#
+# qlim's string is what a one-part-wide stalk on each end of a two-wide block
+# looks like: the output part alone at the top (5), the block's first row (22,
+# 27) and then its body (25, 43) -- and the guest stops there, because the list
+# is capped at 32. The full sequence continues "25,43" to the block's last row
+# (18, 35) and ends with the edgeless part alone at the bottom (2). Derived
+# from `guest/go/skin`'s own pure-Go `Variation` over the tile set the rig
+# builds -- the same package `make check` proves and the same one m1's literals
+# come from -- rather than read back off a run of the thing under test.
 SKIN_EXPECT = sorted([
     ("4", "4", "21,27,17,35"),                     # qblk
     ("4", "4", "5,6,6,2"),                         # qcol, at the first flush
     ("1", "1", "1"),                               # qlone
-    ("32", "32", "5," + "6," * 30 + "2"),          # qlim
+    ("66", "66", "5,22,27," + "25,43," * 14 + "25,..."),    # qlim, truncated
     ("1", "1", "1"),                               # qcol's top part, post-split
     ("2", "1", "5,2"),                             # qcol's lower half, post-
                                                    # split: its own top moved
                                                    # 6 -> 5, its bottom kept 2
 ])
 
-# The audits, tag -> (clusters, parts, nets, drift, unbuilt). nets is 3 at t0
-# because qlone has no belts at all -- a cluster with no edges is a legitimate
-# half-built state and gets no network. The replace splits qcol into two
-# one-sided clusters (one input, no outputs and the reverse), so its network
-# comes down and neither half gets one: clusters 4 -> 5 and nets 3 -> 2. The
-# sixty-fifth belt moves drift to 1 and nothing else: a refused cluster still
-# HAS its network and knows its edge list has moved past what the mod can
-# build, and it stays that way for the rest of the run.
+# The audits, tag -> (clusters, parts, nets, drift, unbuilt, refused). nets is
+# 3 at t0 because qlone has no belts at all -- a cluster with no edges is a
+# legitimate half-built state and gets no network. The replace splits qcol into
+# two one-sided clusters (one input, no outputs and the reverse), so its
+# network comes down and neither half gets one: clusters 4 -> 5 and nets 3 -> 2.
+# The sixty-fifth belt moves drift to 1 and refused to 1 and nothing else: a
+# refused cluster still HAS its network and knows its edge list has moved past
+# what the mod can build, and it stays that way for the rest of the run.
+#
+# THE TUPLE IS THE ASSERTION AND `unbuilt=0` ALONE WOULD NOT BE. A cluster with
+# no inputs or no outputs is a legitimate half-built state and never counts as
+# unbuilt, so a rig that lost half its belts reads `unbuilt=0` while delivering
+# nothing -- which is why the cluster and part counts are pinned against
+# WANT_CLUSTERS/WANT_PARTS as well, and why `nets` is written down per tag
+# rather than compared against `clusters` (three of this save's five clusters
+# are legitimately network-free by the end).
 AUDIT_EXPECT = {
     # t0's audit runs inside on_init's marker dispatch, and the report is
     # taken BEFORE the drain it forces compiles anything -- so it sees the
     # three compilable clusters as unbuilt and no networks at all. qlone never
     # counts as unbuilt: a cluster with no edges is a legitimate half-built
     # state at any size.
-    "t0":           (4, 41, 0, 0, 3),
-    "post-collide": (4, 41, 3, 0, 0),
-    "post-replace": (5, 40, 2, 0, 0),
-    "post-lim":     (5, 40, 2, 1, 0),
-    "final":        (5, 40, 2, 1, 0),
+    "t0":           (4, 75, 0, 0, 3, 0),
+    "post-collide": (4, 75, 3, 0, 0, 0),
+    "post-replace": (5, 74, 2, 0, 0, 0),
+    "post-lim":     (5, 74, 2, 1, 0, 1),
+    "final":        (5, 74, 2, 1, 0, 1),
 }
 
 SPREAD = 0.01
@@ -198,7 +243,7 @@ def main():
     for l in lines:
         m = AUDIT.search(l)
         if m:
-            last = tuple(int(g) for g in m.groups())
+            last = tuple(0 if g is None else int(g) for g in m.groups())
             continue
         m = AUDITED.search(l)
         if m and last is not None:
@@ -211,7 +256,31 @@ def main():
             fail.append("no audit for tag=%s" % tag)
         elif got != want:
             fail.append("audit %s is clusters=%d parts=%d nets=%d drift=%d "
-                        "unbuilt=%d, expected %r" % ((tag,) + got + (want,)))
+                        "unbuilt=%d refused=%d, expected %r"
+                        % ((tag,) + got + (want,)))
+
+    # THE GEOMETRY THE SAVE WAS SUPPOSED TO BUILD, asserted where the world is
+    # still as on_init left it. The tuples above pin this too, but only as one
+    # of six numbers each; saying it once by name is what makes a rig that came
+    # out the wrong shape report as a rig rather than as an audit.
+    t0 = audits.get("t0")
+    if t0 and (t0[0], t0[1]) != (WANT_CLUSTERS, WANT_PARTS):
+        fail.append("the save holds %d clusters over %d parts and the rigs "
+                    "build %d over %d -- a rig is not the shape this suite "
+                    "thinks it is" % (t0[0], t0[1], WANT_CLUSTERS, WANT_PARTS))
+
+    # NOTHING HERE MAY BE REFUSED FOR THE ONE-BELT-PER-PART RULE. Every rig in
+    # this save is built to it -- qlim's sixty-fifth belt lands on an EDGELESS
+    # part precisely so that it asks the PORT bound and not this one -- so a
+    # single-edge refusal is a statement about the save rather than about the
+    # guest, and it would take the `told force` assertion below with it by
+    # answering it for the wrong reason.
+    sedge = [m for m in (SEDGE_REFUSED.search(l) for l in lines) if m]
+    if sedge:
+        fail.append("%d single-edge refusal(s) were issued in a save whose "
+                    "rigs are all built to the rule; the first was cluster %s "
+                    "with %s part(s) carrying more than one belt"
+                    % (len(sedge), sedge[0].group(1), sedge[0].group(2)))
 
     # ---- the refusal, and that somebody was TOLD ---------------------------
     over = [m for m in (OVERLIMIT.search(l) for l in lines) if m]

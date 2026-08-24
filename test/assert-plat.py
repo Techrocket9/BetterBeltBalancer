@@ -61,6 +61,13 @@ Two legs, both needing the DLC and nothing else in common.
        the flat totals, and that line's items come back UNSTACKED -- so a
        fallback anywhere shows up here as singles.
 
+EVERY BAND IS BUILT TO FACTORIO 2.1'S ONE-BELT-PER-PART RULE: two columns of
+parts per row, plus one EDGELESS part on the end for each band's recompile belt
+to land on, because under that rule a working balancer has no free face and the
+belt would otherwise be REFUSED rather than compiled. The stack profiles, the
+per-kind conservation and the rates are all properties of the BELTS, which did
+not move, so every contract below is the one it was.
+
     python3 test/assert-plat.py create.log run.log
 """
 
@@ -89,6 +96,25 @@ SMIXLINES = re.compile(
     r"maxkinds=(\d+) maxstack=(\d+)")
 SMIXKIND = re.compile(r"\[BBB-STK\] smixkind tag=(before|after) name=(\S+) count=(\d+)")
 OVERFLOW = re.compile(r"\[BBB\] alert: cluster \d+ carried more than \d+ item kinds")
+AUDIT = re.compile(
+    r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) unbuilt=(\d+)"
+    r"(?: refused=(\d+))?")
+SEDGE_REFUSED = re.compile(
+    r"\[BBB\] alert: cluster (\d+) has (\d+) parts? carrying more than one belt")
+
+# WHAT THE RIGS BUILD, written down here rather than read off the guest's own
+# report. Five clusters over two surfaces: the platform's 2->2 (four parts) and
+# the four stacking bands, each two columns of parts plus one EDGELESS part for
+# its recompile's belt to land on -- full 4 rows -> 9 parts, flow 4 -> 9,
+# plain 2 -> 5, smix 2 -> 5.
+#
+# It is a statement about the SAVE and not about the compiler, which is the
+# whole reason it is a constant: a band that quietly lost a row, or that was
+# rebuilt one column wide in the old multi-edge idiom, moves this number, and
+# neither the stack profile nor a rate could say so -- both are about what the
+# drain did with a network, whatever size it turned out to be.
+WANT_CLUSTERS = 5
+WANT_PARTS = 32
 
 # The band is sized to stay INSIDE the carry pool's 32-group bound -- overflowing
 # it is the base-only `mix` suite's business ("More than thirty-two kinds") and
@@ -405,6 +431,50 @@ def main():
 
     check_stacking(lines, fail)
     check_stacked_sushi(lines, fail)
+
+    # --- the final audit, over both surfaces ---------------------------------
+    #
+    # THE CLUSTER AND PART COUNTS ARE THE POINT AND `unbuilt=0` WOULD NOT BE. A
+    # cluster with no inputs or no outputs is a legitimate half-built state and
+    # never counts as unbuilt, so a band that came out one column wide -- the
+    # old multi-edge idiom -- would be REFUSED, hold nothing, and still read
+    # `unbuilt=0`. The tuple is what sees it, and `nets == clusters` is what
+    # says every band's edges were recognised.
+    audits = [tuple(0 if g is None else int(g) for g in m.groups())
+              for m in (AUDIT.search(l) for l in lines) if m]
+    if not audits:
+        fail.append("no audit was ever logged, so nothing checked the registry "
+                    "against the world")
+    else:
+        clusters, parts, nets, drift, unbuilt, refused = audits[-1]
+        print("\nfinal audit: %d clusters, %d parts, %d networks, drift=%d, "
+              "unbuilt=%d, refused=%d"
+              % (clusters, parts, nets, drift, unbuilt, refused))
+        if (clusters, parts) != (WANT_CLUSTERS, WANT_PARTS):
+            fail.append("the save holds %d clusters over %d parts and the rigs "
+                        "build %d over %d -- a band is not the shape this suite "
+                        "thinks it is"
+                        % (clusters, parts, WANT_CLUSTERS, WANT_PARTS))
+        if nets != clusters:
+            fail.append("%d of %d clusters have no network at all: something "
+                        "adjacent to a balancer is not being classified as an "
+                        "edge" % (clusters - nets, clusters))
+        if drift or unbuilt or refused:
+            fail.append("the final audit found drift=%d unbuilt=%d refused=%d "
+                        "over %d clusters, on a world nothing has touched since "
+                        "tick 900" % (drift, unbuilt, refused, clusters))
+
+    # Every band here is built to the one-belt-per-part rule, so a refusal is a
+    # statement about the SAVE and not about the guest. Asserted separately from
+    # the audit's `refused=` column because a refusal can be issued, delivered
+    # and then withdrawn between two audits -- and because it names the cluster,
+    # which the column does not.
+    sedge = [m for m in (SEDGE_REFUSED.search(l) for l in lines) if m]
+    if sedge:
+        fail.append("%d single-edge refusal(s) were issued in a save whose "
+                    "bands are all built to the rule; the first was cluster %s "
+                    "with %s part(s) carrying more than one belt"
+                    % (len(sedge), sedge[0].group(1), sedge[0].group(2)))
 
     if fail:
         print("\nSPACE AGE ASSERTIONS FAILED:")

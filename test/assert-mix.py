@@ -4,8 +4,8 @@
 Every other suite ran iron plates through everything, so the multi-kind half of
 `guest/go/carry.go` -- the pool's (name, quality, stack size) key, the per-kind
 split, insertRemainder's walk over several groups -- had never been exercised at
-all. This one runs two pure belts, then a sushi belt, through balancers and
-counts every item in the world BY NAME either side of a forced recompile.
+all. This one runs pure belts, then sushi belts, through balancers and counts
+every item in the world BY NAME either side of a forced recompile.
 
 WHAT THIS SUITE CANNOT REACH, because it is base only: `compile.go`'s
 `detailedTally` and `kindAt`. Below the stacking gate the drain takes the flat
@@ -16,6 +16,13 @@ multi-kind AND STACKED is a Space Age question and lives in the `plat` suite's
 Per name and not as one total, which is the whole point: a teardown that dropped
 one kind and reinserted the rest conserves nothing, and a single total would have
 to lose the same number of items twice in opposite directions to hide it.
+
+EVERY RIG IS BUILT TO FACTORIO 2.1'S ONE-BELT-PER-PART RULE: two columns of
+parts per row, plus one EDGELESS part below each west column, because under
+that rule a working balancer has no free face and the belt each conservation
+check lays would otherwise be REFUSED rather than compiled. N, M and the kinds
+in flight are properties of the BELTS, which did not move, so every contract
+below is the one it was.
 
     python3 test/assert-mix.py create.log run.log
 """
@@ -44,6 +51,26 @@ OVERFLOW = re.compile(
     r"(\d+) items of the kinds past that bound went to the ground beside it"
 )
 LISTS = re.compile(r"\[BBB-MIX\] item lists ok: many distinct=(\d+) mixfull=(\d+)")
+AUDIT = re.compile(
+    r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) unbuilt=(\d+)"
+    r"(?: refused=(\d+))?"
+)
+SEDGE_REFUSED = re.compile(
+    r"\[BBB\] alert: cluster (\d+) has (\d+) parts? carrying more than one belt")
+
+# WHAT THE RIGS BUILD, written down here rather than read off the guest's own
+# report. Four clusters -- `duo`, `quad`, `mixfull` and `many` -- laid to
+# Factorio 2.1's one-belt-per-part rule: two columns of parts per row, plus one
+# EDGELESS part below each west column for the conservation check's belt to
+# land on. duo 2 rows -> 5 parts, quad 4 -> 9, mixfull 2 -> 5, many 4 -> 9.
+# `ctrl` and `probe` are bare belts and are not clusters at all.
+#
+# It is a statement about the SAVE and not about the compiler, which is the
+# whole reason it is a constant: a rig that quietly lost a row, or that was
+# rebuilt one column wide in the old multi-edge idiom, moves this number and
+# nothing the guest reports about itself could say so.
+WANT_CLUSTERS = 4
+WANT_PARTS = 28
 
 # How many distinct item names the `many` rig's four sushi sources cover between
 # them. Asserted rather than trusted: a rig that lost half its list to a rename
@@ -52,32 +79,51 @@ MANY_KINDS = 48
 
 T0, T1 = 1400, 3140
 
-# `duo` is two PURE belts -- one iron, one copper -- into a 2->2 that drains
-# freely. Two belts in, two out, so two belts' worth had better come out.
-DUO_TYPES = ("iron-plate", "copper-plate")
+# The PURE-FEED rigs: which item each of their input belts carries, in row
+# order. `duo` is a 2->2 and `quad` a 4->4 with the two kinds alternating.
+PURE = {
+    "duo":  ("iron-plate", "copper-plate"),
+    "quad": ("iron-plate", "copper-plate", "iron-plate", "copper-plate"),
+}
 
-# HOW EVEN THE TYPE SPLIT HAS TO BE, AND WHY IT IS A FLOOR RATHER THAN A BAND.
+# WHAT IS ASSERTED ABOUT THE TYPE SPLIT, AND WHAT IS ONLY RECORDED.
 #
 # THE BUTTERFLY BALANCES COUNTS, NOT KINDS. Nothing in plan.Build knows what an
-# item is; a splitter divides its input side between its output side by position,
-# and an item's NAME never enters the arithmetic. So the type mix at an output is
-# whatever the geometry happens to produce, it is NOT a designed guarantee, and
-# no future planner change is obliged to preserve it.
+# item is; a splitter divides its input side between its output side by
+# position, and an item's NAME never enters the arithmetic. So the mix at any
+# one output is whatever the geometry happens to produce, it is NOT a designed
+# guarantee, and no future planner change is obliged to preserve it.
 #
-# MEASURED, on this rig, 2026-08-04: a 2->2 fed one pure iron belt and one pure
-# copper belt delivers 1306 and 1304 items -- exactly balanced by COUNT, 0.15%
-# spread -- and the mix at each output is 75/25 in favour of the kind fed on its
-# own side (out1 copper 981 / iron 325, out2 iron 977 / copper 327). Half and
-# half is the naive expectation and it is not what the machine is for; the ratio
-# is a consequence of the lane geometry and is recorded here as a measurement
-# rather than explained, because nothing in the mod chose it.
+# MEASURED, 2026-08-24, on Factorio 2.1.14 with the rigs laid single-edge:
+# UNDER SYMMETRIC SATURATION THIS BUTTERFLY IS A PERMUTATION. `duo` delivers
+# 1306 and 1306 -- exactly balanced by count, 0.00% spread -- with out1 taking
+# ALL the copper and out2 ALL the iron; `quad` delivers 1306 per output at
+# 0.00% spread with outputs 1 and 2 taking all the copper and 3 and 4 all the
+# iron, from inputs that alternate iron/copper/iron/copper. Both sizes, every
+# input saturated, every output draining freely: each output takes exactly its
+# share by count and exactly one kind.
 #
-# What IS load-bearing is that neither output is STARVED of a kind: an output
-# seeing only iron would mean the two kinds took different paths through the
-# network, which is a real defect and would read as 0%. The floor is 15%, which
-# is well clear of the 25% the geometry produces and a long way from the 0% a
-# defect produces.
-TYPE_FLOOR = 0.15
+# THAT IS NOT WHAT THIS SUITE USED TO RECORD, and the difference is a port
+# ORDER rather than a regression. Until 2026-08-24 `duo`'s window opened AFTER
+# its conservation belt had already taken it from 2->2 to 3->2 over P=4 -- an
+# asymmetric network with a dead-ended spare port and a loopback, where the
+# flows genuinely have to cross -- and the multi-edge geometry put that belt
+# FIRST in the edge list. That network mixed, 75/25. Laid single-edge the same
+# belt enters LAST, the same P=4 network delivers 100/0, and both are exactly
+# balanced by count. So the old 15% per-output floor was never a statement
+# about the balancer: it was a statement about one asymmetric network's port
+# assignment, and it is retired rather than re-tuned. The schedule now edits
+# `duo` after its window, so what the rig measures is the 2->2 its own
+# description names.
+#
+# WHAT REPLACES IT IS THE CHECK THE FLOOR WAS GROPING AT. "The two kinds are
+# taking different paths through the network" is only a defect if it costs a
+# kind its THROUGHPUT -- one kind backing up while the other flows. So every
+# kind fed into a pure rig must come out at the rate it went in: iron on one
+# belt in, one belt of iron out, summed over every output. That is true of a
+# permutation, false of a network that starves a kind, and says nothing about
+# a mix nothing ever promised.
+KIND_TOL = 0.02
 
 
 def read(paths):
@@ -199,46 +245,60 @@ def main():
         return 1
     print("one saturated express belt over t=%d..%d: %d items" % (T0, T1, belt))
 
-    if "duo" not in samples or T0 not in samples["duo"] or T1 not in samples["duo"]:
-        fail.append("duo: never reported")
-    else:
-        a, b = samples["duo"][T0], samples["duo"][T1]
+    for rig, feeds in sorted(PURE.items()):
+        n = len(feeds)
+        if rig not in samples or T0 not in samples[rig] or T1 not in samples[rig]:
+            fail.append("%s: never reported" % rig)
+            continue
+        a, b = samples[rig][T0], samples[rig][T1]
         deltas = [b[i] - a[i] for i in range(len(b))]
         total = sum(deltas)
         ratio = total / float(belt)
         mean = total / float(len(deltas))
         spread = (max(deltas) - min(deltas)) / mean if mean else 1.0
-        print("duo: two PURE belts (iron, copper) into a 2->2, per-output %s, "
-              "%d items, %.3fx one belt, spread %.2f%%"
-              % (deltas, total, ratio, spread * 100))
-        if ratio < 1.98 or ratio > 2.02:
+        print("%s: %d PURE belts (%s) into a %d->%d, per-output %s, %d items, "
+              "%.3fx one belt, spread %.2f%%"
+              % (rig, n, ", ".join(sorted(set(feeds))), n, n, deltas, total,
+                 ratio, spread * 100))
+        if abs(ratio - n) > 0.02 * n:
             fail.append(
-                "duo: delivered %.3f belts, expected 2.0 -- a balancer carrying "
-                "two kinds must not throttle" % ratio)
+                "%s: delivered %.3f belts, expected %d -- a balancer carrying "
+                "two kinds must not throttle" % (rig, ratio, n))
         if spread > 0.01:
-            fail.append("duo: outputs spread %.2f%% (%s), over the 1%% bound"
-                        % (spread * 100, deltas))
+            fail.append("%s: outputs spread %.2f%% (%s), over the 1%% bound"
+                        % (rig, spread * 100, deltas))
 
-        # BOTH kinds at BOTH outputs. See TYPE_FLOOR above for why the bound is
-        # a floor rather than a band.
-        for i in (1, 2):
-            per0 = outkinds.get(("duo", i), {}).get(T0)
-            per1 = outkinds.get(("duo", i), {}).get(T1)
+        # EVERY KIND OUT AT THE RATE IT WENT IN, summed over the outputs. See
+        # KIND_TOL above: the per-output MIX is recorded and not asserted,
+        # because this butterfly is a permutation under symmetric saturation
+        # and nothing in the mod ever promised otherwise. What a defect looks
+        # like is a kind that does not come out at all, or comes out slower
+        # than it was fed, and that is what this sees.
+        got = {}
+        for i in range(1, n + 1):
+            per0 = outkinds.get((rig, i), {}).get(T0)
+            per1 = outkinds.get((rig, i), {}).get(T1)
             if per0 is None or per1 is None:
-                fail.append("duo: output %d never reported its per-kind split" % i)
+                fail.append("%s: output %d never reported its per-kind split"
+                            % (rig, i))
                 continue
-            win = {n: per1.get(n, 0) - per0.get(n, 0) for n in set(per0) | set(per1)}
-            got = sum(win.values()) or 1
-            shown = " ".join("%s:%d" % (n, win[n]) for n in sorted(win))
-            print("     out%d over the window: %s" % (i, shown))
-            for name in DUO_TYPES:
-                share = win.get(name, 0) / float(got)
-                if share < TYPE_FLOOR:
-                    fail.append(
-                        "duo: output %d received %.1f%% %s, under the %.0f%% "
-                        "floor -- the two kinds are taking different paths "
-                        "through the network"
-                        % (i, share * 100, name, TYPE_FLOOR * 100))
+            win = {k: per1.get(k, 0) - per0.get(k, 0)
+                   for k in set(per0) | set(per1)}
+            print("     out%d over the window: %s"
+                  % (i, " ".join("%s:%d" % (k, win[k]) for k in sorted(win))))
+            for k, v in win.items():
+                got[k] = got.get(k, 0) + v
+        for name in sorted(set(feeds)):
+            fed = feeds.count(name)
+            out = got.get(name, 0)
+            print("     %-14s %d belt(s) in, %.3f belt(s) out (%d items)"
+                  % (name, fed, out / float(belt), out))
+            if abs(out / float(belt) - fed) > KIND_TOL * fed:
+                fail.append(
+                    "%s: %d belt(s) of %s went in and %.3f came out. A kind "
+                    "that does not leave at the rate it arrived is a kind the "
+                    "network is holding back, whichever output it leaves by"
+                    % (rig, fed, name, out / float(belt)))
 
     # --- conservation, per item name, across a forced recompile --------------
     print("\nitem conservation across a forced recompile, counted BY NAME on "
@@ -325,6 +385,50 @@ def main():
         fail.append("no teardown drained anything, so nothing here proves anything")
     else:
         print("\nthe largest single teardown handed back %d items" % max(drained))
+
+    # --- the final audit, on a world nothing has touched since tick 1200 ------
+    #
+    # THE CLUSTER AND PART COUNTS ARE THE POINT AND `unbuilt=0` WOULD NOT BE. A
+    # cluster with no inputs or no outputs is a legitimate half-built state and
+    # never counts as unbuilt, so a rig that came out one column wide -- the old
+    # multi-edge idiom -- would be REFUSED, deliver nothing, and still read
+    # `unbuilt=0`. The tuple is what sees it, and `nets == clusters` is what
+    # says every cluster's edges were recognised.
+    audits = [tuple(0 if g is None else int(g) for g in m.groups())
+              for m in (AUDIT.search(l) for l in lines) if m]
+    if not audits:
+        fail.append("no audit was ever logged, so nothing checked the registry "
+                    "against the world")
+    else:
+        clusters, parts, nets, drift, unbuilt, refused = audits[-1]
+        print("\nfinal audit: %d clusters, %d parts, %d networks, drift=%d, "
+              "unbuilt=%d, refused=%d"
+              % (clusters, parts, nets, drift, unbuilt, refused))
+        if (clusters, parts) != (WANT_CLUSTERS, WANT_PARTS):
+            fail.append("the save holds %d clusters over %d parts and the rigs "
+                        "build %d over %d -- a rig is not the shape this suite "
+                        "thinks it is"
+                        % (clusters, parts, WANT_CLUSTERS, WANT_PARTS))
+        if nets != clusters:
+            fail.append("%d of %d clusters have no network at all: something "
+                        "adjacent to a balancer is not being classified as an "
+                        "edge" % (clusters - nets, clusters))
+        if drift or unbuilt or refused:
+            fail.append("the final audit found drift=%d unbuilt=%d refused=%d "
+                        "over %d clusters, on a world nothing has touched since "
+                        "tick 1200" % (drift, unbuilt, refused, clusters))
+
+    # Every rig in this save is built to the one-belt-per-part rule, so a
+    # refusal is a statement about the SAVE and not about the guest. Asserted
+    # separately from the audit's `refused=` column because a refusal can be
+    # issued, delivered and then withdrawn between two audits -- and because it
+    # names the cluster, which the column does not.
+    sedge = [m for m in (SEDGE_REFUSED.search(l) for l in lines) if m]
+    if sedge:
+        fail.append("%d single-edge refusal(s) were issued in a save whose rigs "
+                    "are all built to the rule; the first was cluster %s with "
+                    "%s part(s) carrying more than one belt"
+                    % (len(sedge), sedge[0].group(1), sedge[0].group(2)))
 
     if fail:
         print("\nMIX ASSERTIONS FAILED:")

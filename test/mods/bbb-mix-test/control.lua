@@ -18,6 +18,24 @@
 -- expected answer in Lua would be a second implementation of the thing under
 -- test.
 --
+-- EVERY RIG HERE IS BUILT TO FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART.
+-- Every column of parts is TWO columns now -- a west part carrying the row's
+-- input and an east part carrying its output -- because an edge is an interface
+-- linked belt standing on the cluster's own tile, and 2.1's collision validator
+-- forbids two belt-connectables on one tile. See agents/single-edge.md.
+--
+-- What that costs a rig is GEOMETRY AND NOTHING ELSE. N, M and the item kinds
+-- in flight are properties of the BELTS, and the belts did not move, so every
+-- conservation contract in this file is the one it was.
+--
+-- ...except for one thing, and it is the same thing `m2`'s conservation rig
+-- and the interactive checklist's band B both ran into independently: under
+-- this rule a WORKING BALANCER HAS NO FREE FACE. Every part of it already
+-- carries its one belt, so the belt each conservation check used to lay on the
+-- cluster's north face would now be REFUSED and the check would measure a
+-- refusal instead of a recompile. So every rig with parts carries one extra
+-- EDGELESS part below its west column, and that is where the belt goes.
+--
 -- THE RIGS, one per y band on a flat scratch surface:
 --
 --   ctrl     a bare express belt, chest to chest, iron plates. The yardstick,
@@ -25,8 +43,19 @@
 --            engine rather than against arithmetic on a wiki number.
 --   duo      a 2->2 balancer fed by two PURE belts -- one iron, one copper --
 --            draining freely into two chests. Does a balancer carrying two
---            kinds still deliver two belts' worth, and does each output see
---            BOTH kinds?
+--            kinds still deliver two belts' worth, and does each kind come out
+--            at the rate it went in? It is one of the two rigs here whose
+--            numbers are about a RUNNING balancer, which is why its
+--            conservation edit is the last thing the schedule does rather than
+--            the first (see there).
+--   quad     the same question one size up: a 4->4 fed by two PURE iron belts
+--            and two PURE copper ones, alternating, draining freely. It exists
+--            because `duo` alone could not tell a two-line accident from a
+--            property -- and what the two of them measure together is that
+--            under SYMMETRIC SATURATION this butterfly is a PERMUTATION: every
+--            output takes exactly its share by count and exactly one kind, at
+--            both sizes. See assert-mix.py, which records the numbers and says
+--            what is and is not asserted about them.
 --   mixfull  a 2->2 fed by two SUSHI belts, outputs DEAD-ENDED so the hidden
 --            network fills and stays full. Then a forced recompile inside one
 --            tick: is every kind conserved exactly?
@@ -66,7 +95,6 @@ local AUDIT = "bbb-audit"
 local BELT = "express-transport-belt"
 local LOADER = "bbbt-loader"
 local E = defines.direction.east
-local S = defines.direction.south
 
 local SURF = "bbb-mix-a"
 
@@ -255,12 +283,18 @@ end
 --------------------------------------------------------------------------------
 -- rigs
 --
---   x=-5 source chest   -4 loader   -3..-1 belts   0 PART   1..3 belts
---   x=4 sink loader     5 chest        (dead-ended rigs stop after x=3)
+--   x=-5 source chest   -4 loader   -3..-1 belts   0 WEST PART   1 EAST PART
+--   x=2..4 belts        5 sink loader   6 chest
+--                                      (dead-ended rigs stop after x=4)
 --
--- The tile NORTH of a rig's first part is deliberately left empty on every rig:
--- it is the one free face, and laying a south-facing belt on it is a real edge
--- change, so the fingerprint moves and the network is torn down and rebuilt.
+-- TWO COLUMNS OF PARTS, not one: one belt per part, so a row's input and its
+-- output cannot stand against the same tile.
+--
+-- One extra EDGELESS part hangs below the west column of every rig that has
+-- parts, at (0, base + rows). It carries no belt and is therefore the one tile
+-- in the cluster a player's belt can still reach -- laying an east-facing belt
+-- at (-1, base + rows) is a real edge change (a new INPUT, so the port count
+-- goes UP), the fingerprint moves, and the network is torn down and rebuilt.
 -- That is how every conservation check here forces a recompile.
 --------------------------------------------------------------------------------
 
@@ -274,6 +308,11 @@ local RIGS = {
   -- and this is where it is taken.
   { name = "probe", multi = MIXFULL_ITEMS[1] },
   { name = "duo", parts = 2, feeds = { "iron-plate", "copper-plate" }, drained = true },
+  -- The same shape one size up, and the kinds ALTERNATE down the rows rather
+  -- than being grouped, so a network that merely passed row i to row i and one
+  -- that permuted the rows would read differently.
+  { name = "quad", parts = 4, drained = true,
+    feeds = { "iron-plate", "copper-plate", "iron-plate", "copper-plate" } },
   { name = "mixfull", parts = 2, sushi = MIXFULL_ITEMS },
   -- Four parts, four in, four out, dead-ended -- M2's `sat4` shape, which is the
   -- one this repo has already measured holding ~230 items when it is full. That
@@ -312,7 +351,14 @@ local function build_rig(cfg, base)
 
   -- Parts FIRST, belts after, so that the belt events are what drive the
   -- compiles -- the same order M2 builds in and for the same reason.
-  for i = 0, cfg.parts - 1 do put(s, PART, 0, base + i) end
+  --
+  -- Two per row plus the edgeless one below; `cfg.parts` is the number of ROWS
+  -- and the part count is twice it plus one.
+  for i = 0, cfg.parts - 1 do
+    put(s, PART, 0, base + i)
+    put(s, PART, 1, base + i)
+  end
+  put(s, PART, 0, base + cfg.parts)
 
   for i = 1, cfg.parts do
     local y = base + i - 1
@@ -322,11 +368,11 @@ local function build_rig(cfg, base)
       source(s, -5, y, cfg.feeds[i])
     end
     for x = -3, -1 do put(s, BELT, x, y, { direction = E }) end
-    for x = 1, 3 do put(s, BELT, x, y, { direction = E }) end
+    for x = 2, 4 do put(s, BELT, x, y, { direction = E }) end
     -- A dead-ended output backs up, which is what fills the hidden network and
     -- keeps it full: the conservation rigs need a network that is holding as
     -- much as it can hold.
-    if cfg.drained then r.out[i] = sink(s, 4, y) end
+    if cfg.drained then r.out[i] = sink(s, 5, y) end
   end
   return r
 end
@@ -351,7 +397,12 @@ end
 -- directions to hide it.
 --------------------------------------------------------------------------------
 
-local VIS_AREA = { { -34, -20 }, { 20, 80 } }
+-- Wide enough to contain every band plus the spill radius of the one rig that
+-- deliberately spills. It is a constant rather than a function of the band
+-- count because it is read in the same breath as the hidden surface's, and an
+-- item that landed outside it would read as LOSS -- which would put the bug on
+-- the wrong side of every assertion in this suite.
+local VIS_AREA = { { -34, -20 }, { 20, 140 } }
 local HIDDEN_AREA = { { -16, -16 }, { 2200, 400 } }
 
 local function count_area(s, area, kinds)
@@ -450,12 +501,13 @@ local function conserve(rig_name)
   if not r then error("bbb-mix-test: no rig " .. rig_name) end
   log(string.format("[BBB-MIX] mark rig=%s tick=%d", rig_name, game.tick))
   emit(rig_name .. "-before")
-  -- The north face is the only free one; a belt facing SOUTH there is a new
-  -- INPUT edge, so the port count goes up and the network the rebuild produces
-  -- is at least as big as the one it replaced. That matters: a shrink would
-  -- spill legitimately (carry.go, decision 4) and this check is about the
-  -- kinds, not about capacity.
-  put(surf(), BELT, 0, r.base - 1, { direction = S })
+  -- Against the EDGELESS part below the west column, which under the one-belt
+  -- rule is the only tile of this cluster a belt can still reach: an east-facing
+  -- belt there is a new INPUT edge, so the port count goes UP and the network
+  -- the rebuild produces is at least as big as the one it replaced. That
+  -- matters: a shrink would spill legitimately (carry.go, decision 4) and this
+  -- check is about the kinds, not about capacity.
+  put(surf(), BELT, -1, r.base + r.cfg.parts, { direction = E })
   audit_now()
   emit(rig_name .. "-after")
 end
@@ -479,7 +531,7 @@ local function chest_kinds(c)
 end
 
 local function report(tick)
-  for _, name in ipairs { "ctrl", "probe", "duo" } do
+  for _, name in ipairs { "ctrl", "probe", "duo", "quad" } do
     local r = storage.rigs[name]
     local outs = {}
     for i = 1, #r.out do
@@ -495,13 +547,27 @@ end
 --------------------------------------------------------------------------------
 -- schedule
 --
--- Every edit lands BEFORE the throughput window opens, so `duo`'s rate is
--- measured over a stretch in which nothing was touched -- the same discipline
--- M2's `regrow` rig follows.
+-- No edit lands INSIDE the throughput window, so every rate here is measured
+-- over a stretch in which nothing was touched -- the same discipline M2's
+-- `regrow` rig follows. The two dead-ended rigs are edited before it, because
+-- nothing about them is measured over time; `duo` is edited AFTER it, because
+-- it is the only rig whose numbers are about a running balancer.
+--
+-- `duo`'S EDIT MOVED TO THE END WHEN THE RIGS WERE RE-LAID SINGLE-EDGE, and it
+-- is worth saying why rather than leaving it as a schedule detail. Its
+-- conservation belt takes the rig from 2->2 (P=2) to 3->2 (P=4), and the
+-- per-kind split at an output is a function of WHICH PORT each belt landed on
+-- -- so with the edit first, this rig's headline measurement was never about
+-- the 2->2 its own description names. Under the old multi-edge geometry the
+-- extra belt entered the edge list FIRST (it stood on the north face of the
+-- first part) and the split came out 75/25; under the new one it enters LAST
+-- and the same P=4 network delivers 100/0, exactly balanced by count either
+-- way. Neither is a defect -- the butterfly balances COUNTS and nothing in
+-- plan.Build knows what an item is -- and neither was ever the question. The
+-- pristine 2->2 is, and now that is what the window sees.
 --------------------------------------------------------------------------------
 
 local SCHEDULE = {
-  [800] = function() conserve("duo") end,
   [1000] = function() conserve("mixfull") end,
   -- `many` last of the three, and 200 ticks after `mixfull`, because it is the
   -- one whose result depends on how FULL it is: 48 kinds only overflow a
@@ -512,6 +578,13 @@ local SCHEDULE = {
   [1200] = function() conserve("many") end,
   [1400] = function() report(1400) end,
   [3140] = function() report(3140) end,
+  -- After the last sample, so it cannot disturb one.
+  [3160] = function() conserve("duo") end,
+  -- Last of all: nothing else touches the world after it, so the registry and
+  -- the world must agree exactly -- and the cluster and part counts are what
+  -- say the rigs are the shape this suite thinks they are, which no rate and
+  -- no per-name total can.
+  [3180] = function() audit_now() end,
 }
 
 script.on_init(function()

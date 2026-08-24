@@ -1,25 +1,27 @@
 # single-edge.md — the 2.1 port: one belt per part
 
-Status: **PHASES 1, 2, 3 AND 4 SHIPPED 2026-08-24** — the rule and its refusal,
-then the setting, the grandfather pass and the migration, then the interactive
-and demo worlds, then the first tranche of the rebuilt test estate (`m2`, `mar`
-and `upg`). Drafted the same day from the 2026-08-23 investigation and
-boskid's answer to the interface request (forums t=135830). Read CLAUDE.md's
-migration and over-limit sections first; this design reuses both wholesale.
+Status: **PHASES 1, 2, 3, 4 AND 5 SHIPPED 2026-08-24** — the rule and its
+refusal, then the setting, the grandfather pass and the migration, then the
+interactive and demo worlds, then the first tranche of the rebuilt test estate
+(`m2`, `mar` and `upg`), then the second (`mix`, `plat` and `qual`). Drafted the
+same day from the 2026-08-23 investigation and boskid's answer to the interface
+request (forums t=135830). Read CLAUDE.md's migration and over-limit sections
+first; this design reuses both wholesale.
 
 
-What is implemented and what is not is the four "Implementation status"
+What is implemented and what is not is the five "Implementation status"
 sections at the end of this file. The short form: the rule enforces, the refusal
 reaches the player through the sixty-fifth belt's own machinery, the merge is
 spared, a 2.0 multi-edge save opened on 2.1 has its remnants torn down and its
 owning forces told with a ping per balancer, every gesture rig and every demo
 scene is single-edge and headlessly verified, and `m1`, `sedge`, `mig21`, `m2`,
-`mar`, `upg` and `iact` are green on 2.1.14 in both `-gc` arms. **The `mar`
-slopes are measured again**, which is the gate the first three phases shipped
-without and which their "nothing on any hot path moves" claims were waiting on.
-What is left is the other six suites and the GIF re-capture, which needs a
-graphical client; the setting-flip legs and the multi-edge regression run need a
-2.0 binary and belong on the `release/2.0` branch.
+`mar`, `upg`, `mix`, `plat`, `qual` and `iact` — ten of the thirteen — are green
+on 2.1.14 in both `-gc` arms. **The `mar` slopes are measured again**, which is
+the gate the first three phases shipped without and which their "nothing on any
+hot path moves" claims were waiting on. What is left is `m3`, `edge` and `mig`,
+and the GIF re-capture, which needs a graphical client; the setting-flip legs
+and the multi-edge regression run need a 2.0 binary and belong on the
+`release/2.0` branch.
 
 
 ## Why, in three sentences
@@ -362,7 +364,7 @@ The bulk of the labor, and it splits by which binary can run it:
 
 | work | binary | notes |
 |---|---|---|
-| ~~every suite's rigs rebuilt single-edge~~ **`m2`, `mar` and `upg` DONE 2026-08-24; `m3`, `plat`, `edge`, `mix`, `mig`, `qual` remain** | 2.1 | the geometry doubles; every calibrated number in CLAUDE.md's tables gets re-recorded. The suites' assertions themselves mostly survive — what changes is the worlds their `on_init` builds. Confirmed by the first tranche: **not one assertion in `m2` or `upg` had to be weakened**, every rate and every port count is the number it was, and what moved is the part count (77 → 156) and the recompile timings. See "Implementation status — phase 4" below for the two rigs that needed a redesign rather than a re-lay, and for the two suites that will |
+| ~~every suite's rigs rebuilt single-edge~~ **`m2`, `mar`, `upg`, `mix`, `plat` and `qual` DONE 2026-08-24; `m3`, `edge`, `mig` remain** | 2.1 | the geometry doubles; every calibrated number in CLAUDE.md's tables gets re-recorded. The suites' assertions themselves mostly survive — what changes is the worlds their `on_init` builds. Confirmed by both tranches: **not one assertion in `m2`, `upg`, `plat` or `qual` had to be weakened**, every rate and every port count is the number it was, and `plat`'s whole stacking leg came back identical to the item. See "Implementation status — phase 4" for the two rigs that needed a redesign rather than a re-lay and "phase 5" for the one assertion that had to be retired rather than re-recorded |
 | new `sedge` legs: second belt refused (build, rotation, robot), handed back negative, merge-spare via the bridge-tile path, feedback-gate once | 2.1 | the `lim`/`brdg` idiom verbatim |
 | migration suite: fixture 2.0 saves loaded under 2.1 | 2.1 + fixtures | **the fixtures exist and are committed**: `test/fixtures-2.0/` carries the m2, edge, m3 and qual saves from the last 2.0.77 suite run (2026-08-22), preserved 2026-08-24 minutes ahead of anything overwriting `test/tmp` — they cannot be regenerated without a 2.0 binary. Covers: the load survives with per-tile pruning (S2 probe 1's numbers graduate into assertions), the rebuild tears down the remnants, hidden items recovered and spilled conserved, GPS summary logged, audit stable after |
 | setting-flip suite (ON→OFF sweep, OFF→ON recompile) | **2.0.77 only** | multi-edge cannot be enabled on 2.1 at all; this and the multi-edge regression run of the old rigs live on the release/2.0 branch and need the old headless binary pinned |
@@ -1112,7 +1114,9 @@ than assumed.
 
 Six suites are still multi-edge: `m3`, `plat`, `edge`, `mix`, `mig` and `qual`.
 Four of them are a re-lay of the same shape as this one. Two are not, and the
-reason is worth writing down before anyone starts:
+reason is worth writing down before anyone starts. **Three of the six landed the
+same day as phase 5 below** — `mix`, `plat` and `qual`, all re-lays — and the
+paragraph on `edge` and `mig` stands unchanged:
 
 - **`edge`** has rigs whose GESTURE the rule changes rather than whose geometry
   it doubles. Its `lim` column is 64 belts over 32 parts and becomes 64 belts
@@ -1132,3 +1136,156 @@ other side — under this rule a working balancer has no free face, so the only
 place a player's belt can change a balancer's port count is an attached EDGELESS
 part. Two independent passes needing the same trick is the strongest signal in
 this file that it is the shape of the rule and not a workaround.
+
+## Implementation status — phase 5, the test estate's second tranche, 2026-08-24
+
+**Shipped: `mix`, `plat` and `qual`, rebuilt single-edge.** No guest line
+changed and no package was rebuilt: the whole pass is three test mods'
+`control.lua`, three `info.json` version tokens, three assertion scripts and
+`test/run.sh`'s default suite list. Measured on Factorio 2.1.14, shipped
+configuration, both `-gc` arms.
+
+`test/run.sh` now defaults to **`m1 sedge mig21 m2 mar upg mix plat qual iact`**
+— ten of the thirteen.
+
+### The re-lay, and the one thing every conservation rig needed
+
+Phase 4's rule again — every column of parts becomes two, a west column carrying
+the row's inputs and an east column its outputs — plus the thing phase 4 met once
+and this tranche met in every band of two suites:
+
+**A WORKING BALANCER HAS NO FREE FACE.** Every conservation check in this
+repository forces a recompile by laying a belt against the cluster, and under the
+rule every part of a working balancer already carries its one belt — so that
+belt is now REFUSED and the check measures a refusal instead of a teardown. Every
+such rig carries one extra EDGELESS part below its west column and the belt goes
+there. That is `m2`'s conservation rig, the interactive checklist's band B, and
+now every band of `mix` and `plat`: **four independent passes needing the same
+trick**, which is as strong a signal as this file has that it is the shape of the
+rule rather than a workaround.
+
+`qual` is the pleasant surprise: **three of its four rigs were already
+single-edge**, and it is the only suite that could have been. `qblk` is a 2x2
+whose west column carries the inputs and whose east column the outputs, `qcol`'s
+two INTERIOR parts carry nothing (which is what made the fast replace legal in
+the first place), and `qlone` has no belts at all.
+
+### `mix`, and the assertion that had to be retired rather than re-recorded
+
+Four clusters over twenty-eight parts, 3,220 ticks, base only. One saturated
+express belt delivered **1,306 items** over t=1400..3140:
+
+| rig | what it is | what came out |
+|---|---|---|
+| `duo` | 2 -> 2, two PURE belts (iron, copper), draining freely | **1306 1306**, 2.000x, spread 0.00%; conservation exact per name over 48 names and 20,076 items, **0 on the ground** |
+| `quad` | 4 -> 4, two iron and two copper belts ALTERNATING | **1306 1304 1306 1304**, 3.997x, spread 0.15% |
+| `mixfull` | 2 -> 2, two SUSHI belts, dead-ended | exact per name, 6,616 items, **0 on the ground** |
+| `many` | 4x4, four sushi belts over 48 names, dead-ended | **7,936 in, 7,936 out, every name exact**, 18 on the ground, and the overflow alert: **64 items past the 32-group bound** |
+| `probe` | one chest, six filters, no balancer | 2,292 items in **1 of 6 kinds**, electronic-circuit 100% — unchanged, and still the measurement that justifies the rotating source |
+
+Final audit **`clusters=4 parts=28 nets=4 drift=0 unbuilt=0 refused=0`**, and
+that tuple is new: this suite read no audit at all before. `unbuilt=0` alone
+would not do it — a cluster with no inputs or no outputs is a legitimate
+half-built state, so a rig rebuilt one column wide would be refused, deliver
+nothing and still read `unbuilt=0`.
+
+**THE ONE ASSERTION IN THIS WHOLE PASS THAT DID NOT SURVIVE RE-RECORDING**, and
+it is worth the space because the finding is about the mod rather than about the
+rigs. `duo` carried a per-output TYPE FLOOR at 15%: each output had to see at
+least 15% of each kind, on the reasoning that "an output seeing only iron would
+mean the two kinds took different paths through the network, which is a real
+defect". Re-laid, `duo` delivers **100/0** — out1 all the copper, out2 all the
+iron — exactly balanced by count at 0.00% spread.
+
+That was worth chasing rather than re-tuning, and three measurements settled it:
+
+- **the pristine 2 -> 2 separates too**, so it is not the conservation belt;
+- **a 4 -> 4 separates as well**: `quad`, fed iron/copper/iron/copper, sends all
+  the copper to outputs 1 and 2 and all the iron to 3 and 4, 1306 apiece. So it
+  is not a two-line accident. **Under symmetric saturation this butterfly is a
+  PERMUTATION**: every output takes exactly its share by count and exactly one
+  kind;
+- **the old 75/25 was a PORT ORDER.** The window used to open AFTER `duo`'s
+  conservation belt had taken it from 2 -> 2 to 3 -> 2 over P=4 — an asymmetric
+  network with a dead-ended spare port and a loopback, where the flows genuinely
+  have to cross — and the multi-edge geometry put that belt FIRST in the edge
+  list. Laid single-edge the same belt enters LAST and the same P=4 network
+  delivers 100/0. Both are exactly balanced by count; nothing regressed.
+
+So the floor was never a statement about the balancer, it was a statement about
+one asymmetric network's port assignment. It is **retired**, `duo`'s edit moved
+to the END of the schedule so that the window measures the 2 -> 2 its own
+description names, and what replaces it is the check the floor was groping at:
+**every kind must come out at the rate it went in**, summed over the outputs —
+`duo` 1.000 belt of each of two kinds, `quad` 1.998 of each, at 2%. True of a
+permutation, false of a network that starves a kind, silent about a mix nothing
+ever promised. `quad` is new and exists so that `duo` alone can never again be
+mistaken for a property.
+
+### `plat`: the geometry doubled and not one number moved
+
+Five clusters over thirty-two parts across two surfaces. Every figure came back
+**identical to the item** to its 2026-08-05 record:
+
+| | measured |
+|---|---|
+| the platform 2 -> 2 (four parts now) | **676 676 against 676, 2.000x, 0.00% spread** |
+| stacks formed before any recompile | 1,128 items over **336 positions — 72 of size 1, 264 of size 4** |
+| `full` recompiled | 10,952 either side, **+0 single, +128 stacked** |
+| `plain`, unstacked under an open gate | **+16 single, +0 stacked** |
+| `flow`, recompiled under load | +0/+48, then **1496 1496 1492 1488 against 1504 — 3.971x, spread 0.54%** |
+| `smix` | conservation **EXACT per (name, quality) over nine kinds**, 704 items; **+0 single, +64 stacked**, 56x4 -> 72x4; anti-vacuity **14 of 24 hidden lines carrying two names (all 14 stacked) and 6 carrying one name at two qualities (all 6 stacked)** |
+| spills, overflows | **0** and **0** |
+| final audit | `clusters=5 parts=32 nets=5 drift=0 unbuilt=0 refused=0` |
+
+That the stacking numbers are unmoved is the expected result rather than a lucky
+one, and it is the cleanest evidence in the whole port that the re-lay is a
+geometry change and nothing else: **a hidden network is a function of the BELTS**,
+and the belts did not move.
+
+### `qual`: one rig moved, and it needed a sixty-sixth part
+
+`qlim` was thirty-two parts with a belt on both sides of each — exactly what the
+rule forbids — and is **sixty-six** now: one output part above, a 2x32 input
+block (64 inputs, P = `plan.MaxPorts` exactly), and one EDGELESS part below for
+the sixty-fifth belt to land on. That spare part is forced rather than free, and
+for the reason phase 3's band C already records: under the rule all sixty-four
+input parts already carry their belt, so a sixty-fifth belt against any of them
+would ask the SINGLE-EDGE bound and this would stop being a test of
+`forceOfCluster` at all.
+
+Measured: **exactly one** refusal (`128 ports for 65 inputs and 1 outputs, over
+the limit of 64`), **exactly one clean `told force 1`**, qlim delivering 900
+items across the edit, `qblk` at **900 900 against the control's 900 — 2.000x,
+0.00% spread**, zero hand-backs, and the audit walk at `(4, 75, 0, 0, 3, 0)`,
+`(4, 75, 3, 0, 0, 0)`, `(5, 74, 2, 0, 0, 0)` and `(5, 74, 2, 1, 0, 1)` twice.
+
+**Two things the skin assertion had to learn.** qlim's variation string is
+derived from `guest/go/skin`'s own pure-Go `Variation` over the tile set the rig
+builds — the same package `make check` proves — rather than read back off a run
+of the thing under test, and the derivation was validated by reproducing
+`qblk`'s, `qcol`'s and `qlone`'s recorded literals exactly before it was trusted
+for the new shape. And **`logSkin` caps the list at 32 variations and writes a
+literal `...`**, which no cluster in any other suite is big enough to reach: the
+assertion matches the truncated line rather than parsing the marker away, so a
+cap that moved would fail rather than pass silently.
+
+### Red-proven three times, one per suite, each in the new geometry
+
+| injected defect | what came out |
+|---|---|
+| **`mix`: the `tally` fix reverted** — `addOverflow` and the spill accounting replaced by the pre-2026-08-04 `return` | **16 item kinds and 64 items destroyed**, 7,936 in and 7,872 out, **nothing at all on the ground** and no alert anywhere in the run. **Three assertions fire** and they are three different statements: the kinds did not survive, nothing reached the ground on a rig that exists to overflow, and the guest never said so |
+| **`plat`: the stacking gate forced shut** (`stacksPossible` returns false) | **nine assertions**, the same nine and the same **392 items on the ground** as the 2026-08-05 record: **+572 single positions on `full`** and **+304 on `flow`** where the fixed guest adds none, `smix`'s 56x4 histogram becoming **196x1**, and the stacked throughput falling to 3.914x at 4.62% spread. **Per-kind conservation stays EXACT** — the gate-off path is still conservation-correct, it just unstacks |
+| **`qual`: `findOnTile` given `Quality = "normal"`** — the pre-fix `find_entity` semantics stated exactly | all three families at once: **24 skin lines instead of 6, every one `set=0`**, the lone part unregistered under a scripted COLLIDING belt with the audit walk failing at all four post-collide tags (`clusters=3 parts=74` where the world holds 4 and 75), and **the force told 0 times**. The true positives stay true in that arm, which is what makes them controls rather than assertions of the fix |
+
+### The gates
+
+`make check` green (bindings and lock unmoved — no guest line changed).
+**All ten suites green in BOTH `-gc` arms**, each arm one invocation. The `mar`
+slopes came back **identical to the byte** to phase 4's record — 0 B for a far
+belt mined or rotated, 32 for one built, 352 inside the neighbour gate, 1,209
+for a 2 -> 2 recompile, 3,736 for a 4x4, 1,280 for a whole balancer in and out,
+560 for the six-entity paste, 2,080 for grown-and-dissolved, 1,136 for the
+audit, and **3.92 MiB** of linear memory — with linearity x1.00–x1.07, 9,600
+items in and 9,600 out over 200 teardowns, and 681 audits at drift=0. **No other
+suite's numbers moved**, which for a test-only pass is the only result available.

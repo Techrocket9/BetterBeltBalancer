@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "title": "BBB mixed-item verification",
   "author": "BetterBeltBalancer",
-  "factorio_version": "2.0",
+  "factorio_version": "2.1",
   "description": "Runs several distinct item types through one balancer -- two pure belts, a sushi belt, and enough kinds at once to overflow the carry pool -- and reports every count per item name. Asserts nothing itself.",
   "dependencies": ["base >= 2.0.0", "better-belt-balancer"]
 }

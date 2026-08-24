@@ -24,13 +24,22 @@
 --          that; a player cannot do it). The part is still standing, so the
 --          registry must not be edited -- and the unfixed guest, asking at
 --          normal quality only, reads the part as gone and unregisters it.
---   qlim   limit.go's forceOfCluster: the over-limit column (32 parts, 64
---          inputs, one output -- the edge suite's `lim`, uncommon) given its
---          sixty-fifth belt mid-run. The refusal must still be DELIVERED: the
---          `told force` line is the arm a headless run can reach, and on the
---          unfixed guest the lookup fails and the refusal is delivered to
---          nobody. (revertOne shares the same lookup and the same fix; its
---          observable needs a player, which no headless run has.)
+--   qlim   limit.go's forceOfCluster: the over-limit block (64 input parts,
+--          one output part, one edgeless part -- the edge suite's `lim`,
+--          uncommon) given its sixty-fifth belt mid-run. The refusal must
+--          still be DELIVERED: the `told force` line is the arm a headless run
+--          can reach, and on the unfixed guest the lookup fails and the
+--          refusal is delivered to nobody. (revertOne shares the same lookup
+--          and the same fix; its observable needs a player, which no headless
+--          run has.)
+--
+-- EVERY RIG HERE IS BUILT TO FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART.
+-- Three of the four already were -- `qblk` is a 2x2 whose west column carries
+-- the inputs and whose east column carries the outputs, `qcol` is a column
+-- whose two INTERIOR parts carry nothing (which is what makes the fast replace
+-- legal at all), and `qlone` has no belts. Only `qlim` moved: it was
+-- thirty-two parts with a belt on BOTH sides of each, which is the shape the
+-- rule forbids, and it is sixty-six parts now. See agents/single-edge.md.
 --
 -- Deliberately plain Lua, and it ASSERTS NOTHING. test/assert-qual.py decides;
 -- a test mod that computed the expected answer would be a second
@@ -53,8 +62,8 @@ local CTRL = 0
 local QBLK = 12
 local QCOL = 26
 local QLONE = 40
-local QLIM = 52          -- rows QLIM-3 (sink chest) .. QLIM+32 (the 65th belt)
-local ROWS = QLIM + 40
+local QLIM = 52          -- rows QLIM-4 (sink chest) .. QLIM+33 (the 65th belt)
+local ROWS = QLIM + 44
 
 --------------------------------------------------------------------------------
 -- surface and pieces
@@ -218,9 +227,15 @@ local function poke_remove()
   if e then e.destroy { raise_destroy = true } end
 end
 
--- The sixty-fifth belt, exactly as the edge suite lays it.
+-- THE SIXTY-FIFTH BELT, and it lands on the EDGELESS part below the block.
+--
+-- Under the one-belt rule every one of the sixty-four input parts already
+-- carries its belt, so a sixty-fifth belt against any of them would be refused
+-- for the OTHER bound -- which is the `sedge` suite's business and would never
+-- reach `plan.Shape` at all. The spare part is what keeps this the PORT-limit
+-- gesture, and therefore what keeps it a test of `forceOfCluster`.
 local function lim_add()
-  put(surf(), BELT, 0, QLIM + 32, { direction = N })
+  put(surf(), BELT, 0, QLIM + 33, { direction = N })
 end
 
 --------------------------------------------------------------------------------
@@ -305,22 +320,34 @@ script.on_init(function()
   part(s, 0, QLONE)
   report_quality("qlone", 0, QLONE)
 
-  -- qlim: the edge suite's `lim` column, uncommon. Thirty-two parts, a belt on
-  -- both sides of each pointing inwards (64 inputs, P = MaxPorts exactly),
-  -- three of them fed, one output leaving north off the top into a chest.
-  for r = 0, 31 do part(s, 0, QLIM + r) end
+  -- qlim: the edge suite's `lim` block, uncommon, and SIXTY-SIX PARTS under
+  -- the one-belt rule where it used to be thirty-two.
+  --
+  --   (0, QLIM-1)              the OUTPUT part, its belt leaving north
+  --   (0..1, QLIM..QLIM+31)    the 2x32 input block: sixty-four parts, each
+  --                            carrying one belt pointing inwards, which is
+  --                            P = plan.MaxPorts exactly
+  --   (0, QLIM+32)             an EDGELESS part, where the sixty-fifth belt
+  --                            lands (see lim_add above)
+  --
+  -- Three of the sixty-four inputs are fed, which is a belt or so of flow into
+  -- a machine with one way out: the output runs saturated and the assertion
+  -- that it kept running across the refusal has something to measure.
+  part(s, 0, QLIM - 1)
+  for r = 0, 31 do part(s, 0, QLIM + r); part(s, 1, QLIM + r) end
+  part(s, 0, QLIM + 32)
   for r = 0, 31 do
     put(s, BELT, -1, QLIM + r, { direction = E })
-    put(s, BELT, 1, QLIM + r, { direction = W })
+    put(s, BELT, 2, QLIM + r, { direction = W })
   end
   for r = 0, 2 do
     source(s, -5, QLIM + r)
     for x = -3, -2 do put(s, BELT, x, QLIM + r, { direction = E }) end
   end
-  put(s, BELT, 0, QLIM - 1, { direction = N })
-  put(s, LOADER, 0, QLIM - 2, { direction = N, type = "input" })
+  put(s, BELT, 0, QLIM - 2, { direction = N })
+  put(s, LOADER, 0, QLIM - 3, { direction = N, type = "input" })
   local lim_chest = s.create_entity {
-    name = "steel-chest", position = P(0, QLIM - 3), force = "player",
+    name = "steel-chest", position = P(0, QLIM - 4), force = "player",
   }
   rig("qlim", { lim_chest })
   report_quality("qlim", 0, QLIM)

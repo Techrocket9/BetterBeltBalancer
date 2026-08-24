@@ -25,11 +25,27 @@
 -- gate is shut and `detailedTally` is never called at all. Multi-kind AND
 -- stacked is Space Age, so it is here. See CLAUDE.md, "Stacked belts come back
 -- stacked".
+--
+-- EVERY RIG HERE IS BUILT TO FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART.
+-- Every column of parts is TWO columns -- a west part carrying the row's input
+-- and an east part carrying its output -- because an edge is an interface
+-- linked belt standing on the cluster's own tile and 2.1's collision validator
+-- forbids two belt-connectables on one tile. What that costs a band is
+-- GEOMETRY AND NOTHING ELSE: N, M, the stack sizes and the item kinds in
+-- flight are properties of the BELTS, and the belts did not move.
+--
+-- Each band also carries ONE EXTRA EDGELESS PART below its west column, and it
+-- is not decoration. Every recompile here is forced by laying a belt against
+-- the cluster, and under this rule a working balancer HAS NO FREE FACE -- so
+-- the belt each `recompile` used to put on the block's north face would now be
+-- REFUSED and the band would measure a refusal instead of a teardown. The
+-- edgeless part is the one tile a belt can still reach; `m2`'s conservation rig
+-- and the interactive checklist's band B reached the same conclusion
+-- independently. See agents/single-edge.md.
 local PART = "bbb-balancer-part"
 local BELT = "express-transport-belt"
 local AUDIT = "bbb-audit"
 local E = defines.direction.east
-local S = defines.direction.south
 
 local function P(x, y) return { x + 0.5, y + 0.5 } end
 
@@ -47,6 +63,11 @@ local PITCH = 12
 -- the teardown and of nothing else.
 local BANDS = { ctrl = 0, full = PITCH, flow = 2 * PITCH, plain = 3 * PITCH,
                 smix = 4 * PITCH }
+
+-- How many ROWS each band's part block is, which under the one-belt rule is
+-- half its part count -- and, with the edgeless part on the end, exactly where
+-- `recompile` has to put its belt: (-1, BANDS[band] + ROWS[band]).
+local ROWS = { full = 4, flow = 4, plain = 2, smix = 2 }
 
 --------------------------------------------------------------------------------
 -- the stacked-sushi band
@@ -428,10 +449,14 @@ local function smix_sample(tag)
   end
 end
 
--- A belt arriving on a part block's NORTH face is a genuine new edge, so the
--- fingerprint moves and the network comes down and goes back up. The audit
--- marker in the same tick is what makes that happen inside this dispatch rather
--- than on the next tick, so "before" and "after" are one atomic sample apart.
+-- A belt arriving against the band's EDGELESS part is a genuine new edge -- a
+-- new INPUT, so the port count goes UP -- and the fingerprint moves, so the
+-- network comes down and goes back up. It goes there rather than on the block's
+-- north face because under the one-belt rule every part of a working balancer
+-- already carries its belt and a belt on any of them would be REFUSED. The
+-- audit marker in the same tick is what makes the rebuild happen inside this
+-- dispatch rather than on the next tick, so "before" and "after" are one atomic
+-- sample apart.
 -- The profiler is around the AUDIT, not around a tick pair, because the sample
 -- either side of it has to be atomic. That means it carries a whole-save
 -- re-classification as well as the recompile -- the same trade `assert-m2.py`
@@ -440,7 +465,7 @@ end
 -- build. It is NOT comparable with M2's tick-pair recompile timings.
 local function recompile(band, tag)
   sample(tag .. " before")
-  sput(game.surfaces[STK], BELT, 0, BANDS[band] - 1, { direction = S })
+  sput(game.surfaces[STK], BELT, -1, BANDS[band] + ROWS[band], { direction = E })
   local p = helpers.create_profiler()
   stk_audit()
   p.stop()
@@ -448,15 +473,16 @@ local function recompile(band, tag)
   sample(tag .. " after")
 end
 
--- The same gesture for `smix`, sampled per NAME. A belt arriving on the north
--- face is a new INPUT edge, so the port count goes UP -- P = next_pow2(max(N,M))
--- takes a 2->2 from 2 to 4 -- and the network the rebuild produces is strictly
--- bigger than the one it replaced. That matters: a SHRINK would legitimately
--- spill whatever no longer fits (carry.go, decision 4), and this band is about
--- what the drain did with the kinds, not about capacity.
+-- The same gesture for `smix`, sampled per NAME. A belt arriving against the
+-- edgeless part is a new INPUT edge, so the port count goes UP --
+-- P = next_pow2(max(N,M)) takes a 2->2 from 2 to 4 -- and the network the
+-- rebuild produces is strictly bigger than the one it replaced. That matters:
+-- a SHRINK would legitimately spill whatever no longer fits (carry.go,
+-- decision 4), and this band is about what the drain did with the kinds, not
+-- about capacity.
 local function smix_recompile()
   smix_sample("before")
-  sput(game.surfaces[STK], BELT, 0, BANDS.smix - 1, { direction = S })
+  sput(game.surfaces[STK], BELT, -1, BANDS.smix + ROWS.smix, { direction = E })
   local p = helpers.create_profiler()
   stk_audit()
   p.stop()
@@ -505,36 +531,50 @@ local function build_stacking()
   for x = -3, 3 do sput(s, BELT, x, b, { direction = E }) end
   storage.stk_ctrl = sink(s, 4, b)
 
+  -- Every band below is TWO COLUMNS OF PARTS plus one EDGELESS part on the end;
+  -- `parts_for` lays them, so no band can forget either half of the rule.
+  --
+  --   x=-5 chest  -4 loader  -3..-1 belts  0 WEST PART  1 EAST PART
+  --   x=2..4 belts   5 sink loader   6 chest      (dead-ended bands stop at 4)
+  local function parts_for(band)
+    local base, rows = BANDS[band], ROWS[band]
+    for i = 0, rows - 1 do
+      sput(s, PART, 0, base + i)
+      sput(s, PART, 1, base + i)
+    end
+    sput(s, PART, 0, base + rows) -- the edgeless one; see `recompile`
+  end
+
   -- full: 4 in, dead-ended out. Fills the hidden network with stacks and stops.
   b = BANDS.full
-  for i = 0, 3 do sput(s, PART, 0, b + i) end
+  parts_for("full")
   for i = 0, 3 do
     source(s, -5, b + i, true)
     for x = -3, -1 do sput(s, BELT, x, b + i, { direction = E }) end
-    for x = 1, 3 do sput(s, BELT, x, b + i, { direction = E }) end
+    for x = 2, 4 do sput(s, BELT, x, b + i, { direction = E }) end
   end
 
   -- flow: 4 in, 4 out, running. Recompiled while stacked items are moving
   -- through it, and then measured for another 700 ticks.
   b = BANDS.flow
   storage.stk_out = {}
-  for i = 0, 3 do sput(s, PART, 0, b + i) end
+  parts_for("flow")
   for i = 0, 3 do
     source(s, -5, b + i, true)
     for x = -3, -1 do sput(s, BELT, x, b + i, { direction = E }) end
-    for x = 1, 3 do sput(s, BELT, x, b + i, { direction = E }) end
-    storage.stk_out[i + 1] = sink(s, 4, b + i)
+    for x = 2, 4 do sput(s, BELT, x, b + i, { direction = E }) end
+    storage.stk_out[i + 1] = sink(s, 5, b + i)
   end
 
   -- plain: the same force, an ordinary loader, so the lines are UNSTACKED while
   -- the gate is open. This is the branch that costs one host call per non-empty
   -- line and then hands the flat totals back, and it has to conserve exactly.
   b = BANDS.plain
-  for i = 0, 1 do sput(s, PART, 0, b + i) end
+  parts_for("plain")
   for i = 0, 1 do
     source(s, -5, b + i, false)
     for x = -3, -1 do sput(s, BELT, x, b + i, { direction = E }) end
-    for x = 1, 3 do sput(s, BELT, x, b + i, { direction = E }) end
+    for x = 2, 4 do sput(s, BELT, x, b + i, { direction = E }) end
   end
 
   -- smix: 2 in, 2 out, dead-ended, fed by STACKED SUSHI. The only rig in this
@@ -542,14 +582,14 @@ local function build_stacking()
   -- than one item per position at the same time, which is the pair of
   -- conditions `kindAt`'s multi-candidate branch needs to be reached at all.
   b = BANDS.smix
-  for i = 0, 1 do sput(s, PART, 0, b + i) end
+  parts_for("smix")
   for i = 0, 1 do
     -- The offset staggers the two sources so they do not switch to their first
     -- item on the same tick, which would band the whole rig in lockstep and
     -- leave every line single-kind after all.
     sushi_source(s, -5, b + i, SMIX_ITEMS[i + 1], i * 2)
     for x = -3, -1 do sput(s, BELT, x, b + i, { direction = E }) end
-    for x = 1, 3 do sput(s, BELT, x, b + i, { direction = E }) end
+    for x = 2, 4 do sput(s, BELT, x, b + i, { direction = E }) end
   end
 
   stk_audit()
@@ -587,17 +627,22 @@ script.on_init(function()
     if e.valid and e.type ~= "character" then e.destroy() end
   end
 
+  -- FOUR parts, not two: a west part carrying each row's input and an east part
+  -- carrying its output, because one tile may carry one belt. The machine is
+  -- the same 2->2 it always was -- N, M and P are properties of the belts.
   storage.out = {}
   for i = 0, 1 do
-    local part = s.create_entity { name = PART, position = P(0, i), force = "player", raise_built = true }
-    if not part then log("[BBB-PLAT] could not place a part") return end
+    for x = 0, 1 do
+      local part = s.create_entity { name = PART, position = P(x, i), force = "player", raise_built = true }
+      if not part then log("[BBB-PLAT] could not place a part") return end
+    end
   end
   for i = 0, 1 do
     local c = s.create_entity { name = "infinity-chest", position = P(-6, i), force = "player" }
     c.infinity_container_filters = { { index = 1, name = "iron-plate", count = 1000, mode = "at-least" } }
     s.create_entity { name = "bbbt-loader", position = P(-5, i), direction = E, type = "output", force = "player", raise_built = true }
     for x = -4, -1 do s.create_entity { name = BELT, position = P(x, i), direction = E, force = "player", raise_built = true } end
-    for x = 1, 3 do s.create_entity { name = BELT, position = P(x, i), direction = E, force = "player", raise_built = true } end
+    for x = 2, 3 do s.create_entity { name = BELT, position = P(x, i), direction = E, force = "player", raise_built = true } end
     s.create_entity { name = "bbbt-loader", position = P(4, i), direction = E, type = "input", force = "player", raise_built = true }
     storage.out[i + 1] = s.create_entity { name = "steel-chest", position = P(5, i), force = "player" }
   end
@@ -659,6 +704,13 @@ local SCHEDULE = {
   -- construction. The `edge` suite measures the same shape the same way.
   [1000] = function() stk_report(1000) end,
   [1500] = function() stk_report(1500) end,
+  -- After the last sample, so it cannot disturb one, and after every recompile
+  -- this suite makes. Nothing has touched either surface since tick 900, so the
+  -- registry and the world must agree exactly -- and the cluster and part
+  -- counts are what say the bands are the shape this suite thinks they are,
+  -- which no stack profile and no rate can. assert-plat.py reads the LAST audit
+  -- line in the run, which is this one.
+  [1520] = stk_audit,
 }
 
 script.on_event(defines.events.on_tick, function(e)
