@@ -1,16 +1,19 @@
 # single-edge.md — the 2.1 port: one belt per part
 
-Status: **PHASE 1 SHIPPED 2026-08-24** — the rule, its refusal and its suite.
-Drafted the same day from the 2026-08-23 investigation and boskid's answer to
-the interface request (forums t=135830). Read CLAUDE.md's migration and
-over-limit sections first; this design reuses both wholesale.
+Status: **PHASES 1 AND 2 SHIPPED 2026-08-24** — the rule and its refusal, then
+the setting, the grandfather pass and the migration. Drafted the same day from
+the 2026-08-23 investigation and boskid's answer to the interface request
+(forums t=135830). Read CLAUDE.md's migration and over-limit sections first;
+this design reuses both wholesale.
 
-What is implemented and what is not is the "Implementation status" section at
-the end of this file. The short form: the rule enforces, the refusal reaches the
-player through the sixty-fifth belt's own machinery, the merge is spared, and
-the new `sedge` suite is green on 2.1.14. The runtime-global setting, the
-grandfather pass, the fixture-based migration suite, the rebuilt test estate and
-the interactive worlds are later phases and the design for each is unchanged.
+What is implemented and what is not is the two "Implementation status" sections
+at the end of this file. The short form: the rule enforces, the refusal reaches
+the player through the sixty-fifth belt's own machinery, the merge is spared, a
+2.0 multi-edge save opened on 2.1 has its remnants torn down and its owning
+forces told with a ping per balancer, and the `sedge` and `mig21` suites are
+green on 2.1.14. What is left is the rebuilt test estate and the interactive
+worlds; the setting-flip legs and the multi-edge regression run need a 2.0
+binary and belong on the `release/2.0` branch.
 
 ## Why, in three sentences
 
@@ -637,3 +640,210 @@ multi-edge. That measurement is owed and is part of the test-estate phase.
   into a cluster this mod cannot build" and the `alert:` a moment later says
   which. `test/assert-edge.py`'s `SPARED` regex has to move with it when that
   suite is rebuilt.
+
+## Implementation status — phase 2, 2026-08-24
+
+**Shipped: the setting, the grandfather pass, the migration and its fixture
+suite.** Everything below is measured on Factorio 2.1.14 against the shipped
+configuration (`--persist=packed --gc=collected`), except where it says
+explicitly that it cannot be.
+
+| what | where |
+|---|---|
+| the version branch, now shared by the DATA and SETTINGS stages instead of duplicated | `mod-data/engine.lua`, required by `prototypes/hidden.lua` and by `settings.lua` |
+| `bbb-multi-edge-parts`, runtime-global, default false, defined on 2.0.x only | `mod-data/settings.lua` |
+| the fold -- capability AND policy, the flip's obligation, and whether to grandfather -- as PURE GO with all eighteen of its states proved | `guest/go/edgemode/`, run by `make check` |
+| the policy read, the write, the anchor, the flip handler, the sweep, the condemnation, and both summaries | `guest/go/sedge.go` |
+| the ordering carve-out: a condemned network comes down BEFORE the refusal | `compile`, `guest/go/compile.go` |
+| the summary spoken from the informed flush, after `endCarry` | `settleEdgeMode`, called from `flush`, `guest/go/compile.go` |
+| the fold over the rebuild's own classification, and the condemnation | `rebuildFromWorld` / `inspectNetwork`, `guest/go/lifecycle.go` |
+| `refused=` on the audit line | `auditAll`, `guest/go/lifecycle.go` |
+| the subscription and its dispatch | `guest/go/main.go` |
+| the two summary keys, the setting's name and its description | `mod-data/locale/en/better-belt-balancer.cfg` |
+| the suite | `test/mods/bbb-mig21-observer/`, `test/assert-mig21.py`, `test/run.sh` |
+
+### The shape of it, in one paragraph per decision
+
+**The two questions stay split and the marker is the OUTER term.** `stackCapable`
+is the `bbb-can-stack` point query phase 1 already had; `settingMultiEdge` is the
+`settings.global` read beside it; `multiEdgeAllowed` is the AND, cached as one
+integer compare because it is asked on `noteAddedPart`'s path. On 2.1 the setting
+is never read at all -- the AND short-circuits -- which is exactly right, because
+it is not defined there.
+
+**The heap byte is the reconciliation anchor, not a cache of the setting.** It
+records the mode the REGISTRY was last reconciled under, which is what a flip has
+to be compared against: the setting can move between two loads of one save and
+the standing networks cannot. `edgeAnchorSettle` writes it from
+`rebuildFromWorld`, from `fk_on_init` and from both arms of the flip handler.
+
+**The write raises `on_runtime_mod_setting_changed` synchronously**, inside the
+assigning statement, and it fires for a same-value write too (both measured, S2
+above). So the grandfather pass writes the ANCHOR FIRST and the setting second:
+the re-entrant handler compares the setting against an anchor that already
+agrees, and does nothing. No self-write flag exists and none is needed.
+
+**The write is where `revertOverLimit`'s mine is**: `flush()`, after
+`endCarry()`. Same three reasons -- a synchronous re-entry into the queues the
+drain is iterating, the package-level compile buffers, and a carry transaction
+that must be closed before anything can file against it.
+
+**The ordering carve-out is the one place a refusal demolishes anything.** Every
+other refusal leaves the standing network alone, because the machine is fine and
+only the requested edit is not; a CONDEMNED cluster is the opposite case, and
+only two producers can tell them apart -- `inspectNetwork`, which is the one
+function that knows both what the world asks for and whether the standing
+interfaces match it, and `sweepStackedInterfaces` for the 2.0 flip. Both invert
+the stored fingerprint before condemning, which is what carries a condemned
+cluster past the skip: flipping a setting moves nothing in the world.
+
+**One scan, two outcomes, chosen by the capability marker.** The rebuild folds
+"does any tile carry two belts" out of a classification it was making anyway --
+zero extra host calls -- and notes the root. On 2.0 those clusters are ADOPTED,
+because every interface is still standing and the adoption comparison matches
+exactly, and the grandfather pass offers to keep them working. On 2.1 the engine
+has already deleted all but one interface per tile, so the comparison cannot
+match, the remnant is condemned, and the migration summary speaks instead.
+
+**`multi` is RETURNED by `inspectNetwork` rather than read out of `sedgeWorst` by
+its caller**, and that is not style. That function has three early returns that
+never classify -- an empty cluster, a surface that has gone, and the ordinary
+"nothing standing, this is a clean build" -- and on any of them the global still
+holds the PREVIOUS cluster's answer. Reading it directly would attribute one
+balancer's shape to another, which on this load means condemning a working
+machine.
+
+### The `mig21` suite, measured
+
+Two committed fixtures, loaded under 2.1.14 with today's mod, 320 ticks each.
+There is no `--create` phase and there cannot be: the worlds were built by a
+2.0.77 binary that is gone. **The fixture is phase one.**
+
+| | m2 | edge |
+|---|---|---|
+| what the save holds | 21 rigs, 77 parts, 4 surfaces | 15 clusters, 95 parts, 3 surfaces, including `lim` at 64 belts over 32 parts |
+| the heap | **declined** -- `the mod was rebuilt` and a rebuild from world, both asserted rather than assumed | the same |
+| the rebuild | 4 surfaces, 77 parts, 21 clusters, **0 adopted, 21 rebuilt** | 3 surfaces, 95 parts, 15 clusters, **0 adopted, 15 rebuilt** |
+| what the ENGINE had already done, before any script | **77 interfaces over 77 part tiles, 0 stacked tiles**, hidden networks whole at 652 entities | **95 over 95, 0 stacked**, 1,898 hidden entities |
+| seeded into those networks (see below) | 2,320 items | 6,540 |
+| the teardowns | **21, recovering 2,320 -- every item, exactly** | **15, recovering 6,540** |
+| the spills | **21, placing 2,320 -- all of it, since a refused compile claims nothing back** | **15, placing 6,540** |
+| items put back INSIDE a network | **0** | **0** |
+| on the ground afterwards | 1,006 of 2,320 (the rest landed on the player's own belts, which `spill_item_stack` allows) | 5,645 of 6,540 |
+| the compiler's entities afterwards | **0 visible, 0 hidden**, at t1, post-audit and final | the same |
+| the player's parts afterwards | **77**, untouched at every sample | **95** |
+| refusals | 21 clusters over **42** lines | 15 over **30** |
+| the summary | **one** `force.print`, to force 1, naming 21 balancers | **two**, force 1 about 14 and force 4 about 1 |
+| the audit, twice and identical | `clusters=21 parts=77 nets=0 drift=0 unbuilt=0 refused=21` | `clusters=15 parts=95 nets=0 drift=0 unbuilt=0 refused=15` |
+
+**Two refusal lines per cluster is the designed shape rather than a wart.** The
+rebuild refuses with the worst information a refusal will ever have and is
+forbidden to speak, so it logs and re-queues; the informed flush a tick later
+refuses again and delivers the one message. That is `refuseAdmit`'s three-way
+admission doing exactly what the wake race made it for.
+
+**The edge fixture's second force is not decoration.** Two forces' parts touching
+are two balancers, so the summary is spoken twice -- once to each -- and the
+counts add up to the refused total. It is the only place anything checks that the
+message is per FORCE rather than per balancer or per save.
+
+### Two things the suite had to solve, and both are worth knowing
+
+**THE FIXTURES ARE TICK-0 SAVES, SO THE NETWORKS ARE EMPTY.** A `--create` never
+reaches a tick, so the rigs were built and the save written with every belt in
+them empty -- and a migration that recovers nothing, spills nothing and conserves
+nothing trivially would satisfy every count in this suite while proving none of
+them. So the observer SEEDS: one item into every transport line of every entity
+the compiler placed, on every surface, in the one moment before the migration
+runs. That is better than a stand-in for a running balancer's contents, because
+it is a KNOWN NUMBER -- "what the teardown recovered" is asserted as an equality
+against it rather than as a floor.
+
+**THE ONLY "BEFORE" ANY SCRIPT CAN REACH IS `on_configuration_changed`.** The
+migration does not wait for a tick: the heap is declined, so `fk_migrate` fires
+before tick 0 and by then the remnants are down. The observer therefore samples
+and seeds from its own `on_configuration_changed`, which runs first because
+`bbb-mig21-observer` sorts before `better-belt-balancer` and deliberately
+declares no dependency on it -- a dependency would put it after. **It does not
+have to be trusted**: if that order ever flipped there would be nothing left to
+seed, the count would be zero, and the suite fails on a zero. It cannot pass
+vacuously.
+
+**And the `cfg` sample is already post-pruning whatever happens**, because the
+engine deletes the second belt-connectable on every tile at LOAD, before any
+script of any mod runs, with no log line at all. Nothing here can see the world
+as the 2.0 binary left it, and every assertion is written knowing that. What the
+engine deleted went with the interfaces it deleted -- at most eight items each --
+and is not ours to recover.
+
+### `refused=` on the audit line, and why it had to exist
+
+The migration tears a condemned remnant down on purpose, so its clusters end with
+no network -- and `drift=0 unbuilt=1` is, in this repository, **the signature of a
+refusal that demolished first and asked afterwards**, which is the defect the
+sixty-fifth belt pass fixed. Without a way to say "the mod DECLINED to build
+this" the audit could not tell the two apart.
+
+So `auditAll` compares each cluster's fresh fingerprint against the one the
+feedback gate remembers refusing on, counts the matches, and reports them. A
+refused cluster is never counted `unbuilt` -- `unbuilt` is this guest saying it
+should have built something and did not. The column is **appended** rather than
+inserted, because this line is the assertion surface for every suite in the
+repository and several match it with an unanchored pattern over the five counters
+that were there first; the `sedge` suite's recorded audit tuples are unchanged to
+the digit. Measured there, where a refused cluster still HAS its network, the
+column reads `refused=1` beside `drift=1 unbuilt=0` and `refused=2` while the
+merge stands refused -- so the two shapes of refusal are visible and distinct.
+
+### Red-proven three times, and each proof catches a different thing
+
+Every one is an injected defect, built, run against the m2 fixture, and reverted.
+
+| injected defect | what came out |
+|---|---|
+| **`condemnStanding` made a no-op** -- the adoption carve-out gone, so a refusal never demolishes | **eleven assertions**, and the state they describe is the phantom: **77 interfaces and 652 hidden entities still standing** at every sample, **0 teardowns and 0 spills**, **2,320 items stranded inside networks nothing will ever come back for**, nothing on the ground, and the audit reading **`nets=21 drift=21 unbuilt=0 refused=21`** -- twenty-one balancers that the mod knows are wrong and has left standing on an engine where a stacked linked belt is a latent risk on every load |
+| **`settleEdgeMode` returning immediately** -- the summary and the write suppressed | **exactly two**, both about the message: no summary line and no force told. **Every other number is unmoved** -- the remnants still come down, 2,320 items are still recovered and spilled, and the audit still reads `refused=21`. The two proofs are not redundant with each other |
+| **the announce check removed from `refuseSingleEdge`** -- so a migrated cluster falls through to the ORDINARY per-piece message | **exactly one**, and it is the one that says so: a migration announced with a sentence about an extra piece being left in place unconnected, when nobody placed anything. This is the check that would otherwise never have been able to fail |
+
+### What it costs
+
+All three of the suites that run on 2.1 are green in BOTH `-gc` arms, which
+phase 1 could not manage: it built the leaking arm and did not run it.
+
+Package built 2026-08-24, shipped configuration, against master at `b356515`
+(the bindings regeneration that landed the index-assign) built the same way in
+the same session:
+
+| | before | after | |
+|---|--:|--:|---|
+| `dist/better-belt-balancer_0.2.0.zip` | 422,640 B | **439,888 B** | +4.08% |
+| `fk_module.lua` | 2,837,744 B | **3,019,175 B** | +6.39% |
+| `dist/bbb.wasm` | 1,189,328 B | 1,240,253 B | |
+| members bound into the mod | 50 | **53** | of 4,259 |
+| events subscribed | 22 | **23** | |
+| prototypes added | — | **0** | |
+| settings added | — | **1** | CONDITIONAL: never defined on 2.1 |
+
+The three members are `LuaSettings.global` in its handle-returning form,
+`LuaCustomTable`'s INDEX-ASSIGN operator -- which is FKLUA-GAPS.md item 23, asked
+for by this feature and landed upstream before it was written -- and
+`LuaSurface.name`, for the `[gps=x,y,surface]` pings.
+
+**Nothing on any hot path moves, and it is structural rather than measured.**
+`multiEdgeAllowed` is the same single integer compare it was in phase 1, with a
+second cached lookup behind it that is resolved once per heap and short-circuits
+on 2.1 before the setting is read at all. `settleEdgeMode` is one length test on
+an empty slice per flush; `takeCondemned` is a scan of an empty slice per
+compile; `sedgeAnnounce` and `sedgeCondemned` are nil in every save built under
+the rule it is running under. The setting-changed subscription cannot fire at all
+on 2.1. **The `mar` suite cannot say so**, because it cannot run -- its rigs are
+multi-edge -- and that measurement is owed with the rest of the test estate.
+
+### What is still not verified, and where it has to be
+
+| path | state |
+|---|---|
+| the grandfather pass ACTUALLY FLIPPING the setting | **Implemented, and unreachable on 2.1 by construction**: the setting is not defined, so `GrandfatherNeeded`'s marker term is false. What IS pinned is the fold, exhaustively, by `go test ./edgemode/` -- including the state that matters most here, that the write is never attempted where the key does not exist -- and the NEGATIVE, by the `mig21` suite, which fails on any grandfather line, any failed-write alert and any setting-changed line. The positive needs a 2.0 binary and belongs on the `release/2.0` branch |
+| the flip handler, both arms, and `sweepStackedInterfaces` | **Implemented, unreachable on 2.1**: nothing can change a setting that is not defined. Same split -- `edgemode.Reconcile` proves what each flip obliges, over all eighteen states; what a sweep DOES to a standing world is a 2.0 leg |
+| the summary reaching a PLAYER rather than a force | `force.print` is what a headless run can see, and the suite asserts the LocalisedString crossed and the force resolved. Whether the `[gps=]` pings are clickable and land where they should is a graphical client's question and joins the interactive checklist |
+| a fixture with SINGLE-EDGE clusters adopting beside the refused ones | **Not exercised, because neither fixture has one**: every m2 rig is multi-edge (a 1->1 over one part already carries two belts) and so is every edge cluster. The suite asserts `adopted + rebuilt == clusters` and reports the split, so a fixture that grew one would be visible rather than silently ignored |

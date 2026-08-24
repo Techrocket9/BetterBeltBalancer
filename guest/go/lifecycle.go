@@ -572,7 +572,31 @@ func rebuildFromWorld() {
 		// -- once per mod upgrade, and it is what makes a save built by an older
 		// build of this mod come back drawing the shapes it should.
 		restyle(r)
-		slot, exact := inspectNetwork(r)
+		slot, exact, multi := inspectNetwork(r)
+		// A CLUSTER BUILT TO THE OTHER RULE, FOUND BY THE PASS THAT WAS WALKING
+		// PAST IT ANYWAY. This is the whole detection half of the 2.1 port's
+		// migration and of its grandfather pass, and it costs no host call at all:
+		// inspectNetwork classifies every cluster it inspects, and "does any tile
+		// carry two belts" is a number that classification already produced.
+		//
+		// ONE SCAN, TWO OUTCOMES, CHOSEN LATER BY THE CAPABILITY MARKER. On 2.0
+		// these clusters are ADOPTED -- every interface is still standing, so the
+		// comparison below matches exactly -- and settleEdgeMode offers to keep
+		// them working. On 2.1 the engine has already deleted all but one
+		// interface per tile before any script ran, so the comparison cannot match,
+		// the standing remnant is CONDEMNED, and the compile that follows tears it
+		// down and refuses. Neither decision is taken here: the rebuild judges the
+		// world with the worst information anything will ever have and may not
+		// address a player (see refuseAdmit). It notes, and the flush it asks for
+		// speaks.
+		if multi {
+			noteAnnounce(r)
+			if !exact {
+				if _, had := nets[r]; had {
+					condemnStanding(r)
+				}
+			}
+		}
 		if slot > 0 {
 			if _, taken := rfwClaim[slot]; taken {
 				// Two clusters cannot own one slot. Neither is trustworthy.
@@ -617,7 +641,21 @@ func rebuildFromWorld() {
 		rebuildRefused = rebuildRefused[:0]
 		requestFlush()
 	}
+	// AND A FLUSH IS ASKED FOR WHEN THE SCAN FOUND A SAVE BUILT TO THE OTHER
+	// RULE, even though there may be nothing at all to recompile. On 2.0 that is
+	// exactly the case: every multi-edge cluster was ADOPTED and is running, so
+	// nothing is queued and no flush would otherwise happen -- and the load would
+	// end with the grandfather decision unmade and the setting still false. One
+	// deferred flush per rebuild of a save this is about, and none ever on a save
+	// it is not. See sedge.go, settleEdgeMode.
+	if len(sedgeAnnounce) > 0 {
+		requestFlush()
+	}
 	registryReady = true
+	// The registry now agrees with the world and with the rule, whichever rule
+	// that is. Recording it here is what makes a later flip of the setting a
+	// CHANGE rather than a fact restated -- see sedge.go, edgeAnchor.
+	edgeAnchorSettle()
 
 	logStart("rebuilt from world: ")
 	logU(surfaces)
@@ -671,15 +709,25 @@ func registerPartsOn(s fkapi.LuaSurface, si uint32) uint32 {
 // not know where the old interfaces were would leave them there. `slot` is 0
 // when the interfaces exist but their hidden partners could not be followed,
 // which is a netInfo teardown handles by sweeping only the visible half.
-func inspectNetwork(root uint32) (slot uint32, exact bool) {
+//
+// AND IT REPORTS WHETHER THE WORLD ASKS FOR TWO BELTS ON ONE PART, which is the
+// 2.1 port's question and costs nothing here: the classification below is
+// happening anyway and `sedgeWorst` is what it already counts (compile.go). It
+// is RETURNED rather than left for the caller to read out of that global, because
+// this function has three early returns that never classify -- an empty cluster,
+// a surface that has gone, and the ordinary "nothing standing, this is a clean
+// build" -- and on any of them the global still holds the PREVIOUS cluster's
+// answer. A caller reading it directly would attribute one balancer's shape to
+// another, which on the load this is for means condemning a working machine.
+func inspectNetwork(root uint32) (slot uint32, exact bool, multi bool) {
 	tiles := collectCluster(root)
 	if len(tiles) == 0 {
-		return 0, false
+		return 0, false, false
 	}
 	si := tiles[0].s
 	s, ok := surfaceByIndex(si)
 	if !ok {
-		return 0, false
+		return 0, false, false
 	}
 	x0, y0, x1, y1 := tiles[0].x, tiles[0].y, tiles[0].x, tiles[0].y
 	for i := range tiles {
@@ -701,7 +749,11 @@ func inspectNetwork(root uint32) (slot uint32, exact bool) {
 	nameFilter = fkapi.OfString(nameLinkedBelt)
 	ents, err := s.FindEntitiesFiltered(findByName)
 	if err != nil || len(ents) == 0 {
-		return 0, false // nothing standing: a clean build, with nothing to remove
+		// Nothing standing: a clean build, with nothing to remove -- and nothing
+		// to condemn either, whatever shape the world asks for. A multi-edge
+		// cluster that reaches here is refused by the compile in the ordinary way
+		// and announces itself from there (sedge.go, refuseSingleEdge).
+		return 0, false, false
 	}
 
 	adoptPos = adoptPos[:0]
@@ -744,6 +796,9 @@ func inspectNetwork(root uint32) (slot uint32, exact bool) {
 	// (tile, direction) and so is an interface, one to one.
 	force := pforce[root]
 	edges := classifyEdges(s, tiles, force)
+	// The one thing this pass is asked for that is not about adoption, taken
+	// while the counts are fresh and before anything below can return.
+	multi = sedgeWorst >= 2
 
 	// Record it before deciding, so that the caller's fallback -- invert the
 	// fingerprint and let compile() tear this down -- has a box to sweep.
@@ -751,7 +806,7 @@ func inspectNetwork(root uint32) (slot uint32, exact bool) {
 		x0: x0, y0: y0, x1: x1, y1: y1, ents: uint32(len(edges))}
 
 	if !ok || slot == 0 || len(edges) != len(adoptPos) {
-		return slot, false
+		return slot, false, multi
 	}
 	for len(adoptSeen) < len(edges) {
 		adoptSeen = append(adoptSeen, false)
@@ -772,10 +827,10 @@ func inspectNetwork(root uint32) (slot uint32, exact bool) {
 			}
 		}
 		if !hit {
-			return slot, false
+			return slot, false, multi
 		}
 	}
-	return slot, true
+	return slot, true, multi
 }
 
 // sweepOrphanSlots destroys every hidden network no cluster claims, and rebuilds
@@ -893,7 +948,7 @@ func auditAll() uint32 {
 	// one integer compare on every other audit ever run. See legacy.go.
 	legacyRearm(legTrigAudit)
 	auditRoots = liveRootList(auditRoots)
-	nets0, drift, unbuilt := uint32(0), uint32(0), uint32(0)
+	nets0, drift, unbuilt, refused := uint32(0), uint32(0), uint32(0), uint32(0)
 	for i := range auditRoots {
 		r := auditRoots[i]
 		tiles := collectCluster(r)
@@ -914,6 +969,26 @@ func auditAll() uint32 {
 				n++
 			}
 		}
+		// WAS THIS CLUSTER REFUSED, AND IS IT STILL THE SAME REFUSAL? The feedback
+		// gate remembers the edge-list fingerprint each refusal was issued on
+		// (limit.go), so comparing it against a fresh classification separates a
+		// cluster the mod DECLINED to build from one it failed to. That distinction
+		// did not need reporting while every refusal left its standing network
+		// alone -- such a cluster is counted in `nets` and shows up as drift. It
+		// needs reporting since the 2.1 migration, where a cluster built to the
+		// multi-edge rule has its remnant torn down on purpose and would otherwise
+		// be indistinguishable from `drift=0 unbuilt=1`, which is the SIGNATURE of
+		// a refusal that demolished first and asked afterwards.
+		//
+		// `overLimit` is point-queried here as everywhere else -- the walk is over
+		// auditRoots, which is a slice in node id order, so no map iteration order
+		// reaches this line.
+		wasRefused := false
+		if len(overLimit) != 0 {
+			if fp, ok := overLimit[r]; ok && fp == fingerprint(edges) {
+				wasRefused = true
+			}
+		}
 		ni, had := nets[r]
 		// AND WHATEVER A REFUSED MERGE LEFT STANDING UNDER A KEY THAT IS NO
 		// LONGER A ROOT. This is the one state in which `nets` holds a network
@@ -922,6 +997,9 @@ func auditAll() uint32 {
 		// where the merged cluster's own root is a node that never had a network
 		// -- would call a cluster whose two balancers are running perfectly well
 		// `unbuilt`. See limit.go, "The merge".
+		if wasRefused {
+			refused++
+		}
 		if k := strandedNets(r); k != 0 {
 			nets0 += k
 			if had {
@@ -940,8 +1018,11 @@ func auditAll() uint32 {
 			}
 			continue
 		}
-		// No network. Legitimate only when there is nothing to balance.
-		if n > 0 && m > 0 {
+		// No network. Legitimate when there is nothing to balance -- and when the
+		// mod DECLINED to build one, which is not the same statement and must not
+		// read as the same number: `unbuilt` is this guest saying it should have
+		// built something and did not.
+		if n > 0 && m > 0 && !wasRefused {
 			unbuilt++
 		}
 	}
@@ -955,6 +1036,11 @@ func auditAll() uint32 {
 	logU(drift)
 	logS(" unbuilt=")
 	logU(unbuilt)
+	// APPENDED RATHER THAN INSERTED, deliberately: this line is the assertion
+	// surface for every suite in the repository and several of them match it with
+	// an unanchored pattern over the five counters that were here first.
+	logS(" refused=")
+	logU(refused)
 	logEnd()
 	logStats("audit")
 	// Repair, after reporting.

@@ -155,21 +155,17 @@ local BELT_LAYERS = {
   water_tile = true,
 }
 
--- WHICH ENGINE THIS IS. `mods` is the data stage's own dictionary of every
--- installed mod's version, base included, and it is the only thing here that
--- can tell 2.0 from 2.1 -- the two data stages are otherwise identical.
---
--- Anything unreadable is treated as 2.1, which is the safe direction: see the
--- header. The match is on MAJOR.MINOR alone, so every 2.0.x point release is
--- 2.0 and everything from 2.1.0 on is not.
-local function base_is_2_0()
-  local v = mods and mods["base"]
-  if type(v) ~= "string" then return false end
-  local major, minor = v:match("^(%d+)%.(%d+)")
-  return tonumber(major) == 2 and tonumber(minor) == 0
-end
-
-local CAN_STACK = base_is_2_0()
+-- WHICH ENGINE THIS IS, and the question is asked in ONE FILE because TWO
+-- STAGES have to give the same answer. This one decides whether the linked belt
+-- carries `not_colliding_with_itself` and whether the `bbb-can-stack` marker
+-- exists; `settings.lua` decides whether the runtime-global setting that
+-- PERMITS using that capability is defined at all. They are separate Lua states
+-- with nothing shared but the mod's files, so two copies of a version match
+-- would be one edit away from a guest that believes it may stack over a
+-- prototype that cannot -- a silent nil from `create_entity` on every second
+-- interface, forever. mod-data/engine.lua is the one file, and it is also where
+-- the fails-safe-towards-2.1 argument lives.
+local CAN_STACK = require("engine").base_is_2_0()
 
 -- Flags that keep a hidden entity out of every path that could copy it.
 -- The network is ALWAYS recompiled from visible state; an entity that survived

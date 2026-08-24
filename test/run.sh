@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless verification. Ten suites, all real Factorio runs, not models:
+# Headless verification. Twelve suites, all real Factorio runs, not models:
 #
 #   M1  do balancer parts merge and split correctly?
 #   M2  does the compiled hidden network actually balance?
@@ -34,16 +34,26 @@
 #         load makes (swapped in one edit, removed a session later, arriving
 #         through build events and then a plain reload, an incumbent INSTALLED
 #         after this mod, a stranger left alone, and a stranger UNINSTALLED)
+#   mig21 A FACTORIO 2.0 MULTI-EDGE SAVE, OPENED ON 2.1. The only suite with no
+#         `--create` phase: its worlds were built by a 2.0.77 binary that is gone
+#         and cannot be rebuilt at any price, so the saves are committed under
+#         test/fixtures-2.0/ and each one IS phase one. The engine gets there
+#         first -- it silently deletes all but one belt-connectable per tile at
+#         load -- and what is asserted is what the mod then does with the wreck:
+#         the remnants torn down, everything they held recovered and spilled,
+#         every balancer refused, and each force told once with a ping per
+#         balancer. Plus the negative this engine exists to pin: the grandfather
+#         write must never be attempted where the settings key does not exist
 #   sedge FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART. Four single-edge
 #         shapes with their port counts asserted before their rates, and the
 #         three ways an edit can ask a part for a second belt -- built, rotated
 #         and merged -- each refused in front of its teardown with the standing
 #         network left running. agents/single-edge.md is the design.
 #
-# NINE OF THE ELEVEN ARE STILL BUILT IN THE MULTI-EDGE IDIOM AND DO NOT RUN ON
+# NINE OF THE TWELVE ARE STILL BUILT IN THE MULTI-EDGE IDIOM AND DO NOT RUN ON
 # FACTORIO 2.1: every rig in them puts two belts on one part, which is what 2.1
-# forbids. `m1` and `sedge` are what the default runs -- see the SUITES line
-# below for why those two and not the rest.
+# forbids. `m1`, `sedge` and `mig21` are what the default runs -- see the SUITES
+# line below for why those three and not the rest.
 #
 #   make test          # builds the mod first
 #   test/run.sh        # against whatever dist/ already holds
@@ -74,7 +84,7 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 [ -x "$FACTORIO" ] || { echo "factorio not found at: $FACTORIO (set FACTORIO_BIN)" >&2; exit 1; }
 [ -d "$MOD_DIR" ]  || { echo "no built mod at $MOD_DIR; run \`make mod\` first" >&2; exit 1; }
 
-# THE DEFAULT IS WHAT RUNS ON FACTORIO 2.1 TODAY, which is two of the eleven.
+# THE DEFAULT IS WHAT RUNS ON FACTORIO 2.1 TODAY, which is three of the twelve.
 # The other nine are still reachable by name and are still the estate this mod
 # is verified by; what stops them is measured rather than assumed, in two
 # layers:
@@ -85,12 +95,17 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 #   is BELT-FREE: it asserts cluster merges, splits and sprite variations and
 #   never builds an edge, so the rule this port is about cannot touch it.
 #
+#   `mig21` is the exception that proves the point: it does not BUILD a
+#   multi-edge world, it LOADS one somebody else built, which is the only way a
+#   2.1 binary can ever be shown one. Its two fixtures are the m2 and edge saves
+#   from the last 2.0.77 suite run.
+#
 #   and then the RULE. Every rig in the other nine puts two belts on one part,
 #   which is what 2.1 forbids -- so bumping their manifests would only move the
 #   failure from the loader to the compiler. Rebuilding those rigs single-edge
 #   is a later phase of the port; agents/single-edge.md's test-estate table is
 #   the list.
-SUITES="${*:-m1 sedge}"
+SUITES="${*:-m1 sedge mig21}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.
@@ -319,6 +334,99 @@ mig_add_incumbent() {
   mig_standin "$1" "$MIG_INCUMBENT" "$MIG_INCUMBENT_VERSION"
   mig_list "$1" "$MIG_INCUMBENT" true
   echo "==> $MIG_INCUMBENT INSTALLED beside $MOD_NAME, which was already there"
+}
+
+# --- the mig21 suite's staging ----------------------------------------------
+#
+# THE ONLY SUITE WITH NO `--create` PHASE AT ALL, and it cannot have one: the
+# worlds it is about were built by a Factorio 2.0.77 binary that no longer exists
+# on any machine here, and a 2.1 Factorio refuses to build a multi-edge balancer
+# at the prototype level. The saves are committed instead
+# (test/fixtures-2.0/README.md) and THE FIXTURE IS PHASE ONE.
+#
+# What has to be staged around one, and every item is load-bearing:
+#
+#   THE FIXTURE'S OWN TEST MOD, for its DATA STAGE. Each of these worlds is full
+#   of that mod's loaders and lane splitters, and Factorio deletes every entity
+#   whose prototype went with a removed mod at load, before any script runs -- so
+#   dropping it would delete half the rig and the migration would be measured
+#   against a world nobody built.
+#
+#   ...WITH ITS CONTROL STAGE NEUTRALIZED. What is under test is what THIS mod
+#   does to the world at load. The test mod's own schedule would drive rig edits,
+#   forced recompiles and rate measurements on top of it from tick 0, against a
+#   world its `on_init` never set up -- the fixture already carries its storage.
+#   Measured before it was cut: the m2 mod's on_tick raises outright on the
+#   fixture load. bbb-mig21-observer does the measuring instead.
+#
+#   `factorio_version` REWRITTEN TO 2.1, because 2.1 refuses a mod whose
+#   info.json says 2.0 before it places an entity -- the same one-token bump the
+#   `m1` suite needed.
+#
+# The test mod's own VERSION is deliberately left alone. What declines the saved
+# guest heap is THIS mod's build stamp, which moved because the guest was
+# rebuilt; the assertion script REQUIRES the rebuild-from-world line rather than
+# assuming it, because a leg that silently adopted the old heap would test
+# nothing at all.
+
+# stage_fixture <workdir> <fixture> <test-mod>
+stage_fixture() {
+  local work="$1" fixture="$2" testmod="$3"
+  rm -rf "$work"
+  mkdir -p "$work/mods"
+  cp -R "$MOD_DIR" "$work/mods/"
+  cp -R "$ROOT/test/mods/$testmod" "$work/mods/$testmod"
+  cp -R "$ROOT/test/mods/bbb-mig21-observer" "$work/mods/bbb-mig21-observer"
+
+  perl -pi -e 's/"factorio_version": "[^"]*"/"factorio_version": "2.1"/' \
+    "$work/mods/$testmod/info.json"
+  grep -q '"factorio_version": "2.1"' "$work/mods/$testmod/info.json" || {
+    echo "$testmod was not re-targeted at Factorio 2.1" >&2; exit 1; }
+
+  # The prototypes, and nothing else. See above.
+  cat > "$work/mods/$testmod/control.lua" <<'LUA'
+-- Neutralized by test/run.sh for the mig21 suite: this mod is staged for its
+-- DATA STAGE only, because the fixture world is full of its prototypes and
+-- Factorio would delete every one of those entities at load without it. What is
+-- under test is what better-belt-balancer does to that world, and
+-- bbb-mig21-observer is what measures it.
+LUA
+
+  cp "$ROOT/test/fixtures-2.0/$fixture.zip" "$work/map.zip"
+  cat > "$work/mods/mod-list.json" <<JSON
+{
+  "mods": [
+    { "name": "base", "enabled": true },
+    { "name": "elevated-rails", "enabled": false },
+    { "name": "quality", "enabled": true },
+    { "name": "space-age", "enabled": false },
+    { "name": "$MOD_NAME", "enabled": true },
+    { "name": "$testmod", "enabled": true },
+    { "name": "bbb-mig21-observer", "enabled": true }
+  ]
+}
+JSON
+}
+
+# load_fixture <workdir> <ticks> -- the benchmark phase on its own.
+#
+# `--benchmark` never saves, so there is nothing after this and, the fixture
+# being phase one, nothing before it: one Factorio run over a save this
+# repository committed rather than made.
+load_fixture() {
+  local work="$1" ticks="$2"
+  echo "==> loading the 2.0 fixture for ${ticks}t"
+  if ! "$FACTORIO" -c "$CONFIG" --mod-directory "$work/mods" --benchmark "$work/map.zip" \
+        --benchmark-ticks "$ticks" --benchmark-runs 1 --disable-audio \
+        >"$work/run.log" 2>&1; then
+    echo "the fixture load failed; see $work/run.log" >&2
+    tail -40 "$work/run.log" >&2; exit 1
+  fi
+  if grep -qE "stack traceback|Error while running" "$work/run.log"; then
+    echo "script error during the fixture load; see $work/run.log" >&2
+    grep -nE "Error|traceback" "$work/run.log" | head >&2; exit 1
+  fi
+  guest_gate "$work/run.log"
 }
 
 # create_phase <workdir> -- the first of the two phases, on its own.
@@ -619,8 +727,39 @@ for suite in $SUITES; do
       echo "==> asserting the rule and its refusals"
       python3 "$ROOT/test/assert-sedge.py" "$TMP/sedge/create.log" "$TMP/sedge/run.log"
       ;;
+    mig21)
+      # A FACTORIO 2.0 MULTI-EDGE SAVE, OPENED ON 2.1. The one suite with no
+      # `--create` phase: its worlds were built by a 2.0.77 binary that is gone,
+      # and a 2.1 Factorio cannot rebuild them at any price, so the saves are
+      # committed under test/fixtures-2.0/ and each is phase one.
+      #
+      # What the load has to survive is not hypothetical. The ENGINE gets there
+      # first: opening one of these under 2.1.14 silently deletes all but one
+      # belt-connectable per tile, with no log line of any kind, and leaves the
+      # hidden networks fully intact -- so the guest wakes into balancers whose
+      # standing networks are missing most of their interfaces and whose
+      # remaining ports are a lottery. The migration's job is to turn that into
+      # clusters that are refused and explained, with what the hidden half was
+      # still holding recovered and put on the ground beside each one.
+      #
+      # Two fixtures, and they are different shapes rather than two of a kind:
+      # m2's 21 rigs are the ordinary geometry a player builds, and edge's `lim`
+      # is 64 belts over 32 parts -- the biggest network this mod makes, and
+      # tiles carrying THREE.
+      echo "=== mig21: a Factorio 2.0 multi-edge save, opened on 2.1 ==="
+
+      echo "--- m2: 21 rigs, 77 parts, saturated ---"
+      stage_fixture "$TMP/mig21-m2" m2-2.0.77 bbb-m2-test
+      load_fixture "$TMP/mig21-m2" "${BBB_MIG21_TICKS:-320}"
+      python3 "$ROOT/test/assert-mig21.py" --fixture m2 "$TMP/mig21-m2/run.log"
+
+      echo "--- edge: 15 clusters, 95 parts, including lim at 64 belts over 32 parts ---"
+      stage_fixture "$TMP/mig21-edge" edge-2.0.77 bbb-edge-test
+      load_fixture "$TMP/mig21-edge" "${BBB_MIG21_TICKS:-320}"
+      python3 "$ROOT/test/assert-mig21.py" --fixture edge "$TMP/mig21-edge/run.log"
+      ;;
     *)
-      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix, mig, qual or sedge)" >&2
+      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix, mig, qual, sedge or mig21)" >&2
       exit 1
       ;;
   esac

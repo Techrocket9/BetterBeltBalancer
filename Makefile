@@ -239,7 +239,17 @@ check:
 	@# who may pocket it -- belongs to. That last one is the ONLY machine-checked
 	@# part of the miner's pocket: the trigger needs a player, the predicate
 	@# needs nothing.
-	cd guest/go && go test ./plan/ ./skin/ ./carry/
+	@#
+	@# ./edgemode is the fourth, and it is there for a reason the other three do
+	@# not have: THE ENGINE ITS INTERESTING STATES LIVE ON IS ONE THIS MACHINE
+	@# CANNOT RUN. Multiple belts per balancer part exist on Factorio 2.0 only, so
+	@# the setting reading true, a player flipping it and the grandfather pass
+	@# writing it are all unreachable from a 2.1 headless run. Written inside
+	@# `main` that fold would be four branches nothing could ever execute; here,
+	@# all eighteen of its states are checked -- including the one that matters
+	@# most on 2.1, which is that the write is never attempted where the key does
+	@# not exist.
+	cd guest/go && go test ./plan/ ./skin/ ./carry/ ./edgemode/
 	@# --lang comes from fklua.toml's `lang = ["go"]`; passing it was a
 	@# workaround for a gen-bindings that ignored the manifest.
 	$(FKLUA) gen-bindings --check

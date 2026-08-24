@@ -690,6 +690,33 @@ func compile(root uint32) bool {
 		return true // nothing that matters changed
 	}
 
+	// THE ORDERING CARVE-OUT, AND IT IS THE ONE PLACE A REFUSAL DEMOLISHES
+	// ANYTHING. Every refusal below this line leaves the standing network alone,
+	// because the machine is fine and only the requested EDIT is not -- that is
+	// the sixty-fifth belt's whole fix, and the `sedge` suite's `sbld` rig asserts
+	// it. A CONDEMNED cluster is the opposite case: what is standing was built
+	// with two belts on one part on an engine that no longer permits it, so the
+	// machine itself is the thing that cannot exist, and leaving it up is a latent
+	// engine risk on every load rather than a degraded balancer. It comes down
+	// first, and the refusal that follows claims nothing -- so the pool the
+	// teardown opened settles onto the ground, which is what this mod does with a
+	// REMOVAL's items, and a machine that cannot exist any more is a removal.
+	//
+	// Only rebuildFromWorld and the setting-flip sweep condemn, so this is a scan
+	// of an empty slice in every save that was built under the rule it is running
+	// under. BOTH of them INVERT the stored fingerprint before they condemn, and
+	// that is what carries a condemned cluster past the skip above: flipping the
+	// setting moves nothing in the world, so nothing else would.
+	//
+	// `hadNet` goes false with it, for two reasons: the teardown further down must
+	// not run a second time, and a compile that SUCCEEDS after this (the setting
+	// flipped back on) has to draw from the `owned` pool this just opened, which
+	// takeCarry matches by root rather than by geometry. See sedge.go.
+	if hadNet && takeCondemned(root) {
+		teardownForRebuild(root)
+		hadNet = false
+	}
+
 	// THE PORT LIMIT IS ASKED HERE, IN FRONT OF THE TEARDOWN, AND THAT ORDER IS
 	// THE WHOLE OF THE 2026-08-04 FIX. `plan.Shape` needs the edge COUNTS and
 	// nothing else, and they are in hand the moment classifyEdges returns -- so
@@ -1510,12 +1537,24 @@ func flush() {
 	// that is where the miner's pocket runs -- see probe.go. One branch on an
 	// empty slice otherwise.
 	runInsertProbes()
+	// AND THE MIGRATION SUMMARY RUNS HERE, FOR THE SAME REASON THE REVERT DOES.
+	// On Factorio 2.0 it WRITES a runtime-global setting, and that write raises
+	// `on_runtime_mod_setting_changed` synchronously -- inside the assigning
+	// statement, measured -- so it re-enters this guest exactly as `mine_entity`
+	// does. After the drain there is no drain to re-enter and no transaction to
+	// file a claim against. One length test on an empty slice in every save that
+	// was built under the rule it is running under. See sedge.go.
+	settleEdgeMode()
 	// One tick's worth of "who built what" is spent. The notes were filled by
 	// the events of the PREVIOUS tick and read by the drain above; anything
 	// after this belongs to the next one. The tick's NEW PART TILES go with them
-	// and for the same reason: the merge pre-pass that reads them has run.
+	// and for the same reason: the merge pre-pass that reads them has run. So do
+	// the condemnations, whose teardowns the drain has either performed or made
+	// moot -- a condemned cluster that dissolved before it was compiled took its
+	// network down with it.
 	forgetBuildNotes()
 	forgetAddedParts()
+	forgetCondemned()
 }
 
 // The log helpers -- logError, logAlert, and the builder every line is

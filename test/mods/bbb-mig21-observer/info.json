@@ -1,0 +1,9 @@
+{
+  "name": "bbb-mig21-observer",
+  "version": "0.1.0",
+  "title": "BBB 2.0-save-on-2.1 observer",
+  "author": "BetterBeltBalancer",
+  "factorio_version": "2.1",
+  "description": "Reports what a Factorio 2.0 balancer save looks like when it is opened on 2.1, before and after this mod's migration runs on it. Builds nothing and asserts nothing.",
+  "dependencies": ["base >= 2.1.0"]
+}
