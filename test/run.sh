@@ -762,8 +762,9 @@ for suite in $SUITES; do
       # before the compiler ever sees the cluster they make.
       #
       # See agents/single-edge.md for the design and guest/go/sedge.go for the
-      # rule. The suites above this one are still built in the multi-edge idiom
-      # and do not run on 2.1; rebuilding their rigs is a later phase.
+      # rule. `m3`, `edge` and `mig` are the suites still built in the
+      # multi-edge idiom and they do not run on 2.1; rebuilding their rigs is
+      # a later phase.
       echo "=== sedge: one belt per balancer part, and every way of breaking it ==="
       stage "$TMP/sedge" bbb-sedge-test
       run "$TMP/sedge" "${BBB_SEDGE_TICKS:-3500}"

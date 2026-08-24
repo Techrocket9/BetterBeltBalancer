@@ -1114,9 +1114,9 @@ than assumed.
 
 Six suites are still multi-edge: `m3`, `plat`, `edge`, `mix`, `mig` and `qual`.
 Four of them are a re-lay of the same shape as this one. Two are not, and the
-reason is worth writing down before anyone starts. **Three of the six landed the
-same day as phase 5 below** — `mix`, `plat` and `qual`, all re-lays — and the
-paragraph on `edge` and `mig` stands unchanged:
+reason is worth writing down before anyone starts. (**`mix`, `plat` and `qual`
+landed the same day, as phase 5 below** — all three re-lays, and the paragraph on
+`edge` and `mig` stands exactly as it was written:)
 
 - **`edge`** has rigs whose GESTURE the rule changes rather than whose geometry
   it doubles. Its `lim` column is 64 belts over 32 parts and becomes 64 belts
