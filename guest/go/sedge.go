@@ -929,7 +929,12 @@ func tellAffected(msgKey string, withPings bool) {
 			if withPings {
 				gpsAdd(&affected[j])
 			}
-			if affTile[0] == (key{}) || count == 1 {
+			// The FIRST of this force's clusters, in the order the rebuild found
+			// them, is the tile `forceOfCluster` reads the LuaForce off. Any of
+			// them would do -- they all belong to this force by construction --
+			// and taking the first makes it deterministic, which matters because
+			// the message it produces reaches every client.
+			if count == 1 {
 				affTile[0] = key{s: affected[j].surf, x: affected[j].x, y: affected[j].y}
 			}
 		}
