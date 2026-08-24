@@ -67,11 +67,15 @@ Measured on Factorio 2.0.77 headless, base only, Apple M3 Pro, against belt-bala
 
 ## Migrating from Belt Balancer 2 or 3
 
-If you are already using Belt Balancer 2 or Belt Balancer 3 this mod adopts what they built. Uninstall the old mod and load your save with BetterBeltBalancer installed: every balancer part left standing from the incumbant mod becomes one of this mod's parts and the belts around it become that balancer's inputs and outputs exactly as they were. The conversion happens once, at load, before the first tick, and the log carries one line saying how many parts on how many surfaces became how many balancers.
+If you are already using Belt Balancer 2 or Belt Balancer 3 this mod adopts what they built. Uninstall the old mod and load your save with BetterBeltBalancer installed: every balancer part left standing from the incumbent mod becomes one of this mod's parts, at the health and the quality it was standing at, and your stacks and blueprints of the old part keep working and place this mod's. The conversion happens once, at load, before the first tick, and the log carries one line saying how many parts on how many surfaces became how many balancers.
+
+**On Factorio 2.1 most of those balancers will not run again until you rebuild them, and that is worth knowing before you make the cutover save.** This mod allows one belt per balancer part, because 2.1 allows one belt-connectable per tile and every edge of a balancer is one. Belt Balancer's own layout is a single column of parts with a belt on both sides of each, which is two belts per part, so a balancer built that way is converted and then refused: you keep the parts, you keep the items on your belts, and each affected force gets one chat message naming how many balancers need rebuilding with a clickable map ping per balancer. **The exception is a balancer you already built one belt per part** -- a two-column block, inputs down one side and outputs down the other -- which converts into a working balancer and runs at full rate straight away.
+
+So: migrating on 2.1 converts your parts and hands you a rebuild checklist rather than a working machine, except for the balancers already laid one belt per part.
 
 Nothing happens while the old mod is still installed. Both can sit in a mod list together for as long as you like; this mod does not touch a `balancer-part` that belongs to a mod that is running, and it does not touch one that belongs to any other mod either.
 
-**Make Sure **you don't have anything of very high value inside your legacy balancer when you make your cutover save -- items inside the balancers are **lost** in the migration.
+**Make sure** you don't have anything of very high value inside your legacy balancer when you make your cutover save: the items the old mod was holding in its own buffer are **lost** in the migration. It keeps them in its own script state, which Factorio deletes along with the mod before anything of this one's runs. The items on the belts themselves are untouched.
 
 ## Building
 

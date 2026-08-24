@@ -1,27 +1,32 @@
 # single-edge.md — the 2.1 port: one belt per part
 
-Status: **PHASES 1 THROUGH 6 SHIPPED 2026-08-24** — the rule and its
+Status: **PHASES 1 THROUGH 7 SHIPPED 2026-08-24** — the rule and its
 refusal, then the setting, the grandfather pass and the migration, then the
-interactive and demo worlds, then the rebuilt test estate in three tranches
-(`m2`, `mar` and `upg`; `mix`, `plat` and `qual`; `m3` and `edge`). Drafted the
-same day from the 2026-08-23 investigation and boskid's answer to the interface
-request (forums t=135830). Read CLAUDE.md's migration and over-limit sections
-first; this design reuses both wholesale.
+interactive and demo worlds, then the rebuilt test estate in four tranches
+(`m2`, `mar` and `upg`; `mix`, `plat` and `qual`; `m3` and `edge`; `mig`).
+Drafted the same day from the 2026-08-23 investigation and boskid's answer to
+the interface request (forums t=135830). Read CLAUDE.md's migration and
+over-limit sections first; this design reuses both wholesale.
 
 
-What is implemented and what is not is the five "Implementation status"
+What is implemented and what is not is the seven "Implementation status"
 sections at the end of this file. The short form: the rule enforces, the refusal
 reaches the player through the sixty-fifth belt's own machinery, the merge is
 spared, a 2.0 multi-edge save opened on 2.1 has its remnants torn down and its
 owning forces told with a ping per balancer, every gesture rig and every demo
-scene is single-edge and headlessly verified, and `m1`, `sedge`, `mig21`, `m2`,
-`m3`, `mar`, `upg`, `edge`, `mix`, `plat`, `qual` and `iact` — twelve of the
-thirteen — are green on 2.1.14 in both `-gc` arms. **The `mar` slopes are
-measured again**, which is the gate the first three phases shipped without and
-which their "nothing on any hot path moves" claims were waiting on. What is left
-is `mig` and the GIF re-capture, which needs a graphical client; the
-setting-flip legs and the multi-edge regression run need a 2.0 binary and belong
-on the `release/2.0` branch.
+scene is single-edge and headlessly verified, and **all thirteen suites are
+green on 2.1.14 in both `-gc` arms**. **The `mar` slopes are measured again**,
+which is the gate the first three phases shipped without and which their
+"nothing on any hot path moves" claims were waiting on. What is left is the GIF
+re-capture, which needs a graphical client; the setting-flip legs and the
+multi-edge regression run need a 2.0 binary and belong on the `release/2.0`
+branch.
+
+**One defect this estate work found and did not fix**, because it is a guest
+decision rather than a test one: a BB2/BB3 conversion reaches the ORDINARY
+per-piece refusal message rather than the migration summary, unless a
+rebuild-from-world happens to follow it in the same session. Phase 7's "The
+message a converted balancer gets" is the measurement and the proposed fix.
 
 
 ## Why, in three sentences
@@ -283,14 +288,26 @@ they ran on are committed under `test/fixtures-2.0/`.
 
 `legacy.go` is untouched: parts still convert, health and quality still carry,
 the technology is still granted, item stacks still survive. What changes is the
-outcome — **every adopted incumbent balancer is built two-edges-per-tile by
-construction, so on 2.1 each converts and is then refused** with the same
-single-edge messaging and GPS pings. That is the honest result (the incumbent's
-geometry cannot function on 2.1 under any design), and it composes from the
-two features with no new code — but the `mig` suite's expectations change
-wholesale on 2.1 (adopted clusters: converted yes, networks no), and the
-portal description must say it plainly: migrating from Belt Balancer on 2.1
-converts your parts and hands you a rebuild checklist, not a working machine.
+outcome — **every incumbent balancer built the incumbent's way is
+two-edges-per-tile by construction, so on 2.1 each converts and is then
+refused**. That is the honest result (the incumbent's geometry cannot function
+on 2.1 under any design), and it composes from the two features with no new
+code — but the `mig` suite's expectations change wholesale on 2.1 (converted
+yes, networks no), and the portal description must say it plainly.
+
+**MEASURED 2026-08-24, and the paragraph above needed two corrections.** Phase 7
+built the suite and ran it:
+
+- **"every adopted balancer" is too strong, and the exception is the good news.**
+  A Belt Balancer user whose balancer happens to be one belt per part — a
+  two-column block, inputs down one side and outputs down the other — has a
+  shape 2.1 can build, and theirs converts into a **working network at exact
+  rate**. So the portal sentence is *migrating from Belt Balancer on 2.1
+  converts your parts and hands you a rebuild checklist, not a working machine —
+  except balancers already built one belt per part, which keep working.*
+- **"with the same single-edge messaging and GPS pings" is NOT what happens**,
+  and that is the defect phase 7 found. See "The message a converted balancer
+  gets" below.
 
 ## The interactive and demo worlds — a stated requirement of this port
 
@@ -364,7 +381,7 @@ The bulk of the labor, and it splits by which binary can run it:
 
 | work | binary | notes |
 |---|---|---|
-| ~~every suite's rigs rebuilt single-edge~~ **`m2`, `mar`, `upg`, `mix`, `plat`, `qual`, `m3` and `edge` DONE 2026-08-24; `mig` remains** | 2.1 | the geometry doubles; every calibrated number in CLAUDE.md's tables gets re-recorded. The suites' assertions themselves mostly survive — what changes is the worlds their `on_init` builds. Confirmed by all three tranches: **not one assertion in `m2`, `upg`, `plat`, `qual`, `m3` or `edge` had to be weakened**, every rate and every port count is the number it was, and `plat`'s whole stacking leg came back identical to the item. See "Implementation status — phase 4" for the two rigs that needed a redesign rather than a re-lay, "phase 5" for the one assertion that had to be retired rather than re-recorded, and "phase 6" for the four `edge` rigs whose GESTURE the rule changed |
+| ~~every suite's rigs rebuilt single-edge~~ **ALL THIRTEEN DONE 2026-08-24** | 2.1 | the geometry doubles; every calibrated number in CLAUDE.md's tables gets re-recorded. The suites' assertions themselves mostly survive — what changes is the worlds their `on_init` builds. Confirmed by all four tranches: **not one assertion in `m2`, `upg`, `plat`, `qual`, `m3` or `edge` had to be weakened**, every rate and every port count is the number it was, and `plat`'s whole stacking leg came back identical to the item. See "Implementation status — phase 4" for the two rigs that needed a redesign rather than a re-lay, "phase 5" for the one assertion that had to be retired rather than re-recorded, "phase 6" for the four `edge` rigs whose GESTURE the rule changed, and **"phase 7" for `mig`, the one suite whose rigs were deliberately NOT re-laid**: they are somebody else's world, so re-laying them would have been re-laying the thing under test |
 | new `sedge` legs: second belt refused (build, rotation, robot), handed back negative, merge-spare via the bridge-tile path, feedback-gate once | 2.1 | the `lim`/`brdg` idiom verbatim |
 | migration suite: fixture 2.0 saves loaded under 2.1 | 2.1 + fixtures | **the fixtures exist and are committed**: `test/fixtures-2.0/` carries the m2, edge, m3 and qual saves from the last 2.0.77 suite run (2026-08-22), preserved 2026-08-24 minutes ahead of anything overwriting `test/tmp` — they cannot be regenerated without a 2.0 binary. Covers: the load survives with per-tile pruning (S2 probe 1's numbers graduate into assertions), the rebuild tears down the remnants, hidden items recovered and spilled conserved, GPS summary logged, audit stable after |
 | setting-flip suite (ON→OFF sweep, OFF→ON recompile) | **2.0.77 only** | multi-edge cannot be enabled on 2.1 at all; this and the multi-edge regression run of the old rigs live on the release/2.0 branch and need the old headless binary pinned |
@@ -1464,4 +1481,177 @@ change on a cold path is the only result available.
 **`mig` alone**, and it is the one the design has always said changes OUTCOME
 rather than only geometry: every adopted incumbent balancer is multi-edge by
 construction, so on 2.1 each converts and is then refused, and its expectations
-move wholesale.
+move wholesale. **DONE the same day, as phase 7 below.**
+
+## Implementation status — phase 7, `mig` and the end of the estate, 2026-08-24
+
+**Shipped: the migration suite reworked for the convert-then-refuse outcome, and
+`mig` back in the default.** `test/run.sh` now defaults to all **thirteen**. No
+guest line changed and no package was rebuilt: the whole pass is one test mod's
+`control.lua`, three `info.json` version tokens, one assertion script and
+`test/run.sh`. Measured on Factorio 2.1.14, shipped configuration, both `-gc`
+arms.
+
+### The one suite whose rigs were deliberately NOT re-laid
+
+Every other tranche re-laid its rigs, because they are OUR rigs and the rule is
+ours to obey. **`mig`'s world is somebody else's.** Belt Balancer's own idiom is
+a single column of parts with a belt on every free face, which is two belts per
+part, and that is exactly what a migrating player's save contains — so re-laying
+those rigs would have been re-laying the thing under test, and the suite would
+have stopped measuring migration at all.
+
+They stay as the incumbent builds them. What was ADDED is the **`sok` band**:
+the same balancer laid two columns wide, which is a shape a Belt Balancer user
+could genuinely have and which this engine can build. One world, both outcomes,
+which is the honest portal story rather than a second leg staging a second
+world.
+
+**That also closes a gap phase 2 recorded and could not close.** `mig21`'s "what
+is still not verified" says: *a fixture with SINGLE-EDGE clusters adopting
+beside the refused ones — not exercised, because neither fixture has one.* This
+world has two, and the `added` leg's rebuild-from-world **adopts them beside the
+seven it refuses**, measured.
+
+### The world, and what comes out of it
+
+Nine clusters over thirty-one parts on three surfaces and two forces. The four
+rigs that were there before are unchanged in every respect but their y offset;
+`sok2` and `sok4` are new.
+
+| rig | laid | what it is on 2.1 |
+|---|---|---|
+| `ctrl` | — | a bare express belt, the yardstick: **1306 items** over t=1800..3540 |
+| `m4x4` | the incumbent's way, 4 parts | refused. **0 0 0 0** |
+| `m3to5` | the incumbent's way, 5 parts | refused. **0 0 0 0 0** |
+| **`sok2`** | **two columns, 4 parts** | **compiled. 1306 1306 — 2.000x one belt, spread 0.00%** |
+| **`sok4`** | **two columns, 8 parts, P=4** | **compiled. 1304 1306 1306 1304 — 3.997x, spread 0.15%** |
+| `wit` | the incumbent's way, 2 parts | refused; its 48 copper plates are where they always were |
+| `fid` | the incumbent's way, 2 parts | refused; 85.0 of 170.0 health and `uncommon` both carried |
+| `frc` | the incumbent's way, 2+2 on two forces | two clusters, both refused, both forces given the technology |
+| surface B | the incumbent's way, 2 parts | refused |
+
+**Every conversion number is what it was**, which is the result this pass wanted:
+31 parts from 3 surfaces into 9 clusters, 2 forces researched, the item stack at
+50 with its `place_result` flipped, `belt-balancer-1` gone, the per-surface
+census at `bbb-mig-a:0/29 bbb-mig-b:0/2`, and the witness's copper at **48 at
+every one of four samples**. `legacy.go` was not touched and did not need to be.
+
+**And the audit is the whole outcome in one line**, identical in all five
+conversion legs:
+
+    clusters=9 parts=31 nets=2 drift=0 unbuilt=0 refused=7
+
+`nets != clusters` is the port rather than a regression, and it is why the
+suite's cluster check stopped being `nets == c`: seven clusters are refused and
+a refused cluster never gets a network. `refused=` is what tells them apart from
+a cluster the classifier never saw, and `unbuilt` stays 0 — that column is this
+guest saying it should have built something and did not.
+
+### The refusal, and the one thing this suite asserts that `mig21` asserts the opposite of
+
+**Nothing is torn down and nothing is spilled.** `mig21`'s clusters were
+STANDING when the save opened, so the remnant had to come down and everything it
+held reached the ground; here the clusters are seconds old — `legacyScan`
+creates the parts and the very next flush refuses them — so `hadNet` is false,
+there is no teardown for the refusal to be in front of, no carry pool is opened
+and nothing of the player's can reach the ground. The items are where they
+always were, on their own belts, which is what the copper witness measures from
+the other side. **0 teardowns and 0 spills over every leg**, asserted.
+
+**Seven refusals, one per cluster, and the SHAPE is asserted as a multiset**:
+`[2, 2, 2, 2, 2, 3, 4]` parts carrying more than one belt. `m3to5` is the row
+that makes this a statement about a classification rather than about a constant
+— three inputs and five outputs over five parts means three of them carry two
+belts and two carry one, and nothing else in the world has a count that is
+neither zero nor its whole size.
+
+### The message a converted balancer gets, which is the defect this pass found
+
+**A converted-and-refused balancer is announced with the ORDINARY per-piece
+message, and in the commonest migration shape the player never sees the
+migration summary at all.** Measured, not inferred:
+
+| leg | how the player got here | ordinary per-cluster lines | migration summary |
+|---|---|--:|---|
+| `added` | this mod and the removal in ONE edit | **7** | **yes**, force 1 about 6 and force 4 about 1 |
+| `later`, `bb3`, `fgone` | this mod already installed, incumbent removed later | **7** | **no** |
+| `built`, `readd` | parts arriving through build events | **7** | **no** |
+
+The mechanism is not subtle once the two producers of `sedgeAnnounce` are
+written down: **both of them are `rebuildFromWorld`** (sedge.go — the rebuild's
+own fold, and `refuseSingleEdge`'s rebuild arm). A LEGACY CONVERSION is neither.
+So the summary arrives only when a rebuild-from-world happens to follow the
+conversion in the same session, which is exactly the `added` leg: this mod is
+new to the save, `fk_on_init` converts, and the `fk_on_configuration_changed`
+that follows it — a newly added mod is itself a mod-set change — finds
+`registryReady` false and rebuilds. In every other leg the rebuild already
+happened in phase one over an empty registry.
+
+**What the player gets instead is a sentence about an event that never
+happened**: `single-edge-refused-unconnected` says the extra piece was left in
+place, unconnected, and nobody placed anything. That is the same defect class
+`mig21`'s third red proof exists for — *"a migration announced with a sentence
+about an extra piece being left in place unconnected, when nobody placed
+anything"* — reached through the other door. And in the `added` leg the player
+gets **both**: seven per-piece lines and then the summary.
+
+**Not fixed here, deliberately, and the reasoning is worth keeping.** It is a
+guest-behaviour decision inside a test-estate pass, the fix has an untestable
+arm, and the suite that would have to prove it now exists:
+
+- the shape of the fix is `legacyScan`/`legacyRunBuilds` noting the converted
+  roots the way the rebuild does — a flag around the conversion and its flush,
+  read by `refuseSingleEdge` exactly as `rebuildingFromWorld` is;
+- but `settleEdgeMode` then asks `edgemode.GrandfatherNeeded` of those roots,
+  and **on 2.0 that would flip `bbb-multi-edge-parts` ON for a converted BB2
+  save**. That may well be the right answer — a converted save whose balancers
+  need multi-edge is precisely what grandfathering is for — but it is a
+  behaviour change on an engine this machine cannot run, and taking it blind
+  inside a test pass is how a `release/2.0` regression ships;
+- so both arms are PINNED instead. `EXPECT_SUMMARY` in `test/assert-mig.py`
+  asserts the summary's presence in `added` and its ABSENCE in the other five,
+  with the reasoning beside it, so whatever the fix turns out to be has to move
+  a number there and cannot land silently.
+
+### Red proofs: five re-derived, and which of the seventeen retire
+
+Two are about the new outcome and three are regressions across three different
+families of the conversion. Every one is an injected defect, built, run and
+reverted.
+
+| injected defect | what came out |
+|---|---|
+| **`sok2` given a second belt** — one extra south-facing belt on its top west part's north face, so the rig stops being single-edge | **eight assertions across five families**: `sok2` at **0.000x** and 100% spread, the refused count 7 → **8**, the shape multiset gaining a **`1`** (`[1, 2, 2, 2, 2, 2, 3, 4]`), the summary naming 8 balancers, the per-force totals adding to 8 of 7, the rebuild adopting **1** where it should adopt 2, and the audit at `(9, 31, 1, 0, 0, 8)`. **`sok4` stays green**, which is what says the split discriminates per rig rather than per suite |
+| **`m4x4` quietly re-laid TWO COLUMNS WIDE** — the anti-vacuity direction, and the one that would gut this suite silently | **eight assertions**: the world-size guard first (**35 parts where the rigs make 31**), then `m4x4` **delivering [1304, 1306, 1306, 1304] when it is supposed to be refused**, the refused count 7 → **6**, the shape multiset losing its `4`, the summary at 6, the rebuild adopting **3**, and the audit at `(9, 35, 3, 0, 0, 6)`. A suite whose incumbent rigs stopped being the incumbent's idiom would still pass every conversion check ever written; this is what stops it |
+| **the marker guard removed** (`legacyStubPresent()` in `legacyCheck`) | the `foreign` leg fires **twenty-plus assertions**, and among them the NEW one: a stranger's converted balancers are then **refused** — `the audit reads (9, 31, 2, 0, 0, 7); this mod should own nothing at all in this save, which includes refusing nothing`. Converting somebody else's entities and then declining to build them is the loudest possible form of the thing this guard prevents |
+| **the `SetHealth` copy skipped** in `legacyConvertOne` | **exactly two**, one per phase: *the damaged part is at 170.0 health at phase=t1 and was at 85.0 before the swap*. Nothing else in the leg moves — the conversion contracts have exactly the teeth they had before the port |
+| **the force check removed** from `AddPart`'s adjacency loop | **seven**, including one the pre-port suite could not make: *the summary reached 1 force(s) and the force rig puts refused balancers on 2*. Plus the conversion's own cluster count 9 → **8**, the refused count 7 → 6, the shape multiset, and the audit tuple |
+
+**None of the seventeen retire, and that is the finding rather than a
+formality.** Every one of them is about the CONVERSION — the data-stage stub,
+the marker guard, the stranger landing in Blocked, the four incumbent names, the
+build path's phase gate, the quality-blind `find_entity`, the health, the
+quality, the per-force grant, the two-forces-are-two-balancers fill, the two
+surface statements, and the four harness `skip-is-a-pass` proofs — and the
+single-edge port did not touch `legacy.go` at all. What retires is not a proof
+but the ASSERTIONS the old suite made about delivery: `m4x4` at 3.997x and
+`m3to5` at 2.995x are gone, because those balancers cannot run on this engine,
+and they are replaced by two statements rather than one — the `sok` band at
+rate, and the incumbent-idiom rigs at exactly zero.
+
+Three of the five above were re-run against the reworked suite rather than
+merely reasoned about; the other twelve were not re-run this pass, and the
+reason is stated rather than assumed: their assertions are byte-identical to
+what they were, and each one's evidence is recorded in CLAUDE.md's own
+seventeen-row table against the same guest.
+
+### Gates
+
+`make check` green (bindings and lock unmoved — no guest line changed). `make
+test` and `make GC=leaking test` each ONE invocation, both green over **all
+thirteen suites**. The `mar` slopes came back **identical to the byte** to phase
+4's record. **No suite outside `mig` moved by a number**, which for a
+test-estate pass is the only result available. The suite costs **43 s** for
+seven legs and two probes, against 30.6 s for the pre-port world of nineteen
+parts.

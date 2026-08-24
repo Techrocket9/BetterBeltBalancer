@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "title": "A stranger who owns the name",
   "author": "BetterBeltBalancer",
-  "factorio_version": "2.0",
+  "factorio_version": "2.1",
   "description": "The mig suite's NEGATIVE: a mod that is not any fork of the incumbent and that defines `balancer-part` anyway. Nothing of this mod's may ever be converted, and the guard that says so is the bbb-legacy-stub marker prototype, which this mod's presence stops the data stage defining.",
   "dependencies": [
-    "base >= 2.0.0"
+    "base >= 2.1.0"
   ]
 }

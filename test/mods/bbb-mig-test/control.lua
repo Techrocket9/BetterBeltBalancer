@@ -11,6 +11,22 @@
 -- swap. So nothing in `on_init` may name a Better Belt Balancer prototype, and
 -- everything that does is guarded on the prototype existing.
 --
+-- WHAT THE RIGS ARE LAID IN IS THE INCUMBENT'S OWN IDIOM, AND ON FACTORIO 2.1
+-- THAT IS THE POINT. Belt Balancer 2 and 3 put a belt on every free face of a
+-- part, so their 4-in/4-out balancer is FOUR parts each carrying two belts --
+-- and 2.1 allows one belt per balancer part (agents/single-edge.md). Every rig
+-- laid that way converts and is then REFUSED, which is not a defect in the
+-- migration: the incumbent's geometry cannot function on 2.1 under any design
+-- this mod could have, so what a player gets is their parts, their items and a
+-- rebuild checklist.
+--
+-- WHICH IS WHY THE `sok` BAND EXISTS. A Belt Balancer user whose balancer
+-- happens to be one belt per part -- a two-column block, inputs down the west
+-- column and outputs down the east -- has a shape 2.1 can build, and theirs
+-- converts into a WORKING network. It is the only place this suite still proves
+-- that an adopted balancer balances at all, and it is the honest portal story
+-- in one world: some of your balancers keep working, the rest do not.
+--
 -- THE RIGS, one per band on a flat scratch surface, every part placed as
 -- `balancer-part` because in phase one that is the only balancer prototype in
 -- the game:
@@ -19,12 +35,24 @@
 --           delivers in the sample window is what one saturated belt is worth,
 --           so "full throughput" is a comparison against the engine rather than
 --           against a number worked out on paper.
---   m4x4    4 parts, 4 belts in, 4 belts out, saturated. The shape a migrating
---           player is most likely to have.
---   m3to5   5 parts, 3 in and 5 out: N != M, P=8, spare ports looped back. It
---           is here because adoption re-derives the edge list from the world,
---           and an asymmetric shape is where a wrong edge list shows up as a
---           rate rather than as a crash.
+--   m4x4    4 parts, 4 belts in, 4 belts out, saturated -- TWO BELTS ON EVERY
+--           PART. The shape a migrating player is most likely to have, and on
+--           2.1 the shape that stops.
+--   m3to5   5 parts, 3 in and 5 out. Three of its five parts carry two belts
+--           and two carry one, which is why it is still here now that it can
+--           never deliver: the refusal names a COUNT of offending parts per
+--           cluster, and a rig whose count is neither zero nor the whole
+--           cluster is the only thing that separates a real classification
+--           from a constant.
+--   sok2    THE SINGLE-EDGE BAND, first of two. 2 in and 2 out over FOUR parts
+--           in two columns: each west part takes its input on its west face,
+--           each east part gives its output on its east face, and no part
+--           carries two belts. A shape a Belt Balancer user could genuinely
+--           have, and the one that must come out of the conversion RUNNING.
+--   sok4    the same idiom at 4 in and 4 out over eight parts, P=4. Two of them
+--           rather than one because one rig delivering its rate could be an
+--           accident of a network with no stages in it; a four-port butterfly
+--           re-derived from a converted world could not.
 --   wit     THE CONSERVATION WITNESS. 2 parts, 2 in and 2 out, and NO source
 --           and NO sink at all -- its belts are hand-loaded with COPPER PLATE
 --           and nothing can add to them or take from them. Every other rig in
@@ -399,8 +427,16 @@ local RIGS = {
   { name = "ctrl" },
   { name = "m4x4", parts = 4, ins = 4, outs = 4 },
   { name = "m3to5", parts = 5, ins = 3, outs = 5 },
+  { name = "sok2", rows = 2, single = true },
+  { name = "sok4", rows = 4, single = true },
 }
 
+-- THE INCUMBENT'S OWN IDIOM: one column of parts, belts on both free faces of
+-- every row. A part with an input on its west face and an output on its east
+-- face carries TWO belts, which is what Belt Balancer builds and what Factorio
+-- 2.1 forbids -- so on 2.1 everything built by this function converts and is
+-- then refused. That is deliberate and it is what a real incumbent save looks
+-- like; the `sok` band below is the other half of the story.
 local function build_rig(cfg, base)
   local s = game.surfaces[SURF]
   if cfg.name == "ctrl" then
@@ -418,6 +454,37 @@ local function build_rig(cfg, base)
   local out = {}
   for i = 0, cfg.outs - 1 do
     belts(s, E, 1, 3, base + i)
+    out[#out + 1] = sink(s, 4, base + i)
+  end
+  return out
+end
+
+-- THE SINGLE-EDGE BAND: the same balancer laid in TWO COLUMNS, which is a shape
+-- a Belt Balancer user could genuinely have and which Factorio 2.1 can build.
+--
+-- A west part's west face takes the row's input and its east face is INTERIOR
+-- (the east part is there); an east part's west face is interior and its east
+-- face gives the row's output. Every other face of every part is bare ground.
+-- So each part carries exactly one belt, N and M are the same N and M the
+-- one-column rig would have had, and `P = next_pow2(max(N, M))` is unmoved --
+-- the belts decide the network and the belts did not move. It is the estate's
+-- own re-lay rule (agents/single-edge.md, phase 4) applied to somebody else's
+-- world instead of to ours.
+--
+-- The gap either side is one tile narrower than the one-column rigs' because
+-- the block is one tile wider: sources and sinks stay where they are, so a
+-- count of items in a chest is comparable with `ctrl`'s to the item.
+local function build_single(cfg, base)
+  local s = game.surfaces[SURF]
+  for i = 0, cfg.rows - 1 do
+    put(s, LEGACY_PART, 0, base + i)
+    put(s, LEGACY_PART, 1, base + i)
+  end
+  local out = {}
+  for i = 0, cfg.rows - 1 do
+    source(s, -5, base + i)
+    belts(s, E, -3, -1, base + i)
+    belts(s, E, 2, 3, base + i)
     out[#out + 1] = sink(s, 4, base + i)
   end
   return out
@@ -583,7 +650,11 @@ script.on_init(function()
   storage.rigs = {}
   storage.order = order
   for _, cfg in ipairs(RIGS) do
-    storage.rigs[cfg.name] = build_rig(cfg, cfg.base)
+    if cfg.single then
+      storage.rigs[cfg.name] = build_single(cfg, cfg.base)
+    else
+      storage.rigs[cfg.name] = build_rig(cfg, cfg.base)
+    end
   end
   build_witness(wit_base)
   build_fidelity(fid_base)

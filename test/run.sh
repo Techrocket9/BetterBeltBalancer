@@ -33,7 +33,12 @@
 #         plus a stranger), and WHICH TRANSITION of legacy.go's state machine the
 #         load makes (swapped in one edit, removed a session later, arriving
 #         through build events and then a plain reload, an incumbent INSTALLED
-#         after this mod, a stranger left alone, and a stranger UNINSTALLED)
+#         after this mod, a stranger left alone, and a stranger UNINSTALLED).
+#         On 2.1 the CONVERSION is unchanged and the OUTCOME is not: Belt
+#         Balancer's own idiom is two belts on every part, so an incumbent
+#         balancer converts and is then refused, and only the `sok` band -- laid
+#         two columns wide, which one of their users could genuinely have --
+#         comes out of it running
 #   mig21 A FACTORIO 2.0 MULTI-EDGE SAVE, OPENED ON 2.1. The only suite with no
 #         `--create` phase: its worlds were built by a 2.0.77 binary that is gone
 #         and cannot be rebuilt at any price, so the saves are committed under
@@ -57,10 +62,10 @@
 #         the geometry intended, or any refusal at all -- the gestures create
 #         the refusals and the staging must not
 #
-# ONE OF THE THIRTEEN IS STILL BUILT IN THE MULTI-EDGE IDIOM AND DOES NOT RUN
-# ON FACTORIO 2.1: every rig in it puts two belts on one part, which is what
-# 2.1 forbids. The default runs the other twelve -- see the SUITES line below
-# for why those twelve and not `mig`.
+# ALL THIRTEEN RUN ON FACTORIO 2.1 AND ALL THIRTEEN ARE IN THE DEFAULT. The
+# estate was rebuilt for the one-belt-per-part rule in four tranches and `mig`
+# was the last of them, because it is the only suite whose ANSWER the rule
+# changed rather than whose geometry -- see the SUITES line below.
 #
 #   make test          # builds the mod first
 #   test/run.sh        # against whatever dist/ already holds
@@ -91,40 +96,44 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 [ -x "$FACTORIO" ] || { echo "factorio not found at: $FACTORIO (set FACTORIO_BIN)" >&2; exit 1; }
 [ -d "$MOD_DIR" ]  || { echo "no built mod at $MOD_DIR; run \`make mod\` first" >&2; exit 1; }
 
-# THE DEFAULT IS WHAT RUNS ON FACTORIO 2.1 TODAY, which is twelve of the
-# thirteen. `mig` is still reachable by name and is still part of the estate
-# this mod is verified by; what stops it is measured rather than assumed, in two
-# layers:
+# THE DEFAULT IS ALL THIRTEEN, and getting there took four tranches of estate
+# work rather than a manifest token. What each suite needed is recorded in
+# agents/single-edge.md's phase sections; the short form, because it is the
+# reason the list reads the way it does:
 #
 #   `Incompatible Factorio version (current: 2.1, required: 2.0)` -- 2.1 refuses
-#   a mod whose info.json says 2.0 at all, so every one of them fails before a
-#   single entity is placed. `m1` needed nothing but that one token, because it
-#   is BELT-FREE: it asserts cluster merges, splits and sprite variations and
+#   a mod whose info.json says 2.0 at all, so every suite failed at the loader
+#   before an entity was placed. `m1` needed nothing but that one token, because
+#   it is BELT-FREE: it asserts cluster merges, splits and sprite variations and
 #   never builds an edge, so the rule this port is about cannot touch it.
 #
-#   `mig21` is the exception that proves the point: it does not BUILD a
-#   multi-edge world, it LOADS one somebody else built, which is the only way a
-#   2.1 binary can ever be shown one. Its two fixtures are the m2 and edge saves
-#   from the last 2.0.77 suite run.
+#   and then the RULE, for the nine that build belts. `m2`, `mar`, `upg`, `mix`,
+#   `plat`, `qual`, `m3` and `edge` had their rigs REBUILT single-edge -- every
+#   column of parts is two columns now, and the belt an edit used to lay on a
+#   cluster's free face goes against an EDGELESS part instead, because under
+#   this rule a working balancer has no free face. Not one assertion in any of
+#   them had to be weakened.
 #
-#   and then the RULE. Every rig in `mig` puts two belts on one
-#   part, which is what 2.1 forbids -- so bumping their manifests would only
-#   part, which is what 2.1 forbids -- so bumping its manifest would only
-#   move the failure from the loader to the compiler. `m2`, `mar`, `upg`,
-#   `mix`, `plat`, `qual`, `m3` and `edge` have had their rigs REBUILT
-#   single-edge (every column of parts is two columns now, and the belt an
-#   edit used to lay on a cluster's free face goes against an EDGELESS part
-#   instead, because under this rule a working balancer has no free face);
-#   `mig` is what is left, and agents/single-edge.md's test-estate table is
-#   the list. `mig` changes OUTCOME rather than only geometry: every adopted
-#   incumbent balancer is multi-edge by construction, so on 2.1 each converts
-#   and is then refused.
+#   `mig` was last and is the only one whose ANSWER moved. Its world is
+#   somebody else's: Belt Balancer's idiom is a single column of parts with a
+#   belt on every free face, which is two belts per part and is exactly what
+#   2.1 forbids -- so re-laying its rigs would have been re-laying the thing
+#   under test. They stay as the incumbent builds them, they convert, and they
+#   are then refused; what was ADDED is the `sok` band, the same balancer laid
+#   two columns wide, which is a shape one of their users could genuinely have
+#   and which comes out of the conversion running. Some of your balancers keep
+#   working, the rest get a rebuild checklist, and both halves are measured.
+#
+#   `mig21` is the one suite that does not BUILD its world at all: it LOADS one
+#   a 2.0.77 binary built, which is the only way a 2.1 binary can ever be shown
+#   a multi-edge save. Its two fixtures are the m2 and edge saves from the last
+#   2.0.77 run, committed under test/fixtures-2.0/.
 #
 #   `iact` is not about the mod's behaviour at all; it is about the world the
 #   INTERACTIVE checklist stages. It runs here because a rig that stopped
 #   landing, or one this mod refuses, costs a human a session to discover and
 #   costs this a single `--create` to catch.
-SUITES="${*:-m1 sedge mig21 m2 m3 mar upg edge mix plat qual iact}"
+SUITES="${*:-m1 sedge mig21 m2 m3 mar upg edge mix plat qual mig iact}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.

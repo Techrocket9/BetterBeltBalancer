@@ -1,11 +1,27 @@
 #!/usr/bin/env python3
-"""Assert that a Belt Balancer save is adopted when the incumbent is removed.
+"""Assert what a Belt Balancer save becomes when the incumbent is removed.
 
-Seven legs and a name probe, run by test/run.sh, each a pair of Factorio phases
-(the probe is one phase) and most of them under DIFFERENT MOD SETS. The legs
-cover two axes, and neither is a subset of the other: WHICH MOD owns
+ON FACTORIO 2.1 THIS SUITE ASSERTS A DIFFERENT OUTCOME THAN IT USED TO, AND
+NOTHING ABOUT THE CONVERSION CHANGED TO MAKE IT SO. `legacy.go` is untouched by
+the single-edge port: parts still convert at their health and their quality, the
+technology is still granted per force, item stacks still survive and still place
+this mod's parts, and the items on the players' own belts are conserved exactly.
+What changed is the engine underneath. 2.1 allows ONE BELT PER BALANCER PART
+(agents/single-edge.md), and Belt Balancer's own idiom is a single column of
+parts with a belt on every free face -- two belts per part, by construction. So
+an incumbent balancer converts and is then REFUSED, and this suite's throughput
+assertions invert: the rigs laid the incumbent's way must deliver NOTHING, and
+the `sok` band -- laid two columns wide, which a Belt Balancer user could
+genuinely have -- must deliver at rate. That is the honest portal story in one
+world, and it is asserted as plainly as the old rates were rather than by
+loosening a bound.
+
+Seven legs and two name probes, run by test/run.sh, each a pair of Factorio
+phases (the probes are one phase) and most of them under DIFFERENT MOD SETS. The
+legs cover two axes, and neither is a subset of the other: WHICH MOD owns
 `balancer-part`, and WHICH TRANSITION of guest/go/legacy.go's state machine the
-load makes.
+load makes. Both axes survive the port untouched -- the state machine knows
+nothing about belts.
 
     --leg added    the incumbent swapped out and this mod in, in one edit
     --leg later    this mod installed first, the incumbent removed a session on
@@ -47,9 +63,16 @@ What is checked, and why each one is here:
     an estimate.
   * THE ITEM STACK SURVIVED, and places whatever the mod set says it should.
   * THE FORCE CAN STILL CRAFT. The incumbent's technologies went with it.
-  * THE ADOPTED BALANCERS BALANCE, against a bare express belt in the same save.
-    A network adopted from the wrong edge list does not show up as a crash; it
-    shows up as a rate.
+  * THE ONES THIS ENGINE CAN BUILD BALANCE, against a bare express belt in the
+    same save. A network adopted from the wrong edge list does not show up as a
+    crash; it shows up as a rate. Only the `sok` band can reach this now, and
+    that is what it is for.
+  * AND THE ONES IT CANNOT ARE REFUSED, DELIVER EXACTLY ZERO, AND SAY SO. One
+    refusal per cluster, naming how many of its parts carry more than one belt
+    -- a count that is neither zero nor the whole cluster on `m3to5`, which is
+    what separates a real classification from a constant. Nothing is torn down
+    and nothing is spilled: a freshly converted cluster never had a network, so
+    the refusal in front of the teardown has no teardown to be in front of.
   * WHAT THE CONVERSION CARRIED. `legacyConvertOne` reads a HEALTH and a QUALITY
     off the entity it destroys and writes both onto the one it creates, and both
     are invisible on an undamaged normal-quality part -- which is what every
@@ -90,8 +113,52 @@ QUALITY = re.compile(r"\[BBB-MIG\] quality phase=(\S+) name=(\S+) value=(\S+)")
 SURFACES = re.compile(r"\[BBB-MIG\] surfaces phase=(\S+) (.*)")
 FORCEPARTS = re.compile(r"\[BBB-MIG\] force-parts phase=(\S+) (.*)")
 AUDIT = re.compile(
-    r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) unbuilt=(\d+)"
+    r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) "
+    r"unbuilt=(\d+) refused=(\d+)"
 )
+REBUILT = re.compile(
+    r"\[BBB\] rebuilt from world: (\d+) surfaces, (\d+) parts, (\d+) clusters "
+    r"\((\d+) networks adopted, (\d+) rebuilt\)"
+)
+
+# THE REFUSAL, and everything that is said about it.
+#
+# `alert:` and never `error:` -- test/run.sh fails a run on an error line, and a
+# balancer built to a rule this Factorio does not permit is an expected condition
+# with a defined outcome (guest/go/sedge.go, logRefusedSingleEdge).
+REFUSED = re.compile(
+    r"\[BBB\] alert: cluster (\d+) has (\d+) parts? carrying more than one belt, "
+    r"worst (\d+)"
+)
+# The ORDINARY per-cluster refusal message: what a robot or a script that placed
+# a piece is told. See EXPECT_SUMMARY below for why a migration reaches it.
+TOLDPIECE = re.compile(
+    r"\[BBB\] told force (\d+) that cluster (\d+) is past the one-belt-per-part"
+)
+# The MIGRATION summary, which is a different act: one line per affected force,
+# with a `[gps=]` ping per balancer, for a whole save that was built to a rule
+# that has since changed.
+SUMMARY = re.compile(
+    r"\[BBB\] single-edge: (\d+) balancers were built with several belts per part"
+)
+SUMTOLD = re.compile(
+    r"\[BBB\] single-edge: told force (\d+) about (\d+) balancers built to the "
+    # No `$`: this is matched per line, and the trailing group is what catches
+    # the ` -- print FAILED` suffix.
+    r"multi-edge rule(.*)"
+)
+# THE GRANDFATHER PASS, which is the 2.0 arm and must never be attempted here:
+# `bbb-multi-edge-parts` is not defined on 2.1 and writing an undefined
+# settings.global key RAISES.
+GRANDFATHER = re.compile(r"\[BBB\] single-edge: kept multiple belts per part enabled")
+FLIPPED = re.compile(r"\[BBB\] single-edge: multiple belts per part turned (ON|OFF)")
+# EITHER ARM OF THE HAND-BACK, matched on the shape both of them share rather
+# than on one sentence. A NEGATIVE assertion, and an exact regex over a negative
+# is the one shape a rename in the guest can make VACUOUS -- the line stops
+# matching, the assertion stops being able to fail, and nothing says so.
+HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
+TORNDOWN = re.compile(r"\[BBB\] torn down cluster (\d+), returned (\d+) items")
+SPILLED = re.compile(r"\[BBB\] spilled (\d+) items beside cluster (\d+)")
 
 # The trigger each leg must have been driven by. `added` gets on_init, because
 # this mod is new to the save; the rest get on_configuration_changed, because it
@@ -129,8 +196,10 @@ RATE_TOL = 0.02     # against the control belt
 # what this script did until the force rig existed -- cannot see that at all,
 # because both numbers come from the same fill.
 #
-#   m4x4 4 parts / m3to5 5 / wit 2 / fid 2 / frc 2+2 on two forces / surface B 2
-EXPECT_CLUSTERS = 7
+#   m4x4 4 parts / m3to5 5 / sok2 4 / sok4 8 / wit 2 / fid 2 /
+#   frc 2+2 on two forces / surface B 2
+EXPECT_PARTS = 31
+EXPECT_CLUSTERS = 9
 EXPECT_FORCES = 2                    # forces that owned a converted part
 FORCE_B = "bbb-mig-force-b"
 EXPECT_FORCE_B_PARTS = 2
@@ -139,6 +208,68 @@ HIDDEN_SURFACE = "bbb-hidden"        # this mod's own, and never scanned
 
 FID_HEALTH = 85.0
 FID_QUALITY = "uncommon"
+
+# WHAT THE ENGINE CAN AND CANNOT BUILD OUT OF THAT WORLD, which is the whole of
+# what the single-edge port changed about this suite.
+#
+# Seven of the nine clusters are laid the incumbent's way -- one column of parts
+# with a belt on both free faces of each row -- so every one of their parts
+# carries two belts and every one of them is refused. Two are the `sok` band,
+# laid two columns wide, and they compile and run.
+EXPECT_NETS = 2                      # sok2 and sok4, and nothing else
+EXPECT_REFUSED = 7
+
+# HOW MANY PARTS OF EACH REFUSED CLUSTER CARRY MORE THAN ONE BELT, sorted. This
+# is the assertion that says the classification is real rather than a constant:
+# `m3to5` has three inputs and five outputs over five parts, so three of its
+# parts carry two belts and two carry one, and nothing else in the world has a
+# count that is neither zero nor its whole size.
+#
+#   m4x4 4 / m3to5 3 / wit 2 / fid 2 / frc 2 / frc 2 / surface B 2
+EXPECT_REFUSED_SHAPE = [2, 2, 2, 2, 2, 3, 4]
+
+# The rigs the conversion must leave RUNNING, and what each owes against the
+# control belt. Two of them rather than one because one rig delivering its rate
+# could be an accident of a network with no stages in it: `sok4` is P=4, a real
+# butterfly, re-derived from a converted world.
+WORKING = (("sok2", 2.0), ("sok4", 4.0))
+
+# ...and the rigs that must deliver EXACTLY NOTHING. Asserted as zero rather
+# than as a loosened bound: a refused cluster has no network at all, so an item
+# arriving in one of these chests is not a rate that drifted, it is a balancer
+# that was built when it should not have been.
+STOPPED = ("m4x4", "m3to5")
+
+# WHICH LEGS SPEAK THE MIGRATION SUMMARY, and this table is a MEASUREMENT of the
+# shipped guest rather than a statement of what it ought to do.
+#
+# `sedgeAnnounce` -- the list of roots whose refusal belongs in the summary
+# rather than in the ordinary per-piece message -- has two producers, and both
+# of them are `rebuildFromWorld` (guest/go/sedge.go: the rebuild's own fold, and
+# refuseSingleEdge's rebuild arm). A LEGACY CONVERSION is neither. So whether
+# the player gets the checklist depends on whether a rebuild-from-world happens
+# to run AFTER the conversion in the same session:
+#
+#   added   this mod is new to the save, so `fk_on_init` converts and the
+#           `fk_on_configuration_changed` that follows it -- a newly added mod
+#           is itself a mod-set change -- finds registryReady false and rebuilds.
+#           That rebuild re-refuses all seven and the informed flush speaks.
+#   the rest  this mod was already installed, so the rebuild happened in phase
+#           one over an empty registry and phase two's conversion is followed by
+#           nothing. The player gets seven ordinary per-cluster lines instead.
+#
+# BOTH ARMS ARE PINNED, in both directions, because the fix for the asymmetry --
+# whatever it turns out to be -- has to move a number here. See the report in
+# CLAUDE.md's migration section: the ordinary message says an extra piece was
+# left in place unconnected, and in a migration nobody placed anything.
+EXPECT_SUMMARY = {
+    "added": True,
+    "later": False,
+    "bb3": False,
+    "built": False,
+    "readd": False,
+    "fgone": False,
+}
 
 
 def find_all(lines, rx):
@@ -218,7 +349,15 @@ def check_item(items, fail, expect_place):
 
 
 def check_throughput(run, fail):
-    """Throughput over the window, against the control belt in the same save."""
+    """Throughput over the window, against the control belt in the same save.
+
+    TWO STATEMENTS NOW, and the second is as sharp as the first. The `sok` band
+    was laid one belt per part, so this engine can build it and it must deliver
+    at rate; the incumbent-idiom rigs put two belts on every part, so this engine
+    refuses them and they must deliver NOTHING AT ALL. Asserting the second as a
+    zero rather than as a loosened bound is the point: a refused cluster has no
+    network, so an item arriving in one of those chests would be a balancer that
+    got built when the rule says it cannot be."""
     samples = {int(m.group(1)): parse_sample(m.group(2)) for m in find_all(run, SAMPLE)}
     if 1800 not in samples or 3540 not in samples:
         fail.append("the throughput window was not sampled at both ends")
@@ -230,7 +369,7 @@ def check_throughput(run, fail):
     if ctrl < 500:
         fail.append("the control belt delivered %d items; nothing in this save "
                     "was flowing" % ctrl)
-    for name, expect in (("m4x4", 4.0), ("m3to5", 3.0)):
+    for name, expect in WORKING:
         per = delta.get(name)
         if not per:
             fail.append("no samples for rig %s" % name)
@@ -241,43 +380,168 @@ def check_throughput(run, fail):
         print("    %-6s %s  total %.3fx one belt, spread %.2f%%"
               % (name, " ".join(str(v) for v in per), ratio, spread * 100))
         if abs(ratio - expect) > RATE_TOL * expect:
-            fail.append("%s delivered %.3fx one belt and should deliver %.3fx: "
-                        "the adopted network is not the shape the world implies"
+            fail.append("%s delivered %.3fx one belt and should deliver %.3fx: it "
+                        "is laid one belt per part, so this engine can build it "
+                        "and the conversion has to leave it RUNNING -- this is "
+                        "the only rig band in the suite that still proves an "
+                        "adopted balancer balances at all"
                         % (name, ratio, expect))
         if spread > SPREAD:
             fail.append("%s outputs spread %.2f%%, over the %.0f%% bound"
                         % (name, spread * 100, SPREAD * 100))
+    for name in STOPPED:
+        per = delta.get(name)
+        if per is None:
+            fail.append("no samples for rig %s" % name)
+            continue
+        print("    %-6s %s  -- refused, and a refused cluster has no network"
+              % (name, " ".join(str(v) for v in per)))
+        if any(v != 0 for v in per):
+            fail.append("%s delivered %s items and it is built the incumbent's "
+                        "way -- two belts on one part, which this Factorio "
+                        "refuses. Nothing should have been compiled for it"
+                        % (name, per))
 
 
 def check_audit(audits, fail, expect_parts, summary_clusters):
-    """And the registry agrees with the world."""
+    """And the registry agrees with the world.
+
+    THE WHOLE TUPLE IS WRITTEN DOWN HERE rather than cross-checked against
+    anything the guest said, which is the estate's own convention and is why the
+    cluster count was taken off the summary line in the first place: a flood fill
+    that fused two forces' touching parts moves the audit and the summary
+    together and neither says anything.
+
+    `nets` IS NO LONGER `clusters` AND THAT IS THE PORT, not a regression. Seven
+    of the nine clusters are refused and a refused cluster never gets a network,
+    so the two numbers are 2 and 9 and `nets == clusters` would now be the
+    failing state. `refused` is what tells a declined cluster apart from one the
+    classifier never saw -- `unbuilt` is this guest saying it should have built
+    something and did not, and it stays zero throughout."""
     if not audits:
         fail.append("no audit ran after the migration")
         return
-    c, p, nets, drift, unbuilt = (int(g) for g in audits[-1].groups())
-    print("  final audit: clusters=%d parts=%d nets=%d drift=%d unbuilt=%d"
-          % (c, p, nets, drift, unbuilt))
-    if drift or unbuilt:
-        fail.append("the audit found drift=%d unbuilt=%d after the migration"
-                    % (drift, unbuilt))
-    if nets != c:
-        fail.append("%d clusters and %d networks: a cluster the classifier did "
-                    "not see" % (c, nets))
-    if p != expect_parts:
-        fail.append("the audit counted %d parts and %d were adopted"
-                    % (p, expect_parts))
-    # THE ABSOLUTE ONE, and it is the only cluster check with teeth. The line
-    # below cross-checks two numbers the same flood fill produced, so a fill
-    # that fused two forces' touching parts moves both of them together and
-    # neither says anything.
-    if c != EXPECT_CLUSTERS:
-        fail.append("the audit finds %d clusters and the observer built %d: two "
-                    "forces' parts touching are two balancers, and a fill that "
-                    "fused them moves no item count in this suite at all"
-                    % (c, EXPECT_CLUSTERS))
-    if summary_clusters is not None and c != summary_clusters:
+    got = tuple(int(g) for g in audits[-1].groups())
+    want = (EXPECT_CLUSTERS, expect_parts, EXPECT_NETS, 0, 0, EXPECT_REFUSED)
+    print("  final audit: clusters=%d parts=%d nets=%d drift=%d unbuilt=%d "
+          "refused=%d" % got)
+    if got != want:
+        fail.append("the audit reads %s and should read %s: %d clusters over %d "
+                    "parts, of which the %d laid one belt per part carry a "
+                    "network and the %d laid the incumbent's way are refused, "
+                    "with nothing drifting and nothing left unbuilt"
+                    % (got, want, EXPECT_CLUSTERS, expect_parts, EXPECT_NETS,
+                       EXPECT_REFUSED))
+    if summary_clusters is not None and got[0] != summary_clusters:
         fail.append("the migration reported %d clusters and the audit finds %d"
-                    % (summary_clusters, c))
+                    % (summary_clusters, got[0]))
+
+
+def check_refusals(lines, leg, fail):
+    """THE REFUSALS, AND WHAT WAS SAID ABOUT THEM.
+
+    Seven clusters in this world are built the incumbent's way, and every one of
+    them has to be refused BY NAME with a count of its offending parts. The count
+    is what makes this a statement about a classification rather than about a
+    constant: `m3to5` is three inputs and five outputs over five parts, so three
+    of them carry two belts and two carry one.
+
+    AND NOTHING IS TORN DOWN AND NOTHING IS SPILLED. That is the difference
+    between this suite and `mig21`, which asserts the opposite for the same
+    refusal: there the balancers were STANDING when the save opened, so the
+    remnant had to come down and everything it held reached the ground. Here the
+    clusters are seconds old -- `legacyScan` created the parts and the very next
+    flush refused them -- so there is no network to tear down, no carry pool to
+    open and nothing to spill. The items are where they always were, on the
+    player's own belts, which is what the copper witness measures from the other
+    side."""
+    seen = {}
+    for m in find_all(lines, REFUSED):
+        root = int(m.group(1))
+        if root not in seen:
+            seen[root] = (int(m.group(2)), int(m.group(3)))
+    shape = sorted(v[0] for v in seen.values())
+    print("  refused: %d clusters, parts-carrying-two-belts %s"
+          % (len(seen), shape))
+    if len(seen) != EXPECT_REFUSED:
+        fail.append("%d clusters were refused and %d of this world's %d are laid "
+                    "the incumbent's way, two belts on every part"
+                    % (len(seen), EXPECT_REFUSED, EXPECT_CLUSTERS))
+    if shape != EXPECT_REFUSED_SHAPE:
+        fail.append("the refusals name %s parts carrying more than one belt and "
+                    "the rigs imply %s: m3to5 is the one whose count is neither "
+                    "zero nor its whole size, so a constant cannot produce this "
+                    "list" % (shape, EXPECT_REFUSED_SHAPE))
+    worst = sorted({v[1] for v in seen.values()})
+    if worst not in ([], [2]):
+        fail.append("a refusal reported a part carrying %s belts; the incumbent's "
+                    "idiom puts an input on one face and an output on the other, "
+                    "which is two" % worst)
+
+    # ONE ORDINARY MESSAGE PER REFUSED CLUSTER. See EXPECT_SUMMARY: a legacy
+    # conversion reaches the per-piece message rather than the migration summary,
+    # because neither producer of `sedgeAnnounce` is a conversion.
+    told = {int(m.group(2)) for m in find_all(lines, TOLDPIECE)}
+    print("  told per cluster: %d" % len(told))
+    if told != set(seen):
+        fail.append("the ordinary refusal message went to clusters %s and %s "
+                    "were refused: it is once per refused cluster, and the "
+                    "feedback gate is what stops it being once per audit"
+                    % (sorted(told), sorted(seen)))
+
+    # THE MIGRATION SUMMARY, in both directions.
+    summ = find_all(lines, SUMMARY)
+    sumtold = find_all(lines, SUMTOLD)
+    want_summary = EXPECT_SUMMARY.get(leg, False)
+    if want_summary:
+        if len(summ) != 1:
+            fail.append("the migration summary was spoken %d times and this leg "
+                        "adds this mod to the save, so the "
+                        "on_configuration_changed that follows on_init rebuilds "
+                        "from world, re-refuses every converted cluster and the "
+                        "informed flush speaks once" % len(summ))
+        elif int(summ[0].group(1)) != EXPECT_REFUSED:
+            fail.append("the migration summary named %s balancers and %d were "
+                        "refused" % (summ[0].group(1), EXPECT_REFUSED))
+        per_force = {int(m.group(1)): int(m.group(2)) for m in sumtold}
+        print("  migration summary told: %s" % per_force)
+        if sum(per_force.values()) != EXPECT_REFUSED:
+            fail.append("the summary reached forces %s, adding up to %d of %d "
+                        "refused balancers -- it is once per FORCE, never once "
+                        "per balancer and never once per save"
+                        % (per_force, sum(per_force.values()), EXPECT_REFUSED))
+        if len(per_force) != EXPECT_FORCES:
+            fail.append("the summary reached %d force(s) and the force rig puts "
+                        "refused balancers on %d" % (len(per_force), EXPECT_FORCES))
+        for m in sumtold:
+            if "FAILED" in m.group(3):
+                fail.append("the summary to force %s did not reach it"
+                            % m.group(1))
+    elif summ or sumtold:
+        fail.append("the migration summary was spoken in a leg where no "
+                    "rebuild-from-world follows the conversion (%s). If this "
+                    "started passing because the guest learned to announce a "
+                    "CONVERSION, EXPECT_SUMMARY is what has to move"
+                    % (summ or sumtold)[0].group(0).strip()[-80:])
+
+    # NOTHING WAS STANDING, SO NOTHING CAME DOWN.
+    torn = find_all(lines, TORNDOWN)
+    spilled = find_all(lines, SPILLED)
+    if torn or spilled:
+        fail.append("%d teardowns and %d spills: a cluster the conversion just "
+                    "created has never had a network, so the refusal in front of "
+                    "the teardown has no teardown to be in front of and nothing "
+                    "of the player's can reach the ground"
+                    % (len(torn), len(spilled)))
+
+    # AND THE TWO NEGATIVES THIS ENGINE EXISTS TO PIN.
+    if find_all(lines, HANDEDBACK):
+        fail.append("a piece was handed back to a player: there is no player in "
+                    "a headless run, and in a migration nobody placed anything")
+    if find_all(lines, GRANDFATHER) or find_all(lines, FLIPPED):
+        fail.append("the guest touched `bbb-multi-edge-parts`. It is not defined "
+                    "on Factorio 2.1 and writing an undefined settings.global "
+                    "key RAISES, so the capability gate has to hold here")
 
 
 def parse_pairs(text, sep):
@@ -538,6 +802,14 @@ def probe(create, name, version):
                     "the phase being Done, and a gate that let these through "
                     "swaps a working mod's freshly built entity out from under it"
                     % (len(built), name))
+    # AND NOTHING WAS REFUSED, which is the same statement one step further on.
+    # A refusal names a cluster of OURS, so one here would mean the incumbent's
+    # entities had been converted and then declined -- the loudest possible form
+    # of touching a working mod's world.
+    for m in find_all(create, REFUSED):
+        fail.append("a cluster was refused for the one-belt-per-part rule while "
+                    "%s was installed (%s): this mod owns no cluster in that save"
+                    % (name, m.group(0).strip()[-70:]))
 
     report(fail, "%s is recognised by name and its balancers were left alone" % name)
 
@@ -622,8 +894,10 @@ def readd(create, run, census, counts, items, techs, blocked, adopted, audits,
                         "belt-balancer-1=%s and should be %s / %s"
                         % (phase, got[0], got[1], want[0], want[1]))
 
-    # THE STANDING NETWORKS KEEP RUNNING across the incumbent's arrival.
+    # THE STANDING NETWORKS KEEP RUNNING across the incumbent's arrival, and the
+    # refused ones stay refused. Both halves of that are check_throughput's now.
     check_throughput(run, fail)
+    check_refusals(create + run, "readd", fail)
     check_audit(audits, fail, legacy_before, None)
 
     # AND THE ONE WITH TEETH.
@@ -698,9 +972,11 @@ def main():
     legacy_before, ours_before = census["create"]
     print("  phase one: %d %s standing, %d of ours" % (legacy_before, "balancer-part", ours_before))
 
-    if legacy_before < 8:
-        fail.append("only %d incumbent parts were built; the rigs did not go up"
-                    % legacy_before)
+    if legacy_before != EXPECT_PARTS:
+        fail.append("%d incumbent parts were built and the rigs make %d; every "
+                    "count below is against that number, so a world that did not "
+                    "go up whole is measured rather than reported"
+                    % (legacy_before, EXPECT_PARTS))
     if ours_before != 0:
         fail.append("phase one already had %d of this mod's parts; the leg is not "
                     "measuring a migration" % ours_before)
@@ -803,13 +1079,21 @@ def main():
         if not audits:
             fail.append("no audit ran; the guest was never asked to look at this world")
         else:
-            c, p, nets, drift, unbuilt = (int(g) for g in audits[-1].groups())
-            print("  audit: clusters=%d parts=%d nets=%d drift=%d unbuilt=%d"
-                  % (c, p, nets, drift, unbuilt))
-            if c or p or drift or unbuilt:
-                fail.append("the audit found clusters=%d parts=%d drift=%d "
-                            "unbuilt=%d; this mod should own nothing at all in "
-                            "this save" % (c, p, drift, unbuilt))
+            got = tuple(int(g) for g in audits[-1].groups())
+            print("  audit: clusters=%d parts=%d nets=%d drift=%d unbuilt=%d "
+                  "refused=%d" % got)
+            if got != (0, 0, 0, 0, 0, 0):
+                fail.append("the audit reads %s; this mod should own nothing at "
+                            "all in this save, which includes refusing nothing "
+                            "-- a refusal here would mean a stranger's balancer "
+                            "had been converted and then declined" % (got,))
+        # NOTHING WAS REFUSED, because nothing was converted. `check_refusals`
+        # would be wrong here (it expects the seven), so the negative is made
+        # directly: any refusal at all is a stranger's entity in this mod's hands.
+        for m in find_all(both, REFUSED) + find_all(both, SUMMARY):
+            fail.append("a cluster was refused for the one-belt-per-part rule "
+                        "(%s); this mod owns no cluster in this save"
+                        % m.group(0).strip()[-70:])
         report(fail, "the stranger's balancers were left alone")
         return
 
@@ -941,6 +1225,36 @@ def main():
                             % (before[0], before[1]))
 
     check_throughput(run, fail)
+    check_refusals(both, leg, fail)
+
+    # THE REBUILD THAT FOLLOWS THE CONVERSION, and only the `added` leg has one.
+    #
+    # It is the only place in the estate where a single-edge cluster is ADOPTED
+    # beside refused ones -- agents/single-edge.md records that gap explicitly
+    # for the `mig21` suite, whose two fixtures are multi-edge to the last
+    # cluster. Here the rebuild finds nine, adopts the two the `sok` band
+    # compiled a moment earlier because their standing interfaces match the edge
+    # list exactly, and rebuilds the seven that have no network to adopt.
+    if leg == "added":
+        reb = find_all(run, REBUILT)
+        if not reb:
+            fail.append("this leg adds the mod to an existing save, so the "
+                        "on_configuration_changed after on_init must rebuild "
+                        "from world; it did not")
+        else:
+            surfaces, parts, clusters_r, adopted_n, rebuilt_n = (
+                int(g) for g in reb[-1].groups())
+            print("  the rebuild after the conversion: %d clusters, %d adopted, "
+                  "%d rebuilt" % (clusters_r, adopted_n, rebuilt_n))
+            if (clusters_r, adopted_n, rebuilt_n) != (
+                    EXPECT_CLUSTERS, EXPECT_NETS, EXPECT_REFUSED):
+                fail.append("the rebuild found %d clusters and adopted %d of "
+                            "them, rebuilding %d; it should adopt the %d the "
+                            "`sok` band just compiled -- their interfaces match "
+                            "the edge list exactly -- and rebuild the %d that "
+                            "have no network to adopt"
+                            % (clusters_r, adopted_n, rebuilt_n, EXPECT_NETS,
+                               EXPECT_REFUSED))
 
     # The BUILD path, in phase two, long after any scan. In these legs the
     # prototype is this mod's own stub, so one placed by a script (or revived
@@ -968,7 +1282,8 @@ def main():
     elif leg == "fgone":
         report(fail, "the stranger was uninstalled and its balancers became ours")
     else:
-        report(fail, "the incumbent's balancers were adopted and they balance")
+        report(fail, "the incumbent's balancers were adopted: the ones laid one "
+                     "belt per part balance, and the rest are refused")
 
 
 def report(fail, ok_message):
