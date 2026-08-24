@@ -1,19 +1,21 @@
 # single-edge.md — the 2.1 port: one belt per part
 
-Status: **PHASES 1 AND 2 SHIPPED 2026-08-24** — the rule and its refusal, then
-the setting, the grandfather pass and the migration. Drafted the same day from
-the 2026-08-23 investigation and boskid's answer to the interface request
-(forums t=135830). Read CLAUDE.md's migration and over-limit sections first;
-this design reuses both wholesale.
+Status: **PHASES 1, 2 AND 3 SHIPPED 2026-08-24** — the rule and its refusal,
+then the setting, the grandfather pass and the migration, then the interactive
+and demo worlds. Drafted the same day from the 2026-08-23 investigation and
+boskid's answer to the interface request (forums t=135830). Read CLAUDE.md's
+migration and over-limit sections first; this design reuses both wholesale.
 
-What is implemented and what is not is the two "Implementation status" sections
-at the end of this file. The short form: the rule enforces, the refusal reaches
-the player through the sixty-fifth belt's own machinery, the merge is spared, a
-2.0 multi-edge save opened on 2.1 has its remnants torn down and its owning
-forces told with a ping per balancer, and the `sedge` and `mig21` suites are
-green on 2.1.14. What is left is the rebuilt test estate and the interactive
-worlds; the setting-flip legs and the multi-edge regression run need a 2.0
-binary and belong on the `release/2.0` branch.
+What is implemented and what is not is the three "Implementation status"
+sections at the end of this file. The short form: the rule enforces, the refusal
+reaches the player through the sixty-fifth belt's own machinery, the merge is
+spared, a 2.0 multi-edge save opened on 2.1 has its remnants torn down and its
+owning forces told with a ping per balancer, every gesture rig and every demo
+scene is single-edge and headlessly verified, and the `sedge`, `mig21` and
+`iact` suites are green on 2.1.14. What is left is the rebuilt test estate and
+the GIF re-capture, which needs a graphical client; the setting-flip legs and
+the multi-edge regression run need a 2.0 binary and belong on the `release/2.0`
+branch.
 
 ## Why, in three sentences
 
@@ -284,6 +286,11 @@ portal description must say it plainly: migrating from Belt Balancer on 2.1
 converts your parts and hands you a rebuild checklist, not a working machine.
 
 ## The interactive and demo worlds — a stated requirement of this port
+
+**DONE 2026-08-24.** What was actually built, what deviates from the paragraphs
+below and why, and the measurements: "Implementation status — phase 3" at the
+end of this file. The GIF re-capture is the one part still outstanding, because
+it needs a graphical client.
 
 **`test/interactive/bbb-interactive-setup` is the test-world-generating mod
 behind both the checklist and the portal GIF captures** (the GIF session's
@@ -847,3 +854,164 @@ multi-edge -- and that measurement is owed with the rest of the test estate.
 | the flip handler, both arms, and `sweepStackedInterfaces` | **Implemented, unreachable on 2.1**: nothing can change a setting that is not defined. Same split -- `edgemode.Reconcile` proves what each flip obliges, over all eighteen states; what a sweep DOES to a standing world is a 2.0 leg |
 | the summary reaching a PLAYER rather than a force | `force.print` is what a headless run can see, and the suite asserts the LocalisedString crossed and the force resolved. Whether the `[gps=]` pings are clickable and land where they should is a graphical client's question and joins the interactive checklist |
 | a fixture with SINGLE-EDGE clusters adopting beside the refused ones | **Not exercised, because neither fixture has one**: every m2 rig is multi-edge (a 1->1 over one part already carries two belts) and so is every edge cluster. The suite asserts `adopted + rebuilt == clusters` and reports the split, so a fixture that grew one would be visible rather than silently ignored |
+
+## Implementation status — phase 3, 2026-08-24
+
+**Shipped: every gesture rig and every demo scene rebuilt single-edge, a
+headless gate over the staged world, and a migration gesture on the checklist.**
+Everything below is measured on Factorio 2.1.14 against the shipped
+configuration (`--persist=packed --gc=collected`).
+
+| what | where |
+|---|---|
+| the five gesture bands and the five demo scenes, all single-edge | `test/interactive/bbb-interactive-setup/control.lua` |
+| `factorio_version` 2.1, `base >= 2.1.0`, version 0.2.0 | `test/interactive/bbb-interactive-setup/info.json` |
+| the checklist, rewritten for the new geometry and two new gestures | `test/interactive/README.md` |
+| the headless staging gate | `test/assert-interactive.py`, `stage_interactive` and the `iact` leg in `test/run.sh` |
+
+### The bands, and the two that are redesigns rather than re-lays
+
+Everything sits in one column at x = 20 as before, with the demo scenes in a
+second column at x = 56. `COL` and `COL+1` are the west and east part columns;
+a west part takes its input belt on its west face and an east part gives its
+output on its east face, which is the `sedge` suite's idiom.
+
+| band | was | is | y |
+|---|---|---|---|
+| A, the miner's pocket | 4 parts, 4 -> 4, dead-ended | **8 parts** in a 2x4 block, same 4 -> 4, still dead-ended | -24 |
+| B, the belt at the edge | 2 parts with a free south face | **REDESIGN**: a 2 -> 2 over four parts plus a fifth EDGELESS part hanging below it | -12 |
+| C, the sixty-fifth belt | 32 parts carrying 64 belts | **66 parts**: 64 input parts in a 2x32 block, one output part below, one edgeless part above | -1 to 33 |
+| D, the bridge | two 16-part columns, gap flanked by two belts | **two 33-part balancers** (a 2x16 block plus an output part each), gap flanked by ONE belt | 43 to 80 |
+| E, fast replace | 2 parts plus a line running past, and a 4-part column | **REDESIGN**: a 2 -> 2 over four parts with a line that ENDS on the target tile, and a FIVE-part column | 90 to 100 |
+
+**Band B is a redesign because the old gesture no longer exists.** "Lay a belt
+on a free face of a working balancer" is what the rule forbids: every part of a
+working balancer already has its belt. So the rig carries an ATTACHED EDGELESS
+PART, which is the only place a player's belt can change a balancer's port
+count, and the belt goes there. Measured on the saturated rig: the belt takes
+P from 2 to 4 with **72 items handed back and none spilled**, and mining it
+again takes P back to 2 with **200 drained, 72 taken back and 128 that would
+not fit** — the same 128 the `edge` suite's `bmin` leg records for the same
+boundary crossing, which is what says the gesture still reaches the thing it
+is about.
+
+**Band B also carries the SINGLE-EDGE refusal**, and it is the only rig that
+can: the new bound is reachable there without also crossing the port limit,
+which a second belt anywhere on band C would do. A south-facing belt against
+an occupied part's free north face is refused, the balancer keeps running, and
+the audit reads `drift=1 unbuilt=0 refused=1`.
+
+**Band C needed a sixty-sixth part, and that is forced rather than free.** Under
+the rule every one of the 65 parts the design's paragraph names already carries
+its belt, so a sixty-fifth belt has nowhere legal to land and would only ever
+reach the single-edge bound. The spare edgeless part above the block is what
+keeps this the PORT-limit gesture. Measured: `would need 128 ports for 65 inputs
+and 1 outputs, over the limit of 64`, `drift=1 unbuilt=0 refused=1`, nothing
+torn down.
+
+**Band D's gap tile carries ONE flanking belt, not two**, for the same reason
+in reverse: two belts on the bridging tile would make the merge a single-edge
+refusal instead of a port-limit one. One belt gives the merged cluster 65
+inputs over two outputs. Measured: `would merge into a cluster this mod cannot
+build; left 2 standing network(s) alone`, then `128 ports for 65 inputs and 2
+outputs`, audit `clusters=11 parts=229 nets=12 drift=1 unbuilt=0 refused=1`,
+and mining the part back out rebuilds one half at `32->1 over 32 ports` with
+396 items taken back and nothing spilled.
+
+**Band E's forward half is a redesign because a part dropped MID-LINE is now
+refused.** It would take the belt behind it as an input and the belt ahead as
+an output, which is two belts on one part. So the line ENDS on the target tile
+and the part that lands there gets one input. Measured: `can_fast_replace` true
+over the line's last tile, and `compiled cluster 3->2 over 4 ports`.
+
+**Band E's reverse half needs FIVE parts, not four.** The belt that splits the
+column becomes an edge of the part above it and of the part below it, so both
+of those must be otherwise edgeless — which puts the input part, an edgeless
+part, the target, another edgeless part and the output part in a row. Measured:
+`can_fast_replace` false over both END parts (each holds a `bbb-linked-belt`),
+true over the middle, `a belt-connectable fast-replaced the part at 20,98`, and
+two `1->1 over 1 ports` clusters where there was one.
+
+**Band A's gesture got longer and did not change.** Eight parts means eight
+mining steps, and every one of the shrinks overflows: mined one part per 30
+ticks on the saturated rig, the three shrinks spilled **18 items each** and the
+dissolve **178**, 232 in total. With a player all of it goes to the pocket, and
+the checklist's "at every step, not only at the last part" is testable on this
+rig rather than merely stated.
+
+### The demo band, and the scene that retired
+
+Five scenes in a column at x = 56, all saturated from world creation:
+
+| scene | shape | parts | y |
+|---|---|---|---|
+| cross | 1 -> 3, P = 4 | 5: a plus whose four arms carry one belt each and whose centre carries none | -24 |
+| compact column | 8 -> 8, P = 8 | 16: a 2x8 block, the smallest 8 -> 8 the rule allows | -10 |
+| c-shape | 8 -> 8, P = 8 | 18: a ten-part spine with two four-part arms | 6 |
+| c-shape express | 8 -> 9, P = 16 | 19: the same with a fifth part on the top arm | 30 |
+| long run | 8 -> 8, P = 8 | 16: one row taking inputs from the north and giving outputs to the south, alternately | 60 |
+
+**`single-part-1-to-3-fanout` is retired**, exactly as the design says: one part
+cannot carry four belts. The cross is the same 1 -> 3 read and it is already a
+scene, so the count goes from six scenes to five rather than needing a new one.
+
+**The GIFs under `docs/media/` are the pre-port captures and are left in place**
+until the re-capture lands, because deleting them would break the portal
+description's links before there is anything to replace them with. Re-capturing
+needs a graphical client and is the one part of this phase that is not done:
+five scenes, plain and with alt-mode on for the two that have arrow variants,
+and `single-part-1-to-3-fanout.gif` goes when its replacement is uploaded.
+
+### The `iact` suite
+
+One `--create` and no benchmark, because the whole question is answered by what
+the guest logged at load. It fails on a placement the engine refused, on a shape
+that is not the one the geometry intended, on any refusal at all, and on either
+audit reading something other than what the geometry implies.
+
+**Two audit markers, and they say different things.** An audit reports the
+registry as its own dispatch finds it, and that dispatch is also what drains the
+queue — so the first marker sees every cluster unbuilt and the second, placed
+behind it, sees them built. A `--create` never reaches a tick, so there is no
+third way to look. Measured: `(12, 228, 0, 0, 12, 0)` then
+`(12, 228, 12, 0, 0, 0)`.
+
+**The shapes are asserted as an exact multiset**, before anything else, because
+a rig whose belts landed somewhere other than intended still compiles to
+something plausible: `1->1/P1, 1->3/P4, 2->2/P2, 2->2/P2, 4->4/P4, 8->8/P8,
+8->8/P8, 8->8/P8, 8->9/P16, 32->1/P32, 32->1/P32, 64->1/P64`.
+
+**One thing the placement guard had to learn.** `bbb-audit` destroys itself
+inside the dispatch its own placement raises, so `create_entity` returns nil for
+it every time — which the staging mod's own "did it land" wrapper reported as a
+rig that failed. The marker is placed outside that wrapper now, with the reason
+written beside it.
+
+**Red-proven**: a second belt staged against an occupied part of band B, which
+is the defect class this gate exists for. Three assertions fire — one refusal
+over the one-belt-per-part bound, a compiled multiset missing that rig's
+`2->2/P2`, and the second audit reading `nets=11 refused=1` — and the run that
+follows the revert is green again.
+
+### What is verified and what a human still has to do
+
+Every band's GEOMETRY is now measured rather than asserted, which is the
+fast-replace band's own precedent applied to all five: a throwaway probe mod
+drove each gesture by script against the staged world and every outcome above
+is one of its readings. What no script can reach is unchanged and is the reason
+the checklist exists — the flying text, its colour and its position, the sound,
+the piece arriving in an inventory, the cursor's fast-replace preview, and the
+`[gps=]` pings being clickable and landing where they say.
+
+**The migration gesture is new on the checklist** and it is the eyes-on half of
+the `mig21` suite: open a real 2.0 multi-edge save on 2.1 and check the chat
+summary, the pings, the spilled items beside each stopped balancer and the
+audit's `refused=` count. The suite pins every number; what it cannot do is
+tell anyone whether the message reads well or whether a ping goes where it
+claims.
+
+**The BB2/BB3 gesture gained a paragraph rather than changing.** An incumbent's
+balancer is multi-edge by construction, so on 2.1 every adopted one is converted
+and then refused. That is the composition of two shipped features and needs no
+code, but a checklist that promised a working machine would be wrong, so it
+promises a rebuild checklist.

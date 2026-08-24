@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless verification. Twelve suites, all real Factorio runs, not models:
+# Headless verification. Thirteen suites, all real Factorio runs, not models:
 #
 #   M1  do balancer parts merge and split correctly?
 #   M2  does the compiled hidden network actually balance?
@@ -49,11 +49,18 @@
 #         three ways an edit can ask a part for a second belt -- built, rotated
 #         and merged -- each refused in front of its teardown with the standing
 #         network left running. agents/single-edge.md is the design.
+#   iact  THE INTERACTIVE CHECKLIST'S OWN WORLD. test/interactive/ stages the
+#         five player-gesture rigs and the five mod-portal demo scenes, all of
+#         them single-edge; nothing headless can make the gestures, but every
+#         rig has to LAND and every one has to be legal. One `--create`, and it
+#         fails on a placement the engine refused, a shape that is not the one
+#         the geometry intended, or any refusal at all -- the gestures create
+#         the refusals and the staging must not
 #
-# NINE OF THE TWELVE ARE STILL BUILT IN THE MULTI-EDGE IDIOM AND DO NOT RUN ON
+# NINE OF THE THIRTEEN ARE STILL BUILT IN THE MULTI-EDGE IDIOM AND DO NOT RUN ON
 # FACTORIO 2.1: every rig in them puts two belts on one part, which is what 2.1
-# forbids. `m1`, `sedge` and `mig21` are what the default runs -- see the SUITES
-# line below for why those three and not the rest.
+# forbids. `m1`, `sedge`, `mig21` and `iact` are what the default runs -- see the
+# SUITES line below for why those four and not the rest.
 #
 #   make test          # builds the mod first
 #   test/run.sh        # against whatever dist/ already holds
@@ -84,7 +91,7 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 [ -x "$FACTORIO" ] || { echo "factorio not found at: $FACTORIO (set FACTORIO_BIN)" >&2; exit 1; }
 [ -d "$MOD_DIR" ]  || { echo "no built mod at $MOD_DIR; run \`make mod\` first" >&2; exit 1; }
 
-# THE DEFAULT IS WHAT RUNS ON FACTORIO 2.1 TODAY, which is three of the twelve.
+# THE DEFAULT IS WHAT RUNS ON FACTORIO 2.1 TODAY, which is four of the thirteen.
 # The other nine are still reachable by name and are still the estate this mod
 # is verified by; what stops them is measured rather than assumed, in two
 # layers:
@@ -105,7 +112,12 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 #   failure from the loader to the compiler. Rebuilding those rigs single-edge
 #   is a later phase of the port; agents/single-edge.md's test-estate table is
 #   the list.
-SUITES="${*:-m1 sedge mig21}"
+#
+#   `iact` is not about the mod's behaviour at all; it is about the world the
+#   INTERACTIVE checklist stages. It runs here because a rig that stopped
+#   landing, or one this mod refuses, costs a human a session to discover and
+#   costs this a single `--create` to catch.
+SUITES="${*:-m1 sedge mig21 iact}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.
@@ -147,6 +159,33 @@ stage() {
     { "name": "space-age", "enabled": $dlc },
     { "name": "$MOD_NAME", "enabled": true },
     { "name": "$testmod", "enabled": true }
+  ]
+}
+JSON
+}
+
+# The `iact` suite's staging. It differs from `stage` in exactly one thing: the
+# mod it copies does not live under test/mods, because it is not a test mod. It
+# is the rig-staging mod a HUMAN installs beside the real one to walk
+# test/interactive/README.md, and `make interactive-install` copies the same
+# directory into a Factorio mods folder. Staging it from where it really lives
+# is the point -- a copy under test/mods would be a second world that could
+# drift from the one the checklist describes.
+stage_interactive() {
+  local work="$1"
+  rm -rf "$work"
+  mkdir -p "$work/mods"
+  cp -R "$MOD_DIR" "$work/mods/"
+  cp -R "$ROOT/test/interactive/bbb-interactive-setup" "$work/mods/bbb-interactive-setup"
+  cat > "$work/mods/mod-list.json" <<JSON
+{
+  "mods": [
+    { "name": "base", "enabled": true },
+    { "name": "elevated-rails", "enabled": false },
+    { "name": "quality", "enabled": false },
+    { "name": "space-age", "enabled": false },
+    { "name": "$MOD_NAME", "enabled": true },
+    { "name": "bbb-interactive-setup", "enabled": true }
   ]
 }
 JSON
@@ -758,8 +797,30 @@ for suite in $SUITES; do
       load_fixture "$TMP/mig21-edge" "${BBB_MIG21_TICKS:-320}"
       python3 "$ROOT/test/assert-mig21.py" --fixture edge "$TMP/mig21-edge/run.log"
       ;;
+    iact)
+      # THE INTERACTIVE CHECKLIST'S OWN WORLD, staged and never touched.
+      #
+      # `test/interactive/bbb-interactive-setup` is what a human enables before
+      # walking test/interactive/README.md, and it is also where the mod
+      # portal's demo scenes live. Nothing headless can make the gestures -- if
+      # anything could, the checklist would not exist -- but everything it
+      # STAGES is ordinary world-building, and a rig that no longer lands, or
+      # one this mod itself refuses, is a checklist that wastes a human's
+      # session before they have done anything.
+      #
+      # One `--create` and no benchmark: the whole question is answered by what
+      # the guest logged at load. What it asserts is that every piece landed,
+      # every rig compiled to the SHAPE the geometry intended, and NOTHING was
+      # refused -- the gestures are what create the refusals, and a refusal
+      # here means a rig is built to something this Factorio cannot compile.
+      echo "=== iact: the interactive checklist's staged world ==="
+      stage_interactive "$TMP/iact"
+      create_only "$TMP/iact"
+      echo "==> asserting the staged world"
+      python3 "$ROOT/test/assert-interactive.py" "$TMP/iact/create.log"
+      ;;
     *)
-      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix, mig, qual, sedge or mig21)" >&2
+      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix, mig, qual, sedge, mig21 or iact)" >&2
       exit 1
       ;;
   esac

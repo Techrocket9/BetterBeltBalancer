@@ -98,7 +98,7 @@ make test     # headless verification in a real Factorio
 | `guest/go/` | the Go guest; `plan/` is the network planner, `fkapi/` the generated FkLua bindings |
 | `mod-data/` | the hand-written data stage: prototypes, graphics, locale |
 | [`bench/`](bench/README.md) | the head-to-head benchmark harness, its setup mod and the results |
-| `test/` | the headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the six player gestures a headless run cannot make |
+| `test/` | the headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the seven things a headless run cannot check, and the mod that stages both its rigs and the demo scenes |
 | `fklua.toml` | mod identity, the API pin (2.0.77), guest language and GC mode |
 | `CLAUDE.md`, `agents/` | maintainer design notes and the full measurement record |
 
