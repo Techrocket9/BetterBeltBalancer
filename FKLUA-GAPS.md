@@ -6,9 +6,9 @@ Items are numbered in the order they were found; FkLua's own notes refer to thes
 
 | status | items |
 | --- | --- |
-| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22 |
+| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23 |
 | Closed, no change needed | 17 (a budget rather than a defect) |
-| Open | 18 |
+| Open | 18, 24 |
 
 ## 1. `fklua mod` could not carry the data stage
 
@@ -101,6 +101,10 @@ Factorio raises `script.on_configuration_changed` when a neighbouring mod is add
 ## 23. A custom table's index-assign has no expression, so a mod cannot write its own runtime setting
 
 `settings.global["name"] = {value = true}` is the only way a script changes a mod's own runtime-global setting, and it cannot be expressed through the bindings. Two layers: Factorio's `runtime-api.json` declares `LuaCustomTable`'s `index` operator with a `read_type` and no write side, and `LuaSettings::global` likewise, with the write capability appearing only in the attribute's prose description, so a generator that mirrors the description correctly emits no setter; and the ABI's member kinds have no shape for `obj[k] = v`, because the attribute-set kind takes its member name from the generation-time member table rather than as an argument. Measured on Factorio 2.1.14: the write works from any script context except an `on_init` dispatch, persists through save and load, stays per save rather than being written back to `mod-settings.dat`, and raises `on_runtime_mod_setting_changed` synchronously with no `player_index` in the payload; writing a key that is not defined raises an error. The ask is an index-assign member kind, key and value both arguments, mirroring the index read, plus a generator affordance to emit it for writable custom tables, which needs a short allowlist because the description declares no write side to key off. This mod needs it to flip its own multi-edge setting when adopting a save that predates the setting. Fixed upstream, in the shape asked for: the member kind takes key and value as arguments, and the generator emits it from an allowlist over the five custom tables the description says in prose are writable, so writing any other one comes back as a call failure carrying the engine's own "LuaCustomTable is read only" rather than as an unwind. Writing a key that is not a defined setting comes back the same way, which is why this mod gates the write on a marker prototype that only exists on the Factorio versions where the setting is defined. Its grandfather pass writes the setting through this member on the one load that adopts a save built before the setting existed.
+
+## 24. A mod pinning a non-default API version is stranded when the census format moves
+
+`fklua gen-bindings --check` compares the census it would take against the one committed beside the API description, and the census is written only from the checkout that owns the description, which is correct. But the only thing that regenerates a census is `gen-bindings` running at that checkout's default pin, so the censuses of every other committed description go stale the moment the generator gains a row, and a mod pinning one of those versions then fails `--check` with no command anywhere that can repair it: regenerating from the mod project is refused by design, and regenerating from the FkLua checkout would rewrite its own committed bindings to the wrong version. Hit here moving this mod's pin to a committed 2.1.14 description right after the index-assign feature added a census row; the pin move had to be reverted. The ask is an affordance that refreshes a committed description's census without touching the default pin's bindings, for example a census-only mode taking a version, or the census writer refreshing every description the checkout owns whenever it runs.
 
 ## Smaller notes
 
