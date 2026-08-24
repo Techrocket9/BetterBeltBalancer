@@ -102,6 +102,28 @@ type buildNote struct {
 	isPart bool
 }
 
+// pendingPiece is one note the flush decided to hand back, WITH THE CLAUSE
+// NAMING THE BOUND THAT REFUSED IT.
+//
+// The bound is carried rather than looked up because by revert time there is
+// nothing left to look it up from: `revertOverLimit` runs after the drain, the
+// cluster the note was attributed to may have been re-rooted or dissolved by
+// then, and `overLimit` remembers a fingerprint and not a reason. The refusal
+// that queued the note is the one moment anything knows, and it knows for free
+// -- `tellRefusal` already takes the clause for its own force-wide line.
+//
+// It matters because BOTH BOUNDS SHARE THIS PATH. Until the 2.1 port there was
+// one, so "the over-limit piece" was the whole vocabulary; now a belt handed
+// back for the one-belt-per-part rule would have been reported as an over-limit
+// piece, which is the same defect spareMerge's line had one level up -- a
+// sentence naming a bound it no longer owns. The string is a package-level
+// constant in both callers, so this costs a pointer and a length on a slice
+// that is empty on every tick nobody's build was refused.
+type pendingPiece struct {
+	n   buildNote
+	why string
+}
+
 var (
 	// buildNotes is one tick's worth, IN EVENT ORDER, truncated by every flush.
 	// High-water like the recompile queues, so a blueprint paste sizes it once
@@ -112,7 +134,7 @@ var (
 	// drain and consumed after it. Separate from buildNotes because the two
 	// have different lifetimes by one function call, and that call is the whole
 	// reentrancy argument in revertOverLimit.
-	limPending []buildNote
+	limPending []pendingPiece
 
 	// overLimit remembers, per cluster root, the edge-list fingerprint that was
 	// last refused.
@@ -398,7 +420,7 @@ func tellRefusal(root uint32, tiles []key, force uint32,
 		// to anything -- the network was never rebuilt -- so handing them all
 		// back settles it in one step. The alternative converges too, one belt
 		// and one flying text per tick, which is worse to be on the end of.
-		limPending = append(limPending, n)
+		limPending = append(limPending, pendingPiece{n: n, why: why})
 	}
 
 	if told != 0 {
@@ -947,12 +969,17 @@ func revertOverLimit() {
 	// invalidate a pointer into the backing array mid-loop.
 	n := len(limPending)
 	for i := 0; i < n; i++ {
-		revertOne(limPending[i])
+		revertOne(limPending[i].n, limPending[i].why)
 	}
 	limPending = limPending[:0]
 }
 
-func revertOne(n buildNote) {
+// revertOne hands one refused piece back. `why` is the clause naming the bound
+// that refused it and reaches nothing but the two log lines: what the PLAYER
+// was told is a LocalisedString the refusal already sent, and this is for
+// whoever reads logs -- who, since there are two bounds, cannot otherwise tell
+// which of them a returned belt came back from.
+func revertOne(n buildNote, why string) {
 	// The registry cross-check, and it costs nothing: a part stands ON a
 	// registered tile and a belt at a cluster's edge stands one tile OUTSIDE
 	// the cluster's box by construction. If the world has moved on -- the part
@@ -1016,11 +1043,13 @@ func revertOne(n buildNote) {
 		// player has been told it would not fit but not that they still have it.
 		logAlertStart("player ")
 		logU(n.player)
-		logS(" could not be handed back the over-limit piece at ")
+		logS(" could not be handed back the refused piece at ")
 		logI(n.x)
 		logS(",")
 		logI(n.y)
-		logS(" -- no room in the inventory; it stays where it is, unconnected")
+		logS(" (")
+		logS(why)
+		logS(") -- no room in the inventory; it stays where it is, unconnected")
 		logEnd()
 		return
 	}
@@ -1029,11 +1058,13 @@ func revertOne(n buildNote) {
 	// interactively can grep for, and it cannot fire in any headless suite
 	// because a headless --create has no players at all.
 	if verboseLog {
-		logStart("handed the over-limit piece at ")
+		logStart("handed the refused piece at ")
 		logI(n.x)
 		logS(",")
 		logI(n.y)
-		logS(" back to player ")
+		logS(" (")
+		logS(why)
+		logS(") back to player ")
 		logU(n.player)
 		logEnd()
 	}

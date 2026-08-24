@@ -42,7 +42,7 @@ Log line for both: `offered ... items to player ... before the floor`, from the 
 - the belt back in your inventory a tick later;
 - the balancer never stops, and nothing hits the ground.
 
-Log lines: `carrying more than one belt` for the refusal, and `handed the over-limit piece` for the belt coming back.
+Log lines: `carrying more than one belt` for the refusal, and `handed the refused piece` for the belt coming back. The hand-back line names the bound that fired in parentheses, which here is `(past the one-belt-per-part rule)`.
 
 ## C. The sixty-fifth belt (y = 0)
 
@@ -55,7 +55,7 @@ Sixty-four parts carrying one input belt each, one part below them carrying the 
 
 Repeat with a full inventory: the message still appears and the belt stays standing, unconnected. A construction robot placing the belt from a ghost gets a force-wide chat message instead and the belt stands; that arm is asserted headlessly, so seeing it here is optional.
 
-Log lines: `handed the over-limit piece` (the normal case), `could not be handed back` (the full-inventory case). Both name the over-limit piece whichever of the two bounds was crossed, so gesture B produces them too.
+Log lines: `handed the refused piece` (the normal case), `could not be handed back` (the full-inventory case). Both name the bound that fired in parentheses, `(over the port limit)` here and `(past the one-belt-per-part rule)` in gesture B, so a returned piece says which rule sent it back.
 
 ## D. Bridging two balancers over the limit (y = 61, the gap)
 

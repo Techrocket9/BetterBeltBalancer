@@ -45,7 +45,15 @@ TOLDFORCE = re.compile(
     r"\[BBB\] told force (\d+) that cluster (\d+) is past the one-belt-per-part "
     r"rule(.*)$"
 )
-HANDEDBACK = re.compile(r"\[BBB\] handed the over-limit piece at ")
+# EITHER ARM OF THE HAND-BACK, matched on the shape both of them share rather
+# than on one sentence. This is a NEGATIVE assertion -- a headless --create has
+# no players, so `revertOne` returns before it mines anything -- and an exact
+# regex over a negative is the one shape a rename in the guest can make
+# VACUOUS: the line stops matching, the assertion stops being able to fail, and
+# nothing says so. "piece at x,y" is what `handed the refused piece at 4,7 (over
+# the port limit) back to player 1` and its could-not-be-handed-back twin have
+# in common, and nothing else in this guest's vocabulary produces it.
+HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
 SPARED = re.compile(
     r"\[BBB\] cluster (\d+) would merge into a cluster this mod cannot build; "
     r"left (\d+) standing network\(s\) alone"

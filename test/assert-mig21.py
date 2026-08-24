@@ -75,7 +75,15 @@ FLIPPED = re.compile(r"\[BBB\] single-edge: multiple belts per part turned (ON|O
 TORNDOWN = re.compile(r"\[BBB\] torn down cluster (\d+), returned (\d+) items")
 SPILLED = re.compile(r"\[BBB\] spilled (\d+) items beside cluster (\d+)")
 TOOKBACK = re.compile(r"\[BBB\] cluster (\d+) took back (\d+) items")
-HANDEDBACK = re.compile(r"\[BBB\] handed the over-limit piece at ")
+# EITHER ARM OF THE HAND-BACK, matched on the shape both of them share rather
+# than on one sentence. This is a NEGATIVE assertion -- a headless --create has
+# no players, so `revertOne` returns before it mines anything -- and an exact
+# regex over a negative is the one shape a rename in the guest can make
+# VACUOUS: the line stops matching, the assertion stops being able to fail, and
+# nothing says so. "piece at x,y" is what `handed the refused piece at 4,7 (over
+# the port limit) back to player 1` and its could-not-be-handed-back twin have
+# in common, and nothing else in this guest's vocabulary produces it.
+HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
 # The ordinary per-piece refusal message. It must NOT be used for a migration:
 # nothing was placed, so "the extra piece was left in place" is a sentence about
 # an event that never happened.

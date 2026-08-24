@@ -70,7 +70,15 @@ OVERLIMIT = re.compile(
 TOLDFORCE = re.compile(
     r"\[BBB\] told force (\d+) that cluster (\d+) is over the port limit(.*)$"
 )
-HANDEDBACK = re.compile(r"\[BBB\] handed the over-limit piece at ")
+# EITHER ARM OF THE HAND-BACK, matched on the shape both of them share rather
+# than on one sentence. This is a NEGATIVE assertion -- a headless --create has
+# no players, so `revertOne` returns before it mines anything -- and an exact
+# regex over a negative is the one shape a rename in the guest can make
+# VACUOUS: the line stops matching, the assertion stops being able to fail, and
+# nothing says so. "piece at x,y" is what `handed the refused piece at 4,7 (over
+# the port limit) back to player 1` and its could-not-be-handed-back twin have
+# in common, and nothing else in this guest's vocabulary produces it.
+HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
 SAMPLE = re.compile(r"\[BBB-QUAL\] sample tick=(\d+) (.*)")
 
 # The rig geometry the probes aim at (must match bbb-qual-test/control.lua).
