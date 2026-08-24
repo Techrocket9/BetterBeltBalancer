@@ -1,0 +1,140 @@
+   0.000 2026-08-22 21:36:13; Factorio 2.0.77 (build 84539, mac-arm64, steam, space-age)
+   0.003 Operating system: macOS 26.6.2
+   0.003 Program arguments: "/Users/ymt/Library/Application Support/Steam/steamapps/common/Factorio/factorio.app/Contents/MacOS/factorio" "-c" "/Users/ymt/code/BetterBeltBalancer/test/tmp/userdir/config/config.ini" "--mod-directory" "/Users/ymt/code/BetterBeltBalancer/test/tmp/m3/mods" "--create" "/Users/ymt/code/BetterBeltBalancer/test/tmp/m3/map.zip" "--map-gen-seed" "12345" "--disable-audio" 
+   0.003 Config path: /Users/ymt/code/BetterBeltBalancer/test/tmp/userdir/config/config.ini
+   0.003 Read data path: /Users/ymt/Library/Application Support/Steam/steamapps/common/Factorio/factorio.app/Contents/data
+   0.003 Write data path: /Users/ymt/code/BetterBeltBalancer/test/tmp/userdir [196878/948584MB]
+   0.003 Binaries path: /Users/ymt/Library/Application Support/Steam/steamapps/common/Factorio/factorio.app/Contents
+   0.046 System info: [CPU: arm64, 11 cores, RAM: 36864 MB]
+   0.046 Running in headless mode
+   0.047 Audio is disabled
+   0.047 Info ModManager.cpp:449: FeatureFlag expansion-shaders = false
+   0.047 Info ModManager.cpp:449: FeatureFlag freezing = false
+   0.047 Info ModManager.cpp:449: FeatureFlag quality = false
+   0.047 Info ModManager.cpp:449: FeatureFlag rail-bridges = false
+   0.047 Info ModManager.cpp:449: FeatureFlag segmented-units = false
+   0.047 Info ModManager.cpp:449: FeatureFlag space-travel = false
+   0.047 Info ModManager.cpp:449: FeatureFlag spoiling = false
+   0.049 Loading mod core 0.0.0 (data.lua)
+   0.057 Loading mod base 2.0.77 (data.lua)
+   0.136 Loading mod better-belt-balancer 0.1.0 (data.lua)
+   0.142 Loading mod bbb-m3-test 0.1.0 (data.lua)
+   0.148 Loading mod base 2.0.77 (data-updates.lua)
+   0.154 Loading mod better-belt-balancer 0.1.0 (data-final-fixes.lua)
+   0.179 Checksum for core: 4187927925
+   0.179 Checksum of base: 1879415942
+   0.179 Checksum of better-belt-balancer: 2038013643
+   0.179 Checksum of bbb-m3-test: 1967913827
+   0.253 Prototype list checksum: 1778156685
+   0.266 Info PlayerData.cpp:66: Local player-data.json unavailable
+   0.266 Info PlayerData.cpp:71: Cloud player-data.json unavailable
+   0.266 Info GlobalContext.cpp:1300: Resetting config.
+   0.266 Factorio initialised
+   0.266 Info Create.cpp:31: Creating new map /Users/ymt/code/BetterBeltBalancer/test/tmp/m3/map.zip
+   0.269 Blueprint storage "blueprint-storage-2.dat" was not found, trying to load previous version storage "blueprint-storage.dat"
+   1.087 Loading level.dat: 888111 bytes.
+   1.087 Info Scenario.cpp:154: Map version 2.0.77-0
+   1.098 Blueprint storage "blueprint-storage-2.dat" was not found, trying to load previous version storage "blueprint-storage.dat"
+   1.100 Checksum for script __level__/control.lua: 3792629764
+   1.150 Checksum for script __better-belt-balancer__/control.lua: 705222433
+   1.151 Checksum for script __bbb-m3-test__/control.lua: 1452215006
+   1.155 Script @__better-belt-balancer__/control.lua:145: [BBB] guest init: cluster tracking armed for bbb-balancer-part
+   2.340 Script @__better-belt-balancer__/control.lua:145: [BBB] hidden surface bbb-hidden created, index=6
+   2.340 Script @__better-belt-balancer__/control.lua:145: [BBB] rebuilt from world: 5 surfaces, 0 parts, 0 clusters (0 networks adopted, 0 rebuilt)
+   2.340 Script @__better-belt-balancer__/control.lua:145: [BBB] stats after-rebuild compiles=0 skipped=0 builds=0 teardowns=0 creates=0
+   2.340 Script @__better-belt-balancer__/control.lua:145: [BBB] heap after-rebuild sys=122272 alloc=49152 gc=1 heap=90112 live=0 free=48416 since=49152 cycles=0 grows=2 steps=0 deadlines=0 phase=0 meta=73120 budget=5120 eff=5120 roots=0
+   2.345 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 1 formed (1 part)
+   2.345 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=1 parts=1 sizes=1
+   2.346 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 1+2->1 (2 parts)
+   2.346 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=1 parts=2 sizes=2
+   2.347 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 1+3->1 (3 parts)
+   2.347 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=1 parts=3 sizes=3
+   2.347 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 1+4->1 (4 parts)
+   2.347 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=1 parts=4 sizes=4
+   2.366 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 5 formed (1 part)
+   2.366 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=2 parts=5 sizes=1,4
+   2.367 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 5+6->5 (2 parts)
+   2.367 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=2 parts=6 sizes=2,4
+   2.376 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 7 formed (1 part)
+   2.376 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=3 parts=7 sizes=1,2,4
+   2.377 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 7+8->7 (2 parts)
+   2.377 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=3 parts=8 sizes=2,2,4
+   2.387 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 9 formed (1 part)
+   2.387 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=4 parts=9 sizes=1,2,2,4
+   2.388 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 9+10->9 (2 parts)
+   2.388 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=4 parts=10 sizes=2,2,2,4
+   2.398 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 11 formed (1 part)
+   2.398 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=5 parts=11 sizes=1,2,2,2,4
+   2.399 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 11+12->11 (2 parts)
+   2.399 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=5 parts=12 sizes=2,2,2,2,4
+   2.409 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 13 formed (1 part)
+   2.409 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=6 parts=13 sizes=1,2,2,2,2,4
+   2.410 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 13+14->13 (2 parts)
+   2.410 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=6 parts=14 sizes=2,2,2,2,2,4
+   2.421 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 15 formed (1 part)
+   2.421 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=7 parts=15 sizes=1,2,2,2,2,2,4
+   2.421 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 15+16->15 (2 parts)
+   2.421 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=7 parts=16 sizes=2,2,2,2,2,2,4
+   2.432 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 17 formed (1 part)
+   2.432 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=8 parts=17 sizes=1,2,2,2,2,2,2,4
+   2.433 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 17+18->17 (2 parts)
+   2.433 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=8 parts=18 sizes=2,2,2,2,2,2,2,4
+   2.442 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 19 formed (1 part)
+   2.442 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=9 parts=19 sizes=1,2,2,2,2,2,2,2,4
+   2.443 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 19+20->19 (2 parts)
+   2.443 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=9 parts=20 sizes=2,2,2,2,2,2,2,2,4
+   2.453 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 21 formed (1 part)
+   2.453 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=10 parts=21 sizes=1,2,2,2,2,2,2,2,2,4
+   2.454 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 21+22->21 (2 parts)
+   2.454 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=10 parts=22 sizes=2,2,2,2,2,2,2,2,2,4
+   2.463 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 23 formed (1 part)
+   2.463 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=11 parts=23 sizes=1,2,2,2,2,2,2,2,2,2,4
+   2.464 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 23+24->23 (2 parts)
+   2.464 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=11 parts=24 sizes=2,2,2,2,2,2,2,2,2,2,4
+   2.474 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 25 formed (1 part)
+   2.474 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=12 parts=25 sizes=1,2,2,2,2,2,2,2,2,2,2,4
+   2.475 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 25+26->25 (2 parts)
+   2.475 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=12 parts=26 sizes=2,2,2,2,2,2,2,2,2,2,2,4
+   2.485 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 27 formed (1 part)
+   2.485 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=27 sizes=1,2,2,2,2,2,2,2,2,2,2,2,4
+   2.485 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 27+28->27 (2 parts)
+   2.486 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=28 sizes=2,2,2,2,2,2,2,2,2,2,2,2,4
+   2.496 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 29 formed (1 part)
+   2.496 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=29 sizes=1,2,2,2,2,2,2,2,2,2,2,2,2,4
+   2.497 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 29+30->29 (2 parts)
+   2.497 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=30 sizes=2,2,2,2,2,2,2,2,2,2,2,2,2,4
+   2.513 Script @__better-belt-balancer__/control.lua:145: [BBB] audit clusters=14 parts=30 nets=0 drift=0 unbuilt=14
+   2.513 Script @__better-belt-balancer__/control.lua:145: [BBB] stats audit compiles=0 skipped=0 builds=0 teardowns=0 creates=0
+   2.513 Script @__better-belt-balancer__/control.lua:145: [BBB] heap audit sys=167328 alloc=77824 gc=1 heap=135168 live=0 free=92832 since=77824 cycles=0 grows=2 steps=0 deadlines=0 phase=0 meta=73120 budget=5120 eff=5120 roots=0
+   2.513 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=1 parts=4 set=4 vars=5,6,6,2
+   2.516 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 1 4->4 over 4 ports, 32 entities, slot 1
+   2.516 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=5 parts=2 set=2 vars=5,2
+   2.517 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 5 2->2 over 2 ports, 11 entities, slot 2
+   2.518 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=7 parts=2 set=2 vars=5,2
+   2.519 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 7 2->2 over 2 ports, 11 entities, slot 3
+   2.519 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=9 parts=2 set=2 vars=5,2
+   2.520 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 9 2->2 over 2 ports, 11 entities, slot 4
+   2.520 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=11 parts=2 set=2 vars=5,2
+   2.521 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 11 2->2 over 2 ports, 11 entities, slot 5
+   2.522 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=13 parts=2 set=2 vars=5,2
+   2.523 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 13 2->2 over 2 ports, 11 entities, slot 6
+   2.523 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=15 parts=2 set=2 vars=5,2
+   2.524 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 15 2->2 over 2 ports, 11 entities, slot 7
+   2.524 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=17 parts=2 set=2 vars=5,2
+   2.529 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 17 2->2 over 2 ports, 11 entities, slot 8
+   2.529 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=19 parts=2 set=2 vars=5,2
+   2.531 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 19 2->2 over 2 ports, 11 entities, slot 9
+   2.531 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=21 parts=2 set=2 vars=5,2
+   2.532 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 21 2->2 over 2 ports, 11 entities, slot 10
+   2.533 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=23 parts=2 set=2 vars=5,2
+   2.534 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 23 2->2 over 2 ports, 11 entities, slot 11
+   2.534 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=25 parts=2 set=2 vars=5,2
+   2.535 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 25 2->2 over 2 ports, 11 entities, slot 12
+   2.536 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=27 parts=2 set=2 vars=5,2
+   2.537 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 27 2->2 over 2 ports, 11 entities, slot 13
+   2.538 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=29 parts=2 set=2 vars=5,2
+   2.540 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 29 2->2 over 2 ports, 11 entities, slot 14
+   2.540 Script @__better-belt-balancer__/control.lua:145: [BBB] heap post-audit sys=200096 alloc=102400 gc=1 heap=167936 live=0 free=125344 since=102400 cycles=0 grows=3 steps=0 deadlines=0 phase=0 meta=73120 budget=5120 eff=5120 roots=0
+   2.542 Script @__bbb-m3-test__/control.lua:742: [BBB-M3] init complete: 12 rigs, players=0
+Done.
+   2.599 Goodbye

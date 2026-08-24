@@ -1,0 +1,274 @@
+   0.000 2026-08-22 21:36:44; Factorio 2.0.77 (build 84539, mac-arm64, steam, space-age)
+   0.003 Operating system: macOS 26.6.2
+   0.003 Program arguments: "/Users/ymt/Library/Application Support/Steam/steamapps/common/Factorio/factorio.app/Contents/MacOS/factorio" "-c" "/Users/ymt/code/BetterBeltBalancer/test/tmp/userdir/config/config.ini" "--mod-directory" "/Users/ymt/code/BetterBeltBalancer/test/tmp/edge/mods" "--create" "/Users/ymt/code/BetterBeltBalancer/test/tmp/edge/map.zip" "--map-gen-seed" "12345" "--disable-audio" 
+   0.003 Config path: /Users/ymt/code/BetterBeltBalancer/test/tmp/userdir/config/config.ini
+   0.003 Read data path: /Users/ymt/Library/Application Support/Steam/steamapps/common/Factorio/factorio.app/Contents/data
+   0.003 Write data path: /Users/ymt/code/BetterBeltBalancer/test/tmp/userdir [196852/948584MB]
+   0.003 Binaries path: /Users/ymt/Library/Application Support/Steam/steamapps/common/Factorio/factorio.app/Contents
+   0.043 System info: [CPU: arm64, 11 cores, RAM: 36864 MB]
+   0.044 Running in headless mode
+   0.044 Audio is disabled
+   0.044 Info ModManager.cpp:449: FeatureFlag expansion-shaders = false
+   0.044 Info ModManager.cpp:449: FeatureFlag freezing = false
+   0.044 Info ModManager.cpp:449: FeatureFlag quality = false
+   0.044 Info ModManager.cpp:449: FeatureFlag rail-bridges = false
+   0.044 Info ModManager.cpp:449: FeatureFlag segmented-units = false
+   0.044 Info ModManager.cpp:449: FeatureFlag space-travel = false
+   0.044 Info ModManager.cpp:449: FeatureFlag spoiling = false
+   0.046 Loading mod core 0.0.0 (data.lua)
+   0.054 Loading mod base 2.0.77 (data.lua)
+   0.132 Loading mod better-belt-balancer 0.1.0 (data.lua)
+   0.139 Loading mod bbb-edge-test 0.1.0 (data.lua)
+   0.145 Loading mod base 2.0.77 (data-updates.lua)
+   0.152 Loading mod better-belt-balancer 0.1.0 (data-final-fixes.lua)
+   0.176 Checksum for core: 4187927925
+   0.176 Checksum of base: 1879415942
+   0.176 Checksum of better-belt-balancer: 2038013643
+   0.176 Checksum of bbb-edge-test: 2346156407
+   0.251 Prototype list checksum: 1778156685
+   0.262 Info PlayerData.cpp:66: Local player-data.json unavailable
+   0.263 Info PlayerData.cpp:71: Cloud player-data.json unavailable
+   0.263 Info GlobalContext.cpp:1300: Resetting config.
+   0.263 Factorio initialised
+   0.263 Info Create.cpp:31: Creating new map /Users/ymt/code/BetterBeltBalancer/test/tmp/edge/map.zip
+   0.266 Blueprint storage "blueprint-storage-2.dat" was not found, trying to load previous version storage "blueprint-storage.dat"
+   1.087 Loading level.dat: 888113 bytes.
+   1.087 Info Scenario.cpp:154: Map version 2.0.77-0
+   1.098 Blueprint storage "blueprint-storage-2.dat" was not found, trying to load previous version storage "blueprint-storage.dat"
+   1.100 Checksum for script __level__/control.lua: 3792629764
+   1.151 Checksum for script __better-belt-balancer__/control.lua: 705222433
+   1.153 Checksum for script __bbb-edge-test__/control.lua: 2693437959
+   1.156 Script @__better-belt-balancer__/control.lua:145: [BBB] guest init: cluster tracking armed for bbb-balancer-part
+   1.535 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 1 formed (1 part)
+   1.536 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=1 parts=1 set=1 vars=1
+   1.538 Script @__better-belt-balancer__/control.lua:145: [BBB] hidden surface bbb-hidden created, index=3
+   1.539 Script @__better-belt-balancer__/control.lua:145: [BBB] rebuilt from world: 2 surfaces, 1 parts, 1 clusters (0 networks adopted, 1 rebuilt)
+   1.539 Script @__better-belt-balancer__/control.lua:145: [BBB] stats after-rebuild compiles=1 skipped=0 builds=0 teardowns=0 creates=0
+   1.539 Script @__better-belt-balancer__/control.lua:145: [BBB] heap after-rebuild sys=122272 alloc=45056 gc=1 heap=90112 live=0 free=48672 since=45056 cycles=0 grows=2 steps=0 deadlines=0 phase=0 meta=73120 budget=5120 eff=5120 roots=0
+   1.540 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 1+2->1 (2 parts)
+   1.540 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=1 parts=2 sizes=2
+   1.549 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 3 formed (1 part)
+   1.549 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=2 parts=3 sizes=1,2
+   1.549 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 3+4->3 (2 parts)
+   1.549 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=2 parts=4 sizes=2,2
+   1.559 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 5 formed (1 part)
+   1.559 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=3 parts=5 sizes=1,2,2
+   1.560 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 5+6->5 (2 parts)
+   1.560 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=3 parts=6 sizes=2,2,2
+   1.560 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 7 formed (1 part)
+   1.560 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=4 parts=7 sizes=1,2,2,2
+   1.561 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 7+8->7 (2 parts)
+   1.561 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=4 parts=8 sizes=2,2,2,2
+   1.581 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 9 formed (1 part)
+   1.581 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=5 parts=9 sizes=1,2,2,2,2
+   1.582 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 9+10->9 (2 parts)
+   1.582 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=5 parts=10 sizes=2,2,2,2,2
+   1.592 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 11 formed (1 part)
+   1.592 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=6 parts=11 sizes=1,2,2,2,2,2
+   1.593 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 11+12->11 (2 parts)
+   1.593 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=6 parts=12 sizes=2,2,2,2,2,2
+   1.603 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 13 formed (1 part)
+   1.603 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=7 parts=13 sizes=1,2,2,2,2,2,2
+   1.604 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 13+14->13 (2 parts)
+   1.604 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=7 parts=14 sizes=2,2,2,2,2,2,2
+   1.614 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 15 formed (1 part)
+   1.614 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=8 parts=15 sizes=1,2,2,2,2,2,2,2
+   1.616 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 15+16->15 (2 parts)
+   1.616 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=8 parts=16 sizes=2,2,2,2,2,2,2,2
+   1.616 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 15+17->15 (3 parts)
+   1.617 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=8 parts=17 sizes=2,2,2,2,2,2,2,3
+   1.617 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 15+18->15 (4 parts)
+   1.617 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=8 parts=18 sizes=2,2,2,2,2,2,2,4
+   1.637 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 19 formed (1 part)
+   1.637 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=9 parts=19 sizes=1,2,2,2,2,2,2,2,4
+   1.638 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 19+20->19 (2 parts)
+   1.638 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=9 parts=20 sizes=2,2,2,2,2,2,2,2,4
+   1.638 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 19+21->19 (3 parts)
+   1.638 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=9 parts=21 sizes=2,2,2,2,2,2,2,3,4
+   1.639 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 19+22->19 (4 parts)
+   1.639 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=9 parts=22 sizes=2,2,2,2,2,2,2,4,4
+   1.657 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 23 formed (1 part)
+   1.658 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=10 parts=23 sizes=1,2,2,2,2,2,2,2,4,4
+   1.658 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 23+24->23 (2 parts)
+   1.658 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=10 parts=24 sizes=2,2,2,2,2,2,2,2,4,4
+   1.659 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 23+25->23 (3 parts)
+   1.659 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=10 parts=25 sizes=2,2,2,2,2,2,2,3,4,4
+   1.660 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 23+26->23 (4 parts)
+   1.660 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=10 parts=26 sizes=2,2,2,2,2,2,2,4,4,4
+   1.679 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 27 formed (1 part)
+   1.679 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=11 parts=27 sizes=1,2,2,2,2,2,2,2,4,4,4
+   1.680 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 27+28->27 (2 parts)
+   1.680 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=11 parts=28 sizes=2,2,2,2,2,2,2,2,4,4,4
+   1.680 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 27+29->27 (3 parts)
+   1.680 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=11 parts=29 sizes=2,2,2,2,2,2,2,3,4,4,4
+   1.689 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 30 formed (1 part)
+   1.689 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=12 parts=30 sizes=1,2,2,2,2,2,2,2,3,4,4,4
+   1.690 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 30+31->30 (2 parts)
+   1.690 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=12 parts=31 sizes=2,2,2,2,2,2,2,2,3,4,4,4
+   1.699 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 32 formed (1 part)
+   1.699 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=32 sizes=1,2,2,2,2,2,2,2,2,3,4,4,4
+   1.700 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+33->32 (2 parts)
+   1.700 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=33 sizes=2,2,2,2,2,2,2,2,2,3,4,4,4
+   1.701 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+34->32 (3 parts)
+   1.701 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=34 sizes=2,2,2,2,2,2,2,2,3,3,4,4,4
+   1.702 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+35->32 (4 parts)
+   1.702 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=35 sizes=2,2,2,2,2,2,2,2,3,4,4,4,4
+   1.703 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+36->32 (5 parts)
+   1.703 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=36 sizes=2,2,2,2,2,2,2,2,3,4,4,4,5
+   1.704 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+37->32 (6 parts)
+   1.704 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=37 sizes=2,2,2,2,2,2,2,2,3,4,4,4,6
+   1.704 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+38->32 (7 parts)
+   1.704 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=38 sizes=2,2,2,2,2,2,2,2,3,4,4,4,7
+   1.705 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+39->32 (8 parts)
+   1.705 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=39 sizes=2,2,2,2,2,2,2,2,3,4,4,4,8
+   1.706 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+40->32 (9 parts)
+   1.706 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=40 sizes=2,2,2,2,2,2,2,2,3,4,4,4,9
+   1.707 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+41->32 (10 parts)
+   1.707 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=41 sizes=2,2,2,2,2,2,2,2,3,4,4,4,10
+   1.707 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+42->32 (11 parts)
+   1.707 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=42 sizes=2,2,2,2,2,2,2,2,3,4,4,4,11
+   1.708 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+43->32 (12 parts)
+   1.708 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=43 sizes=2,2,2,2,2,2,2,2,3,4,4,4,12
+   1.709 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+44->32 (13 parts)
+   1.709 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=44 sizes=2,2,2,2,2,2,2,2,3,4,4,4,13
+   1.710 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+45->32 (14 parts)
+   1.710 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=45 sizes=2,2,2,2,2,2,2,2,3,4,4,4,14
+   1.711 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+46->32 (15 parts)
+   1.711 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=46 sizes=2,2,2,2,2,2,2,2,3,4,4,4,15
+   1.711 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+47->32 (16 parts)
+   1.711 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=47 sizes=2,2,2,2,2,2,2,2,3,4,4,4,16
+   1.712 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+48->32 (17 parts)
+   1.712 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=48 sizes=2,2,2,2,2,2,2,2,3,4,4,4,17
+   1.713 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+49->32 (18 parts)
+   1.713 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=49 sizes=2,2,2,2,2,2,2,2,3,4,4,4,18
+   1.714 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+50->32 (19 parts)
+   1.714 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=50 sizes=2,2,2,2,2,2,2,2,3,4,4,4,19
+   1.715 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+51->32 (20 parts)
+   1.715 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=51 sizes=2,2,2,2,2,2,2,2,3,4,4,4,20
+   1.716 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+52->32 (21 parts)
+   1.716 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=52 sizes=2,2,2,2,2,2,2,2,3,4,4,4,21
+   1.717 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+53->32 (22 parts)
+   1.717 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=53 sizes=2,2,2,2,2,2,2,2,3,4,4,4,22
+   1.718 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+54->32 (23 parts)
+   1.718 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=54 sizes=2,2,2,2,2,2,2,2,3,4,4,4,23
+   1.719 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+55->32 (24 parts)
+   1.719 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=55 sizes=2,2,2,2,2,2,2,2,3,4,4,4,24
+   1.719 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+56->32 (25 parts)
+   1.720 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=56 sizes=2,2,2,2,2,2,2,2,3,4,4,4,25
+   1.720 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+57->32 (26 parts)
+   1.720 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=57 sizes=2,2,2,2,2,2,2,2,3,4,4,4,26
+   1.721 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+58->32 (27 parts)
+   1.721 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=58 sizes=2,2,2,2,2,2,2,2,3,4,4,4,27
+   1.722 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+59->32 (28 parts)
+   1.722 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=59 sizes=2,2,2,2,2,2,2,2,3,4,4,4,28
+   1.723 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+60->32 (29 parts)
+   1.723 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=60 sizes=2,2,2,2,2,2,2,2,3,4,4,4,29
+   1.723 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+61->32 (30 parts)
+   1.723 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=61 sizes=2,2,2,2,2,2,2,2,3,4,4,4,30
+   1.724 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+62->32 (31 parts)
+   1.724 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=62 sizes=2,2,2,2,2,2,2,2,3,4,4,4,31
+   1.725 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 32+63->32 (32 parts)
+   1.725 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=13 parts=63 sizes=2,2,2,2,2,2,2,2,3,4,4,4,32
+   1.771 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 64 formed (1 part)
+   1.771 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=64 sizes=1,2,2,2,2,2,2,2,2,3,4,4,4,32
+   1.773 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+65->64 (2 parts)
+   1.773 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=65 sizes=2,2,2,2,2,2,2,2,2,3,4,4,4,32
+   1.775 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+66->64 (3 parts)
+   1.775 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=66 sizes=2,2,2,2,2,2,2,2,3,3,4,4,4,32
+   1.777 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+67->64 (4 parts)
+   1.777 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=67 sizes=2,2,2,2,2,2,2,2,3,4,4,4,4,32
+   1.779 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+68->64 (5 parts)
+   1.779 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=68 sizes=2,2,2,2,2,2,2,2,3,4,4,4,5,32
+   1.780 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+69->64 (6 parts)
+   1.781 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=69 sizes=2,2,2,2,2,2,2,2,3,4,4,4,6,32
+   1.782 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+70->64 (7 parts)
+   1.782 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=70 sizes=2,2,2,2,2,2,2,2,3,4,4,4,7,32
+   1.784 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+71->64 (8 parts)
+   1.784 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=71 sizes=2,2,2,2,2,2,2,2,3,4,4,4,8,32
+   1.789 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+72->64 (9 parts)
+   1.790 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=72 sizes=2,2,2,2,2,2,2,2,3,4,4,4,9,32
+   1.791 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+73->64 (10 parts)
+   1.791 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=73 sizes=2,2,2,2,2,2,2,2,3,4,4,4,10,32
+   1.793 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+74->64 (11 parts)
+   1.793 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=74 sizes=2,2,2,2,2,2,2,2,3,4,4,4,11,32
+   1.795 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+75->64 (12 parts)
+   1.795 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=75 sizes=2,2,2,2,2,2,2,2,3,4,4,4,12,32
+   1.797 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+76->64 (13 parts)
+   1.797 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=76 sizes=2,2,2,2,2,2,2,2,3,4,4,4,13,32
+   1.799 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+77->64 (14 parts)
+   1.799 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=77 sizes=2,2,2,2,2,2,2,2,3,4,4,4,14,32
+   1.801 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+78->64 (15 parts)
+   1.801 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=78 sizes=2,2,2,2,2,2,2,2,3,4,4,4,15,32
+   1.803 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 64+79->64 (16 parts)
+   1.803 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=14 parts=79 sizes=2,2,2,2,2,2,2,2,3,4,4,4,16,32
+   1.806 Script @__better-belt-balancer__/control.lua:145: [BBB] cluster 80 formed (1 part)
+   1.806 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=80 sizes=1,2,2,2,2,2,2,2,2,3,4,4,4,16,32
+   1.808 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+81->80 (2 parts)
+   1.808 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=81 sizes=2,2,2,2,2,2,2,2,2,3,4,4,4,16,32
+   1.810 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+82->80 (3 parts)
+   1.810 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=82 sizes=2,2,2,2,2,2,2,2,3,3,4,4,4,16,32
+   1.812 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+83->80 (4 parts)
+   1.812 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=83 sizes=2,2,2,2,2,2,2,2,3,4,4,4,4,16,32
+   1.814 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+84->80 (5 parts)
+   1.814 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=84 sizes=2,2,2,2,2,2,2,2,3,4,4,4,5,16,32
+   1.816 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+85->80 (6 parts)
+   1.816 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=85 sizes=2,2,2,2,2,2,2,2,3,4,4,4,6,16,32
+   1.818 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+86->80 (7 parts)
+   1.818 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=86 sizes=2,2,2,2,2,2,2,2,3,4,4,4,7,16,32
+   1.820 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+87->80 (8 parts)
+   1.820 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=87 sizes=2,2,2,2,2,2,2,2,3,4,4,4,8,16,32
+   1.822 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+88->80 (9 parts)
+   1.822 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=88 sizes=2,2,2,2,2,2,2,2,3,4,4,4,9,16,32
+   1.824 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+89->80 (10 parts)
+   1.824 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=89 sizes=2,2,2,2,2,2,2,2,3,4,4,4,10,16,32
+   1.827 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+90->80 (11 parts)
+   1.827 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=90 sizes=2,2,2,2,2,2,2,2,3,4,4,4,11,16,32
+   1.829 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+91->80 (12 parts)
+   1.829 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=91 sizes=2,2,2,2,2,2,2,2,3,4,4,4,12,16,32
+   1.831 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+92->80 (13 parts)
+   1.831 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=92 sizes=2,2,2,2,2,2,2,2,3,4,4,4,13,16,32
+   1.833 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+93->80 (14 parts)
+   1.833 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=93 sizes=2,2,2,2,2,2,2,2,3,4,4,4,14,16,32
+   1.835 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+94->80 (15 parts)
+   1.835 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=94 sizes=2,2,2,2,2,2,2,2,3,4,4,4,15,16,32
+   1.837 Script @__better-belt-balancer__/control.lua:145: [BBB] merge 80+95->80 (16 parts)
+   1.837 Script @__better-belt-balancer__/control.lua:145: [BBB] state clusters=15 parts=95 sizes=2,2,2,2,2,2,2,2,3,4,4,4,16,16,32
+   1.853 Script @__bbb-edge-test__/control.lua:1465: [BBB-EDGE] mark tag=init
+   1.871 Script @__better-belt-balancer__/control.lua:145: [BBB] audit clusters=15 parts=95 nets=0 drift=0 unbuilt=15
+   1.871 Script @__better-belt-balancer__/control.lua:145: [BBB] stats audit compiles=1 skipped=0 builds=0 teardowns=0 creates=0
+   1.871 Script @__better-belt-balancer__/control.lua:145: [BBB] heap audit sys=200096 alloc=114688 gc=1 heap=167936 live=0 free=125248 since=114688 cycles=0 grows=3 steps=0 deadlines=0 phase=0 meta=73120 budget=5120 eff=5120 roots=0
+   1.877 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=1 parts=2 set=2 vars=5,2
+   1.879 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 1 2->2 over 2 ports, 11 entities, slot 1
+   1.879 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=3 parts=2 set=2 vars=5,2
+   1.880 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 3 2->2 over 2 ports, 11 entities, slot 2
+   1.880 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=5 parts=2 set=2 vars=5,2
+   1.881 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 5 2->2 over 2 ports, 11 entities, slot 3
+   1.882 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=7 parts=2 set=2 vars=5,2
+   1.883 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 7 2->2 over 2 ports, 11 entities, slot 4
+   1.883 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=9 parts=2 set=2 vars=5,2
+   1.884 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 9 2->2 over 2 ports, 11 entities, slot 5
+   1.884 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=11 parts=2 set=2 vars=5,2
+   1.885 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 11 2->2 over 2 ports, 11 entities, slot 6
+   1.886 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=13 parts=2 set=2 vars=5,2
+   1.887 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 13 2->2 over 2 ports, 11 entities, slot 7
+   1.887 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=15 parts=4 set=4 vars=5,6,6,2
+   1.890 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 15 4->4 over 4 ports, 32 entities, slot 8
+   1.890 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=19 parts=4 set=4 vars=5,6,6,2
+   1.893 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 19 4->4 over 4 ports, 32 entities, slot 9
+   1.893 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=23 parts=4 set=4 vars=5,6,6,2
+   1.896 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 23 4->4 over 4 ports, 32 entities, slot 10
+   1.896 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=27 parts=3 set=3 vars=7,9,2
+   1.898 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 27 2->2 over 2 ports, 11 entities, slot 11
+   1.898 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=30 parts=2 set=2 vars=5,2
+   1.899 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 30 2->2 over 2 ports, 11 entities, slot 12
+   1.903 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=32 parts=32 set=32 vars=5,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,2
+   1.956 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 32 64->1 over 64 ports, 1026 entities, slot 13
+   1.959 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=64 parts=16 set=16 vars=5,6,6,6,6,6,6,6,6,6,6,6,6,6,6,2
+   1.982 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 64 32->1 over 32 ports, 434 entities, slot 14
+   1.984 Script @__better-belt-balancer__/control.lua:145: [BBB] skin cluster=80 parts=16 set=16 vars=5,6,6,6,6,6,6,6,6,6,6,6,6,6,6,2
+   2.006 Script @__better-belt-balancer__/control.lua:145: [BBB] compiled cluster 80 32->1 over 32 ports, 434 entities, slot 15
+   2.006 Script @__better-belt-balancer__/control.lua:145: [BBB] heap post-audit sys=421280 alloc=307200 gc=1 heap=389120 live=0 free=346432 since=307200 cycles=0 grows=6 steps=0 deadlines=0 phase=0 meta=73120 budget=5120 eff=5120 roots=0
+   2.011 Script @__bbb-edge-test__/control.lua:390: [BBB-EDGE] place tag=init ours=191 onpart=191 offpart=0 parts=95
+   2.020 Script @__bbb-edge-test__/control.lua:1472: [BBB-EDGE] plan chn_end=1900 end_tick=4564 stock=211200
+Done.
+   2.081 Goodbye
