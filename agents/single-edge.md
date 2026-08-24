@@ -1,9 +1,16 @@
 # single-edge.md — the 2.1 port: one belt per part
 
-Status: **DESIGN, nothing implemented.** Drafted 2026-08-24 from the 2026-08-23
-investigation and boskid's answer to the interface request
-(forums t=135830). Read CLAUDE.md's migration and over-limit sections first;
-this design reuses both wholesale.
+Status: **PHASE 1 SHIPPED 2026-08-24** — the rule, its refusal and its suite.
+Drafted the same day from the 2026-08-23 investigation and boskid's answer to
+the interface request (forums t=135830). Read CLAUDE.md's migration and
+over-limit sections first; this design reuses both wholesale.
+
+What is implemented and what is not is the "Implementation status" section at
+the end of this file. The short form: the rule enforces, the refusal reaches the
+player through the sixty-fifth belt's own machinery, the merge is spared, and
+the new `sedge` suite is green on 2.1.14. The runtime-global setting, the
+grandfather pass, the fixture-based migration suite, the rebuilt test estate and
+the interactive worlds are later phases and the design for each is unchanged.
 
 ## Why, in three sentences
 
@@ -452,3 +459,181 @@ hard gap:
 | refusal UX for the second belt | reuse limit.go verbatim, new locale key | it is the same gesture with a different bound |
 | 2.0 branch vs FkLua packaging flag | branch now, file the gap | unblocks immediately; the gap is real but small |
 | old multi-edge rigs | kept, 2.0-branch-only regression | multi-edge remains shipped (opt-in) on 2.0 and needs coverage while it exists |
+
+## Implementation status — phase 1, 2026-08-24
+
+**Shipped: the rule, its refusal, its merge arm and its suite.** Everything
+below is measured on Factorio 2.1.14 against the shipped configuration
+(`--persist=packed --gc=collected`).
+
+| what | where |
+|---|---|
+| the data-stage version branch: `not_colliding_with_itself` on 2.0.x only, and the `bbb-can-stack` marker in the same `if` | `mod-data/prototypes/hidden.lua` |
+| trunk targets 2.1 (`factorio_version`, `base >= 2.1.0`) | `fklua.toml` |
+| the capability, the predicate, the refusal, the bridging-tile theorem and the backstop | `guest/go/sedge.go` |
+| the per-tile count, taken out of the walk that was happening anyway | `classifyEdges`, `guest/go/compile.go` |
+| the refusal asked in front of the teardown, beside the port limit's | `compile`, `guest/go/compile.go` |
+| the three-way admission and the message, now shared by both bounds | `refuseAdmit` / `tellRefusal`, `guest/go/limit.go` |
+| the merge pre-pass, asking both bounds | `overLimitMerge`, `guest/go/limit.go` |
+| the tick's new part tiles | `noteAddedPart`, called from `AddPart` |
+| the capability re-derived at the three load hooks | `edgeModeRecheck`, `guest/go/main.go` |
+| the two locale keys | `mod-data/locale/en/better-belt-balancer.cfg` |
+| the suite | `test/mods/bbb-sedge-test/`, `test/assert-sedge.py`, `test/run.sh` |
+
+### The `sedge` suite, measured
+
+Eight clusters over thirty-six parts on a flat scratch surface, 3,500 ticks,
+base only. Five rigs measure the rule and three break it. One saturated express
+belt delivered **974 items** over the settled window (t=2100 to t=3400):
+
+| rig | what it is | per-output | total vs one belt | spread |
+|---|---|---|---|---|
+| `s11` | 1 -> 1 over **two** parts, P=1 | 976 | 1.002x | 0.00% |
+| `s22` | 2 -> 2 over **four** parts (2x2), P=2 | 974 974 | 2.000x | 0.00% |
+| `s44` | 4 -> 4 over **eight** parts (4x2), P=4 | 974 976 974 976 | 4.004x | 0.21% |
+| `s35` | 3 -> 5 over **ten** parts (5x2), P=8 with loopbacks | 584 584 584 586 585 | 3.001x | 0.34% |
+| `sbld` | a 2 -> 2 whose part was given a second belt at t=500 | 974 974 | 2.000x | 0.00% |
+| `srot` | a 2 -> 2 whose neighbour belt was rotated onto it at t=600 and back at t=1200 | 974 974 | 2.000x | 0.00% |
+| `smrg` | two 1 -> 1s bridged at t=1400 and un-bridged at t=1900 | 974 976 | 2.002x | 0.21% |
+
+**The port counts are asserted before any rate is read**, as an exact multiset
+over the create log: three 1->1 over 1, three 2->2 over 2, one 4->4 over 4 and
+one 3->5 over 8. A rig whose belts did not land where the geometry intended
+still delivers a plausible number; the port count is what says the machine is
+the one that was asked for.
+
+**The three refusals**, one per leg and exactly one per distinct edge state:
+
+| leg | how the second belt arrives | what came out |
+|---|---|---|
+| `sbld` | script-built against an occupied part | **one** `alert:` naming 1 part at worst 2 belts, **one** clean `told force`, the standing network delivering 2.000x for the remaining 3,000 ticks |
+| `srot` | a belt ROTATED onto an occupied part -- `entity.direction = ...` raises nothing at all, so the audit is what finds it | the audit reports `drift=1` before it repairs, the repair reaches the refusal, and rotating the belt back is a **SKIP**: `drift` returns to 0 with nothing torn down and nothing built |
+| `smrg` | a part BRIDGING two working balancers, whose bridging tile carries a belt on each side | the merge pre-pass spares **2** standing networks, and across the whole dispatch **0 teardowns, 0 builds, 0 spills** -- both halves still delivering 2.018x one belt while the refusal stands, the same figure they delivered before it |
+
+Audits, tag by tag, `(clusters, parts, nets, drift, unbuilt)`: `t0` (8, 36, 0, 0,
+8) -- the audit inside `on_init`'s marker dispatch reports before the drain it
+forces compiles anything -- then (8, 36, 8, 0, 0) built, (8, 36, 8, **1**, 0)
+with `sbld` refused, (8, 36, 8, **2**, 0) with `srot` refused as well, back to
+(8, 36, 8, 1, 0) when the rotation is undone, (**7**, **37**, 8, **2**, 0) while
+the merge stands refused -- both spared networks counted under keys that are no
+longer roots -- and (8, 36, 8, 1, 0) after it and at the end.
+
+**`drift=1 unbuilt=0` and never the other way round.** A refused cluster still
+HAS its network and knows its edge list has moved past what the mod can build;
+`drift=0 unbuilt=1` is the signature of a refusal that demolished first and
+asked afterwards, and it is what the red proof below produces.
+
+**Zero hand-backs over the whole run**, which is the standing negative: a
+headless `--create` has no players, so `game.get_player` resolves to nothing and
+`revertOne` returns before it mines anything. A hand-back here would be a revert
+firing for a script build. The flying text, the sound and the piece coming back
+are behind the same player wall as the sixty-fifth belt's, and join it on the
+interactive checklist.
+
+**Zero spills over the whole run.** Every refusal happens in front of its
+teardown, so no network ever comes down for one.
+
+### The red proof
+
+`multiEdgeAllowed()` forced to return true -- one line, and the semantic
+equivalent of the pre-port guest -- rebuilt and re-run:
+
+- **`test/run.sh` kills the run** before a single assertion is read, on **ten**
+  `[BBB] error: create_entity returned nil for bbb-linked-belt` lines. That is
+  the engine refusing the second interface on a tile, which is the whole reason
+  the rule exists.
+- Run against the logs by hand, **fifteen assertions fire**: zero refusals where
+  three are expected, zero forces told, zero merges spared, the un-merge
+  building **both** halves instead of one, **four spills totalling 64 items**,
+  six audit lines reading `drift=0 unbuilt=1` or `unbuilt=2` -- the signature
+  above -- and `sbld` and `smrg` delivering **0.000x one belt**: the balancers
+  a player was using simply stop.
+
+### Two deviations from the design, and why
+
+**1. "Also spare a merge when either predecessor is already in the refused map"
+is NOT implemented, because it is unsound.** The design offers it as free
+conservatism; it is the one direction that is not free. `spareMerge` must be
+exact in the YES direction -- sparing a merge that then compiles successfully
+leaves both predecessors' networks standing beside the new one, three networks
+over one cluster, two of them holding items nothing will ever come back for. And
+a predecessor being refused does not imply the merged cluster is: a part is
+fast-replaceable onto a belt (`fastreplace.go`), so the bridging part can be
+placed ON one of the two belts that made a predecessor's tile multi-edge, taking
+that tile to one edge and the merged cluster to perfectly buildable. The same
+argument retires it for the port bound. What IS implemented is the sound half --
+the bridging-tile theorem, which the design states correctly -- plus a fall-back
+to the full classification for a candidate that has stranded networks under it,
+where the theorem's premise ("the predecessors were valid") is the thing that
+does not hold.
+
+**2. The bridging-tile theorem needs the tick's new part tiles, and they are
+written down rather than re-derived.** `AddPart` appends the tile to a
+high-water slice truncated by every flush -- the `buildNotes` shape exactly.
+Nothing at all is recorded on an engine that can stack or inside a
+`rebuildFromWorld`, and the classification behind it is skipped outright unless
+a merge would really strand a standing network, which is what keeps a blueprint
+paste and a whole-world rebuild off it.
+
+### What it costs
+
+Package built 2026-08-24, shipped configuration, against the master build the
+2026-08-23 probe packaged (same guest, hand-edited manifest):
+
+| | before | after | |
+|---|--:|--:|---|
+| `fk_module.lua` | 2,747,461 B | **2,837,744 B** | +3.29% |
+| `dist/bbb.wasm` | 1,163,064 B | 1,189,262 B | |
+| `dist/better-belt-balancer_0.1.0.zip` | 414,060 B | **421,520 B** | +1.80% |
+| members bound into the mod | 50 | **50** | of 4,257 -- and `fk_api_gen.lua` is **byte-identical** to master's |
+| prototypes added | — | **1** | `bbb-can-stack`, CONDITIONAL: never defined on 2.1 |
+
+The zip and wasm baselines are CLAUDE.md's recorded numbers rather than a
+same-session rebuild; the `fk_module.lua` and API-table comparisons are against
+the packaged artifact itself and are exact. `EntityRaw` and `LuaCustomTable.Get`
+were already bound for the migration's marker probe, so the capability query
+crosses nothing new -- which is what the byte-identical API table says.
+
+**Nothing on any hot path moves, and it is structural rather than measured**:
+the per-tile count is one integer per tile inside a walk that already visits
+every side, the capability is one integer compare after the first call, and the
+merge arm makes no host call at all unless a merge would strand a standing
+network. **The `mar` suite cannot say so**, because it cannot run: its rigs are
+multi-edge. That measurement is owed and is part of the test-estate phase.
+
+### What runs on 2.1.14 and what does not
+
+**Two of the eleven suites.** Measured rather than assumed, and in two layers:
+
+- 2.1 refuses a mod whose `info.json` says `factorio_version: 2.0` outright --
+  *"Incompatible Factorio version (current: 2.1, required: 2.0)"* -- so every
+  suite fails at the loader before an entity is placed.
+- **`m1` needed nothing but that one token and is GREEN**: 6 + 3 phases, cluster
+  counts and sprite variations identical to their recorded values. It is
+  belt-free, so the rule this port is about cannot touch it. Its manifest is
+  bumped and it is back in the default.
+- The other nine build multi-edge rigs, so bumping their manifests would only
+  move the failure from the loader to the compiler. `test/run.sh`'s default is
+  `m1 sedge`; the nine stay reachable by name.
+
+### The two things this phase found that the design did not
+
+- **`reclaimStranded`'s "simply released, with no teardown at all" is true of
+  only one of two cases.** `removePart` marks the OLD ROOT dead
+  unconditionally, and the old root of an un-merging cluster is whichever of the
+  three nodes union-find kept. When it is the bridging part's own brand-new node
+  the teardown is a no-op and both halves skip -- which is what the `edge`
+  suite's `brdg` leg measures, by an accident of freed-id reuse. When it is a
+  predecessor's root, which is what happens in a save that has freed no node ids
+  (this suite's), that half is torn down and rebuilt. Conservation and placement
+  are correct either way -- the `sedge` suite measures 10 items drained and 10
+  put straight back, 0 spilled -- so it is a cost rather than a defect, and the
+  suite asserts the pair rather than one of them. CLAUDE.md's "The merge that
+  would be over the limit" already says the key must not be assumed; what it
+  also says, that mining the bridge back out costs zero teardowns, is true only
+  of the first case.
+- **`spareMerge`'s log line named a bound it no longer owns.** It said "would
+  merge past the port limit"; there are two bounds now, so it says "would merge
+  into a cluster this mod cannot build" and the `alert:` a moment later says
+  which. `test/assert-edge.py`'s `SPARED` regex has to move with it when that
+  suite is rebuilt.

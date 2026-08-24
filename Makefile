@@ -4,8 +4,12 @@
 #   make mod      fklua mod -> dist/<name>_<version>/, data stage included
 #   make zip      the same, as an installable dist/<name>_<version>.zip
 #   make install  the built mod into a Factorio mods directory
-#   make test     headless verification, ten suites: SUITES=m2 for one of
-#                 (m1 m2 m3 upg plat mar edge mix mig qual)
+#   make test     headless verification. The default is the two suites that run
+#                 on Factorio 2.1 -- m1 and sedge -- and SUITES=m2 names one of
+#                 the nine still built in the multi-edge idiom
+#                 (m2 m3 upg plat mar edge mix mig qual). See test/run.sh's
+#                 SUITES line and agents/single-edge.md for what it takes to
+#                 bring those back.
 #   make check    the generated bindings and the lock are current
 #
 # `fklua mod` GENERATES the control stage (control.lua, info.json, fk_abi.lua,

@@ -214,6 +214,14 @@ func AddPart(k key, f uint32) bool {
 	id := newNode(k, f)
 	index[k] = id
 	nParts++
+	// THE ONE TILE A MERGE CAN NEWLY BREAK THE ONE-BELT-PER-PART RULE ON is the
+	// tile of the part that made the merge, because adding a part can only take
+	// edges away from the tiles that were already there. The merge pre-pass
+	// (limit.go) needs those tiles a tick later and cannot re-derive them, so
+	// they are written down here, where they are free. One append to a
+	// high-water slice, and nothing at all on an engine that can stack or inside
+	// a rebuild-from-world. See sedge.go.
+	noteAddedPart(k)
 
 	merged := false
 	// Every root involved goes on the teardown queue -- the one that survives

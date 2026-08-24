@@ -10,22 +10,41 @@
 --   bbb-lane-splitter the 1x1 lane-fidelity stage at the inputs
 --
 -- ---------------------------------------------------------------------------
--- THE COLLISION MASK ON bbb-linked-belt IS THE WHOLE ARCHITECTURE.
+-- THE COLLISION MASK ON bbb-linked-belt WAS THE WHOLE ARCHITECTURE, AND ON
+-- FACTORIO 2.1 THE DOOR IS SHUT.
 --
--- Spike S1 probed 14 masks. The engine VALIDATES any belt-connectable whose
--- `layers` differ from the type default -- and the validation demands the mask
--- collide with transport-belt's and with itself, so every deviation fails at
--- load. But when `layers` is EXACTLY the type default the validation is skipped
--- entirely, while `not_colliding_with_itself` is still honoured at runtime.
+-- Spike S1 probed 14 masks on 2.0.77. The engine VALIDATES any belt-connectable
+-- whose `layers` differ from the type default -- and the validation demands the
+-- mask collide with transport-belt's and with itself, so every deviation fails
+-- at load. But when `layers` is EXACTLY the type default the validation was
+-- skipped entirely, while `not_colliding_with_itself` was still honoured at
+-- runtime. That was the one and only door to putting two (or four)
+-- belt-connectables on one tile, which is what let a 1x1 balancer part carry an
+-- input interface on one side and an output interface on another.
 --
--- That is the one and only door to putting two (or four) belt-connectables on
--- one tile, which is what lets a 1x1 balancer part carry an input interface on
--- one side and an output interface on another. It is a loophole, not an API:
--- the version is pinned in testing and the fallback (hidden inserters plus
--- `proxy-container`, the miniloader technique) stays documented in
--- agents/spike-s1.md in case a patch tightens it.
+-- It was a loophole and it is closed. 2.1 fixed the equals-compare that skipped
+-- the validation, so the check now runs on every belt-connectable and demands
+-- the mask collide with itself; probed exhaustively on 2.1.14, no mask design
+-- passes and no runtime bypass exists (`create_entity` nils, `teleport` returns
+-- false). boskid's answer to the interface request (forums t=135830) explains
+-- the invariant it protects: belt-to-belt connections are NOT SAVED, they are
+-- re-derived at load, and one belt-connectable per tile is what makes that
+-- re-derivation unambiguous.
 --
--- Do not "tidy" the layer list. Adding or removing one entry moves this
+-- SO THE FLAG IS EMITTED ON 2.0.x AND NEVER ON 2.1.x, and with it the marker
+-- prototype `bbb-can-stack` that tells the guest which world it is in. The rule
+-- the guest enforces when the marker is absent is at most ONE BELT PER BALANCER
+-- PART, because one part tile may carry at most one interface linked belt.
+-- agents/single-edge.md is the whole port; guest/go/sedge.go is the runtime
+-- half of this file.
+--
+-- THE VERSION GUARD IS WHAT KEEPS A MISPACKAGED ZIP FROM BRICKING A 2.1 LOAD,
+-- and it fails SAFE: anything this file cannot read as 2.0.x is treated as 2.1,
+-- because emitting the flag on 2.1 refuses the mod at load while not emitting
+-- it on 2.0 merely costs the multi-edge geometry the guest would then refuse to
+-- build anyway.
+--
+-- Do not "tidy" the layer list. On 2.0 adding or removing one entry moves this
 -- prototype from the unvalidated path to the validated one, and the mod stops
 -- loading.
 -- ---------------------------------------------------------------------------
@@ -136,6 +155,22 @@ local BELT_LAYERS = {
   water_tile = true,
 }
 
+-- WHICH ENGINE THIS IS. `mods` is the data stage's own dictionary of every
+-- installed mod's version, base included, and it is the only thing here that
+-- can tell 2.0 from 2.1 -- the two data stages are otherwise identical.
+--
+-- Anything unreadable is treated as 2.1, which is the safe direction: see the
+-- header. The match is on MAJOR.MINOR alone, so every 2.0.x point release is
+-- 2.0 and everything from 2.1.0 on is not.
+local function base_is_2_0()
+  local v = mods and mods["base"]
+  if type(v) ~= "string" then return false end
+  local major, minor = v:match("^(%d+)%.(%d+)")
+  return tonumber(major) == 2 and tonumber(minor) == 0
+end
+
+local CAN_STACK = base_is_2_0()
+
 -- Flags that keep a hidden entity out of every path that could copy it.
 -- The network is ALWAYS recompiled from visible state; an entity that survived
 -- into a blueprint or a clone would be a second, untracked network.
@@ -195,10 +230,14 @@ end
 local linked = clone("linked-belt", "linked-belt", "bbb-linked-belt")
 linked.collision_mask = {
   layers = util.table.deepcopy(BELT_LAYERS),
-  -- The door. Without it a second linked belt cannot share the tile, and
-  -- without that a 1x1 part cannot be both an input and an output.
-  not_colliding_with_itself = true,
 }
+if CAN_STACK then
+  -- The door, on the engine that still has one. Without it a second linked belt
+  -- cannot share the tile, and without that a 1x1 part cannot be both an input
+  -- and an output -- which is the rule guest/go/sedge.go enforces everywhere
+  -- else.
+  linked.collision_mask.not_colliding_with_itself = true
+end
 -- A linked belt remembers its partner in a blueprint and re-links on paste, and
 -- can be carried through a clone the same way. Both would resurrect a network
 -- the compiler does not know about, so both are refused at the prototype.
@@ -315,3 +354,36 @@ local probe = {
 }
 
 data:extend { linked, belt, splitter, lane, audit, probe }
+
+-- THE CAPABILITY MARKER, and it is defined here rather than unconditionally
+-- because its whole meaning is "the linked belt above carries
+-- `not_colliding_with_itself`, so this engine can stack two of them on one
+-- tile". The guest cannot read a prototype's collision mask and must not carry
+-- a version number of its own; a point lookup of this name against
+-- `prototypes.entity` answers the question in two host calls and no allocation,
+-- and the guest's belief cannot drift from the prototype's actual capability
+-- because the two are one `if`.
+--
+-- It is the `bbb-legacy-stub` idiom exactly (prototypes/legacy.lua), for the
+-- same reason and with the same shape: a prototype that exists to be looked up
+-- and that nothing ever places. See guest/go/sedge.go, `multiEdgeAllowed`.
+if CAN_STACK then
+  data:extend {
+    {
+      type = "simple-entity",
+      name = "bbb-can-stack",
+      hidden = true,
+      hidden_in_factoriopedia = true,
+      flags = util.table.deepcopy(HIDDEN_FLAGS),
+      max_health = 1,
+      collision_mask = { layers = {} },
+      collision_box = { { 0, 0 }, { 0, 0 } },
+      selectable_in_game = false,
+      -- The graphical client validates every sprite path at load and headless
+      -- does not, which is how a stale filename here once survived every suite
+      -- and then refused to load in the real game. The engine's own empty
+      -- sprite has no file dependency of ours at all.
+      picture = util.empty_sprite(),
+    },
+  }
+end

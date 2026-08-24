@@ -1,6 +1,6 @@
 # Better Belt Balancer
 
-A Factorio 2.0 mod. Balancer parts are 1x1 tiles: place several next to each other and they become one balancer, of whatever shape you built. The belts feeding it are its inputs and the belts it feeds are its outputs; orientation alone decides, so there is nothing to configure. Items are balanced across every output exactly, per lane, under every load condition: saturated, starved, partially blocked, asymmetric.
+A Factorio 2.1 mod. Balancer parts are 1x1 tiles: place several next to each other and they become one balancer, of whatever shape you built. The belts feeding it are its inputs and the belts it feeds are its outputs; orientation alone decides, so there is nothing to configure. Each part connects to one belt, so a four-in four-out balancer is eight parts: four carrying the inputs and four carrying the outputs. Items are balanced across every output exactly, per lane, under every load condition: saturated, starved, partially blocked, asymmetric.
 
 The mod's logic is written in Go, compiled to WebAssembly by TinyGo and then to Lua by [FkLua](https://github.com/Techrocket9/FkLua).
 
@@ -29,6 +29,12 @@ This mod compiles instead. When a cluster of parts changes, the guest (the Go pr
 The network is a butterfly over P = next_pow2(max(inputs, outputs)) lines, log2(P) stages of P/2 splitters, with a lane-splitter stage on entry that makes it lane-accurate rather than only belt-accurate. A 4x4 balancer is 32 hidden entities; an 8x8 is 84.
 
 One balancer supports up to 64 belts per side (inputs and outputs counted separately); the limit is the size of the hidden-surface slot a network compiles into.
+
+## One belt per part
+
+Each part connects to one belt. A part already serving a belt refuses a second one: the balancer you have keeps running exactly as it was, the piece comes back to your inventory, and a message says why. Rotating a belt so that it points at a part that is already serving one is refused the same way, and so is placing a part that would join two balancers into one where the joining part would end up with a belt on each side.
+
+The reason is the engine rather than a design choice. Each belt a balancer touches is served by a hidden interface standing on that part's tile, and Factorio 2.1 allows one of those per tile. Building a wider balancer is a matter of building it a part deeper: a column of parts on the input side and a column on the output side, with as many rows as you have belts.
 
 ## Fast replace
 
@@ -69,19 +75,19 @@ Nothing happens while the old mod is still installed. Both can sit in a mod list
 
 ## Building
 
-Prerequisites: Go, TinyGo 0.41.1, binaryen (`wasm-opt`, which TinyGo's wasm build shells out to), Python 3 (the sprite check, the test assertion scripts and the art generator), and a checkout of [FkLua](https://github.com/Techrocket9/FkLua) at `../FkLua` with `bin/fklua` built (`FKLUA=/path/to/fklua` overrides). The headless tests and the benchmarks also need a Factorio 2.0 install; set `FACTORIO_BIN` if it is not at the default Steam location on macOS.
+Prerequisites: Go, TinyGo 0.41.1, binaryen (`wasm-opt`, which TinyGo's wasm build shells out to), Python 3 (the sprite check, the test assertion scripts and the art generator), and a checkout of [FkLua](https://github.com/Techrocket9/FkLua) at `../FkLua` with `bin/fklua` built (`FKLUA=/path/to/fklua` overrides). The headless tests and the benchmarks also need a Factorio 2.1 install; set `FACTORIO_BIN` if it is not at the default Steam location on macOS.
 
 ```sh
 make zip      # dist/better-belt-balancer_<version>.zip, a complete mod
 make install  # unpacked, into your Factorio mods directory (MODS_DIR overrides)
 make check    # pure-Go unit tests, bindings and lockfile current, gofmt
-make test     # headless verification: ten suites in a real Factorio
+make test     # headless verification in a real Factorio
 ```
 
 `make test` creates saves with the rigs already built, benchmarks them in a real Factorio, and asserts against the guest's own log lines. Two build switches:
 
 - `QUIET=1` compiles out every `[BBB]` log line below the error level. The default build is verbose because the suites assert on those lines.
-- `GC=leaking` builds the guest on FkLua's leaking arena instead of its paced collector. The shipped build is collected: over 3,400 teardown-and-rebuild cycles the leaking arm's heap doubled its way to 32 MiB with a 782 ms tick at the last doubling, where the collected arm ended at 0.5 MiB with a worst tick of 71 ms and no measurable steady-state difference. Both arms pass all ten suites.
+- `GC=leaking` builds the guest on FkLua's leaking arena instead of its paced collector. The shipped build is collected: over 3,400 teardown-and-rebuild cycles the leaking arm's heap doubled its way to 32 MiB with a 782 ms tick at the last doubling, where the collected arm ended at 0.5 MiB with a worst tick of 71 ms and no measurable steady-state difference. Both arms build, and the suites that run today are green in the shipped one.
 
 - The icon, logo, and sprites were created by [Edjie Arts](https://edjie.carrd.co). A balancer reads as one continuous machine across any shape, with trim only along its real outline.
 
@@ -92,7 +98,7 @@ make test     # headless verification: ten suites in a real Factorio
 | `guest/go/` | the Go guest; `plan/` is the network planner, `fkapi/` the generated FkLua bindings |
 | `mod-data/` | the hand-written data stage: prototypes, graphics, locale |
 | [`bench/`](bench/README.md) | the head-to-head benchmark harness, its setup mod and the results |
-| `test/` | the ten headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the six player gestures a headless run cannot make |
+| `test/` | the headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the six player gestures a headless run cannot make |
 | `fklua.toml` | mod identity, the API pin (2.0.77), guest language and GC mode |
 | `CLAUDE.md`, `agents/` | maintainer design notes and the full measurement record |
 

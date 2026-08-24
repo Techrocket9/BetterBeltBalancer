@@ -5,14 +5,21 @@ version = "0.2.0"
 title = "Better Belt Balancer"
 author = "Techrocket9"
 description = "Belt balancers that click together into arbitrary shapes. Highly performant; megabase-ready (UPS hit is ~equal to vanilla hand-crafted belt balancers)."
-factorio_version = "2.0"
+# TRUNK TARGETS 2.1, and it is one value per release: the portal serves the
+# right release per game version, so the 2.0 arm is a `release/2.0` branch
+# carrying this key, the 2.0.77 api pin and its generated bindings, and nothing
+# hand-written. The mod-data tree is IDENTICAL on both branches -- the
+# engine-version guard in prototypes/hidden.lua is what makes one tree correct
+# on both engines. See agents/single-edge.md, "Packaging: one tree, two
+# releases".
+factorio_version = "2.1"
 # The DATA STAGE. `fklua mod` generates the control stage and rm -rf's its
 # output directory first, so nothing hand-written can live there; this key is
 # the default for --include, and the tree is merged into the package before
 # either writer runs -- so `--zip` carries it too.
 data = "mod-data"
 # info.json's dependencies, verbatim. The data stage extends base prototypes.
-dependencies = ["base >= 2.0.0"]
+dependencies = ["base >= 2.1.0"]
 
 # The API version the generated bindings come from.
 # PINNED: `fklua gen-bindings --check` fails if the tree drifts from it,

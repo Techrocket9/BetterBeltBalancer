@@ -34,6 +34,16 @@
 #         load makes (swapped in one edit, removed a session later, arriving
 #         through build events and then a plain reload, an incumbent INSTALLED
 #         after this mod, a stranger left alone, and a stranger UNINSTALLED)
+#   sedge FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART. Four single-edge
+#         shapes with their port counts asserted before their rates, and the
+#         three ways an edit can ask a part for a second belt -- built, rotated
+#         and merged -- each refused in front of its teardown with the standing
+#         network left running. agents/single-edge.md is the design.
+#
+# NINE OF THE ELEVEN ARE STILL BUILT IN THE MULTI-EDGE IDIOM AND DO NOT RUN ON
+# FACTORIO 2.1: every rig in them puts two belts on one part, which is what 2.1
+# forbids. `m1` and `sedge` are what the default runs -- see the SUITES line
+# below for why those two and not the rest.
 #
 #   make test          # builds the mod first
 #   test/run.sh        # against whatever dist/ already holds
@@ -64,7 +74,23 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 [ -x "$FACTORIO" ] || { echo "factorio not found at: $FACTORIO (set FACTORIO_BIN)" >&2; exit 1; }
 [ -d "$MOD_DIR" ]  || { echo "no built mod at $MOD_DIR; run \`make mod\` first" >&2; exit 1; }
 
-SUITES="${*:-m1 m2 m3 upg plat mar edge mix mig qual}"
+# THE DEFAULT IS WHAT RUNS ON FACTORIO 2.1 TODAY, which is two of the eleven.
+# The other nine are still reachable by name and are still the estate this mod
+# is verified by; what stops them is measured rather than assumed, in two
+# layers:
+#
+#   `Incompatible Factorio version (current: 2.1, required: 2.0)` -- 2.1 refuses
+#   a mod whose info.json says 2.0 at all, so every one of them fails before a
+#   single entity is placed. `m1` needed nothing but that one token, because it
+#   is BELT-FREE: it asserts cluster merges, splits and sprite variations and
+#   never builds an edge, so the rule this port is about cannot touch it.
+#
+#   and then the RULE. Every rig in the other nine puts two belts on one part,
+#   which is what 2.1 forbids -- so bumping their manifests would only move the
+#   failure from the loader to the compiler. Rebuilding those rigs single-edge
+#   is a later phase of the port; agents/single-edge.md's test-estate table is
+#   the list.
+SUITES="${*:-m1 sedge}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.
@@ -573,8 +599,28 @@ for suite in $SUITES; do
       python3 "$ROOT/test/assert-mig.py" --leg probe \
         --incumbent belt-balancer-performance --version 1.0.5 "$TMP/migp2/create.log"
       ;;
+    sedge)
+      # FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART. Every edge is an
+      # interface linked belt standing on the cluster's own tile, and 2.1 closed
+      # the collision-mask loophole that let two of them share one. So the port
+      # is a RULE change and this is the suite for it: four single-edge shapes
+      # measured against a bare express belt with their PORT COUNTS asserted
+      # first, and the three ways an edit can ask for a second belt on one part
+      # -- built, ROTATED (which raises no event at all, so the audit is what
+      # finds it) and a MERGE, whose teardowns are AddPart's and are queued
+      # before the compiler ever sees the cluster they make.
+      #
+      # See agents/single-edge.md for the design and guest/go/sedge.go for the
+      # rule. The suites above this one are still built in the multi-edge idiom
+      # and do not run on 2.1; rebuilding their rigs is a later phase.
+      echo "=== sedge: one belt per balancer part, and every way of breaking it ==="
+      stage "$TMP/sedge" bbb-sedge-test
+      run "$TMP/sedge" "${BBB_SEDGE_TICKS:-3500}"
+      echo "==> asserting the rule and its refusals"
+      python3 "$ROOT/test/assert-sedge.py" "$TMP/sedge/create.log" "$TMP/sedge/run.log"
+      ;;
     *)
-      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix, mig or qual)" >&2
+      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix, mig, qual or sedge)" >&2
       exit 1
       ;;
   esac

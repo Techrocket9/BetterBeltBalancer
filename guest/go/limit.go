@@ -52,6 +52,15 @@ package main
 //     predecessors back off the teardown queue. See "The merge" below for the
 //     free arithmetic that keeps it off the hot path and for what the registry
 //     then believes.
+//
+// SINCE THE 2.1 PORT THERE ARE TWO BOUNDS AND ONE REFUSAL. The port limit is
+// this file's; the one-belt-per-part rule Factorio 2.1 forces is sedge.go's.
+// They share everything below the sentence: `refuseAdmit`'s three-way
+// admission (the wake-race guard and the once-per-edge-state gate),
+// `tellRefusal`'s three arms, `limPending`'s hand-back, and the merge pre-pass,
+// which asks both questions of a candidate before it spares anything. What
+// differs is the predicate and the two locale keys, which is the whole of what
+// a bound is.
 
 import (
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
@@ -228,44 +237,79 @@ func logRefusedOverLimit(root uint32, pt plan.Ports) {
 	logEnd()
 }
 
-// refuseOverLimit is compile()'s answer when a cluster's edge list has outgrown
-// plan.MaxPorts. The standing network has not been touched and must not be.
+// What a refusal is allowed to do this time. Every refusal in this guest goes
+// through refuseAdmit, whichever bound it broke -- the port limit here, the
+// one-belt-per-part rule in sedge.go -- because the wake-race discipline and
+// the feedback gate are properties of REFUSING, not of the bound.
+const (
+	refuseSilent  = iota // this exact edge state has been refused before
+	refuseLogOnly        // inside rebuildFromWorld: log, requeue, tell nobody
+	refuseSpeak          // log, and put it in front of somebody
+)
+
+// refuseAdmit decides which of the three a refusal is, and arms the gate when
+// the answer is the third.
 //
-// Returns with the world exactly as it found it: everything below is a log
-// line, a message and a queue insertion.
-func refuseOverLimit(root uint32, fp uint64, pt plan.Ports, tiles []key, force uint32) {
-	// A REBUILD-FROM-WORLD REFUSAL LOGS, REQUEUES AND TELLS NOBODY. The
-	// rebuild's flush runs with the worst information a refusal will ever
-	// have -- when it runs from the first event of a session, that event's own
-	// build note does not exist yet -- and anything said now is either the
-	// wrong arm or a claim about a state the next tick falsifies (both
-	// happened; the 2026-08-05 field reports and lifecycle.go's comment are
-	// the record). So: the memo is NOT armed, the cluster goes back on the
-	// queue, and the first ordinary flush re-judges with the notes in hand and
-	// delivers the one correct message. A refused cluster in a save nobody is
-	// editing reaches that flush with no notes and gets the piece-stands
-	// message, which is then true.
+// A REBUILD-FROM-WORLD REFUSAL LOGS, REQUEUES AND TELLS NOBODY. The rebuild's
+// flush runs with the worst information a refusal will ever have -- when it
+// runs from the first event of a session, that event's own build note does not
+// exist yet -- and anything said now is either the wrong arm or a claim about a
+// state the next tick falsifies (both happened; the 2026-08-05 field reports and
+// lifecycle.go's comment are the record). So: the memo is NOT armed, the cluster
+// goes back on the queue, and the first ordinary flush re-judges with the notes
+// in hand and delivers the one correct message. A refused cluster in a save
+// nobody is editing reaches that flush with no notes and gets the piece-stands
+// message, which is then true.
+//
+// Otherwise it is ONCE PER DISTINCT EDGE STATE, not once per flush. See
+// overLimit.
+func refuseAdmit(root uint32, fp uint64) int {
 	if rebuildingFromWorld {
-		logRefusedOverLimit(root, pt)
 		// NOT markLive: this runs inside the rebuild's own flushLive drain,
 		// whose loop has already captured its length and whose tail truncates
 		// the queue to [:0] -- an append here would be silently erased.
 		// rebuildFromWorld requeues these AFTER its flush returns, the same
 		// after-the-drain discipline revertOverLimit follows.
 		rebuildRefused = append(rebuildRefused, root)
-		return
+		return refuseLogOnly
 	}
-	// ONCE PER DISTINCT EDGE STATE, not once per flush. See overLimit.
 	if prev, ok := overLimit[root]; ok && prev == fp {
-		return
+		return refuseSilent
 	}
 	if overLimit == nil {
 		overLimit = make(map[uint32]uint64)
 	}
 	overLimit[root] = fp
+	return refuseSpeak
+}
 
+// refuseOverLimit is compile()'s answer when a cluster's edge list has outgrown
+// plan.MaxPorts. The standing network has not been touched and must not be.
+//
+// Returns with the world exactly as it found it: everything below is a log
+// line, a message and a queue insertion.
+func refuseOverLimit(root uint32, fp uint64, pt plan.Ports, tiles []key, force uint32) {
+	switch refuseAdmit(root, fp) {
+	case refuseSilent:
+		return
+	case refuseLogOnly:
+		logRefusedOverLimit(root, pt)
+		return
+	}
 	logRefusedOverLimit(root, pt)
-	tellOverLimit(root, pt, tiles, force)
+	limMsg[1].Number = float64(plan.MaxPorts)
+	// The number the PLAYER sees is the belt count on the machine's bigger
+	// side, never pt.P: a player placed one belt and has no window into the
+	// compiler, so "would need 128 ports" for a 65th belt read as gibberish in
+	// the field (report, 2026-08-05). The log line above keeps P -- it is for
+	// whoever reads logs, and ports are its native unit.
+	side := pt.N
+	if pt.M > side {
+		side = pt.M
+	}
+	limMsg[2].Number = float64(side)
+	tellRefusal(root, tiles, force, msgOverLimit, msgOverLimitStand, 2,
+		"over the port limit")
 }
 
 // limBuf is everything a message needs, package level so that telling a player
@@ -294,7 +338,7 @@ func init() {
 	limSound.Path = soundCannotBuild
 }
 
-// tellOverLimit puts the refusal in front of somebody.
+// tellRefusal puts a refusal in front of somebody.
 //
 // Three outcomes, and which one happens is decided by whether a PLAYER built
 // the thing that broke the machine:
@@ -309,19 +353,14 @@ func init() {
 // `game.get_player` is called FRESH here and never held: the build arrived one
 // tick ago and a `LuaPlayer` does not survive that gap. This is the miner's
 // pocket's own pattern (carry.go) and for the same reason.
-func tellOverLimit(root uint32, pt plan.Ports, tiles []key, force uint32) {
-	limMsg[1].Number = float64(plan.MaxPorts)
-	// The number the PLAYER sees is the belt count on the machine's bigger
-	// side, never pt.P: a player placed one belt and has no window into the
-	// compiler, so "would need 128 ports" for a 65th belt read as gibberish in
-	// the field (report, 2026-08-05). The log line above keeps P — it is for
-	// whoever reads logs, and ports are its native unit.
-	side := pt.N
-	if pt.M > side {
-		side = pt.M
-	}
-	limMsg[2].Number = float64(side)
-
+//
+// NOTHING BELOW DEPENDS ON WHICH BOUND BROKE, which is why it takes the two
+// sentences and their parameter count rather than a shape: the caller has
+// already written its numbers into limMsg[1..] and says how many of them there
+// are, and `why` is the clause the force-wide log line names the rule with. The
+// port limit and the one-belt-per-part rule are the two callers today.
+func tellRefusal(root uint32, tiles []key, force uint32,
+	msgKey, standKey string, nparam int, why string) {
 	x0, y0, x1, y1 := clusterBox(tiles)
 	limPos.X = float64(x0+x1)/2 + 0.5
 	limPos.Y = float64(y0+y1)/2 + 0.5
@@ -363,8 +402,8 @@ func tellOverLimit(root uint32, pt plan.Ports, tiles []key, force uint32) {
 	}
 
 	if told != 0 {
-		limMsg[0] = fkapi.OfString(msgOverLimit)
-		msg := fkapi.Value{Tag: fkapi.TagArray, Array: limMsg[:]}
+		limMsg[0] = fkapi.OfString(msgKey)
+		msg := fkapi.Value{Tag: fkapi.TagArray, Array: limMsg[:1+nparam]}
 		o, err := fkapi.Game.GetPlayer(fkapi.OfNumber(float64(told)))
 		if err != nil || o == nil {
 			// Left between the build and the flush. Ordinary, not an error --
@@ -382,8 +421,8 @@ func tellOverLimit(root uint32, pt plan.Ports, tiles []key, force uint32) {
 	// Nobody to hand anything back to: a robot revived a ghost, or a script
 	// built it. The belt stands where it is, unconnected, and the force is told
 	// why -- a different sentence, because "you got it back" would be a lie.
-	limMsg[0] = fkapi.OfString(msgOverLimitStand)
-	msg := fkapi.Value{Tag: fkapi.TagArray, Array: limMsg[:]}
+	limMsg[0] = fkapi.OfString(standKey)
+	msg := fkapi.Value{Tag: fkapi.TagArray, Array: limMsg[:1+nparam]}
 	f, ok := forceOfCluster(tiles, force)
 	if !ok {
 		return
@@ -402,7 +441,9 @@ func tellOverLimit(root uint32, pt plan.Ports, tiles []key, force uint32) {
 		logU(force)
 		logS(" that cluster ")
 		logU(root)
-		logS(" is over the port limit; nobody built it, so the piece stands")
+		logS(" is ")
+		logS(why)
+		logS("; nobody built it, so the piece stands")
 		if err != nil {
 			logS(" -- print FAILED")
 		}
@@ -628,7 +669,7 @@ func spareOverLimitMerges() {
 
 	for i := range limCands {
 		r := limCands[i]
-		if overLimitMerge(r) {
+		if overLimitMerge(r, limCandMerge[i]) {
 			if limCandMerge[i] {
 				spareMerge(r)
 			}
@@ -652,15 +693,48 @@ func addLimCand(r uint32, merge bool) {
 	limCandMerge = append(limCandMerge, merge)
 }
 
-// overLimitMerge is `overLimitShape` asked of a cluster that has not been
-// compiled yet, with the free bound in front of it.
-func overLimitMerge(r uint32) bool {
+// overLimitMerge asks, of a cluster that has not been compiled yet, whether
+// the compiler is going to refuse it -- for EITHER bound, because a merge past
+// either one demolishes the same two working balancers.
+//
+// `bridged` says whether this candidate had a dead root absorbed into it THIS
+// flush (a real merge) or is a candidate only because a previous refusal left
+// networks stranded under it. The distinction matters to the second bound and
+// not to the first.
+//
+// IT MUST BE EXACT IN THE "YES" DIRECTION. Sparing a merge that then compiles
+// successfully leaves both predecessors' networks standing beside the new one,
+// which is strictly worse than the defect this pass exists to fix. Being
+// conservative the other way costs the old behaviour and nothing else.
+func overLimitMerge(r uint32, bridged bool) bool {
 	if int(r) >= len(csize) || !alive[r] {
 		return false
 	}
-	// AT MOST FOUR EDGES PER PART, so this is a proof and not a heuristic. It is
-	// what keeps the whole pass off the hot path -- see the header.
-	if int(csize[r])*4 <= plan.MaxPorts {
+	// THE TWO FREE TESTS FIRST, and neither makes a host call.
+	//
+	// The port bound: AT MOST FOUR EDGES PER PART, so `4C <= MaxPorts` is a
+	// proof and not a heuristic. It is what keeps the whole pass off the hot
+	// path -- see the header.
+	ports := int(csize[r])*4 > plan.MaxPorts
+	// The one-belt-per-part bound has no such arithmetic: any two-part merge
+	// could break it. What stands in for it is the BRIDGING-TILE THEOREM
+	// (sedge.go) -- adding a part can only take edges away from the tiles that
+	// were already there, so the only tile that can newly violate is the new
+	// part's own.
+	//
+	// A candidate with stranded networks under it is the one case the theorem
+	// cannot serve: a stranded predecessor was REFUSED rather than compiled, so
+	// "the predecessors were valid single-edge" is not true of it and the full
+	// classification is the only exact answer. `stranded` is empty in every save
+	// that has never refused a merge, so the test costs a length check.
+	sedge := !multiEdgeAllowed()
+	if sedge && bridged && len(stranded) == 0 {
+		if bridgingTilesOverloaded(r) {
+			return true
+		}
+		sedge = false
+	}
+	if !ports && !sedge {
 		return false
 	}
 	tiles := collectCluster(r)
@@ -671,8 +745,18 @@ func overLimitMerge(r uint32) bool {
 	if !ok {
 		return false
 	}
-	_, over := overLimitShape(classifyEdges(surf, tiles, pforce[r]))
-	return over
+	edges := classifyEdges(surf, tiles, pforce[r])
+	if ports {
+		if _, over := overLimitShape(edges); over {
+			return true
+		}
+	}
+	if sedge {
+		if _, over := multiEdgeShape(); over {
+			return true
+		}
+	}
+	return false
 }
 
 // spareMerge takes every teardown that belongs to the merge into `r` back off
@@ -698,9 +782,14 @@ func spareMerge(r uint32) {
 	}
 	deadRoots = deadRoots[:n]
 	if spared != 0 && verboseLog {
+		// THE LINE NAMES NO BOUND, because there are two of them now: a merge is
+		// spared for the port limit or for the one-belt-per-part rule, and which
+		// one it was is on the `alert:` line the refusal itself writes a moment
+		// later. It used to say "past the port limit" and that was the only
+		// bound there was.
 		logStart("cluster ")
 		logU(r)
-		logS(" would merge past the port limit; left ")
+		logS(" would merge into a cluster this mod cannot build; left ")
 		logU(spared)
 		logS(" standing network(s) alone instead of demolishing them")
 		logEnd()

@@ -228,6 +228,7 @@ func onInit() {
 	// converts through AddPart directly, and the world scan the first event
 	// pays for adopts the networks this one just built rather than rebuilding
 	// them.
+	edgeModeRecheck()
 	legacyRecheck(legTrigInit)
 }
 
@@ -256,6 +257,12 @@ func onInit() {
 //
 //go:wasmexport fk_on_configuration_changed
 func onConfigurationChanged() {
+	// AND IT IS WHERE THE ENGINE CAN CHANGE UNDER A SAVE. Factorio raises this
+	// for a game-version change as well as for a mod-set one, so it is the hook
+	// that catches a 2.0 heap waking up on 2.1 -- where `bbb-can-stack` is gone
+	// and every multi-edge cluster in the save has to be refused rather than
+	// compiled. Free on every other load: sedge.go's answer is one point query.
+	edgeModeRecheck()
 	ensureRegistry()
 	legacyRecheck(legTrigConfig)
 }
@@ -284,6 +291,7 @@ func onMigrate(oldVersion uint32) {
 	logU(oldVersion)
 	logS("); the heap is fresh and the registry comes from the world")
 	logEnd()
+	edgeModeRecheck()
 	ensureRegistry()
 	// A fresh heap knows nothing about a migration it may already have done, so
 	// the decision is taken again from the world. It is cheap and it is correct:

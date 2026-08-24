@@ -330,6 +330,11 @@ func initBuffers() {
 	carryClaims.Reset()
 	buildNotes = buildNotes[:0]
 	limPending = limPending[:0]
+	addedTiles = addedTiles[:0]
+	// The engine capability is re-derived rather than assumed: a fresh heap has
+	// never asked, and the load hooks that can reach a DIFFERENT engine throw
+	// the answer away again. See sedge.go.
+	edgeMode = edgeModeUnchecked
 	stranded = stranded[:0]
 	limCands = limCands[:0]
 	limCandMerge = limCandMerge[:0]
@@ -458,14 +463,23 @@ var dirOf [4]uint32
 // The incumbent's accepted limitation is inherited by construction: a belt's
 // `direction` is where it sends items, so a belt curving away at the edge is
 // simply not pointing at us and is not an output.
+//
+// IT ALSO COUNTS THE EDGES PER TILE, into sedge.go's two package-level numbers,
+// and that costs one integer per tile and nothing else: this walk already
+// visits every tile and every side, so the answer to "does any part carry more
+// than one belt" -- the rule Factorio 2.1 forces -- falls out of a pass that was
+// happening anyway. No allocation and no extra host call, which is the gate the
+// `mar` suite holds everything on this path to.
 func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge {
 	edgeBuf = edgeBuf[:0]
+	sedgeWorst, sedgeTiles = 0, 0
 	// The engine filters by force for us. A belt of another force could never
 	// have connected to an interface of ours, so classifying it as an edge
 	// would place a linked belt that silently moves nothing.
 	forceFilter = fkapi.OfNumber(float64(force))
 	for i := range tiles {
 		k := tiles[i]
+		onTile := uint32(0)
 		for d := 0; d < len(dirs); d++ {
 			nx, ny := k.x+dirs[d][0], k.y+dirs[d][1]
 			if _, ok := index[key{k.s, nx, ny}]; ok {
@@ -476,6 +490,7 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 			if !found {
 				continue
 			}
+			onTile++
 			// An INPUT interface faces the incoming belt with its input side,
 			// so it points the other way; an OUTPUT interface points at the
 			// belt it feeds.
@@ -484,6 +499,12 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 				ld = plan.Opposite(dir)
 			}
 			edgeBuf = append(edgeBuf, plan.Edge{TileX: k.x, TileY: k.y, Dir: ld, Out: out})
+		}
+		if onTile > 1 {
+			sedgeTiles++
+			if onTile > sedgeWorst {
+				sedgeWorst = onTile
+			}
 		}
 	}
 	return edgeBuf
@@ -687,6 +708,19 @@ func compile(root uint32) bool {
 		refuseOverLimit(root, fp, pt, tiles, force)
 		return false
 	}
+	// AND THE ONE-BELT-PER-PART RULE IS ASKED IN THE SAME PLACE, for the same
+	// reason and through the same machinery (sedge.go, limit.go). The port limit
+	// goes first because its answer does not depend on the mode -- a cluster
+	// past sixty-four ports is past it whichever geometry built it -- so a
+	// player whose balancer breaks both bounds is told about the one that is
+	// true on every engine.
+	//
+	// The counts come out of classifyEdges above and nothing between here and
+	// there re-classifies.
+	if worst, over := multiEdgeShape(); over {
+		refuseSingleEdge(root, fp, worst, tiles, force)
+		return false
+	}
 	forgetOverLimit(root)
 
 	if hadNet {
@@ -723,6 +757,18 @@ func compile(root uint32) bool {
 		logU(plan.MaxPorts)
 		logS("; not compiled, and the early refusal did not catch it")
 		logEnd()
+		releaseSlot(slot)
+		return false
+	}
+	// THE OTHER UNREACHABLE BACKSTOP, and the twin of the one above. plan.Build
+	// has no test to mirror for the one-belt-per-part rule -- it would happily
+	// emit a network for a multi-edge cluster and the engine would refuse every
+	// second interface with a silent nil -- so the mirror is of the
+	// CLASSIFICATION rather than of the planner, and it is asked here, where a
+	// working network has already been demolished, for the same reason: getting
+	// here means the check in front of the teardown did not agree with this one.
+	// See sedge.go.
+	if singleEdgeBackstop(root) {
 		releaseSlot(slot)
 		return false
 	}
@@ -1466,8 +1512,10 @@ func flush() {
 	runInsertProbes()
 	// One tick's worth of "who built what" is spent. The notes were filled by
 	// the events of the PREVIOUS tick and read by the drain above; anything
-	// after this belongs to the next one.
+	// after this belongs to the next one. The tick's NEW PART TILES go with them
+	// and for the same reason: the merge pre-pass that reads them has run.
 	forgetBuildNotes()
+	forgetAddedParts()
 }
 
 // The log helpers -- logError, logAlert, and the builder every line is
