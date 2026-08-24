@@ -652,7 +652,7 @@ end
 local timing = {}
 
 local function timed_begin(label)
-  timing.label, timing.p = label, game.create_profiler()
+  timing.label, timing.p = label, helpers.create_profiler()
 end
 
 local function timed_end()
@@ -710,7 +710,7 @@ local function loss_check()
   -- possible now that the recompile is deferred; it costs a full
   -- re-classification of every cluster, which is why this timing line is not
   -- comparable with the two above.
-  local p = game.create_profiler()
+  local p = helpers.create_profiler()
   audit_now(storage.loss_base)
   p.stop()
   local after, ga, la = count_visible_items()
@@ -725,14 +725,14 @@ end
 local function raw_create_cost()
   local hid = game.surfaces["bbb-hidden"]
   if not hid then log("[BBB-M2] raw: no hidden surface") return end
-  local p = game.create_profiler()
+  local p = helpers.create_profiler()
   for i = 1, 32 do
     hid.create_entity { name = "bbb-belt", position = P(200 + i, 200), direction = E,
                         force = "player" }
   end
   p.stop()
   log { "", "[BBB-M2] timing raw 32 create_entity on the hidden surface ", p }
-  local q = game.create_profiler()
+  local q = helpers.create_profiler()
   local found = hid.find_entities_filtered { area = { { 190, 190 }, { 250, 210 } } }
   q.stop()
   log { "", "[BBB-M2] timing raw find_entities_filtered (" .. #found .. " hits) ", q }

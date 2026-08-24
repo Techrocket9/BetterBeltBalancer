@@ -489,7 +489,7 @@ local function mega_init()
   local mx, my = -40, -40
   local audited = audit_marker(surface, force, mx, my)
   if audited then
-    local p = game.create_profiler()
+    local p = helpers.create_profiler()
     audit_marker(surface, force, mx, my)
     p.stop()
     log { "", "[BENCH-MEGA] timing audit only, nothing pending ", p }
@@ -497,7 +497,7 @@ local function mega_init()
 
   local gi, gpx = add(deferred.shape, deferred.ox, deferred.oy)
   if audited then
-    local q = game.create_profiler()
+    local q = helpers.create_profiler()
     audit_marker(surface, force, mx, my)
     q.stop()
     log { "", "[BENCH-MEGA] timing audit + FIRST COMPILE of the 64x64 ", q }
@@ -675,7 +675,7 @@ local function hitch_tick(e)
   local t = e.tick
   for _, base in ipairs(HITCH_AT) do
     if t == base - 2 then
-      hitch.p = game.create_profiler()
+      hitch.p = helpers.create_profiler()
       hitch.label = "idle tick pair, nothing pending"
       return
     elseif t == base or t == base + 2 or t == base + 4 then
@@ -687,12 +687,12 @@ local function hitch_tick(e)
       if t == base then
         local belt = hitch_belt(h)
         if not belt then log("[BENCH-MEGA] hitch: no input belt at the 64x64") return end
-        hitch.p = game.create_profiler()
+        hitch.p = helpers.create_profiler()
         hitch.label = "64x64 teardown+rebuild(-1 input)"
         belt.destroy { raise_destroy = true }
       elseif t == base + 2 then
         local s = game.surfaces[h.surface]
-        hitch.p = game.create_profiler()
+        hitch.p = helpers.create_profiler()
         hitch.label = "64x64 teardown+rebuild(full)"
         s.create_entity { name = TIERS[cfg.tier].belt,
                           position = { h.x + 0.5, h.y + 0.5 }, direction = EAST,

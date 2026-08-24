@@ -417,7 +417,7 @@ def main():
     times = [(m.group(1), float(m.group(2)))
              for m in (TIMING.search(l) for l in lines) if m]
     if times:
-        print("\ncompile cost, wall clock (game.create_profiler):")
+        print("\ncompile cost, wall clock (helpers.create_profiler):")
         for what, ms in times:
             print("  %-52s %8.3f ms" % (what, ms))
 

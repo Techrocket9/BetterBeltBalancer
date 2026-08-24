@@ -441,7 +441,7 @@ end
 local function recompile(band, tag)
   sample(tag .. " before")
   sput(game.surfaces[STK], BELT, 0, BANDS[band] - 1, { direction = S })
-  local p = game.create_profiler()
+  local p = helpers.create_profiler()
   stk_audit()
   p.stop()
   log { "", "[BBB-STK] timing " .. tag .. " recompile (audit-forced) ", p }
@@ -457,7 +457,7 @@ end
 local function smix_recompile()
   smix_sample("before")
   sput(game.surfaces[STK], BELT, 0, BANDS.smix - 1, { direction = S })
-  local p = game.create_profiler()
+  local p = helpers.create_profiler()
   stk_audit()
   p.stop()
   log { "", "[BBB-STK] timing smix recompile (audit-forced) ", p }
@@ -639,7 +639,7 @@ local SCHEDULE = {
   -- The control every timing below is read against: the same whole-save
   -- re-classification with nothing to rebuild.
   [500] = function()
-    local p = game.create_profiler()
+    local p = helpers.create_profiler()
     stk_audit()
     p.stop()
     log { "", "[BBB-STK] timing audit only, nothing pending ", p }
