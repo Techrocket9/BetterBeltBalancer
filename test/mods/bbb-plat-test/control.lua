@@ -79,9 +79,9 @@ local ROWS = { full = 4, flow = 4, plain = 2, smix = 2 }
 -- with because every count and every profile in this file filters by it. One
 -- save, two independent measurements, no second Factorio run.
 --
--- SIX NAMES AND NOT FORTY-EIGHT. The carry pool's bound is 32 (name, quality,
+-- SEVEN NAMES AND NOT FORTY-EIGHT. The carry pool's bound is 32 (name, quality,
 -- STACK SIZE) groups, and belt stacking multiplies a name by every stack size
--- standing on the lines at once -- so six names is up to 24 groups, inside the
+-- standing on the lines at once -- so seven names is up to 28 groups, inside the
 -- bound with room. Overflowing it is the `mix` suite's job ("More than
 -- thirty-two kinds"); overflowing it HERE would spill, and a spill is what this
 -- band asserts does not happen.
