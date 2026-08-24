@@ -28,9 +28,22 @@ COMPILED = re.compile(
 TIMING = re.compile(r"\[BBB-M2\] timing (.+?) Duration: ([\d.]+)ms")
 LANE = re.compile(r"\[BBB-M2\] lane t=(\d+) out=(\d+) left=(\d+) right=(\d+)")
 AUDIT = re.compile(
-    r"\[BBB\] audit clusters=(\d+) parts=\d+ nets=(\d+) drift=(\d+) unbuilt=(\d+)")
+    r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) unbuilt=(\d+)"
+    r"(?: refused=(\d+))?")
+SEDGE_REFUSED = re.compile(
+    r"\[BBB\] alert: cluster (\d+) has (\d+) parts? carrying more than one belt")
 
 T0, T1 = 1800, 3540
+
+# What the rigs BUILD, written down here rather than read off the guest's own
+# summary. Twenty-one clusters, two columns of parts per row -- see the layout
+# block at the top of test/mods/bbb-m2-test/control.lua.
+#
+# It is a statement about the SAVE and not about the compiler, which is the
+# whole reason it is a constant: a rig that quietly lost a row, or that was
+# rebuilt one column wide in the old multi-edge idiom, moves this number, and
+# nothing the guest reports about itself could say so.
+WANT_CLUSTERS, WANT_PARTS = 21, 156
 
 # rig -> (live outputs, what the total should be in units of one saturated belt,
 #         how much spread between live outputs is allowed)
@@ -382,19 +395,30 @@ def main():
     # world must agree exactly. This is where `pass` is really decided: a
     # classifier that read the belt going past a cluster's north face as an edge
     # would have a fingerprint the world does not match, and would say so here.
-    audits = [tuple(int(g) for g in m.groups())
+    audits = [tuple(0 if g is None else int(g) for g in m.groups())
               for m in (AUDIT.search(l) for l in lines) if m]
     if not audits:
         fail.append("no audit was ever logged, so nothing checked the registry "
                     "against the world")
     else:
-        clusters, nets, drift, unbuilt = audits[-1]
-        print("\nfinal audit: %d clusters, %d networks, drift=%d, unbuilt=%d"
-              % (clusters, nets, drift, unbuilt))
+        clusters, parts, nets, drift, unbuilt, refused = audits[-1]
+        print("\nfinal audit: %d clusters, %d parts, %d networks, drift=%d, "
+              "unbuilt=%d, refused=%d"
+              % (clusters, parts, nets, drift, unbuilt, refused))
         if drift or unbuilt:
             fail.append("the final audit found drift=%d unbuilt=%d over %d "
                         "clusters, on a world nothing has touched since tick 900"
                         % (drift, unbuilt, clusters))
+        # THE GEOMETRY THE SAVE WAS SUPPOSED TO BUILD. Every rig here is laid
+        # out to Factorio 2.1's one-belt-per-part rule, which doubles the part
+        # columns; a rig built the old way still delivers nothing and would fail
+        # on its rate, but a rig that lost a ROW delivers a plausible number on
+        # the outputs it still has. This is the line that sees that.
+        if (clusters, parts) != (WANT_CLUSTERS, WANT_PARTS):
+            fail.append("the save holds %d clusters over %d parts and the rigs "
+                        "build %d over %d -- a rig is not the shape this suite "
+                        "thinks it is"
+                        % (clusters, parts, WANT_CLUSTERS, WANT_PARTS))
         # Every cluster in this save has belts on both sides of it, so every one
         # of them must have compiled to a network. A cluster with no network is
         # a cluster whose edges the classifier did not recognise -- which is
@@ -413,6 +437,24 @@ def main():
             fail.append("%d of %d clusters have no network at all: something "
                         "adjacent to a balancer is not being classified as an "
                         "edge" % (clusters - nets, clusters))
+        if refused:
+            fail.append("the final audit reports %d refused cluster(s): a rig "
+                        "in this suite is asking for more than one belt on a "
+                        "part" % refused)
+
+    # --- nothing here may be REFUSED ------------------------------------------
+    #
+    # Every rig in this save is built to the one-belt-per-part rule, so a
+    # refusal is a statement about the SAVE and not about the guest. It is worth
+    # asserting separately from the audit's `refused=` column because a refusal
+    # can be issued, delivered and then withdrawn between two audits -- and
+    # because it names the cluster, which the column does not.
+    refusals = [m for m in (SEDGE_REFUSED.search(l) for l in lines) if m]
+    if refusals:
+        fail.append("%d single-edge refusal(s) were issued in a save whose rigs "
+                    "are all built to the rule; the first was cluster %s with "
+                    "%s part(s) carrying more than one belt"
+                    % (len(refusals), refusals[0].group(1), refusals[0].group(2)))
 
     times = [(m.group(1), float(m.group(2)))
              for m in (TIMING.search(l) for l in lines) if m]

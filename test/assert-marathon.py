@@ -42,8 +42,8 @@ AUDIT = re.compile(
 # iteration contains. The divisor turns a per-iteration slope into a per-thing
 # one; the text is what the report calls it.
 LEGS = [
-    ("A", 1, "a whole 4-part balancer: 18 entities placed in one tick, run under "
-             "load, all 18 removed in one tick"),
+    ("A", 1, "a whole 4-part balancer: 16 entities placed in one tick, run under "
+             "load, all 16 removed in one tick"),
     ("B", 2, "a belt laid inside the neighbour gate and picked up again -- "
              "re-classified, fingerprint matched, NOTHING rebuilt"),
     ("C", 2, "an input belt removed and put back -- the edge really moves, so a "
@@ -54,11 +54,34 @@ LEGS = [
              "and its undo"),
     ("G", 2, "the same edit as C but on a 4x4 -- sixteen parts, a 32-entity "
              "network -- so C:G is how the compile term scales"),
-    ("F", 1, "a saturated balancer grown by a part, taken apart entirely and "
-             "rebuilt, with every item counted"),
+    ("F", 1, "a saturated balancer grown by an edgeless part, taken apart "
+             "entirely and rebuilt, with every item counted"),
 ]
 
 CALS = ("cal", "calA", "calZ")
+
+# THE WORLD EVERY PROBE IS TAKEN OVER, written down here rather than read off
+# the guest's own audit, for the reason the whole suite exists: an audit is only
+# a constant that can be subtracted if the world it re-classifies is the same
+# world every time. `(clusters, parts, networks)` for the three permanent rigs
+# -- KEEP and CHURN, each a 2->2 over four parts, and BIG, a 4x4 over sixteen --
+# and every leg is written so that its probe fires with the world back in
+# exactly that state.
+#
+# Leg F is the one exception and it is a designed one: its probe fires between
+# the dissolve and the rebuild, so the churn rig is not there. It has its own
+# constant rather than an exemption, because "the world is missing the four
+# parts F took out" is a statement and "F may report anything" is not.
+#
+# THIS IS ALSO THE SUITE'S ANTI-VACUITY LINE, and it is here because it was
+# missing: with leg F's rebuild crippled so that only half the churn rig came
+# back, every existing assertion still passed -- the count never rose, nothing
+# drifted, no cluster read `unbuilt` (a cluster with inputs and no outputs is a
+# legitimate half-built state), and the calibration spread stayed at 0.0%. What
+# actually happened was visible in one place only: `calZ` re-classifying a world
+# with two fewer parts and one fewer network than `cal` did.
+WORLD = (3, 24, 3)
+WORLD_F = (2, 20, 2)
 
 # The ceilings. Each is the measured value with headroom, and each exists so
 # that an allocation regression in the path underneath it fails the suite rather
@@ -238,6 +261,32 @@ def drift(lines):
     if drifted:
         fail("%d audits reported drift or an unbuilt cluster, first %r"
              % (len(drifted), drifted[0]))
+
+    # EVERY LEG LEAVES THE WORLD AS IT FOUND IT, which is what makes one audit
+    # the same price as the next and the calibration subtractable at all. Each
+    # leg's audits must therefore collapse to ONE (clusters, parts, networks)
+    # tuple, and that tuple must be the one the rigs build.
+    shapes = {}
+    for leg, a in audits:
+        if leg == "init":
+            continue
+        shapes.setdefault(leg, set()).add(a[:3])
+    print("the world every probe was taken over:")
+    for leg in sorted(shapes):
+        seen = sorted(shapes[leg])
+        want = WORLD_F if leg == "F" else WORLD
+        print("  %-4s %s%s" % (leg, " and ".join(repr(s) for s in seen),
+                               "" if seen == [want] else "   <-- expected %r" % (want,)))
+        if len(seen) > 1:
+            fail("leg %s audited %d different worlds (%s): a leg that does not "
+                 "leave the world as it found it makes its own audit -- and "
+                 "every calibration after it -- a different measurement"
+                 % (leg, len(seen), ", ".join(repr(s) for s in seen)))
+        if seen[0] != want:
+            fail("leg %s audited a world of %r and the rigs build %r: either the "
+                 "leg is not net-zero or a rig is not the shape this suite "
+                 "thinks it is" % (leg, seen[0], want))
+
     if not any(DONE.search(l) for l in lines):
         fail("the run never reached its end tick; raise BBB_MAR_TICKS")
 

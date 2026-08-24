@@ -1,21 +1,26 @@
 # single-edge.md — the 2.1 port: one belt per part
 
-Status: **PHASES 1, 2 AND 3 SHIPPED 2026-08-24** — the rule and its refusal,
+Status: **PHASES 1, 2, 3 AND 4 SHIPPED 2026-08-24** — the rule and its refusal,
 then the setting, the grandfather pass and the migration, then the interactive
-and demo worlds. Drafted the same day from the 2026-08-23 investigation and
+and demo worlds, then the first tranche of the rebuilt test estate (`m2`, `mar`
+and `upg`). Drafted the same day from the 2026-08-23 investigation and
 boskid's answer to the interface request (forums t=135830). Read CLAUDE.md's
 migration and over-limit sections first; this design reuses both wholesale.
 
-What is implemented and what is not is the three "Implementation status"
+
+What is implemented and what is not is the four "Implementation status"
 sections at the end of this file. The short form: the rule enforces, the refusal
 reaches the player through the sixty-fifth belt's own machinery, the merge is
 spared, a 2.0 multi-edge save opened on 2.1 has its remnants torn down and its
 owning forces told with a ping per balancer, every gesture rig and every demo
-scene is single-edge and headlessly verified, and the `sedge`, `mig21` and
-`iact` suites are green on 2.1.14. What is left is the rebuilt test estate and
-the GIF re-capture, which needs a graphical client; the setting-flip legs and
-the multi-edge regression run need a 2.0 binary and belong on the `release/2.0`
-branch.
+scene is single-edge and headlessly verified, and `m1`, `sedge`, `mig21`, `m2`,
+`mar`, `upg` and `iact` are green on 2.1.14 in both `-gc` arms. **The `mar`
+slopes are measured again**, which is the gate the first three phases shipped
+without and which their "nothing on any hot path moves" claims were waiting on.
+What is left is the other six suites and the GIF re-capture, which needs a
+graphical client; the setting-flip legs and the multi-edge regression run need a
+2.0 binary and belong on the `release/2.0` branch.
+
 
 ## Why, in three sentences
 
@@ -357,7 +362,7 @@ The bulk of the labor, and it splits by which binary can run it:
 
 | work | binary | notes |
 |---|---|---|
-| every suite's rigs rebuilt single-edge | 2.1 | the geometry doubles; every calibrated number in CLAUDE.md's tables gets re-recorded. The suites' assertions themselves mostly survive — what changes is the worlds their `on_init` builds |
+| ~~every suite's rigs rebuilt single-edge~~ **`m2`, `mar` and `upg` DONE 2026-08-24; `m3`, `plat`, `edge`, `mix`, `mig`, `qual` remain** | 2.1 | the geometry doubles; every calibrated number in CLAUDE.md's tables gets re-recorded. The suites' assertions themselves mostly survive — what changes is the worlds their `on_init` builds. Confirmed by the first tranche: **not one assertion in `m2` or `upg` had to be weakened**, every rate and every port count is the number it was, and what moved is the part count (77 → 156) and the recompile timings. See "Implementation status — phase 4" below for the two rigs that needed a redesign rather than a re-lay, and for the two suites that will |
 | new `sedge` legs: second belt refused (build, rotation, robot), handed back negative, merge-spare via the bridge-tile path, feedback-gate once | 2.1 | the `lim`/`brdg` idiom verbatim |
 | migration suite: fixture 2.0 saves loaded under 2.1 | 2.1 + fixtures | **the fixtures exist and are committed**: `test/fixtures-2.0/` carries the m2, edge, m3 and qual saves from the last 2.0.77 suite run (2026-08-22), preserved 2026-08-24 minutes ahead of anything overwriting `test/tmp` — they cannot be regenerated without a 2.0 binary. Covers: the load survives with per-tile pruning (S2 probe 1's numbers graduate into assertions), the rebuild tears down the remnants, hidden items recovered and spilled conserved, GPS summary logged, audit stable after |
 | setting-flip suite (ON→OFF sweep, OFF→ON recompile) | **2.0.77 only** | multi-edge cannot be enabled on 2.1 at all; this and the multi-edge regression run of the old rigs live on the release/2.0 branch and need the old headless binary pinned |
@@ -608,8 +613,11 @@ crosses nothing new -- which is what the byte-identical API table says.
 the per-tile count is one integer per tile inside a walk that already visits
 every side, the capability is one integer compare after the first call, and the
 merge arm makes no host call at all unless a merge would strand a standing
-network. **The `mar` suite cannot say so**, because it cannot run: its rigs are
-multi-edge. That measurement is owed and is part of the test-estate phase.
+network. **The `mar` suite could not say so when this was written**, because it
+could not run: its rigs were multi-edge. **It says so now** — phase 4 re-laid them, and the three legs that measure the event path came back
+byte-identical (32 B for a far belt built, 0 for one mined, 352 B for a belt laid
+inside the neighbour gate and picked up again), with the 4×4 recompile term
+unmoved at 3,736 B. See "Implementation status — phase 3" below.
 
 ### What runs on 2.1.14 and what does not
 
@@ -843,8 +851,9 @@ on 2.1 before the setting is read at all. `settleEdgeMode` is one length test on
 an empty slice per flush; `takeCondemned` is a scan of an empty slice per
 compile; `sedgeAnnounce` and `sedgeCondemned` are nil in every save built under
 the rule it is running under. The setting-changed subscription cannot fire at all
-on 2.1. **The `mar` suite cannot say so**, because it cannot run -- its rigs are
-multi-edge -- and that measurement is owed with the rest of the test estate.
+on 2.1. **The `mar` suite could not say so when this was written** -- its rigs
+were multi-edge -- and it says so now, from phase 4: see "Implementation status
+— phase 4" below for the slope table it produced.
 
 ### What is still not verified, and where it has to be
 
@@ -1015,3 +1024,111 @@ balancer is multi-edge by construction, so on 2.1 every adopted one is converted
 and then refused. That is the composition of two shipped features and needs no
 code, but a checklist that promised a working machine would be wrong, so it
 promises a rebuild checklist.
+
+## Implementation status — phase 4, the test estate's first tranche, 2026-08-24
+
+**Shipped: `m2`, `mar` and `upg`, rebuilt single-edge, and the heap-slope gate
+back.** No guest line changed and no package was rebuilt: the whole pass is three
+test mods' `control.lua`, three `info.json` version tokens, three assertion
+scripts and `test/run.sh`'s default suite list. Measured on Factorio 2.1.14,
+shipped configuration, both `-gc` arms.
+
+`test/run.sh` now defaults to **`m1 sedge mig21 m2 mar upg iact`** — seven of the
+thirteen.
+
+### The re-lay, in one rule
+
+**Every column of parts became two: a west column carrying the row's inputs and
+an east column carrying its outputs.** That is the whole transformation for
+nineteen of the twenty-one `m2` rigs and for three of `mar`'s four permanent
+ones, and it preserves the property each rig exists to prove because **N, M and
+`P = next_pow2(max(N, M))` are properties of the BELTS**, and the belts did not
+move. `m2` went from 77 parts to 156 over the same 21 clusters; not one
+assertion had to be weakened and not one rate, spread or port count moved.
+
+Three things needed more than a re-lay:
+
+- **`m2`'s `fdbk`, the feedback loop.** Its return run used to come in through
+  the cluster's NORTH face, which under the rule is a tile that already carries
+  an input. The loop now runs UNDER the block and returns through the loop row's
+  west part's SOUTH face — the only free face left, because every other tile of
+  the cluster carries its one belt. Its westward leg passes directly beneath the
+  east column, which is safe for the same reason `pass` is: a west-facing belt on
+  a part's south face is neither `dir` nor `back` from that side.
+- **`m2`'s item-conservation rig.** Its edit was "lay a belt on the cluster's one
+  free face", which the rule now refuses — so the check would have measured a
+  refusal instead of a recompile. The block is three rows tall now and the bottom
+  row carries nothing: the belt goes against an EDGELESS part, which is a third
+  input and takes P from 2 to 4. Same figures out the other side, to the item:
+  2,680 before, 2,680 after, 72 drained and 72 put back inside.
+- **`mar`'s leg E**, the six-entity paste. Two parts and four belts made a 2→2
+  under the old idiom and make a 1→1 under the rule, so the leg measures a
+  smaller network and its slope fell (736 → 560 B). The EVENT shape it exists to
+  measure — six entities in one tick and six out in one tick — is unchanged.
+
+**`mar`'s `BIG` rig did not move at all**, and that is the pass's own control: a
+4×4 built the wide way (inputs on the west column, outputs on the east, two
+interior columns carrying nothing) was ALREADY single-edge and never had a tile
+with two belts on it. Its slope came back at **3,736 B, identical to the byte**.
+
+### The slopes, which is the gate this tranche restores
+
+`make GC=leaking test`, one invocation, 680 net-zero operations. Old column is
+2.0.77 multi-edge, new is 2.1.14 single-edge:
+
+| one operation | before | after |
+|---|--:|--:|
+| a belt-connectable mined or rotated far from anything | 0 B | **0 B** |
+| a belt-connectable built far from anything | 32 B | **32 B** |
+| a belt laid inside the two-tile gate and picked up again | 352 B | **352 B** |
+| one teardown-and-rebuild of a 2→2 | 1,180 B | **1,209 B** |
+| one teardown-and-rebuild of a 4×4 | 3,736 B | **3,736 B** |
+| a whole 4-part balancer in and out under load | 1,216 B | **1,280 B** |
+| a six-entity paste and its undo | 736 B | **560 B** |
+| a balancer grown by a part, dissolved and rebuilt | 1,712 B | **2,080 B** |
+| one `bbb-audit` | 1,136 B | **1,136 B** |
+| linear memory over the run | 3.92 MiB | **3.92 MiB** |
+
+Linearity ×1.00–×1.07 on every leg against a ×1.35 bound; the calibration is
+1,136 B three times at **0.0% spread**; conservation over 100 add-part /
+remove-everything cycles of a full network is **9,600 in, 9,600 out, 0 lost over
+200 teardowns**; 681 audits at drift=0. The collected arm ends on **0.46 MiB with
+a 10,192 B live set, 9 collections in 6 paced steps and 0 forward-progress
+deadlines**.
+
+**The three terms the 300-hour projection multiplies are all in the unmoved
+set**, so that projection stands exactly as CLAUDE.md records it. Checked rather
+than assumed.
+
+### The red proofs, and two of them found something
+
+| injected defect | what came out |
+|---|---|
+| **`m2`'s `pass` line turned SOUTH** — one token, and the passing belt becomes an edge on two parts that already carry one each | **six assertions**, where the pre-port geometry would have cost a rate and nothing else: `pass` delivering **0 0, 0.000x** and its own passing chest **0**, `nets != clusters`, the audit's new `refused=1`, and the named refusal `cluster 147 has 2 parts carrying more than one belt`. The whole balancer stops, which is what the rule does to a cluster it cannot build |
+| **`mar`'s leg F rebuilding only half the churn rig** | **NOTHING, on the suite as it stood.** The item count never rose, nothing drifted, no cluster read `unbuilt` — a cluster with inputs and no outputs is a legitimate half-built state, not an unbuilt one — and the calibration spread stayed at 0.0%. The only trace was `calZ` re-classifying a world with two fewer parts and one fewer network than `cal` did, and nothing was looking. `assert-marathon.py` pins the `(clusters, parts, networks)` tuple of every leg's probe now, against constants written in the script; it fails by name: *"leg calZ audited a world of (3, 22, 2) and the rigs build (3, 24, 3)"* |
+| **`bump_build` moving the mod VERSION and not the build stamp** | the saved guest heap is ADOPTED, `fk_migrate` never fires, `rebuildFromWorld` never runs, and `assert-upgrade.py` fails with *"the guest never rebuilt its registry from the world after the upgrade"*. That is **S2 result 6 red-proven in this repo** rather than quoted: a version bump alone does not decline the heap |
+
+### What this tranche did NOT do, and what the next one has to decide
+
+Six suites are still multi-edge: `m3`, `plat`, `edge`, `mix`, `mig` and `qual`.
+Four of them are a re-lay of the same shape as this one. Two are not, and the
+reason is worth writing down before anyone starts:
+
+- **`edge`** has rigs whose GESTURE the rule changes rather than whose geometry
+  it doubles. Its `lim` column is 64 belts over 32 parts and becomes 64 belts
+  over 65 parts; several legs lay a belt on a working balancer's free face, which
+  is now a refusal rather than a recompile, so each has to be re-aimed at an
+  edgeless part exactly as `m2`'s conservation rig was. `bmin`'s port-boundary
+  crossing and `brdg`'s over-limit merge both need re-deriving from scratch.
+- **`mig`** changes OUTCOME and not only geometry: every adopted incumbent
+  balancer is multi-edge by construction, so on 2.1 each converts and is then
+  refused. Its expectations move wholesale — adopted yes, networks no — which is
+  the thing "The BB2/BB3 migration feature on 2.1" above already states and which
+  no re-lay can paper over.
+
+The interactive worlds are NOT on that list: phase 3 rebuilt them the same day,
+and its band B reached the same conclusion `m2`'s conservation rig did from the
+other side — under this rule a working balancer has no free face, so the only
+place a player's belt can change a balancer's port count is an attached EDGELESS
+part. Two independent passes needing the same trick is the strongest signal in
+this file that it is the shape of the rule and not a workaround.

@@ -5,15 +5,34 @@
 -- whether they are right. A test mod that computed the expected balance in Lua
 -- would be a second implementation of the thing under test.
 --
+-- EVERY RIG HERE IS BUILT TO FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART.
+-- Every edge of a cluster is an interface linked belt standing on the cluster's
+-- own tile, so a part carrying an input on its west side and an output on its
+-- east carried TWO belt-connectables on one tile -- which is what 2.1's
+-- collision validator forbids. See agents/single-edge.md and guest/go/sedge.go.
+--
+-- What that costs a rig is GEOMETRY AND NOTHING ELSE. Every column of parts
+-- becomes TWO columns: a west part carrying the input and an east part carrying
+-- the output, so `sat4` is eight parts rather than four and `lio` is two rather
+-- than one. The MACHINE does not change -- same N, same M, same
+-- `P = next_pow2(max(N, M))`, same butterfly, same rate -- which is exactly what
+-- assert-m2.py's port-count block is there to say before it looks at a number.
+--
+-- The layout every uniform rig now uses, per row:
+--
+--   x=-5 source chest   -4 loader   -3..-1 belts   0 WEST PART   1 EAST PART
+--   x=2..4 belts        5 sink loader              6 chest
+--
 -- The rigs, one per y band on a flat scratch surface:
 --
 --   ctrl     a bare express belt, chest to chest. The yardstick: whatever this
 --            delivers in the sample window is what one saturated belt is worth,
 --            so "full throughput" is a comparison against the engine rather
 --            than against a number someone worked out on paper.
---   sat4     4 parts, 4 belts in, 4 belts out, everything saturated
---   sat8     the same at 8, which needs three butterfly stages and two jumper
---            blocks rather than two and one
+--   sat4     4 belts in, 4 belts out over EIGHT parts (a 4x2 block), everything
+--            saturated
+--   sat8     the same at 8 -- sixteen parts -- which needs three butterfly
+--            stages and two jumper blocks rather than two and one
 --   a3to5    3 in, 5 out: N != M, and P=8 with loopbacks on the spare ports
 --   a4to1    4 in, 1 out: the other asymmetry, where spare OUTPUT ports have to
 --            dead-end because there are no spare input ports to loop them into
@@ -38,7 +57,7 @@
 --   n9m9     9 in, 9 out. P=16: the first FOUR-stage butterfly, three jumper
 --            blocks, ever built in a real game
 --   fdbk     a literal feedback loop: a third output belt curls round through
---            the world and comes back into the cluster's north face, so the
+--            the world and comes back into the cluster's SOUTH face, so the
 --            machine sees 3 in / 3 out and one of each is itself
 --   tslow    4 in, 4 out, but one OUTPUT ROW is a normal-tier belt. A
 --            rate-LIMITED port rather than a fully blocked one
@@ -53,14 +72,18 @@
 --            both arms of the belt_to_ground_type branch
 --   spio     2->2 fed and drained by vanilla express SPLITTERS whose faces
 --            span both parts, so each half is its own edge
---   lio      1->1 through LOADERS directly against the part -- and the first
---            1->1 (P=1, five-entity) flow rig in any suite
+--   lio      1->1 through LOADERS directly against the parts -- and the first
+--            1->1 (P=1, five-entity) flow rig in any suite. TWO parts under the
+--            rule, which is the smallest balancer that can exist at all
 --   lsio     2->2 through LANE SPLITTERS against the parts. Base ships the
 --            `lane-splitter` TYPE and not one buildable entity of it, so
 --            data.lua clones the mod's own hidden one to have anything to place
 --   pass     the NEGATIVE: a belt line running PAST the cluster's north face,
 --            perpendicular to it, which must not be classified as an edge and
---            must not have anything stolen from it
+--            must not have anything stolen from it. Under the one-belt rule it
+--            has teeth it did not have before: both top parts already carry
+--            their one belt, so a classifier that read the passing line as an
+--            edge would take them to TWO and the whole cluster would be REFUSED
 --
 -- Plus two measurements that are not rigs:
 --   * a profiler around a forced full recompile of sat4 and sat8
@@ -212,8 +235,12 @@ end
 --------------------------------------------------------------------------------
 -- rigs
 --
---   x=-5 source chest   -4 loader   -3..-1 belts   0 PART   1..3 belts
---   x=4 sink loader     5 chest
+--   x=-5 source chest   -4 loader   -3..-1 belts   0 WEST PART   1 EAST PART
+--   x=2..4 belts        5 sink loader              6 chest
+--
+-- TWO COLUMNS OF PARTS, not one. Under Factorio 2.1's rule a part may carry at
+-- most one belt, so the input and the output of a row cannot stand against the
+-- same tile. `rows` below is the number of ROWS; the part count is twice it.
 --------------------------------------------------------------------------------
 
 -- Every rig gets a y band of `span` rows, defaulting to PITCH, and the bands
@@ -227,20 +254,20 @@ end
 -- assert-m2.py reads them.
 local RIGS = {
   { name = "ctrl" },
-  { name = "sat4",   parts = 4, ins = 4, outs = 4 },
-  { name = "sat8",   parts = 8, ins = 8, outs = 8 },
-  { name = "a3to5",  parts = 5, ins = 3, outs = 5 },
-  { name = "a4to1",  parts = 4, ins = 4, outs = 1 },
-  { name = "starve", parts = 4, ins = 4, outs = 4, fed = { [1] = true } },
-  { name = "block",  parts = 4, ins = 4, outs = 4, blocked = { [4] = true } },
-  { name = "regrow", parts = 4, ins = 3, outs = 4, grow_to = 4 },
-  { name = "xsurf",  parts = 4, ins = 4, outs = 4, other_surface = true },
+  { name = "sat4",   rows = 4, ins = 4, outs = 4 },
+  { name = "sat8",   rows = 8, ins = 8, outs = 8 },
+  { name = "a3to5",  rows = 5, ins = 3, outs = 5 },
+  { name = "a4to1",  rows = 4, ins = 4, outs = 1 },
+  { name = "starve", rows = 4, ins = 4, outs = 4, fed = { [1] = true } },
+  { name = "block",  rows = 4, ins = 4, outs = 4, blocked = { [4] = true } },
+  { name = "regrow", rows = 4, ins = 3, outs = 4, grow_to = 4 },
+  { name = "xsurf",  rows = 4, ins = 4, outs = 4, other_surface = true },
 
   -- the shape band
-  { name = "sq3",    parts = 3, ins = 3, outs = 3 },
-  { name = "a2to3",  parts = 3, ins = 2, outs = 3 },
-  { name = "a5to3",  parts = 5, ins = 5, outs = 3 },
-  { name = "n9m9",   parts = 9, ins = 9, outs = 9, span = 16 },
+  { name = "sq3",    rows = 3, ins = 3, outs = 3 },
+  { name = "a2to3",  rows = 3, ins = 2, outs = 3 },
+  { name = "a5to3",  rows = 5, ins = 5, outs = 3 },
+  { name = "n9m9",   rows = 9, ins = 9, outs = 9, span = 16 },
   { name = "tslow",  outs = 4, build = "tslow" },
   { name = "fdbk",   outs = 2, build = "fdbk" },
   { name = "lane",   outs = 2, build = "lane" },
@@ -259,8 +286,8 @@ local function build_input_row(s, y, fed)
 end
 
 local function build_output_row(s, y, blocked)
-  for x = 1, 3 do put(s, BELT, x, y, { direction = E }) end
-  if not blocked then return sink(s, 4, y) end
+  for x = 2, 4 do put(s, BELT, x, y, { direction = E }) end
+  if not blocked then return sink(s, 5, y) end
   return nil
 end
 
@@ -282,27 +309,26 @@ local BUILD = {}
 -- express so the belt is the only limiter.
 function BUILD.tslow(s, base)
   local out = {}
-  for i = 0, 3 do put(s, PART, 0, base + i) end
+  for i = 0, 3 do put(s, PART, 0, base + i); put(s, PART, 1, base + i) end
   for i = 0, 3 do
     source(s, -5, base + i)
     belts(s, BELT, E, "x", -3, -1, base + i)
   end
   for i = 0, 2 do
-    belts(s, BELT, E, "x", 1, 3, base + i)
-    out[#out + 1] = sink(s, 4, base + i)
+    belts(s, BELT, E, "x", 2, 4, base + i)
+    out[#out + 1] = sink(s, 5, base + i)
   end
-  belts(s, SLOWBELT, E, "x", 1, 3, base + 3)
-  out[4] = sink(s, 4, base + 3)
+  belts(s, SLOWBELT, E, "x", 2, 4, base + 3)
+  out[4] = sink(s, 5, base + 3)
   return out
 end
 
 -- fdbk: a literal feedback loop.
 --
---     row base      <- <- <- <- <- <- +      the return run
---     row base+1    v                 ^
---     row base+2  ->[P]->  sink       ^      real in/out
---     row base+3  ->[P]->  sink       ^      real in/out
---     row base+4    [P]-> -> -> -> -> +      the loop's own output
+--     row base+2  ->[W][E]->  sink               real in/out
+--     row base+3  ->[W][E]->  sink               real in/out
+--     row base+4    [W][E]-> -> -> -> +          the loop's own output
+--     row base+5     ^ <- <- <- <- <- +          the return run
 --
 -- The machine sees 3 in and 3 out, and one of each is itself. In steady state
 -- the loop carries L, every output carries (2+L)/3, and the loop's output IS
@@ -311,24 +337,35 @@ end
 -- is that the loop is a physical belt in the world, so it fills, and a network
 -- that jams instead of settling shows up as a rate collapse.
 --
--- No loop tile is orthogonally adjacent to a part except the two that are meant
--- to be edges: (1, base+4), the loop's output, and (0, base+1), its input into
--- the north face. The return run is kept two rows clear of the parts for that
--- reason and not for tidiness.
+-- THE RETURN COMES IN FROM THE SOUTH, and under the one-belt rule that is
+-- forced rather than chosen: the loop's own west part is the only tile in the
+-- cluster with a free face, because every other one already carries its one
+-- belt. It runs UNDER the block rather than over it for the same reason -- the
+-- north faces of row base+2 belong to nothing and must keep belonging to
+-- nothing, and a return run laid there would be one tile from two parts.
+--
+-- No tile of the return run is orthogonally adjacent to a part except
+-- (0, base+5), which is the intended input: the westward run along row base+5
+-- passes under the east column, but a WEST-facing belt on a part's south face
+-- is neither `dir` nor `back` from that side and falls through classifySide,
+-- exactly as `pass` does from the north.
 function BUILD.fdbk(s, base)
   local out = {}
-  for i = 2, 4 do put(s, PART, 0, base + i) end
+  for i = 2, 4 do put(s, PART, 0, base + i); put(s, PART, 1, base + i) end
   for i = 2, 3 do
     source(s, -5, base + i)
     belts(s, BELT, E, "x", -3, -1, base + i)
-    belts(s, BELT, E, "x", 1, 3, base + i)
-    out[#out + 1] = sink(s, 4, base + i)
+    belts(s, BELT, E, "x", 2, 4, base + i)
+    out[#out + 1] = sink(s, 5, base + i)
   end
-  -- east along the bottom, north up column 6, west along the top, south in.
-  belts(s, BELT, E, "x", 1, 5, base + 4)
-  belts(s, BELT, N, "y", base + 4, base + 1, 6)
-  belts(s, BELT, W, "x", 6, 1, base)
-  belts(s, BELT, S, "y", base, base + 1, 0)
+  -- east off the bottom row, south at column 6, west underneath the block, and
+  -- north into the bottom-left part's south face. Every turn is a CURVE (fed
+  -- from one side with nothing behind it), so the loop carries both lanes at
+  -- full rate and cannot be the thing that limits it.
+  belts(s, BELT, E, "x", 2, 5, base + 4)
+  put(s, BELT, 6, base + 4, { direction = S })
+  belts(s, BELT, W, "x", 6, 1, base + 5)
+  put(s, BELT, 0, base + 5, { direction = N })
   return out
 end
 
@@ -352,14 +389,19 @@ end
 --     row pb-3   [chest]        [chest]
 --     row pb-2   [loader S]     [loader S]
 --     row pb-1     v              v
---     row pb       v          ->  ->->[P]-> sink      x=-2 side-loads here
---     row pb+1   ->->->->->->->->[P]-> sink           x=-4 side-loads here
+--     row pb       v          ->  ->->[W][E]-> sink   x=-2 side-loads here
+--     row pb+1   ->->->->->->->->[W][E]-> sink        x=-4 side-loads here
 --                x=-5  -4  -3  -2
+--
+-- The side-loading happens on the PLAYER'S OWN BELTS, upstream of the parts, so
+-- the one-belt rule does not touch it: what doubles is the part columns, and
+-- the feed that reaches the west part is the same half-belt on one lane it
+-- always was.
 function BUILD.lane(s, base)
   local pb = base + 3
   storage.lane_base = pb
   local out = {}
-  for i = 0, 1 do put(s, PART, 0, pb + i) end
+  for i = 0, 1 do put(s, PART, 0, pb + i); put(s, PART, 1, pb + i) end
 
   -- row pb: (-3,pb) is fed by nothing and exists only to keep (-2,pb) straight.
   source(s, -2, pb - 3, S)
@@ -373,8 +415,8 @@ function BUILD.lane(s, base)
   belts(s, BELT, E, "x", -5, -1, pb + 1)
 
   for i = 0, 1 do
-    belts(s, BELT, E, "x", 1, 3, pb + i)
-    out[#out + 1] = sink(s, 4, pb + i)
+    belts(s, BELT, E, "x", 2, 4, pb + i)
+    out[#out + 1] = sink(s, 5, pb + i)
   end
   return out
 end
@@ -388,17 +430,17 @@ end
 -- a pair created out of order could span the part and link the wrong two ends.
 function BUILD.uio(s, base)
   local out = {}
-  for i = 0, 1 do put(s, PART, 0, base + i) end
+  for i = 0, 1 do put(s, PART, 0, base + i); put(s, PART, 1, base + i) end
   for i = 0, 1 do
     local y = base + i
     source(s, -7, y)
     belts(s, BELT, E, "x", -5, -4, y)
     put(s, UNDER, -3, y, { direction = E, type = "input" })
     put(s, UNDER, -1, y, { direction = E, type = "output" })
-    put(s, UNDER, 1, y, { direction = E, type = "input" })
-    put(s, UNDER, 3, y, { direction = E, type = "output" })
-    belts(s, BELT, E, "x", 4, 4, y)
-    out[#out + 1] = sink(s, 5, y)
+    put(s, UNDER, 2, y, { direction = E, type = "input" })
+    put(s, UNDER, 4, y, { direction = E, type = "output" })
+    belts(s, BELT, E, "x", 5, 5, y)
+    out[#out + 1] = sink(s, 6, y)
   end
   return out
 end
@@ -410,27 +452,32 @@ end
 -- classifySide until this rig.
 function BUILD.spio(s, base)
   local out = {}
-  for i = 0, 1 do put(s, PART, 0, base + i) end
+  for i = 0, 1 do put(s, PART, 0, base + i); put(s, PART, 1, base + i) end
   for i = 0, 1 do
     local y = base + i
     source(s, -7, y)
     belts(s, BELT, E, "x", -5, -2, y)
-    belts(s, BELT, E, "x", 2, 3, y)
-    out[#out + 1] = sink(s, 4, y)
+    belts(s, BELT, E, "x", 3, 4, y)
+    out[#out + 1] = sink(s, 5, y)
   end
-  -- An east-facing splitter's position is the boundary between its two rows.
+  -- An east-facing splitter's position is the boundary between its two rows,
+  -- and its x is the centre of the single COLUMN it stands in: -1 on the way in,
+  -- against the west parts, and 2 on the way out, against the east ones.
   put_at(s, SPLIT, -0.5, base + 1.0, { direction = E })
-  put_at(s, SPLIT, 1.5, base + 1.0, { direction = E })
+  put_at(s, SPLIT, 2.5, base + 1.0, { direction = E })
   return out
 end
 
--- lio: 1->1 through LOADERS directly against the part, which is the loader arm
+-- lio: 1->1 through LOADERS directly against the parts, which is the loader arm
 -- of classifySide and also the smallest network this compiler can build --
--- P=1, no stages at all, five entities.
+-- P=1, no stages at all, five entities. TWO parts under the one-belt rule, and
+-- two is the fewest a balancer can have: one to carry the input and one to
+-- carry the output.
 function BUILD.lio(s, base)
   put(s, PART, 0, base)
-  source(s, -2, base) -- chest at -2, loader at -1, against the part
-  return { sink(s, 1, base) } -- loader at 1, against the part; chest at 2
+  put(s, PART, 1, base)
+  source(s, -2, base)         -- chest at -2, loader at -1, against the west part
+  return { sink(s, 2, base) } -- loader at 2, against the east part; chest at 3
 end
 
 -- lsio: 2->2 fed and drained through LANE SPLITTERS placed directly against the
@@ -445,15 +492,15 @@ end
 -- one, because base ships the TYPE and no buildable instance of it.
 function BUILD.lsio(s, base)
   local out = {}
-  for i = 0, 1 do put(s, PART, 0, base + i) end
+  for i = 0, 1 do put(s, PART, 0, base + i); put(s, PART, 1, base + i) end
   for i = 0, 1 do
     local y = base + i
     source(s, -7, y)
     belts(s, BELT, E, "x", -5, -2, y)
     put(s, LSPLIT, -1, y, { direction = E })
-    put(s, LSPLIT, 1, y, { direction = E })
-    belts(s, BELT, E, "x", 2, 3, y)
-    out[#out + 1] = sink(s, 4, y)
+    put(s, LSPLIT, 2, y, { direction = E })
+    belts(s, BELT, E, "x", 3, 4, y)
+    out[#out + 1] = sink(s, 5, y)
   end
   return out
 end
@@ -469,19 +516,26 @@ end
 -- The passing line has its own source and its own chest: the balancer must
 -- deliver its own two belts exactly, and must not take a single item from a
 -- line that merely goes past.
+--
+-- UNDER THE ONE-BELT RULE THIS RIG HAS TEETH IT DID NOT HAVE BEFORE. The line
+-- now runs over the north faces of BOTH top parts, and both of them already
+-- carry their one belt -- the west part its input, the east part its output --
+-- so a classifier that read the passing line as an edge would not merely
+-- deliver an odd rate: it would take two tiles to two belts each and the whole
+-- cluster would be REFUSED, delivering nothing at all.
 function BUILD.pass(s, base)
   local out = {}
-  for i = 1, 2 do put(s, PART, 0, base + i) end
+  for i = 1, 2 do put(s, PART, 0, base + i); put(s, PART, 1, base + i) end
   for i = 1, 2 do
     local y = base + i
     source(s, -5, y)
     belts(s, BELT, E, "x", -3, -1, y)
-    belts(s, BELT, E, "x", 1, 3, y)
-    out[#out + 1] = sink(s, 4, y)
+    belts(s, BELT, E, "x", 2, 4, y)
+    out[#out + 1] = sink(s, 5, y)
   end
   source(s, -5, base)
-  belts(s, BELT, E, "x", -3, 3, base)
-  out[3] = sink(s, 4, base)
+  belts(s, BELT, E, "x", -3, 4, base)
+  out[3] = sink(s, 5, base)
   return out
 end
 
@@ -494,17 +548,23 @@ local function build_rig(cfg, base)
     return r
   end
 
-  if not cfg.parts then -- the control: one uninterrupted belt
+  if not cfg.rows then -- the control: one uninterrupted belt
     source(s, -5, base)
-    for x = -3, 3 do put(s, BELT, x, base, { direction = E }) end
-    r.out[1] = sink(s, 4, base)
+    for x = -3, 4 do put(s, BELT, x, base, { direction = E }) end
+    r.out[1] = sink(s, 5, base)
     return r
   end
 
   -- Parts FIRST, belts after, so that the belt events are what drive the
   -- compiles. Building the belts first would work too and would compile once;
   -- this way the belt-adjacency trigger is on the critical path of every rig.
-  for i = 0, cfg.parts - 1 do put(s, PART, 0, base + i) end
+  --
+  -- TWO PER ROW: the west one carries the row's input and the east one its
+  -- output, because one tile may carry only one belt.
+  for i = 0, cfg.rows - 1 do
+    put(s, PART, 0, base + i)
+    put(s, PART, 1, base + i)
+  end
 
   for i = 1, cfg.ins do
     build_input_row(s, base + i - 1, cfg.fed == nil or cfg.fed[i] == true)
@@ -524,16 +584,27 @@ end
 -- countable, force a recompile, count again. Nothing else can have moved, so
 -- the difference is exactly what the teardown handed back -- and the guest logs
 -- what it thinks it handed back, so the two numbers have to agree.
+--
+-- THE FIFTH AND SIXTH PARTS ARE WHAT MAKES THE EDIT POSSIBLE AT ALL. The check
+-- needs a real edge change on a network that is full, and under the one-belt
+-- rule every part of a working 2->2 already carries its one belt -- so the belt
+-- that used to be laid on a free face would now be REFUSED, and the check would
+-- measure a refusal instead of a recompile. So the block is three rows tall and
+-- the bottom row carries nothing: the belt goes against the EDGELESS west part,
+-- which is a third input and takes P from 2 to 4.
 --------------------------------------------------------------------------------
 
 local function build_loss_rig(base)
   storage.loss_base = base
   local s = game.surfaces["bbb-m2-a"]
-  for i = 0, 1 do put(s, PART, 0, base + i) end
+  for i = 0, 2 do
+    put(s, PART, 0, base + i)
+    put(s, PART, 1, base + i)
+  end
   for i = 0, 1 do
     source(s, -5, base + i)
     for x = -3, -1 do put(s, BELT, x, base + i, { direction = E }) end
-    for x = 1, 3 do put(s, BELT, x, base + i, { direction = E }) end
+    for x = 2, 4 do put(s, BELT, x, base + i, { direction = E }) end
   end
 end
 
@@ -613,7 +684,7 @@ local function sample_lanes(tick)
   local s = game.surfaces["bbb-m2-a"]
   for row = 0, 1 do
     local l1, l2 = 0, 0
-    for x = 1, 3 do
+    for x = 2, 4 do
       local b = s.find_entities_filtered {
         position = P(x, pb + row), type = "transport-belt" }[1]
       if b and b.valid then
@@ -701,10 +772,11 @@ end
 local function loss_check()
   local before, gb, lb = count_visible_items()
   local s = game.surfaces["bbb-m2-a"]
-  -- A belt arriving on the cluster's NORTH side is a genuine new edge, so the
-  -- fingerprint moves and the network is torn down and rebuilt. (The west sides
-  -- are already occupied; this is the one free face.)
-  put(s, BELT, 0, storage.loss_base - 1, { direction = defines.direction.south })
+  -- A belt against the EDGELESS west part of the bottom row is a genuine new
+  -- edge -- a third input -- so the fingerprint moves and the network is torn
+  -- down and rebuilt. Every other tile of this cluster already carries its one
+  -- belt, and a belt against any of them would be refused rather than compiled.
+  put(s, BELT, -1, storage.loss_base + 2, { direction = E })
   -- Same tick, so that "before" and "after" are one atomic sample apart and the
   -- difference can only be the teardown. The audit marker is what makes that
   -- possible now that the recompile is deferred; it costs a full

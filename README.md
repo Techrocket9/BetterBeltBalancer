@@ -87,7 +87,7 @@ make test     # headless verification in a real Factorio
 `make test` creates saves with the rigs already built, benchmarks them in a real Factorio, and asserts against the guest's own log lines. Two build switches:
 
 - `QUIET=1` compiles out every `[BBB]` log line below the error level. The default build is verbose because the suites assert on those lines.
-- `GC=leaking` builds the guest on FkLua's leaking arena instead of its paced collector. The shipped build is collected: over 3,400 teardown-and-rebuild cycles the leaking arm's heap doubled its way to 32 MiB with a 782 ms tick at the last doubling, where the collected arm ended at 0.5 MiB with a worst tick of 71 ms and no measurable steady-state difference. Both arms build, and the suites that run today are green in the shipped one.
+- `GC=leaking` builds the guest on FkLua's leaking arena instead of its paced collector. The shipped build is collected: over 3,400 teardown-and-rebuild cycles the leaking arm's heap doubled its way to 32 MiB with a 782 ms tick at the last doubling, where the collected arm ended at 0.5 MiB with a worst tick of 71 ms and no measurable steady-state difference. Both arms build, and the suites that run today are green in both.
 
 - The icon, logo, and sprites were created by [Edjie Arts](https://edjie.carrd.co). A balancer reads as one continuous machine across any shape, with trim only along its real outline.
 

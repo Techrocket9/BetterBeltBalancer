@@ -57,10 +57,10 @@
 #         the geometry intended, or any refusal at all -- the gestures create
 #         the refusals and the staging must not
 #
-# NINE OF THE THIRTEEN ARE STILL BUILT IN THE MULTI-EDGE IDIOM AND DO NOT RUN ON
+# SIX OF THE THIRTEEN ARE STILL BUILT IN THE MULTI-EDGE IDIOM AND DO NOT RUN ON
 # FACTORIO 2.1: every rig in them puts two belts on one part, which is what 2.1
-# forbids. `m1`, `sedge`, `mig21` and `iact` are what the default runs -- see the
-# SUITES line below for why those four and not the rest.
+# forbids. `m1`, `sedge`, `mig21`, `m2`, `mar`, `upg` and `iact` are what the
+# default runs -- see the SUITES line below for why those seven and not the rest.
 #
 #   make test          # builds the mod first
 #   test/run.sh        # against whatever dist/ already holds
@@ -91,8 +91,8 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 [ -x "$FACTORIO" ] || { echo "factorio not found at: $FACTORIO (set FACTORIO_BIN)" >&2; exit 1; }
 [ -d "$MOD_DIR" ]  || { echo "no built mod at $MOD_DIR; run \`make mod\` first" >&2; exit 1; }
 
-# THE DEFAULT IS WHAT RUNS ON FACTORIO 2.1 TODAY, which is four of the thirteen.
-# The other nine are still reachable by name and are still the estate this mod
+# THE DEFAULT IS WHAT RUNS ON FACTORIO 2.1 TODAY, which is seven of the thirteen.
+# The other six are still reachable by name and are still the estate this mod
 # is verified by; what stops them is measured rather than assumed, in two
 # layers:
 #
@@ -107,17 +107,18 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 #   2.1 binary can ever be shown one. Its two fixtures are the m2 and edge saves
 #   from the last 2.0.77 suite run.
 #
-#   and then the RULE. Every rig in the other nine puts two belts on one part,
-#   which is what 2.1 forbids -- so bumping their manifests would only move the
-#   failure from the loader to the compiler. Rebuilding those rigs single-edge
-#   is a later phase of the port; agents/single-edge.md's test-estate table is
-#   the list.
+#   and then the RULE. Every rig in the remaining six puts two belts on one
+#   part, which is what 2.1 forbids -- so bumping their manifests would only
+#   move the failure from the loader to the compiler. `m2`, `mar` and `upg` have
+#   had their rigs REBUILT single-edge (every column of parts is two columns
+#   now); `m3`, `plat`, `edge`, `mix`, `mig` and `qual` are the tranche that has
+#   not, and agents/single-edge.md's test-estate table is the list.
 #
 #   `iact` is not about the mod's behaviour at all; it is about the world the
 #   INTERACTIVE checklist stages. It runs here because a rig that stopped
 #   landing, or one this mod refuses, costs a human a session to discover and
 #   costs this a single `--create` to catch.
-SUITES="${*:-m1 sedge mig21 iact}"
+SUITES="${*:-m1 sedge mig21 m2 mar upg iact}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.

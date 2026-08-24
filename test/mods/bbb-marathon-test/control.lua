@@ -14,14 +14,23 @@
 -- marker, and lets the guest print the number. test/assert-marathon.py fits the
 -- slope.
 --
+-- EVERY RIG HERE IS BUILT TO FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART,
+-- so a row's input and its output stand against two different tiles and every
+-- column of parts is two columns wide (agents/single-edge.md). What that
+-- changes here is the SIZE of each leg's primitive and therefore the byte
+-- figures the assertion script reports -- not what any leg is measuring. The
+-- `BIG` rig did not move at all: a 4x4 block whose west column carries the
+-- inputs and whose east column carries the outputs was already single-edge, and
+-- always had been.
+--
 -- THE LEGS, and each one is chosen so that ONE term dominates it:
 --
 --   cal   ten audits with the world untouched. The audit is not free -- it
 --         re-classifies every cluster in the save -- and every other leg pays
 --         exactly one of them per iteration, so this is the constant that gets
 --         subtracted from all of them.
---   A     the headline cycle: place a 4-part balancer and its 14 belts in one
---         tick, run it under load, remove all 18 entities, audit. Net zero.
+--   A     the headline cycle: place a 4-part balancer and its 12 belts in one
+--         tick, run it under load, remove all 16 entities, audit. Net zero.
 --   B     lay a belt two tiles from a finished balancer and pick it up again.
 --         The cluster is queued and re-classified; the fingerprint says nothing
 --         moved and NOTHING is rebuilt. This is the common case -- a player
@@ -37,7 +46,9 @@
 --         multiplayer server this is the term with the largest multiplier of
 --         all -- every belt anyone lays anywhere on the map pays it.
 --   E     six entities placed in one tick and removed in one tick: a small
---         blueprint paste and its undo.
+--         blueprint paste and its undo. Two parts and four belts under the
+--         rule, where it used to be two parts and four belts with both parts
+--         double-edged -- the same six events, a 1->1 network instead of a 2->2.
 --   G     the same edit as C but on a 4x4 -- sixteen parts, four in, four out,
 --         a 32-entity network. C and G together are what says the compile
 --         term SCALES with the network rather than with the number of edits,
@@ -228,28 +239,28 @@ local function leg_cal(phase, i, name)
   if phase == 0 then probe(name, i) end
 end
 
--- A: a whole balancer, built and removed. 4 parts, 8 input belts, 6 output
--- belts, all in one tick each way -- so one deferred flush builds it and one
--- takes it down, which is the batching the guest is designed around.
-local A_PARTS, A_IN, A_OUT = 4, 2, 2
+-- A: a whole balancer, built and removed. A 2->2 over FOUR parts -- two rows,
+-- a west part carrying each row's input and an east part carrying its output --
+-- plus 8 input belts and 4 output belts, all in one tick each way, so one
+-- deferred flush builds it and one takes it down. That is the batching the
+-- guest is designed around.
+local A_ROWS = 2
 
 local function leg_A(phase, i)
   local s = surf()
   if phase == 0 then
-    for r = 0, A_PARTS - 1 do put_soft(s, PART, 0, CYCLE + r) end
-    for r = 0, A_IN - 1 do
+    for r = 0, A_ROWS - 1 do
+      put_soft(s, PART, 0, CYCLE + r)
+      put_soft(s, PART, 1, CYCLE + r)
       for x = -4, -1 do put_soft(s, BELT, x, CYCLE + r, { direction = E }) end
-    end
-    for r = 0, A_OUT - 1 do
-      for x = 1, 3 do put_soft(s, BELT, x, CYCLE + r, { direction = E }) end
+      for x = 2, 3 do put_soft(s, BELT, x, CYCLE + r, { direction = E }) end
     end
   elseif phase == 9 then
-    for r = 0, A_PARTS - 1 do kill(s, 0, CYCLE + r, { name = PART }) end
-    for r = 0, A_IN - 1 do
+    for r = 0, A_ROWS - 1 do
+      kill(s, 0, CYCLE + r, { name = PART })
+      kill(s, 1, CYCLE + r, { name = PART })
       for x = -4, -1 do kill(s, x, CYCLE + r, { type = "transport-belt" }) end
-    end
-    for r = 0, A_OUT - 1 do
-      for x = 1, 3 do kill(s, x, CYCLE + r, { type = "transport-belt" }) end
+      for x = 2, 3 do kill(s, x, CYCLE + r, { type = "transport-belt" }) end
     end
   elseif phase == 11 then
     probe("A", i)
@@ -300,22 +311,24 @@ end
 
 -- E: six entities in one tick and six out in one tick -- the event shape of a
 -- small blueprint paste and its undo.
+--
+-- Two parts and four belts, which under the one-belt rule is a 1->1: the west
+-- part carries the input belt at x=11 and the east part the output belt at
+-- x=14, and the two outer belts (10 and 15) extend the runs without touching
+-- anything. Six entities, one tick each way -- the same event shape it has
+-- always been. It sits three tiles clear of leg D's tile so that neither leg
+-- can ever be inside the other's gate, whatever order they run in.
+local E_PARTS = { 12, 13 }
+local E_BELTS = { 10, 11, 14, 15 }
+
 local function leg_E(phase, i)
   local s = surf()
   if phase == 0 then
-    put_soft(s, PART, 14, FAR)
-    put_soft(s, PART, 14, FAR + 1)
-    put_soft(s, BELT, 13, FAR, { direction = E })
-    put_soft(s, BELT, 13, FAR + 1, { direction = E })
-    put_soft(s, BELT, 15, FAR, { direction = E })
-    put_soft(s, BELT, 15, FAR + 1, { direction = E })
+    for _, x in ipairs(E_PARTS) do put_soft(s, PART, x, FAR) end
+    for _, x in ipairs(E_BELTS) do put_soft(s, BELT, x, FAR, { direction = E }) end
   elseif phase == 4 then
-    kill(s, 14, FAR, { name = PART })
-    kill(s, 14, FAR + 1, { name = PART })
-    kill(s, 13, FAR, { type = "transport-belt" })
-    kill(s, 13, FAR + 1, { type = "transport-belt" })
-    kill(s, 15, FAR, { type = "transport-belt" })
-    kill(s, 15, FAR + 1, { type = "transport-belt" })
+    for _, x in ipairs(E_PARTS) do kill(s, x, FAR, { name = PART }) end
+    for _, x in ipairs(E_BELTS) do kill(s, x, FAR, { type = "transport-belt" }) end
   elseif phase == 7 then
     probe("E", i)
   end
@@ -336,23 +349,34 @@ local function leg_G(phase, i)
   end
 end
 
--- F: the conservation leg. A saturated 2-part balancer on a FINITE stock is
--- grown by a third part (merge -> teardown and rebuild while the network is
--- full), then taken apart entirely, then rebuilt. Every item in the band is
--- counted while the network is DOWN -- which is the only moment the count is
--- complete, because a teardown spills the hidden network onto the visible
--- ground.
+-- F: the conservation leg. A saturated 2->2 over FOUR parts on a FINITE stock
+-- is grown by a fifth part (teardown and rebuild while the network is full),
+-- then taken apart entirely, then rebuilt. Every item in the band is counted
+-- while the network is DOWN -- which is the only moment the count is complete,
+-- because a teardown spills the hidden network onto the visible ground.
+--
+-- The fifth part carries no belt and cannot: under the one-belt rule every part
+-- of the standing 2->2 already has one, so the only part that can be ADDED is
+-- an edgeless one below the block. The edit is still a real recompile -- the
+-- cluster's tile set moves, so the fingerprint does.
 local function leg_F(phase, i)
   local s = surf()
   if phase == 0 then
     put_soft(s, PART, 0, CHURN + 2)
   elseif phase == 6 then
-    for r = 0, 2 do kill(s, 0, CHURN + r, { name = PART }) end
+    kill(s, 0, CHURN + 2, { name = PART })
+    for r = 0, 1 do
+      kill(s, 0, CHURN + r, { name = PART })
+      kill(s, 1, CHURN + r, { name = PART })
+    end
   elseif phase == 7 then
     probe("F", i)
   elseif phase == 8 then
     log(string.format("[BBB-MAR] churn i=%d total=%d", i, count_band(s, CHURN_BAND)))
-    for r = 0, 1 do put_soft(s, PART, 0, CHURN + r) end
+    for r = 0, 1 do
+      put_soft(s, PART, 0, CHURN + r)
+      put_soft(s, PART, 1, CHURN + r)
+    end
   end
 end
 
@@ -394,23 +418,29 @@ end
 script.on_init(function()
   local s = make_surface()
 
-  -- KEEP: never structurally touched. Legs B and C happen at its edge.
-  for r = 0, 1 do put(s, PART, 0, KEEP + r) end
+  -- KEEP: never structurally touched. Legs B and C happen at its edge. A 2->2
+  -- over four parts -- west column in, east column out.
   for r = 0, 1 do
+    put(s, PART, 0, KEEP + r)
+    put(s, PART, 1, KEEP + r)
     source_inf(s, KEEP + r)
     for x = -4, -1 do put(s, BELT, x, KEEP + r, { direction = E }) end
-    for x = 1, 3 do put(s, BELT, x, KEEP + r, { direction = E }) end
+    for x = 2, 3 do put(s, BELT, x, KEEP + r, { direction = E }) end
     sink(s, KEEP + r)
   end
 
   -- CYCLE: only the ends are permanent. Leg A places and removes everything
   -- between them.
-  for r = 0, A_IN - 1 do source_inf(s, CYCLE + r) end
-  for r = 0, A_OUT - 1 do sink(s, CYCLE + r) end
+  for r = 0, A_ROWS - 1 do source_inf(s, CYCLE + r); sink(s, CYCLE + r) end
 
   -- BIG: the M2 `sat4` shape. Four inputs on the west face of a 4x4 block of
   -- parts, four outputs on the east -- a 32-entity network, against KEEP's
   -- eleven.
+  --
+  -- THIS RIG DID NOT MOVE FOR THE ONE-BELT RULE and never had to: only the west
+  -- column carries an input and only the east column an output, the two
+  -- interior columns carry nothing at all, and no tile has ever had two. A 4x4
+  -- built the wide way was single-edge before there was a rule.
   for r = 0, 3 do
     for c = 0, 3 do put(s, PART, c, BIG + r) end
   end
@@ -428,12 +458,14 @@ script.on_init(function()
     s.create_entity { name = "steel-chest", position = P(6, BIG + r), force = "player" }
   end
 
-  -- CHURN: a finite stock, so leg F's count is a conservation statement.
-  for r = 0, 1 do put(s, PART, 0, CHURN + r) end
+  -- CHURN: a finite stock, so leg F's count is a conservation statement. A 2->2
+  -- over four parts, like KEEP.
   for r = 0, 1 do
+    put(s, PART, 0, CHURN + r)
+    put(s, PART, 1, CHURN + r)
     source_finite(s, CHURN + r, CHURN_STOCK)
     for x = -4, -1 do put(s, BELT, x, CHURN + r, { direction = E }) end
-    for x = 1, 3 do put(s, BELT, x, CHURN + r, { direction = E }) end
+    for x = 2, 3 do put(s, BELT, x, CHURN + r, { direction = E }) end
     sink(s, CHURN + r)
   end
 
