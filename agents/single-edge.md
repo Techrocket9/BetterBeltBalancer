@@ -816,9 +816,9 @@ the same session:
 
 | | before | after | |
 |---|--:|--:|---|
-| `dist/better-belt-balancer_0.2.0.zip` | 422,640 B | **439,888 B** | +4.08% |
-| `fk_module.lua` | 2,837,744 B | **3,019,175 B** | +6.39% |
-| `dist/bbb.wasm` | 1,189,328 B | 1,240,253 B | |
+| `dist/better-belt-balancer_0.2.0.zip` | 422,640 B | **439,832 B** | +4.07% |
+| `fk_module.lua` | 2,837,744 B | **3,018,845 B** | +6.38% |
+| `dist/bbb.wasm` | 1,189,328 B | 1,240,187 B | |
 | members bound into the mod | 50 | **53** | of 4,259 |
 | events subscribed | 22 | **23** | |
 | prototypes added | — | **0** | |
