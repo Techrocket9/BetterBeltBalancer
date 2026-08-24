@@ -6,9 +6,9 @@ Items are numbered in the order they were found; FkLua's own notes refer to thes
 
 | status | items |
 | --- | --- |
-| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23 |
+| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24 |
 | Closed, no change needed | 17 (a budget rather than a defect) |
-| Open | 18, 24 |
+| Open | 18 |
 
 ## 1. `fklua mod` could not carry the data stage
 
@@ -104,7 +104,7 @@ Factorio raises `script.on_configuration_changed` when a neighbouring mod is add
 
 ## 24. A mod pinning a non-default API version is stranded when the census format moves
 
-`fklua gen-bindings --check` compares the census it would take against the one committed beside the API description, and the census is written only from the checkout that owns the description, which is correct. But the only thing that regenerates a census is `gen-bindings` running at that checkout's default pin, so the censuses of every other committed description go stale the moment the generator gains a row, and a mod pinning one of those versions then fails `--check` with no command anywhere that can repair it: regenerating from the mod project is refused by design, and regenerating from the FkLua checkout would rewrite its own committed bindings to the wrong version. Hit here moving this mod's pin to a committed 2.1.14 description right after the index-assign feature added a census row; the pin move had to be reverted. The ask is an affordance that refreshes a committed description's census without touching the default pin's bindings, for example a census-only mode taking a version, or the census writer refreshing every description the checkout owns whenever it runs.
+`fklua gen-bindings --check` compares the census it would take against the one committed beside the API description, and the census is written only from the checkout that owns the description, which is correct. But the only thing that regenerates a census is `gen-bindings` running at that checkout's default pin, so the censuses of every other committed description go stale the moment the generator gains a row, and a mod pinning one of those versions then fails `--check` with no command anywhere that can repair it: regenerating from the mod project is refused by design, and regenerating from the FkLua checkout would rewrite its own committed bindings to the wrong version. Hit here moving this mod's pin to a committed 2.1.14 description right after the index-assign feature added a census row; the pin move had to be reverted. Fixed upstream: `gen-bindings` in the FkLua checkout now refreshes the census of every description the checkout owns whatever pin was invoked, so staleness is structurally impossible, and a mod project's `--check` no longer fails on the compiler's own census at all, since nothing a mod builds reads it; a stale one prints a notice naming the checkout and the command. This mod's pin move to 2.1.14 went through on exactly that sequence with nothing hand-edited.
 
 ## Smaller notes
 
