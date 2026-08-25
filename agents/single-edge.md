@@ -233,8 +233,13 @@ mechanism:
   adopt any network with two interfaces on one tile.
 - **Setting flipped OFF on 2.0, same build**: heap survives, no rebuild;
   `on_runtime_mod_setting_changed` fires (a Map setting, no restart), the
-  mode byte mismatches, and `sweepStackedInterfaces` walks the registry's
-  networks looking for the same thing.
+  mode byte mismatches, and the guest walks the registry's networks looking for
+  the same thing. **MEASURED 2026-08-24 AND THIS ARM IS A VETO, NOT A SWEEP** --
+  the scan finding anything is the same condition that makes the grandfather
+  pass write the setting straight back on, so a flip-off with multi-edge
+  balancers standing is refused and the world is untouched. See "Implementation
+  status - phase 9"; the paragraphs below describe the 2.1 arm, which is the one
+  that really tears anything down.
 
 **What happens to an offending network: mandatory teardown, then refusal.**
 This is deliberately NOT the over-limit standing-state idiom. The two triggers
@@ -252,9 +257,13 @@ arrive in different worlds, measured 2026-08-24 (see the S2 results below):
   were holding when the engine removed them — at most 8 items per interface
   (two lanes of four positions), engine-caused, ours to document rather than
   to fix.
-- **On a 2.0 setting flip the stacked interfaces genuinely still stand**, and
+- ~~**On a 2.0 setting flip the stacked interfaces genuinely still stand**, and
   the mandatory teardown is what takes them down before they can reach a 2.1
-  load through a later Factorio upgrade.
+  load through a later Factorio upgrade.~~ **WRONG, and measured wrong on
+  2026-08-24.** They do still stand, and the teardown never happens: the flip is
+  vetoed before it can, because the same clusters that would be swept are the
+  clusters the grandfather pass exists to keep. Nothing on 2.0 is at risk from
+  them either -- that engine is the one that can stack. Phase 9.
 
 The ordering carve-out serves both: when the STANDING network is itself
 invalid (stacked or engine-pruned interfaces), tear down first, then refuse
@@ -390,7 +399,7 @@ The bulk of the labor, and it splits by which binary can run it:
 | ~~every suite's rigs rebuilt single-edge~~ **ALL THIRTEEN DONE 2026-08-24** | 2.1 | the geometry doubles; every calibrated number in CLAUDE.md's tables gets re-recorded. The suites' assertions themselves mostly survive — what changes is the worlds their `on_init` builds. Confirmed by all four tranches: **not one assertion in `m2`, `upg`, `plat`, `qual`, `m3` or `edge` had to be weakened**, every rate and every port count is the number it was, and `plat`'s whole stacking leg came back identical to the item. See "Implementation status — phase 4" for the two rigs that needed a redesign rather than a re-lay, "phase 5" for the one assertion that had to be retired rather than re-recorded, "phase 6" for the four `edge` rigs whose GESTURE the rule changed, and **"phase 7" for `mig`, the one suite whose rigs were deliberately NOT re-laid**: they are somebody else's world, so re-laying them would have been re-laying the thing under test |
 | new `sedge` legs: second belt refused (build, rotation, robot), handed back negative, merge-spare via the bridge-tile path, feedback-gate once | 2.1 | the `lim`/`brdg` idiom verbatim |
 | migration suite: fixture 2.0 saves loaded under 2.1 | 2.1 + fixtures | **the fixtures exist and are committed**: `test/fixtures-2.0/` carries the m2, edge, m3 and qual saves from the last 2.0.77 suite run (2026-08-22), preserved 2026-08-24 minutes ahead of anything overwriting `test/tmp` — they cannot be regenerated without a 2.0 binary. Covers: the load survives with per-tile pruning (S2 probe 1's numbers graduate into assertions), the rebuild tears down the remnants, hidden items recovered and spilled conserved, GPS summary logged, audit stable after |
-| setting-flip suite (ON→OFF sweep, OFF→ON recompile) | **2.0.77 only** | multi-edge cannot be enabled on 2.1 at all; this and the multi-edge regression run of the old rigs live on the release/2.0 branch and need the old headless binary pinned |
+| ~~setting-flip suite (ON→OFF sweep, OFF→ON recompile)~~ **DONE 2026-08-24, as the `flip` suite** | **2.0.77 only** | multi-edge cannot be enabled on 2.1 at all. What it found is that the ON→OFF arm is a VETO rather than a sweep, and that the shipped veto spilled every standing multi-edge network on the way. Phase 9 |
 | bench re-baselines | 2.1 | the per-balancer marginal cost changes (2× parts per rig); RESULTS.md numbers are a new session against new controls anyway |
 
 ## Spike S2 — the two gating probes are DONE (2026-08-24), four remain
@@ -494,7 +503,7 @@ hard gap:
 |---|---|---|
 | migrated invalid balancers | refuse + spill + GPS summary (not partial service, not standing) | honesty over arbitrary degradation — and "standing" is not on offer anyway: the engine prunes the interfaces at load, measured, so an unhandled multi-edge network arrives already crippled (sat4 at 14 items of 1305, survivor-lottery ports) |
 | the setting's kind | runtime-global, default false, script-grandfathered | a script cannot write a startup setting, and the grandfather pass is the mod flipping it; also: no restart to flip, and the data-stage flag no longer depends on it |
-| the grandfather latch | first load of the updating version only; never auto-flipped down afterwards | a silent downgrade under a player relying on multi-edge is a trap; flipping off is a one-click Map setting once they have rebuilt |
+| the grandfather latch | first load of the updating version only; never auto-flipped down afterwards | a silent downgrade under a player relying on multi-edge is a trap; flipping off is a one-click Map setting once they have rebuilt -- **and the flip-off is VETOED while multi-edge balancers are still standing, measured 2026-08-24 (phase 9)** |
 | where the setting lives on 2.1 | not defined at all | no dead toggles; falls back to `hidden` if the settings stage cannot see `mods` |
 | refusal UX for the second belt | reuse limit.go verbatim, new locale key | it is the same gesture with a different bound |
 | 2.0 branch vs FkLua packaging flag | branch now, file the gap | unblocks immediately; the gap is real but small |
@@ -1911,3 +1920,319 @@ pass that adds a list to the conversion path and a map probe to the rebuild had
 to clear, and it clears it structurally: every new slice is nil in a save that
 never had an incumbent, `refusalDelivered` is a length test on a nil map, and
 nothing was added to the event path, the neighbour gate or the flush proper.
+
+## Implementation status — phase 9, the release/2.0 arm, 2026-08-24
+
+**Shipped: the estate verified on Factorio 2.0.77, the two suites that INVERT
+there given their 2.0 arms, a fourteenth suite that drives the setting, one
+defect a live session found and its fix, and pings on the message that names
+balancers to rebuild.** This is the work every earlier phase deferred as
+"needs a 2.0 binary", done on one: the installed engine went back to 2.0.77, so
+the arm that had only ever been reasoned about could be run.
+
+**WHAT WAS RUN, exactly.** The committed change is harness and suites and one
+guest fix, all of it engine-agnostic. The manifest was flipped to the release
+arm as a LOCAL, UNCOMMITTED state for the duration -- `fklua.toml`'s
+`factorio_version = "2.0"`, `base >= 2.0.0` and `[fklua] api = "2.0.77"`, plus
+`fklua.lock` and the regenerated `guest/go/fkapi/fkapi.go`, taken verbatim off
+`release/2.0` -- because the ABI marshals event payloads BY NAME and a
+2.1-pinned guest on a 2.0 engine writes a field 2.1 added as mandatory and reads
+it as nil. `make check` is green against that pin.
+
+### The harness learned which engine it is on
+
+**A mod whose `info.json` names the other series is refused at the LOADER**, so
+before the port every suite failed on a token rather than on anything real.
+`test/run.sh` reads `Major.Minor` off `$FACTORIO --version` and STAMPS every
+staged copy: `factorio_version` unconditionally, and `base >= X.Y.Z` clamped DOWN
+when it names a series newer than this engine and otherwise left exactly alone.
+Clamping only downward is what makes the change a no-op on 2.1 -- every staged
+manifest already says 2.1 and none requires a base past it -- which matters
+because that arm could not be re-run here. The precedent is `mig_standin`, which
+has rewritten a stand-in's `info.json` since the migration suite existed; this is
+the same rewrite over one more field and over every staged mod.
+
+**THE PACKAGED MOD IS GATED AND NOT STAMPED, and the asymmetry is deliberate.**
+A test mod is engine-agnostic Lua and a stamp is free; the mod under test is a
+guest compiled against a pinned API, so stamping it would let exactly the
+by-name mismatch above load and run silently. `run.sh` compares the built mod's
+`factorio_version` against the binary's series and fails with what to do about
+it. That is a deviation from the brief, which said to stamp the package too, and
+the reason is that a stamp there would mask the one thing this whole exercise is
+careful about.
+
+### The eleven that do not care which engine they are on
+
+`m1 sedge m2 m3 upg mar edge mix plat qual iact`, **green on 2.0.77 in BOTH `-gc`
+arms, each arm one invocation**, with every number the one the 2.1 record
+carries. That is the expected result and it is worth having as a measurement:
+single-edge behaviour is identical when the capability marker is present and the
+setting is false, because `multiEdgeAllowed` is the AND of the two.
+
+**The sharpest of them is `mar`, and its slopes came back IDENTICAL TO THE
+BYTE** -- 1,280 / 352 / 1,209 / 32 / 560 / 3,736 / 2,080 B per primitive, 1,136 B
+of calibration at 0.0% spread, linearity x1.00-x1.07, and **3.92 MiB** of linear
+memory. Those are guest-allocation constants and they should be engine-
+independent; nothing anywhere else says so. The collected arm ends on **0.46 MiB
+with a 10,192 B live set, 9 collections in 6 paced steps and 0 forward-progress
+deadlines**, also the 2.1 figures.
+
+**No suite's numbers moved engine-to-engine**, which is the finding: `m2`'s
+control belt, `m3`'s twelve rig rates and its 15,856-of-16,000 stress recovery,
+`edge`'s spill quantities and placement probe, `mix`'s 48-name conservation and
+its 64-item overflow, `plat`'s stacking profiles, `qual`'s six skin lines and
+`iact`'s twelve-shape multiset are all the digits they are on 2.1.
+
+### `mig21` and `mig` INVERT, which is what this exercise exists for
+
+Both suites take `--engine` now, from the series `run.sh` read off the binary.
+There is no default: the conversion is identical on both engines and its OUTCOME
+is opposite, so a script that guessed would assert the wrong half and be green
+for the wrong reason on one of them.
+
+**`mig21` on 2.0: the fixtures load INTACT and every balancer is kept.** The
+2.1 arm's first assertion is that no tile carries two belt-connectables; here the
+first assertion is that many do, because the engine that built these saves does
+not prune them and that is what multi-edge IS.
+
+| | m2 | edge |
+|---|---|---|
+| what the ENGINE did before any script | **145 interfaces over 77 part tiles, 67 of them stacked** (2.1: 77 over 77, 0 stacked) | **191 over 95, 93 stacked** (2.1: 95 over 95, 0) |
+| the rebuild | 4 surfaces, 77 parts, 21 clusters, **21 adopted, 0 rebuilt** (2.1: 0 and 21) | 3 surfaces, 95 parts, 15 clusters, **15 adopted, 0 rebuilt** |
+| condemnations, teardowns, spills, refusals | **0, 0, 0, 0** (2.1: 21 teardowns, 21 spills, 21 refused) | **0, 0, 0, 0** |
+| items on the ground, every sample | **0** (2.1: 1,006 and 5,645) | **0** |
+| the grandfather | **one** write, `settings.global bbb-multi-edge-parts = true`, **21 clusters re-queued** | one write, **15 re-queued** |
+| who was told | force 1 about 21, **21 pings**, first `[gps=0,13,bbb-m2-a]` | force 1 about 14 and force 4 about 1, **14 and 1 pings** |
+| the setting-changed handler's own line | **none** -- the anchor is written BEFORE the setting, so the re-entrant event finds agreement | none |
+| still running | chests **0 -> 10,850** over 300 ticks | chests **211,200 -> 208,012**, the sources draining |
+| the audit, twice and identical | `clusters=21 parts=77 nets=21 drift=0 unbuilt=0 refused=0` | `clusters=15 parts=95 nets=15 drift=0 unbuilt=0 refused=0` |
+
+**"Still running" is its own assertion and it had to be.** Nothing moved is
+satisfied by a save that is frozen, so the observer counts items in ordinary
+containers -- and which WAY that total goes is a fact about each fixture's rigs
+rather than about this mod: `m2` feeds from infinity chests into ordinary ones so
+it rises, and every source in the `edge` world is a FINITE steel chest, which is
+what makes that suite's conserved totals possible at all, so it falls. Written
+down per fixture rather than softened to "the number moved", because "the number
+moved" is satisfied by a leak.
+
+**`mig` on 2.0: a converted Belt Balancer save is grandfathered and RUNS.** The
+conversion is byte-identical -- `legacy.go` knows nothing about any of this --
+and so is the first flush after it: the setting defaults to false, so all seven
+incumbent-idiom clusters are refused with the same seven alert lines and the same
+shape multiset `[2, 2, 2, 2, 2, 3, 4]`. What happens next is the whole
+difference. Measured over all seven legs and both name probes:
+
+| | 2.1 | **2.0** |
+|---|---|---|
+| the final audit | `clusters=9 parts=31 nets=2 drift=0 unbuilt=0 refused=7` | **`nets=9 ... refused=0`** |
+| `sok2` / `sok4` | 2.000x / 3.997x | **2.000x / 3.997x** |
+| `m4x4` / `m3to5` | **0 0 0 0** and **0 0 0 0 0** | **3.997x at 0.15% and 2.996x at 0.26%** |
+| what the player is told | the migration checklist, once per force | **the grandfather warning**, once per force: 6 and 1 |
+| the pings | 6 and 1 | **6 and 1**, first `[gps=0,13,bbb-mig-a]` and `[gps=0,87,bbb-mig-a]` |
+| teardowns, spills | 0, 0 | **0, 0** |
+
+**3.997x and 2.996x are the pre-port records to the digit** -- what the
+multi-edge geometry produced on 2.0.77 before any of this existed. The suite
+asserts them as the 2.0 arm's `WORKING` band, with `STOPPED` empty.
+
+**Two constants had to be split rather than switched**, and both splits are the
+kind a single engine cannot see. `EXPECT_REFUSED` is the number of refusal LINES
+and is 7 on both engines; `EXPECT_AUDIT_REFUSED` is the audit's own column and is
+7 on 2.1 and **0** on 2.0, because the grandfather compiles all seven a flush
+later and the successful compile clears the feedback memo. And the `added` leg's
+rebuild-from-world reports **2 adopted / 7 rebuilt on BOTH** -- it runs in the
+dispatch after the conversion's flush, before the grandfather's re-queue has been
+flushed -- so those are their own constants and not the audit's.
+
+**The per-force log line is SHARED by both messages** (`tellAffected` writes it
+whichever sentence it is delivering), so what it pins -- once per FORCE, the
+LocalisedString crossing, the `LuaForce` resolving from a force INDEX, and the
+ping count -- is asserted on both engines. Only the summary SENTENCE is
+2.1-only, and on 2.0 speaking it would be false of every balancer a flush later.
+
+### The fourteenth suite, and the wall it had to get past first
+
+`flip` drives `bbb-multi-edge-parts` through all four of its transitions, on a
+world of four rigs: a control belt, a single-edge `sok` that is legal in both
+modes, `me1` laid the incumbent's way and refused at the false default, and `me2`
+the same shape but DEAD-ENDED and built after the setting went on -- which is
+the field report's own rig, full and static, so what a flip does to a standing
+network's items is a number rather than a rounding error.
+
+**`settings.global` IS NOT SCRIPT-WRITABLE BY A TEST MOD, and the design's S2
+note recorded the wrong half of that.** Measured on 2.0.77: `settings.global[k] =
+v` from any mod but the one that DEFINED the setting raises *"Settings can only
+be changed by the owning player or the mod that made the setting"*, and a
+runtime-global has no owning player. So the mod that defines it is the only
+script in the game that may write it, and every transition of the flip handler
+was reachable by a human and by nothing else.
+
+So the mod opens the door itself: `remote.call('better-belt-balancer',
+'set-multi-edge-parts', true|false)`, beside the audit and registered in the same
+`init`. It reaches the same `writeMultiEdgeSetting` a player's keypress does, so
+the suite drives the real path rather than a stand-in, and it is **inert on 2.1
+by construction** -- the write is gated on the capability marker, which is absent
+there, so the method exists and writes nothing. This is the `bbb-audit` argument
+for the third time: a path only a human can reach is a path whose bugs a player
+finds, and the alternative is a second implementation of the thing under test.
+
+**The suite is SKIPPED on 2.1 with a line that says so**, in `run.sh` and again
+in the assertion script's own first check -- a run whose setting reads `absent`
+fails rather than passing, which is this repository's own "a check that skips is
+a check that passed" applied to a whole suite.
+
+### THE FLIP-OFF IS A VETO, AND THE SWEEP IS UNREACHABLE
+
+**The design called a flip OFF with multi-edge balancers standing a SWEEP: tear
+them down, spill, tell the player. It has never been able to do that, and the
+reason is one line of arithmetic nobody had done.**
+
+Reaching `edgemode.ActSweep` at all means the capability marker is present -- the
+anchor said Multi, which requires it, and prototypes are fixed for a session --
+and the very next thing `settleEdgeMode` asks is `GrandfatherNeeded(marker,
+setting, n)`, which on that path is `true && Off && n > 0`. **So the condition
+that makes a sweep find something is the condition that makes the grandfather
+pass write the setting straight back on.** The flip is refused, every time, and
+the player gets the grandfather warning. A flip-off with nothing multi-edge
+standing finds `n == 0`, says nothing, and sticks -- which is the only way the
+setting ever goes off, and it is the right one.
+
+That is what a live 2.0.77 session reported, and it is endorsed as the intended
+behaviour. The design text that called it a sweep is corrected in place above and
+in `edgemode.go`'s `ActSweep` comment, which now says what the constant means
+(go and LOOK) rather than what the caller used to do with it.
+
+### The defect: a vetoed flip put the world on the floor
+
+**The same session reported that the newly built multi-edge balancer spilled its
+contents at the moment of the veto.** Reproduced headlessly before a line was
+changed, and the mechanism is the ordering:
+
+> `sweepStackedInterfaces` condemned every multi-edge cluster, inverted its
+> fingerprint and re-queued it. The flush then took the condemnation, tore the
+> network down into an `owned` pool, and refused -- the setting is still off at
+> that instant -- so `closePool` spilled everything no successor claimed. Only
+> THEN did `settleEdgeMode` reach the grandfather, write the setting back on and
+> re-queue, and the networks came back EMPTY.
+
+The fix is that the scan touches nothing: `scanStackedMultiEdge` counts and
+announces, and the grandfather's own re-queue (which every grandfather owes, and
+which phase 8 added for the conversion case) is what puts the clusters back on
+the queue -- where each one SKIPS on the fingerprint it never lost. **Which
+leaves `condemnStanding` with one producer, `rebuildFromWorld`** -- the 2.1
+migration, where the machine really cannot exist and the engine has already
+pruned it, and which is the only case in which a refusal may demolish anything.
+
+Measured on the `flip` suite, same rigs, same schedule, the only difference being
+the scan:
+
+| across the vetoed flip-off | the sweep as it shipped | **the scan** |
+|---|--:|--:|
+| items on the ground | **0 -> 88 -> 64** | **0 -> 0 -> 0** |
+| items standing inside the networks | **120 -> 24 -> 76** | **120 -> 120 -> 120** |
+| the compiler's entities (visible / hidden) | **12/21 -> 4/7 -> 12/21** | **12/21 unmoved** |
+| networks torn down over the run | **4** | **2**, and both are the strip's deliberate removals |
+| `me1` over a window spanning the flip | 1.992x one belt | **2.000x** |
+| one-belt-per-part refusals over the run | **4** | **2** |
+
+**RED-PROVEN**: the destructive sweep put back, rebuilt, re-run. **Six
+assertions fire**, and the one with the name on it reads *"THE VETO PUT ITEMS ON
+THE GROUND: 0 -> 88 -> 64 -> 64. A vetoed flip is a no-op on the world."* The
+first version of the assertion script gated the world checks behind `if not
+fails` and that red proof printed three failures with the ground total never once
+compared -- so they are gated on their own inputs now, which is the same
+"skip is a pass" trap one level down.
+
+**On the reported asymmetry** (the twenty grandfathered fixture balancers did not
+spill, the new one did): in this repro BOTH spill, `me1` 24 items and `me2` 72.
+The likely explanation is inference rather than measurement -- a balancer already
+emptied by an earlier destructive flip cycle has nothing left to lose the second
+time -- and it is recorded as a hypothesis.
+
+### The pings, and the counts that were checked rather than assumed
+
+**The veto and the load-time grandfather share one message, and it now carries a
+`[gps=x,y,surface]` per balancer** -- the flash the 2.1 migration summary has had
+since phase 2. That reverses the design's own reasoning, which said the 2.0
+message should carry none "because the player is not sent on a tour of balancers
+that are running"; the sentence has always ended in *rebuild them one belt per
+part*, and naming N machines without saying where is the scavenger hunt the pings
+exist to end. Requested from the same session.
+
+**The cap is the migration summary's own discipline and the log is where it is
+stated.** The list stops at what one readable chat line holds and the count in
+the sentence stays exact; the guest's `told force` line carries the ping count,
+a `(list truncated)` note when the cap bit, and the FIRST ping verbatim -- which
+is what makes "the pings name real cluster tiles" a measurement rather than an
+inference from a count, since `force.print` goes to the chat and no script can
+read it back. Asserted in all three suites that produce the message. **The chat
+line itself does not say it was truncated**, which is what the shipped migration
+summary also does; a localisable way to say it inside a raw-string parameter
+would need a different message shape, and it is recorded rather than done.
+
+### The two things the field report asked to be checked
+
+**The load-time grandfather fires**, confirmed both ways: the user saw the
+message, and `mig21`'s 2.0 arm now asserts exactly one grandfather write, one
+re-queue of every cluster and one message per owning force at load. Not a second
+defect.
+
+**The "20 balancers" count does not come from the committed fixtures.** Measured:
+the m2 fixture is **21 of 21** multi-edge and the edge fixture **15 of 15**, and
+the m2 figure is confirmed from the fixture's own committed create log -- its 21
+compiled shapes include a 1->1 over one part and seven 2->2 over two, every one
+of which puts an input on one face of a part and an output on another. The
+`pass` rig is one of those 2->2s and is multi-edge like the rest, so the
+hypothesis that it accounts for a 20 does not hold. The derivation itself is
+exact and is a count of clusters that HAVE a standing network and whose
+classification puts two belts on some tile, so a 20 means two of that session's
+clusters were not in that state at that moment. Not reproducible from anything
+committed, and not an off-by-one in the guest.
+
+### What is still interactive-only
+
+Unchanged and unchanged for the same reason: nothing headless can resolve a
+`LuaPlayer`. The flying text, its colour and position, the sound, a piece
+arriving in an inventory, the cursor's fast-replace preview, and whether a
+`[gps=]` ping is CLICKABLE and lands where it says. The setting's own GUI gesture
+joins them -- a human opening Map settings and moving the toggle -- and what the
+`flip` suite pins is everything on this side of that: the write, the handler, the
+scan, the veto, the requeue, the message, the ping count and the world.
+
+### What it costs
+
+Package built 2026-08-24 against the 2.0 pin, shipped configuration, measured
+either side of the guest change in one session with a forced wasm rebuild on
+both:
+
+| | before | after | |
+|---|--:|--:|---|
+| `dist/better-belt-balancer_0.2.0.zip` | 444,662 B | **446,005 B** | +0.30% |
+| `fk_module.lua` | 3,055,590 B | **3,066,937 B** | +0.37% |
+| `dist/bbb.wasm` | 1,252,441 B | 1,256,958 B | |
+| members bound into the mod | 53 | **53** | of 4,259 -- none added |
+| events subscribed | 23 | **23** | |
+| remote methods | 1 | **2** | `set-multi-edge-parts`, inert on 2.1 |
+| prototypes, settings, defines | — | **0** | none added |
+
+**Nothing on any hot path moves, and the `mar` suite says so rather than the
+comment saying so.** The seven slopes came back **identical to the byte** --
+1,280 / 352 / 1,209 / 32 / 560 / 3,736 / 2,080 B per primitive, 1,136 B of
+calibration at 0.0% spread and 3.92 MiB of linear memory -- which is what a pass
+that touches the flip handler and the ping builder has to clear, and it clears it
+structurally: the scan runs only on a keypress, the ping buffer is a package-level
+fixed array written by `copy`, and the remote method cannot be dispatched by
+anything but a `remote.call`.
+
+### Gates
+
+`make check` green against the 2.0 pin, with bindings and lock unmoved. **All
+fourteen suites green in BOTH `-gc` arms on Factorio 2.0.77**, each arm one
+invocation. The `mar` slopes byte-identical to phase 4's record. The 2.1 arm was
+not re-run here -- this machine has one binary -- so every change committed is
+engine-agnostic by construction: the stamping is a no-op where the manifests
+already name the running series, the two assertion scripts branch on `--engine`
+with the 2.1 expectations untouched, `flip` skips there, and the guest change is
+on a path 2.1 cannot enter (the setting is not defined, so the flip handler never
+fires and `writeMultiEdgeSetting` returns false before it writes).

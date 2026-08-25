@@ -34,26 +34,38 @@
 #         load makes (swapped in one edit, removed a session later, arriving
 #         through build events and then a plain reload, an incumbent INSTALLED
 #         after this mod, a stranger left alone, and a stranger UNINSTALLED).
-#         On 2.1 the CONVERSION is unchanged and the OUTCOME is not: Belt
-#         Balancer's own idiom is two belts on every part, so an incumbent
-#         balancer converts and is then refused, and only the `sok` band -- laid
-#         two columns wide, which one of their users could genuinely have --
-#         comes out of it running
-#   mig21 A FACTORIO 2.0 MULTI-EDGE SAVE, OPENED ON 2.1. The only suite with no
-#         `--create` phase: its worlds were built by a 2.0.77 binary that is gone
-#         and cannot be rebuilt at any price, so the saves are committed under
-#         test/fixtures-2.0/ and each one IS phase one. The engine gets there
-#         first -- it silently deletes all but one belt-connectable per tile at
-#         load -- and what is asserted is what the mod then does with the wreck:
-#         the remnants torn down, everything they held recovered and spilled,
-#         every balancer refused, and each force told once with a ping per
-#         balancer. Plus the negative this engine exists to pin: the grandfather
-#         write must never be attempted where the settings key does not exist
+#         The CONVERSION is the same on both engines and the OUTCOME is not:
+#         Belt Balancer's own idiom is two belts on every part, so on 2.1 an
+#         incumbent balancer converts and is then refused and only the `sok`
+#         band -- laid two columns wide, which one of their users could
+#         genuinely have -- comes out of it running, while on 2.0 the
+#         grandfather pass keeps the lot and every rig delivers
+#   mig21 A FACTORIO 2.0 MULTI-EDGE SAVE, OPENED. The only suite with no
+#         `--create` phase: its worlds were built by a 2.0.77 binary and a 2.1
+#         one cannot rebuild them at any price, so the saves are committed under
+#         test/fixtures-2.0/ and each one IS phase one. WHICH ENGINE OPENS IT IS
+#         THE WHOLE QUESTION and the two answers are opposites. On 2.1 the engine
+#         gets there first -- it silently deletes all but one belt-connectable
+#         per tile at load -- and what is asserted is what the mod does with the
+#         wreck: the remnants torn down, everything they held recovered and
+#         spilled, every balancer refused, each force told once with a ping per
+#         balancer, and the grandfather write never attempted where the settings
+#         key does not exist. On 2.0 nothing is pruned, every cluster is ADOPTED
+#         whole, nothing comes down and nothing spills, and the mod writes its
+#         own setting ON to keep the save working and says so
 #   sedge FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART. Four single-edge
 #         shapes with their port counts asserted before their rates, and the
 #         three ways an edit can ask a part for a second belt -- built, rotated
 #         and merged -- each refused in front of its teardown with the standing
 #         network left running. agents/single-edge.md is the design.
+#   flip  `bbb-multi-edge-parts`, DRIVEN -- and the one suite that cannot run on
+#         Factorio 2.1, where the setting is not defined at all. Four
+#         transitions: refused at the false default, ON so the refused clusters
+#         compile and a multi-edge balancer can be built, OFF with those
+#         balancers standing and full -- which the mod VETOES, writing the
+#         setting straight back on without touching the world -- and OFF again
+#         once nothing is left to veto, which sticks. On 2.1 it prints a SKIP
+#         rather than passing
 #   iact  THE INTERACTIVE CHECKLIST'S OWN WORLD. test/interactive/ stages the
 #         five player-gesture rigs and the five mod-portal demo scenes, all of
 #         them single-edge; nothing headless can make the gestures, but every
@@ -62,10 +74,26 @@
 #         the geometry intended, or any refusal at all -- the gestures create
 #         the refusals and the staging must not
 #
-# ALL THIRTEEN RUN ON FACTORIO 2.1 AND ALL THIRTEEN ARE IN THE DEFAULT. The
-# estate was rebuilt for the one-belt-per-part rule in four tranches and `mig`
-# was the last of them, because it is the only suite whose ANSWER the rule
-# changed rather than whose geometry -- see the SUITES line below.
+# THIRTEEN OF THE FOURTEEN RUN ON EITHER ENGINE, and three of them ANSWER
+# DIFFERENTLY on each. The estate was rebuilt for the one-belt-per-part rule in
+# four tranches and `mig` was the last of them, because it is the only suite
+# whose ANSWER the rule changed rather than whose geometry -- see the SUITES line
+# below.
+#
+# WHICH FACTORIO IS RUNNING IS AN INPUT TO THREE SUITES, not an accident of the
+# machine. This mod ships on two engine arms out of one tree, and:
+#
+#   `mig21` INVERTS. On 2.1 the engine prunes a 2.0 save's stacked interfaces at
+#   load and every balancer is refused, torn down and spilled; on 2.0 nothing is
+#   pruned, every one of them is ADOPTED whole, and the mod writes its own
+#   setting on to keep the save working.
+#   `mig` INVERTS for the same reason: an incumbent's balancers convert and are
+#   refused on 2.1, and are grandfathered and RUN on 2.0.
+#   `flip` exists on 2.0 only, and says so out loud on 2.1 rather than passing.
+#
+# The two assertion scripts take `--engine` from the series read off the binary
+# below; there is no default, because a script that guessed would assert the
+# wrong half and be green for the wrong reason on one of them.
 #
 #   make test          # builds the mod first
 #   test/run.sh        # against whatever dist/ already holds
@@ -95,6 +123,92 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 
 [ -x "$FACTORIO" ] || { echo "factorio not found at: $FACTORIO (set FACTORIO_BIN)" >&2; exit 1; }
 [ -d "$MOD_DIR" ]  || { echo "no built mod at $MOD_DIR; run \`make mod\` first" >&2; exit 1; }
+
+# --- which Factorio is running, and what that does to a staged mod -----------
+#
+# THIS MOD SHIPS ON TWO ENGINE ARMS AND THE TEST ESTATE IS ONE TREE. Trunk
+# targets 2.1 and `release/2.0` carries the same suites against a 2.0 binary
+# (agents/single-edge.md, "Packaging: one tree, two releases"), so every test
+# mod, observer and stand-in here has to load on whichever Factorio is on the
+# machine -- and a mod whose info.json names the other series is REFUSED AT THE
+# LOADER, before an entity is placed: `Incompatible Factorio version (current:
+# 2.1, required: 2.0)`. That is a whole suite failing on a token.
+#
+# So the series is read off the binary and STAMPED into every staged copy. Two
+# fields carry it and both have to move together:
+#
+#   factorio_version   set to the running series, always. A staged mod is a
+#                      throwaway copy in $TMP; nothing here edits test/mods.
+#   base >= X.Y.Z      CLAMPED DOWN when it names a series newer than this
+#                      engine, and otherwise left exactly alone. Clamping only
+#                      downward is what makes this a no-op on the newer engine
+#                      -- `base >= 2.0.0` is satisfied by 2.1 and must keep the
+#                      digits it was written with.
+#
+# The precedent is `mig_standin`, which has rewritten a stand-in's info.json
+# since the migration suite existed; this is the same rewrite over one more
+# field and over every staged mod rather than one.
+#
+# THE PACKAGED MOD IS GATED AND NOT STAMPED, and that asymmetry is the point.
+# A test mod is engine-agnostic Lua and a stamp is free; the mod under test is
+# a GUEST COMPILED AGAINST A PINNED API, and the ABI marshals event payloads BY
+# NAME -- so a field 2.1 added to a subscribed event is written as mandatory and
+# arrives nil on a 2.0 engine. Stamping the package would let exactly that
+# mismatch load and run, silently, which is the one direction that must never
+# be papered over. The mod's own factorio_version comes from fklua.toml, which
+# is the release identity, so a disagreement with the binary is a real defect
+# and is reported as one: build the arm that matches, or run the binary the arm
+# was built for.
+ENGINE_SERIES="$("$FACTORIO" --version 2>/dev/null |
+  sed -n '1s/^Version: \([0-9][0-9]*\.[0-9][0-9]*\)\..*$/\1/p')"
+[ -n "$ENGINE_SERIES" ] || {
+  echo "could not read a Major.Minor series out of \`$FACTORIO --version\`" >&2
+  "$FACTORIO" --version 2>&1 | head -3 >&2; exit 1; }
+ENGINE_MAJOR="${ENGINE_SERIES%%.*}"
+ENGINE_MINOR="${ENGINE_SERIES##*.}"
+echo "==> Factorio $ENGINE_SERIES; staged mods are stamped for it"
+
+# stamp_engine <staged-mod-dir>...
+#
+# Mechanical, and deliberately so: nothing here is conditional on WHICH series
+# is running, so the 2.1 behaviour it replaces is the behaviour it produces (all
+# thirteen staged manifests already say 2.1 and none of them requires a base
+# newer than 2.1, so on 2.1 both rewrites are no-ops to the byte).
+stamp_engine() {
+  local d
+  for d in "$@"; do
+    [ -f "$d/info.json" ] || { echo "no info.json in $d" >&2; exit 1; }
+    ENGINE_SERIES="$ENGINE_SERIES" ENGINE_MAJOR="$ENGINE_MAJOR" \
+    ENGINE_MINOR="$ENGINE_MINOR" perl -pi -e '
+      s/"factorio_version":\s*"[^"]*"/"factorio_version": "$ENV{ENGINE_SERIES}"/;
+      # `>` survives as a literal in a hand-written manifest and as > in one
+      # a JSON writer produced, so both forms are matched.
+      s{(base\s*(?:>=|\\u003e=)\s*)(\d+)\.(\d+)\.(\d+)}{
+        my ($lead, $maj, $min, $pat) = ($1, $2, $3, $4);
+        ($maj > $ENV{ENGINE_MAJOR} ||
+         ($maj == $ENV{ENGINE_MAJOR} && $min > $ENV{ENGINE_MINOR}))
+          ? "$lead$ENV{ENGINE_MAJOR}.$ENV{ENGINE_MINOR}.0"
+          : "$lead$maj.$min.$pat";
+      }ge;
+    ' "$d/info.json"
+    # The rewrite is what a whole suite rests on, and a perl that silently
+    # matched nothing would move the failure to the loader with no explanation.
+    grep -q "\"factorio_version\": \"$ENGINE_SERIES\"" "$d/info.json" || {
+      echo "$d/info.json was not stamped for Factorio $ENGINE_SERIES" >&2
+      cat "$d/info.json" >&2; exit 1; }
+  done
+}
+
+# The mod under test, gated rather than stamped. See the block above.
+MOD_SERIES="$(sed -n 's/.*"factorio_version": *"\([^"]*\)".*/\1/p' "$MOD_DIR/info.json")"
+[ "$MOD_SERIES" = "$ENGINE_SERIES" ] || {
+  echo "the built mod targets Factorio $MOD_SERIES and the binary is $ENGINE_SERIES." >&2
+  echo "That is not a manifest token: the guest's bindings are pinned to one API and" >&2
+  echo "the ABI marshals event payloads BY NAME, so a field the other series added is" >&2
+  echo "written as mandatory and read as nil here. Build the matching arm --" >&2
+  echo "fklua.toml's factorio_version and [fklua] api, and \`fklua gen-bindings\`" >&2
+  echo "-- or run the binary this one was built for." >&2
+  exit 1; }
 
 # THE DEFAULT IS ALL THIRTEEN, and getting there took four tranches of estate
 # work rather than a manifest token. What each suite needed is recorded in
@@ -133,7 +247,7 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 #   INTERACTIVE checklist stages. It runs here because a rig that stopped
 #   landing, or one this mod refuses, costs a human a session to discover and
 #   costs this a single `--create` to catch.
-SUITES="${*:-m1 sedge mig21 m2 m3 mar upg edge mix plat qual mig iact}"
+SUITES="${*:-m1 sedge mig21 flip m2 m3 mar upg edge mix plat qual mig iact}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.
@@ -162,6 +276,7 @@ stage() {
   mkdir -p "$work/mods"
   cp -R "$MOD_DIR" "$work/mods/"
   cp -R "$ROOT/test/mods/$testmod" "$work/mods/$testmod"
+  stamp_engine "$work/mods/$testmod"
   # The Space Age DLC mods ship inside the Factorio install's data/ directory,
   # so they load no matter what --mod-directory says. Base only wherever
   # possible: a base-only run is one fewer variable, and only the `plat` suite
@@ -193,6 +308,7 @@ stage_interactive() {
   mkdir -p "$work/mods"
   cp -R "$MOD_DIR" "$work/mods/"
   cp -R "$ROOT/test/interactive/bbb-interactive-setup" "$work/mods/bbb-interactive-setup"
+  stamp_engine "$work/mods/bbb-interactive-setup"
   cat > "$work/mods/mod-list.json" <<JSON
 {
   "mods": [
@@ -319,6 +435,7 @@ mig_standin() {
     echo "the stand-in's info.json was not renamed to $name" >&2; exit 1; }
   grep -q "\"version\": \"$version\"" "$work/mods/$name/info.json" || {
     echo "the stand-in's info.json was not re-versioned to $version" >&2; exit 1; }
+  stamp_engine "$work/mods/$name"
 }
 
 # stage_mig <workdir> <extra-mod-name> <standin-version-or-empty> <bbb-in-phase-one>
@@ -331,11 +448,13 @@ stage_mig() {
   rm -rf "$work"
   mkdir -p "$work/mods"
   cp -R "$ROOT/test/mods/bbb-mig-test" "$work/mods/bbb-mig-test"
+  stamp_engine "$work/mods/bbb-mig-test"
   if [ -n "$extra" ]; then
     if [ -n "$ver" ]; then
       mig_standin "$work" "$extra" "$ver"
     else
       cp -R "$ROOT/test/mods/$extra" "$work/mods/$extra"
+      stamp_engine "$work/mods/$extra"
     fi
   fi
   [ "$bbb" = true ] && cp -R "$MOD_DIR" "$work/mods/"
@@ -414,9 +533,9 @@ mig_add_incumbent() {
 #   Measured before it was cut: the m2 mod's on_tick raises outright on the
 #   fixture load. bbb-mig21-observer does the measuring instead.
 #
-#   `factorio_version` REWRITTEN TO 2.1, because 2.1 refuses a mod whose
-#   info.json says 2.0 before it places an entity -- the same one-token bump the
-#   `m1` suite needed.
+#   `factorio_version` STAMPED FOR THE RUNNING ENGINE, because a Factorio
+#   refuses a mod whose info.json names the other series before it places an
+#   entity. That is `stamp_engine` now and is no longer special to this suite.
 #
 # The test mod's own VERSION is deliberately left alone. What declines the saved
 # guest heap is THIS mod's build stamp, which moved because the guest was
@@ -432,11 +551,7 @@ stage_fixture() {
   cp -R "$MOD_DIR" "$work/mods/"
   cp -R "$ROOT/test/mods/$testmod" "$work/mods/$testmod"
   cp -R "$ROOT/test/mods/bbb-mig21-observer" "$work/mods/bbb-mig21-observer"
-
-  perl -pi -e 's/"factorio_version": "[^"]*"/"factorio_version": "2.1"/' \
-    "$work/mods/$testmod/info.json"
-  grep -q '"factorio_version": "2.1"' "$work/mods/$testmod/info.json" || {
-    echo "$testmod was not re-targeted at Factorio 2.1" >&2; exit 1; }
+  stamp_engine "$work/mods/$testmod" "$work/mods/bbb-mig21-observer"
 
   # The prototypes, and nothing else. See above.
   cat > "$work/mods/$testmod/control.lua" <<'LUA'
@@ -688,14 +803,14 @@ for suite in $SUITES; do
       stage_mig "$TMP/mig1" belt-balancer-2 2.0.9 false
       BETWEEN=mig_swap_in run "$TMP/mig1" "${BBB_MIG_TICKS:-3600}"
       unset BETWEEN
-      python3 "$ROOT/test/assert-mig.py" --leg added \
+      python3 "$ROOT/test/assert-mig.py" --engine "$ENGINE_SERIES" --leg added \
         "$TMP/mig1/create.log" "$TMP/mig1/run.log"
 
       echo "--- leg 2: this mod installed first, the incumbent removed later ---"
       stage_mig "$TMP/mig2" belt-balancer-2 2.0.9 true
       BETWEEN=mig_drop_incumbent run "$TMP/mig2" "${BBB_MIG_TICKS:-3600}"
       unset BETWEEN
-      python3 "$ROOT/test/assert-mig.py" --leg later \
+      python3 "$ROOT/test/assert-mig.py" --engine "$ENGINE_SERIES" --leg later \
         "$TMP/mig2/create.log" "$TMP/mig2/run.log"
 
       # THE LIVE SUCCESSOR, and the leg is the coexistence shape rather than the
@@ -709,7 +824,7 @@ for suite in $SUITES; do
       stage_mig "$TMP/mig3" belt-balancer-3 1.0.1 true
       BETWEEN=mig_drop_incumbent run "$TMP/mig3" "${BBB_MIG_TICKS:-3600}"
       unset BETWEEN
-      python3 "$ROOT/test/assert-mig.py" --leg bb3 \
+      python3 "$ROOT/test/assert-mig.py" --engine "$ENGINE_SERIES" --leg bb3 \
         "$TMP/mig3/create.log" "$TMP/mig3/run.log"
 
       # No incumbent has ever been installed here, so `balancer-part` is this
@@ -722,7 +837,7 @@ for suite in $SUITES; do
       echo "--- leg 4: legacy parts arriving through build events, then a plain reload ---"
       stage_mig "$TMP/mig4" "" "" true
       run "$TMP/mig4" "${BBB_MIG_TICKS:-3600}"
-      python3 "$ROOT/test/assert-mig.py" --leg built \
+      python3 "$ROOT/test/assert-mig.py" --engine "$ENGINE_SERIES" --leg built \
         "$TMP/mig4/create.log" "$TMP/mig4/run.log"
 
       # DONE -> BLOCKED, the one transition fk_on_configuration_changed exists
@@ -737,14 +852,14 @@ for suite in $SUITES; do
       stage_mig "$TMP/mig5" "" "" true
       BETWEEN=mig_add_incumbent run "$TMP/mig5" "${BBB_MIG_TICKS:-3600}"
       unset BETWEEN
-      python3 "$ROOT/test/assert-mig.py" --leg readd \
+      python3 "$ROOT/test/assert-mig.py" --engine "$ENGINE_SERIES" --leg readd \
         "$TMP/mig5/create.log" "$TMP/mig5/run.log"
 
       echo "--- leg 6: a stranger owns balancer-part and must be left alone ---"
       stage_mig "$TMP/mig6" bbb-mig-foreign "" false
       BETWEEN=mig_add_bbb_beside_foreign run "$TMP/mig6" "${BBB_MIG_TICKS:-3600}"
       unset BETWEEN
-      python3 "$ROOT/test/assert-mig.py" --leg foreign \
+      python3 "$ROOT/test/assert-mig.py" --engine "$ENGINE_SERIES" --leg foreign \
         "$TMP/mig6/create.log" "$TMP/mig6/run.log"
 
       # THE STRANGER REMOVED. `legacyCheck` promises this in as many words and
@@ -755,7 +870,7 @@ for suite in $SUITES; do
       stage_mig "$TMP/mig7" bbb-mig-foreign "" true
       BETWEEN=mig_drop_foreign run "$TMP/mig7" "${BBB_MIG_TICKS:-3600}"
       unset BETWEEN
-      python3 "$ROOT/test/assert-mig.py" --leg fgone \
+      python3 "$ROOT/test/assert-mig.py" --engine "$ENGINE_SERIES" --leg fgone \
         "$TMP/mig7/create.log" "$TMP/mig7/run.log"
 
       # THE OTHER TWO ROWS OF `legacyIncumbents`, one create phase each. What a
@@ -766,12 +881,12 @@ for suite in $SUITES; do
       echo "--- probes: the two incumbent names with no leg of their own ---"
       stage_mig "$TMP/migp1" belt-balancer 3.4.4 true
       create_only "$TMP/migp1"
-      python3 "$ROOT/test/assert-mig.py" --leg probe \
+      python3 "$ROOT/test/assert-mig.py" --engine "$ENGINE_SERIES" --leg probe \
         --incumbent belt-balancer --version 3.4.4 "$TMP/migp1/create.log"
 
       stage_mig "$TMP/migp2" belt-balancer-performance 1.0.5 true
       create_only "$TMP/migp2"
-      python3 "$ROOT/test/assert-mig.py" --leg probe \
+      python3 "$ROOT/test/assert-mig.py" --engine "$ENGINE_SERIES" --leg probe \
         --incumbent belt-balancer-performance --version 1.0.5 "$TMP/migp2/create.log"
       ;;
     sedge)
@@ -814,17 +929,40 @@ for suite in $SUITES; do
       # m2's 21 rigs are the ordinary geometry a player builds, and edge's `lim`
       # is 64 belts over 32 parts -- the biggest network this mod makes, and
       # tiles carrying THREE.
-      echo "=== mig21: a Factorio 2.0 multi-edge save, opened on 2.1 ==="
+      echo "=== mig21: a Factorio 2.0 multi-edge save, opened on $ENGINE_SERIES ==="
 
       echo "--- m2: 21 rigs, 77 parts, saturated ---"
       stage_fixture "$TMP/mig21-m2" m2-2.0.77 bbb-m2-test
       load_fixture "$TMP/mig21-m2" "${BBB_MIG21_TICKS:-320}"
-      python3 "$ROOT/test/assert-mig21.py" --fixture m2 "$TMP/mig21-m2/run.log"
+      python3 "$ROOT/test/assert-mig21.py" --engine "$ENGINE_SERIES" --fixture m2 "$TMP/mig21-m2/run.log"
 
       echo "--- edge: 15 clusters, 95 parts, including lim at 64 belts over 32 parts ---"
       stage_fixture "$TMP/mig21-edge" edge-2.0.77 bbb-edge-test
       load_fixture "$TMP/mig21-edge" "${BBB_MIG21_TICKS:-320}"
-      python3 "$ROOT/test/assert-mig21.py" --fixture edge "$TMP/mig21-edge/run.log"
+      python3 "$ROOT/test/assert-mig21.py" --engine "$ENGINE_SERIES" --fixture edge "$TMP/mig21-edge/run.log"
+      ;;
+    flip)
+      # `bbb-multi-edge-parts`, DRIVEN. The setting exists on Factorio 2.0 only
+      # -- mod-data/settings.lua defines it on 2.0.x and never on 2.1.x -- so
+      # this is the one suite that cannot run on trunk's own engine, and it says
+      # so out loud rather than passing.
+      #
+      # A CHECK THAT SKIPS IS A CHECK THAT PASSED (CLAUDE.md's own review-gate
+      # finding), so the skip is a line in the log and a line in the assertion
+      # script's output, not a silent `continue`. What covers the FOLD on 2.1 is
+      # `go test ./edgemode/`, which proves all eighteen of its states; what
+      # nothing covers there is the WORLD, which is what this drives.
+      echo "=== flip: the multi-edge setting, turned on and off under load ==="
+      if [ "$ENGINE_SERIES" != "2.0" ]; then
+        echo "==> SKIPPED on Factorio $ENGINE_SERIES: \`bbb-multi-edge-parts\` is"
+        echo "    defined on 2.0.x only, so there is nothing here to flip. The fold"
+        echo "    behind it is proved by \`go test ./edgemode/\` on every engine."
+        continue
+      fi
+      stage "$TMP/flip" bbb-flip-test
+      run "$TMP/flip" "${BBB_FLIP_TICKS:-3200}"
+      echo "==> asserting the flip, the veto and the refusals"
+      python3 "$ROOT/test/assert-flip.py" "$TMP/flip/create.log" "$TMP/flip/run.log"
       ;;
     iact)
       # THE INTERACTIVE CHECKLIST'S OWN WORLD, staged and never touched.
@@ -849,7 +987,7 @@ for suite in $SUITES; do
       python3 "$ROOT/test/assert-interactive.py" "$TMP/iact/create.log"
       ;;
     *)
-      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix, mig, qual, sedge, mig21 or iact)" >&2
+      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix, mig, qual, sedge, mig21, flip or iact)" >&2
       exit 1
       ;;
   esac

@@ -77,13 +77,33 @@ const (
 	// the anchor before the setting so that its own re-entrant event lands here.
 	ActNone Action = iota
 
-	// ActSweep: multi-edge was allowed and is not any more. Every standing
-	// network built to the old rule has to come DOWN -- not be flagged and left,
-	// which is what an over-limit refusal does. Stacked linked belts standing in
-	// a world whose engine forbids them are a latent engine risk on every load
-	// (boskid, forums t=135830: belt-to-belt connections are re-derived at load
-	// and one belt-connectable per tile is what makes that unambiguous), so they
-	// are removed at the first opportunity.
+	// ActSweep: multi-edge was allowed and is not any more, so the guest has to
+	// go and LOOK at what is standing.
+	//
+	// IT DOES NOT MEAN "TEAR THEM DOWN", AND SAYING SO WAS A DEFECT. The design
+	// called this a sweep -- condemn every multi-edge network, spill what it
+	// held -- and the caller did exactly that until 2026-08-24, when a live 2.0
+	// session turned the setting off and watched a full balancer's contents land
+	// on the floor. Two things are wrong with a sweep and the first makes the
+	// second unreachable by reasoning alone:
+	//
+	//	IT CANNOT STICK. Getting here means the marker is present (the anchor said
+	//	Multi, which requires it), so the very next thing the caller asks is
+	//	GrandfatherNeeded(marker, Off, n) -- and that is `n > 0`, which is exactly
+	//	the condition under which a sweep finds anything. So a flip-off with
+	//	multi-edge balancers standing is always VETOED: the setting is written
+	//	back on and the player is told why.
+	//	AND A VETOED FLIP MUST BE A NO-OP ON THE WORLD. Everything a sweep tore
+	//	down was about to be told it may keep working.
+	//
+	// So the caller SCANS: it counts and announces and touches nothing (sedge.go,
+	// scanStackedMultiEdge). The teardown-and-refuse path survives for the one
+	// case that really needs it -- a 2.0 save opened on 2.1, where the engine has
+	// already pruned the interfaces and a stacked linked belt standing in that
+	// world is a latent engine risk on every load (boskid, forums t=135830:
+	// belt-to-belt connections are re-derived at load and one belt-connectable
+	// per tile is what makes that unambiguous). Its only producer is
+	// `rebuildFromWorld`.
 	ActSweep
 
 	// ActRequeue: multi-edge was forbidden and is allowed now. Nothing has to be

@@ -765,10 +765,14 @@ func onEdgeModeSettingChanged(name string) {
 	case edgemode.ActNone:
 		return
 	case edgemode.ActSweep:
-		n := sweepStackedInterfaces()
+		n := scanStackedMultiEdge()
 		logStart("single-edge: multiple belts per part turned OFF; ")
 		logU(n)
-		logS(" standing balancers were built that way and are coming down")
+		logS(" standing balancers were built that way")
+		if n > 0 {
+			logS(", so the flip is VETOED -- nothing is touched and settleEdgeMode")
+			logS(" turns the setting back on")
+		}
 		logEnd()
 	default:
 		// Turned back ON. Nothing standing is wrong -- a refused cluster never got
@@ -783,26 +787,56 @@ func onEdgeModeSettingChanged(name string) {
 	requestFlush()
 }
 
-// sweepStackedInterfaces finds every standing network that was built with two
-// belts on one part and marks it for demolition.
+// scanStackedMultiEdge finds every standing network that was built with two
+// belts on one part, AND TOUCHES NOTHING AT ALL.
 //
 // A WHOLE-SAVE RE-CLASSIFICATION, which is what an audit is, and it is affordable
 // for the same reason: this is a keypress. It cannot be reached at all on an
 // engine that has no setting to flip.
 //
-// THE FINGERPRINT HAS TO BE INVERTED and that is not a trick borrowed for
-// convenience -- it is the same statement rebuildFromWorld makes for the same
-// reason. Nothing about the WORLD changed when the setting moved, so a plain
-// re-queue would find the stored fingerprint matching and skip; inverting it is
-// how this guest says "whatever you have recorded, it is not what should be
-// standing there".
-func sweepStackedInterfaces() uint32 {
+// ---------------------------------------------------------------------------
+// THIS USED TO SWEEP, AND THE SWEEP WAS UNREACHABLE AND DESTRUCTIVE
+// ---------------------------------------------------------------------------
+//
+// The design called a flip OFF with multi-edge balancers standing a SWEEP:
+// condemn every one of them, invert its fingerprint, re-queue it, and let the
+// flush tear it down and spill what it held. That is what this function did, and
+// it was wrong twice over.
+//
+// IT COULD NEVER STICK. Reaching ActSweep at all means the marker is present
+// (the anchor said Multi, which requires it, and prototypes are fixed for a
+// session), and the very next thing settleEdgeMode asks is
+// `edgemode.GrandfatherNeeded(marker, setting, n)` -- which on this path is
+// `true && Off && n > 0`. So the same condition that makes the sweep find
+// something makes the grandfather pass write the setting straight back ON. The
+// flip is VETOED, always, and every teardown the sweep queued was a teardown of
+// a machine that was about to be told it may keep working.
+//
+// AND IT PUT THE ITEMS ON THE FLOOR ON THE WAY. Reported from a live 2.0.77
+// session on 2026-08-24: turning the setting off with a full multi-edge balancer
+// standing produced the veto message AND a pile of that balancer's contents
+// beside it. The mechanism is exactly the ordering above -- compile() takes the
+// condemnation, tears the network down into an `owned` pool, refuses (the
+// setting is still off at that instant), and closePool spills what no successor
+// claimed; the veto then flips the setting back and the requeue rebuilds the
+// network EMPTY.
+//
+// A VETOED FLIP IS A NO-OP ON THE WORLD. So this counts and announces and does
+// nothing else: no condemnation, no inverted fingerprint, no re-queue. The
+// grandfather pass's own re-queue (which every grandfather owes, see
+// grandfatherMultiEdge) is what puts the clusters back on the queue, and every
+// one of them then SKIPS on the fingerprint it never lost.
+//
+// WHICH LEAVES `condemnStanding` WITH ONE PRODUCER: `rebuildFromWorld`, the 2.1
+// migration, where the machine really cannot exist and the engine has already
+// pruned it. That is the only case in which a refusal may demolish anything, and
+// it is the case the carve-out in compile() was written for.
+func scanStackedMultiEdge() uint32 {
 	auditRoots = liveRootList(auditRoots)
 	found := uint32(0)
 	for i := range auditRoots {
 		r := auditRoots[i]
-		ni, had := nets[r]
-		if !had {
+		if _, had := nets[r]; !had {
 			continue // nothing standing to be wrong
 		}
 		tiles := collectCluster(r)
@@ -818,14 +852,11 @@ func sweepStackedInterfaces() uint32 {
 			continue
 		}
 		found++
-		condemnStanding(r)
-		// STOOD, unconditionally: this sweep only ever looks at clusters that HAVE
-		// a network (`if !had { continue }` above), and every one of them is about
-		// to be torn down and spilled.
-		noteAnnounce(r, true)
-		ni.fp = ^ni.fp
-		nets[r] = ni
-		markLive(r)
+		// STOOD IS FALSE, and it is false because nothing came down. The flag
+		// picks between the two MIGRATION sentences and neither of them is what a
+		// veto says, so it changes nothing here -- but it is a statement about the
+		// world and the world is untouched.
+		noteAnnounce(r, false)
 	}
 	return found
 }
@@ -939,7 +970,16 @@ func grandfatherMultiEdge(n uint32) {
 		logEnd()
 		requestFlush()
 	}
-	tellAffected(msgGrandfathered, false)
+	// WITH PINGS, and that is a reversal of the design's own reasoning. It said
+	// the 2.0 message should carry none, "because it is a warning about a save
+	// that still works and the player is not sent on a tour of balancers that are
+	// running". The sentence it carries has always ended in "Rebuild them one belt
+	// per part", and a player who has just been told to rebuild N machines and not
+	// told WHERE has been handed a scavenger hunt -- which is the exact
+	// complaint the 2.1 summary's pings were added for. Requested from a live
+	// session on 2026-08-24, after a flip-off veto named twenty balancers and
+	// pointed at none of them.
+	tellAffected(msgGrandfathered, true)
 }
 
 // requeueEveryCluster puts every standing cluster back on the build queue and
@@ -1111,6 +1151,25 @@ func tellAffected(msgKey string, withPings bool) {
 		logS(" about ")
 		logU(count)
 		logS(" balancers built to the multi-edge rule")
+		if withPings {
+			// HOW MANY PINGS REALLY WENT OUT, beside how many balancers were
+			// named. The two are equal until a base has more affected balancers
+			// than one readable chat line can point at, and the cap is silent in
+			// the CHAT by design -- the count in the sentence stays exact, which is
+			// what a player reads. It may not be silent HERE: this line is the
+			// assertion surface, and a suite that could not tell a full list from a
+			// truncated one could not tell either from a broken one.
+			logS(", ")
+			logU(uint32(gpsCount))
+			logS(" pings")
+			if gpsCut {
+				logS(" (list truncated)")
+			}
+			if gpsFirstEnd > 0 {
+				logS(", first ")
+				logS(gpsFirst())
+			}
+		}
 		if err != nil {
 			logS(" -- print FAILED")
 		}
@@ -1144,6 +1203,17 @@ var (
 	gpsBuf    [900]byte
 	gpsLen    int
 	gpsDigits [12]byte
+	// How many pings this list really carries, and whether the cap cut it short.
+	// Read by tellAffected for the log line, which is the only place the
+	// truncation is stated: the chat sentence keeps an exact COUNT and a list
+	// that fits, which is the discipline the 2.1 migration summary already ships.
+	gpsCount int
+	gpsCut   bool
+	// Where the FIRST ping ends, so the log line can carry it verbatim. The
+	// whole list cannot go there -- logline.go's buffer is 512 bytes and this one
+	// is 900 -- and one real ping is what makes "the pings name cluster tiles" a
+	// measurement rather than an inference from a count.
+	gpsFirstEnd int
 	// One-entry surface-name memo. Consecutive clusters are almost always on the
 	// same surface, and a name is a host call and a string copy.
 	gpsSurfIdx  uint32
@@ -1153,7 +1223,18 @@ var (
 
 func gpsReset() {
 	gpsLen = 0
+	gpsCount = 0
+	gpsCut = false
+	gpsFirstEnd = 0
 	gpsSurfOK = false
+}
+
+// gpsFirst is the first ping of the list, borrowed exactly as gpsString is.
+func gpsFirst() string {
+	if gpsFirstEnd == 0 {
+		return ""
+	}
+	return unsafe.String(&gpsBuf[0], gpsFirstEnd)
 }
 
 func gpsS(s string) { gpsLen += copy(gpsBuf[gpsLen:], s) }
@@ -1181,12 +1262,15 @@ func gpsI(v int32) {
 // produce, so a ping is never written half-way.
 func gpsAdd(c *affCluster) {
 	if gpsLen > len(gpsBuf)-128 {
+		gpsCut = true
 		return
 	}
 	name, ok := gpsSurfaceName(c.surf)
 	if !ok {
+		gpsCut = true
 		return
 	}
+	gpsCount++
 	if gpsLen > 0 {
 		gpsS(" ")
 	}
@@ -1197,6 +1281,9 @@ func gpsAdd(c *affCluster) {
 	gpsS(",")
 	gpsS(name)
 	gpsS("]")
+	if gpsFirstEnd == 0 {
+		gpsFirstEnd = gpsLen
+	}
 }
 
 func gpsSurfaceName(si uint32) (string, bool) {

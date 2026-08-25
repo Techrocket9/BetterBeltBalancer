@@ -94,6 +94,30 @@ local function seed_all()
     hidden, visible, hidden + visible))
 end
 
+-- WHAT THE RIGS HAVE DELIVERED, which only matters on one engine and is
+-- reported on both.
+--
+-- On Factorio 2.1 every balancer in these fixtures is refused and its remnant
+-- torn down, so this number moves only because the rigs' own bare control belts
+-- and pass-through lines are still running -- it is reported and not asserted.
+-- On 2.0 nothing is torn down at all: the clusters are ADOPTED whole and the
+-- grandfather pass keeps them working, and "keeps working" has to mean items
+-- arriving somewhere rather than merely entities standing. Every sink in these
+-- worlds is an ordinary chest; the infinity chests are the SOURCES and are
+-- excluded, because their contents are held at a filter level and say nothing.
+local function delivered()
+  local total = 0
+  for _, s in pairs(game.surfaces) do
+    for _, e in pairs(s.find_entities_filtered { type = "container" }) do
+      local inv = e.get_inventory(defines.inventory.chest)
+      if inv then
+        for _, item in pairs(inv.get_contents()) do total = total + item.count end
+      end
+    end
+  end
+  return total
+end
+
 local function sample(tag)
   local tot_parts, tot_iface, tot_stacked, tot_ground = 0, 0, 0, 0
   local tot_hidden, tot_hitems, tot_vitems = 0, 0, 0
@@ -145,9 +169,9 @@ local function sample(tag)
   end
   log(string.format(
     "[MIG21] total tag=%s parts=%d ours=%d stacked_tiles=%d ground=%d " ..
-    "hidden_entities=%d hidden_items=%d iface_items=%d",
+    "hidden_entities=%d hidden_items=%d iface_items=%d delivered=%d",
     tag, tot_parts, tot_iface, tot_stacked, tot_ground,
-    tot_hidden, tot_hitems, tot_vitems))
+    tot_hidden, tot_hitems, tot_vitems, delivered()))
 end
 
 -- The audit marker is a shipped prototype and the only SYNCHRONOUS "re-classify

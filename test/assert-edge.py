@@ -860,9 +860,17 @@ def main():
         fail("the /bbb-audit console command did not reach Factorio's command "
              "registry: fkapi.AddCommand in guest/go/commands.go's init did not "
              "take effect")
-    if iface.group(1) != "audit":
-        fail("the remote interface exposes %r, expected exactly 'audit'"
-             % iface.group(1))
+    # THE WHOLE METHOD LIST, AS AN EXACT SET. A method here is public API that
+    # another mod can come to depend on, so it is asserted by name rather than by
+    # a `contains`. `set-multi-edge-parts` joined it on 2026-08-24: Factorio
+    # refuses `settings.global[k] = v` from anybody but the mod that DEFINED the
+    # setting, which left every transition of the multi-edge flip handler
+    # reachable by a human and by nothing else (agents/single-edge.md, phase 9).
+    # It is inert on Factorio 2.1, where that setting does not exist.
+    want_iface = {"audit", "set-multi-edge-parts"}
+    if set(iface.group(1).split(",")) != want_iface:
+        fail("the remote interface exposes %r, expected exactly %s"
+             % (iface.group(1), ",".join(sorted(want_iface))))
     if rcall.group(1) != "true":
         fail("remote.call('better-belt-balancer', 'audit') failed: fk_on_call "
              "did not dispatch")

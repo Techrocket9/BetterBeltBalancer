@@ -150,7 +150,19 @@ SUMTOLD = re.compile(
 # THE GRANDFATHER PASS, which is the 2.0 arm and must never be attempted here:
 # `bbb-multi-edge-parts` is not defined on 2.1 and writing an undefined
 # settings.global key RAISES.
-GRANDFATHER = re.compile(r"\[BBB\] single-edge: kept multiple belts per part enabled")
+GRANDFATHER = re.compile(
+    r"\[BBB\] single-edge: kept multiple belts per part enabled for this save -- "
+    r"(\d+) balancers use it")
+GFFAILED = re.compile(r"could not be written")
+# The ping list, which BOTH messages carry. `force.print` goes to the game's chat
+# and no script can read it back, so the count and the first ping are logged --
+# without them a suite could say a message was sent and nothing at all about
+# whether it pointed anywhere.
+PINGS = re.compile(
+    r"multi-edge rule, (\d+) pings(, list truncated)?"
+    r"(?:, first \[gps=(-?\d+),(-?\d+),(\S+?)\])?")
+REQUEUED = re.compile(
+    r"\[BBB\] single-edge: (\d+) clusters re-queued after grandfathering")
 FLIPPED = re.compile(r"\[BBB\] single-edge: multiple belts per part turned (ON|OFF)")
 # EITHER ARM OF THE HAND-BACK, matched on the shape both of them share rather
 # than on one sentence. A NEGATIVE assertion, and an exact regex over a negative
@@ -219,6 +231,32 @@ FID_QUALITY = "uncommon"
 EXPECT_NETS = 2                      # sok2 and sok4, and nothing else
 EXPECT_REFUSED = 7
 
+# ...AND ON FACTORIO 2.0 THE ANSWER INVERTS, which is the reason `--engine` is a
+# required argument rather than a default.
+#
+# The CONVERSION is byte-identical on both engines -- `legacy.go` knows nothing
+# about any of this -- and so is the first flush after it: the setting defaults
+# to false, so all seven incumbent-idiom clusters are refused exactly as they are
+# on 2.1, with the same seven alert lines and the same shape multiset. What
+# happens NEXT is the whole difference. On 2.0 the capability marker is present,
+# so `settleEdgeMode` asks `edgemode.GrandfatherNeeded(marker, Off, 7)`, gets
+# true, writes this mod's own setting ON, re-queues every cluster and tells each
+# owning force -- and the very next flush compiles all seven. A player who
+# uninstalls Belt Balancer on 2.0 keeps their base.
+#
+# So on 2.0 every rig runs, nothing is left refused, and what the player is told
+# is the GRANDFATHER warning rather than the migration checklist. Until a 2.0
+# binary was available again, `go test ./edgemode/` was the only machine anywhere
+# that could execute that branch.
+ENGINE_2_0 = {
+    "nets": 9,                       # all nine, once the grandfather has run
+    "audit_refused": 0,              # ...so none of them is left refused
+    # The pre-port numbers, and they are the numbers the multi-edge geometry
+    # produced on 2.0.77 before any of this existed: 3.997x and 2.995x.
+    "working": (("sok2", 2.0), ("sok4", 4.0), ("m4x4", 4.0), ("m3to5", 3.0)),
+    "stopped": (),
+}
+
 # HOW MANY PARTS OF EACH REFUSED CLUSTER CARRY MORE THAN ONE BELT, sorted. This
 # is the assertion that says the classification is real rather than a constant:
 # `m3to5` has three inputs and five outputs over five parts, so three of its
@@ -239,6 +277,28 @@ WORKING = (("sok2", 2.0), ("sok4", 4.0))
 # arriving in one of these chests is not a rate that drifted, it is a balancer
 # that was built when it should not have been.
 STOPPED = ("m4x4", "m3to5")
+
+# WHICH ENGINE IS RUNNING. Set once by main() from run.sh's own reading of the
+# binary, and read by the shared checks below -- which are shared precisely so
+# that a leg needing the same statement cannot get a copy that drifts from it.
+ENGINE = "2.1"
+
+# HOW MANY CLUSTERS THE AUDIT MAY REPORT AS `refused`, which is NOT the number of
+# refusal LINES. On 2.1 the seven refusals stand and the audit counts them; on
+# 2.0 the grandfather pass compiles every one of them a flush later and the
+# feedback memo is cleared by the compile that succeeds, so the column is zero
+# while seven alert lines are still in the log. Two numbers because they are two
+# facts, and conflating them is how a 2.0 run would have "passed" by measuring
+# the wrong one.
+EXPECT_AUDIT_REFUSED = EXPECT_REFUSED
+
+# WHAT THE `added` LEG'S REBUILD-FROM-WORLD FINDS, and it is the same on both
+# engines. That rebuild runs in the dispatch after the conversion's own flush,
+# and on 2.0 the grandfather's re-queue has not been flushed yet -- so at that
+# instant exactly the `sok` band holds a network and the other seven do not,
+# whichever Factorio this is.
+REBUILD_ADOPTED = 2
+REBUILD_REBUILT = 7
 
 # WHICH LEGS SPEAK THE MIGRATION SUMMARY: ALL OF THEM, ONCE EACH, and none of
 # them reaches the ordinary per-piece message at all.
@@ -431,7 +491,7 @@ def check_audit(audits, fail, expect_parts, summary_clusters):
         fail.append("no audit ran after the migration")
         return
     got = tuple(int(g) for g in audits[-1].groups())
-    want = (EXPECT_CLUSTERS, expect_parts, EXPECT_NETS, 0, 0, EXPECT_REFUSED)
+    want = (EXPECT_CLUSTERS, expect_parts, EXPECT_NETS, 0, 0, EXPECT_AUDIT_REFUSED)
     print("  final audit: clusters=%d parts=%d nets=%d drift=%d unbuilt=%d "
           "refused=%d" % got)
     if got != want:
@@ -440,7 +500,7 @@ def check_audit(audits, fail, expect_parts, summary_clusters):
                     "network and the %d laid the incumbent's way are refused, "
                     "with nothing drifting and nothing left unbuilt"
                     % (got, want, EXPECT_CLUSTERS, expect_parts, EXPECT_NETS,
-                       EXPECT_REFUSED))
+                       EXPECT_AUDIT_REFUSED))
     if summary_clusters is not None and got[0] != summary_clusters:
         fail.append("the migration reported %d clusters and the audit finds %d"
                     % (summary_clusters, got[0]))
@@ -502,7 +562,62 @@ def check_refusals(lines, leg, fail):
     # THE MIGRATION SUMMARY, in both directions.
     summ = find_all(lines, SUMMARY)
     sumtold = find_all(lines, SUMTOLD)
-    want_summary = EXPECT_SUMMARY.get(leg, False)
+    # ON 2.0 THE SUMMARY IS NEVER SPOKEN AND THE GRANDFATHER WARNING IS. They are
+    # the two arms of the same `if` in settleEdgeMode: the capability marker is
+    # present, so the fold answers "keep this save working" before it can ever
+    # reach the sentence about balancers that have stopped -- which would be
+    # false, since a flush later every one of them is running.
+    want_summary = ENGINE != "2.0" and EXPECT_SUMMARY.get(leg, False)
+
+    # THE PER-FORCE LINE IS SHARED BY BOTH MESSAGES AND IS ASSERTED ON BOTH
+    # ENGINES. `tellAffected` writes it whichever sentence it is delivering, so
+    # what it pins -- once per FORCE rather than once per balancer or once per
+    # save, the LocalisedString crossing, the `LuaForce` resolving from a force
+    # INDEX, and now the ping per balancer -- is true of the migration checklist
+    # and of the grandfather warning alike. Which SENTENCE went out is what the
+    # engine decides, and that is the branch below it.
+    if want_summary or ENGINE == "2.0":
+        per_force = {int(m.group(1)): int(m.group(2)) for m in sumtold}
+        print("  told per force: %s" % per_force)
+        if sum(per_force.values()) != EXPECT_REFUSED:
+            fail.append("the message reached forces %s, adding up to %d of %d "
+                        "affected balancers -- it is once per FORCE, never once "
+                        "per balancer and never once per save"
+                        % (per_force, sum(per_force.values()), EXPECT_REFUSED))
+        if len(per_force) != EXPECT_FORCES:
+            fail.append("the message reached %d force(s) and the force rig puts "
+                        "affected balancers on %d" % (len(per_force), EXPECT_FORCES))
+        for m in sumtold:
+            if "FAILED" in m.group(3):
+                fail.append("the message to force %s did not reach it"
+                            % m.group(1))
+        # AND IT POINTS AT THEM. A message that names N machines to rebuild and
+        # gives no position is the scavenger hunt the pings exist to end, so the
+        # ping count is asserted against the balancer count and the FIRST ping is
+        # asserted to parse -- a count alone cannot tell a list of real pings from
+        # a list of plausible ones.
+        pings = find_all(lines, PINGS)
+        if len(pings) != len(sumtold):
+            fail.append("%d of the %d per-force messages carried a ping count"
+                        % (len(pings), len(sumtold)))
+        for m in pings:
+            if m.group(2):
+                fail.append("a ping list was truncated with at most %d balancers "
+                            "in it, so the cap or the buffer has moved"
+                            % EXPECT_REFUSED)
+            if m.group(3) is None:
+                fail.append("a per-force message carried %s pings and no first one "
+                            "to check; the guest logs it verbatim precisely so "
+                            "that this can be a measurement" % m.group(1))
+            else:
+                print("    first ping: [gps=%s,%s,%s]"
+                      % (m.group(3), m.group(4), m.group(5)))
+        got_pings = sorted(int(m.group(1)) for m in pings)
+        if got_pings != sorted(per_force.values()):
+            fail.append("the messages carried %s pings and named %s balancers; "
+                        "one ping per balancer is what makes the sentence "
+                        "actionable" % (got_pings, sorted(per_force.values())))
+
     if want_summary:
         if len(summ) != 1:
             fail.append("the migration summary was spoken %d times and a "
@@ -514,20 +629,6 @@ def check_refusals(lines, leg, fail):
         elif int(summ[0].group(1)) != EXPECT_REFUSED:
             fail.append("the migration summary named %s balancers and %d were "
                         "refused" % (summ[0].group(1), EXPECT_REFUSED))
-        per_force = {int(m.group(1)): int(m.group(2)) for m in sumtold}
-        print("  migration summary told: %s" % per_force)
-        if sum(per_force.values()) != EXPECT_REFUSED:
-            fail.append("the summary reached forces %s, adding up to %d of %d "
-                        "refused balancers -- it is once per FORCE, never once "
-                        "per balancer and never once per save"
-                        % (per_force, sum(per_force.values()), EXPECT_REFUSED))
-        if len(per_force) != EXPECT_FORCES:
-            fail.append("the summary reached %d force(s) and the force rig puts "
-                        "refused balancers on %d" % (len(per_force), EXPECT_FORCES))
-        for m in sumtold:
-            if "FAILED" in m.group(3):
-                fail.append("the summary to force %s did not reach it"
-                            % m.group(1))
         # AND WHICH OF THE TWO MIGRATION SENTENCES IT USED. A conversion tears
         # nothing down -- the clusters are seconds old and never had a network --
         # so the summary must NOT be the one that says their contents are on the
@@ -541,6 +642,17 @@ def check_refusals(lines, leg, fail):
                             "are on the ground, and a conversion spills nothing: "
                             "these clusters never had a network to tear down, "
                             "which is what the 0 teardowns and 0 spills below say")
+    elif ENGINE == "2.0":
+        # THE SENTENCE THAT MUST NOT BE SAID HERE. On this engine the balancers
+        # are kept, so the migration summary -- "they are refused" -- is false of
+        # every one of them a flush later, and the grandfather warning is what
+        # went out instead. `sumtold` is legitimately present and was asserted
+        # above; the summary line itself may not be.
+        if summ:
+            fail.append("the migration summary was spoken on Factorio 2.0, where "
+                        "the grandfather pass keeps these balancers working: it "
+                        "says they have stopped, and a flush later every one of "
+                        "them is running (%s)" % summ[0].group(0).strip()[-80:])
     elif summ or sumtold:
         fail.append("the migration summary was spoken in a leg that should not "
                     "speak it (%s)" % (summ or sumtold)[0].group(0).strip()[-80:])
@@ -559,7 +671,41 @@ def check_refusals(lines, leg, fail):
     if find_all(lines, HANDEDBACK):
         fail.append("a piece was handed back to a player: there is no player in "
                     "a headless run, and in a migration nobody placed anything")
-    if find_all(lines, GRANDFATHER) or find_all(lines, FLIPPED):
+    gf = find_all(lines, GRANDFATHER)
+    if ENGINE == "2.0":
+        # THE POSITIVE, on the engine where it is reachable. A converted Belt
+        # Balancer save is exactly the base-must-survive case grandfathering
+        # exists for: the incumbent's idiom is two belts on every part, so
+        # without the flip the default-false setting refuses every balancer on
+        # the load that adopts them -- the mod breaking a base at the moment it
+        # takes responsibility for it.
+        if len(gf) != 1:
+            fail.append("the guest wrote `bbb-multi-edge-parts` ON %d times and a "
+                        "converted save owes exactly one: seven of its nine "
+                        "balancers need multi-edge, and the flip is what keeps "
+                        "them working" % len(gf))
+        elif int(gf[0].group(1)) != EXPECT_REFUSED:
+            fail.append("the grandfather named %s balancers and %d were refused "
+                        "before it ran" % (gf[0].group(1), EXPECT_REFUSED))
+        if find_all(lines, GFFAILED):
+            fail.append("the grandfather write FAILED. On Factorio 2.0 the "
+                        "setting is defined and the capability gate is open")
+        req = find_all(lines, REQUEUED)
+        if len(req) != 1 or int(req[0].group(1)) != EXPECT_CLUSTERS:
+            fail.append("the grandfather re-queued %s clusters and the world has "
+                        "%d. A converted cluster has NO network -- the flush that "
+                        "is closing refused it -- so the re-queue is the only "
+                        "thing that will ever give it one"
+                        % ([m.group(1) for m in req], EXPECT_CLUSTERS))
+        # AND NOT the setting-changed handler's own line: the pass writes the
+        # anchor BEFORE the setting, so the synchronous event its own write
+        # raises lands on agreement and returns silently.
+        if find_all(lines, FLIPPED):
+            fail.append("the setting-changed handler announced a flip. The "
+                        "grandfather writes the anchor first precisely so that "
+                        "its own re-entrant event finds agreement and does "
+                        "nothing")
+    elif gf or find_all(lines, FLIPPED):
         fail.append("the guest touched `bbb-multi-edge-parts`. It is not defined "
                     "on Factorio 2.1 and writing an undefined settings.global "
                     "key RAISES, so the capability gate has to hold here")
@@ -941,12 +1087,16 @@ def readd(create, run, census, counts, items, techs, blocked, adopted, audits,
 
 
 def main():
+    global ENGINE, EXPECT_NETS, EXPECT_AUDIT_REFUSED, WORKING, STOPPED
     args = sys.argv[1:]
     leg = "added"
     inc_name = inc_version = None
+    engine = None
     while args and args[0].startswith("--"):
         if args[0] == "--leg":
             leg, args = args[1], args[2:]
+        elif args[0] == "--engine":
+            engine, args = args[1], args[2:]
         elif args[0] == "--incumbent":
             inc_name, args = args[1], args[2:]
         elif args[0] == "--version":
@@ -954,6 +1104,20 @@ def main():
         else:
             print("unknown option %r" % args[0])
             sys.exit(2)
+
+    # WHICH FACTORIO IS RUNNING, required and never defaulted. The conversion is
+    # the same on both engines and its OUTCOME is opposite, so a script that
+    # guessed would assert the wrong half and be green for the wrong reason on
+    # one of them. test/run.sh reads the series off the binary.
+    if engine not in ("2.0", "2.1"):
+        print("--engine 2.0|2.1 is required (got %r)" % engine)
+        sys.exit(2)
+    ENGINE = engine
+    if engine == "2.0":
+        EXPECT_NETS = ENGINE_2_0["nets"]
+        EXPECT_AUDIT_REFUSED = ENGINE_2_0["audit_refused"]
+        WORKING = ENGINE_2_0["working"]
+        STOPPED = ENGINE_2_0["stopped"]
 
     create, run = [], []
     for path, into in zip(args[:2], (create, run)):
@@ -1267,15 +1431,21 @@ def main():
                 int(g) for g in reb[-1].groups())
             print("  the rebuild after the conversion: %d clusters, %d adopted, "
                   "%d rebuilt" % (clusters_r, adopted_n, rebuilt_n))
+            # THESE TWO ARE ENGINE-INDEPENDENT and are deliberately not the
+            # audit's numbers. The rebuild runs in the dispatch AFTER the
+            # conversion's flush, and on 2.0 the grandfather's re-queue has not
+            # been flushed yet -- so on both engines exactly the `sok` band has a
+            # network at this instant and the other seven do not. What differs is
+            # what happens a flush later, which the audit is where to look for.
             if (clusters_r, adopted_n, rebuilt_n) != (
-                    EXPECT_CLUSTERS, EXPECT_NETS, EXPECT_REFUSED):
+                    EXPECT_CLUSTERS, REBUILD_ADOPTED, REBUILD_REBUILT):
                 fail.append("the rebuild found %d clusters and adopted %d of "
                             "them, rebuilding %d; it should adopt the %d the "
                             "`sok` band just compiled -- their interfaces match "
                             "the edge list exactly -- and rebuild the %d that "
                             "have no network to adopt"
-                            % (clusters_r, adopted_n, rebuilt_n, EXPECT_NETS,
-                               EXPECT_REFUSED))
+                            % (clusters_r, adopted_n, rebuilt_n, REBUILD_ADOPTED,
+                               REBUILD_REBUILT))
 
     # The BUILD path, in phase two, long after any scan. In these legs the
     # prototype is this mod's own stub, so one placed by a script (or revived

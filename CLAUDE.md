@@ -9,7 +9,7 @@ Conventions are inherited from FkLua — read [`../FkLua/CLAUDE.md`](../FkLua/CL
 
 ---
 
-> **TRUNK TARGETS FACTORIO 2.1 SINCE 2026-08-24, AND ITS RULE IS ONE BELT PER BALANCER PART.** 2.1 closed the collision-mask loophole that let two interface linked belts share a part's tile, so a part carries at most one edge and a cluster that asks for more is refused. The design is [`agents/single-edge.md`](agents/single-edge.md) and the rule is `guest/go/sedge.go`; "One belt per balancer part" below is the working note. **ALL THIRTEEN SUITES RUN ON 2.1 AND ALL THIRTEEN ARE IN THE DEFAULT**, as of 2026-08-24: `m2`, `mar` and `upg` had their rigs REBUILT single-edge -- which is also what restored the heap-slope gate the port's first three phases shipped without -- then `mix`, `plat`, `qual`, `m3` and `edge`, and finally `mig`, which is the one suite whose rigs were deliberately NOT re-laid: its world is the INCUMBENT'S, so on 2.1 an incumbent balancer converts and is then refused, and what was added is a band laid one belt per part that converts into a working network.
+> **TRUNK TARGETS FACTORIO 2.1 SINCE 2026-08-24, AND ITS RULE IS ONE BELT PER BALANCER PART.** 2.1 closed the collision-mask loophole that let two interface linked belts share a part's tile, so a part carries at most one edge and a cluster that asks for more is refused. The design is [`agents/single-edge.md`](agents/single-edge.md) and the rule is `guest/go/sedge.go`; "One belt per balancer part" below is the working note. **ALL FOURTEEN SUITES ARE IN THE DEFAULT AND THIRTEEN OF THEM RUN ON EITHER ENGINE**, as of 2026-08-24: `m2`, `mar` and `upg` had their rigs REBUILT single-edge -- which is also what restored the heap-slope gate the port's first three phases shipped without -- then `mix`, `plat`, `qual`, `m3` and `edge`, and finally `mig`, which is the one suite whose rigs were deliberately NOT re-laid: its world is the INCUMBENT'S, so on 2.1 an incumbent balancer converts and is then refused, and what was added is a band laid one belt per part that converts into a working network. **AND THE RELEASE/2.0 ARM IS VERIFIED SINCE 2026-08-24**: the whole estate is green on Factorio 2.0.77 in both `-gc` arms with `mar`'s slopes byte-identical, `mig21` and `mig` INVERT there (nothing is pruned, so a multi-edge save is adopted whole and a converted Belt Balancer save is grandfathered and RUNS at 3.997x and 2.996x one belt), and the fourteenth suite -- `flip`, which drives the setting that exists on 2.0 only -- is how the flip-off turned out to be a VETO rather than the sweep the design described, and how the veto's own spill was found and fixed. See [`agents/single-edge.md`](agents/single-edge.md), phase 9.
 
 ## Critical rules
 
@@ -59,7 +59,11 @@ guest/go/                the Go guest, its own module (//go:wasmimport is
                          registered from `init` through FkLua's callback seam
                          and both reaching `auditAll`. It is what gives a PLAYER
                          a door onto the diagnostic that was script-only until
-                         it existed,
+                         it existed -- and, since 2026-08-24, a
+                         `set-multi-edge-parts` method that is the ONLY script
+                         route to this mod's own runtime setting, because
+                         Factorio lets nobody but the defining mod write
+                         `settings.global`,
                          probe.go is the `bbb-insert-probe` marker: it asks
                          a CHEST the question the pocket asks a player, so
                          the one half of that path that never needed a
@@ -231,22 +235,23 @@ mod-data/                the DATA STAGE, hand-written Lua: data.lua, prototypes/
 tools/                   make-graphics.py -- the 47-cell adaptive sprite
                          sheet, the icon and the I/O arrows, all COMPUTED
                          rather than drawn, and their committed PNGs
-test/                    headless verification, THIRTEEN suites (see below), of
-                         which four run on Factorio 2.1 -- `sedge`, the rule;
-                         `m1`, which is belt-free and needed nothing but a
-                         manifest bump; `mig21`, which does not BUILD a
-                         multi-edge world but LOADS one out of
-                         fixtures-2.0/, which is the only way a 2.1 binary can
-                         ever be shown one; and `iact`, which gates the
-                         INTERACTIVE checklist's own staged world. The other
-                         nine build multi-edge
-                         rigs and await the estate rebuild. And
+test/                    headless verification, FOURTEEN suites (see below), and
+                         run.sh STAMPS every staged mod's info.json for the
+                         engine it read off the binary, because this mod ships
+                         on two arms out of one tree. Eleven answer the same on
+                         either; `mig21` and `mig` INVERT and take --engine,
+                         and `flip` -- which drives the multi-edge setting --
+                         exists on 2.0 alone and prints a SKIP on 2.1 rather
+                         than passing. `mig21` does not BUILD a multi-edge
+                         world at all: it LOADS one out of fixtures-2.0/, which
+                         is the only way a 2.1 binary can ever be shown one. And
                          interactive/ -- the rig-staging mod and checklist for
                          the five PLAYER gestures no headless run can make
                          (`make interactive-install`), plus TWO gestures that
                          need a real save and a graphical client rather than a
                          player: adopting a Belt Balancer save, and opening a
-                         2.0 multi-edge one on 2.1. THAT MOD ALSO STAGES THE
+                         2.0 multi-edge one on 2.1, plus the settings-menu
+                         gesture the `flip` suite drives from script. THAT MOD ALSO STAGES THE
                          FIVE MOD-PORTAL DEMO SCENES, which is what makes the
                          GIF captures reproducible instead of living in a save
                          nobody kept. Every rig and every scene in it is
@@ -298,14 +303,18 @@ make mod      # fklua mod: identity, deps and mod-data/ all from fklua.toml
 make zip      # the same, as dist/<name>_<version>.zip -- a complete
               # installable mod, data stage included
 make install  # into $MODS_DIR (defaults to the Factorio user mods dir)
-make test     # headless verification. The DEFAULT is `m1 sedge mig21 m2 m3
-              # mar upg edge mix plat qual iact`, which is every suite but
-              # `mig`; SUITES=mig names the one still built in the multi-edge
-              # idiom, which fails at the loader ("Incompatible Factorio
-              # version") and would then fail at the compiler. See
-              # test/run.sh's SUITES block.
-              # (m1 m2 m3 upg plat mar edge mix mig qual sedge mig21 iact --
-              # plat is
+make test     # headless verification, FOURTEEN suites, and the DEFAULT is all
+              # of them. WHICH FACTORIO IS ON THE MACHINE IS AN INPUT: this mod
+              # ships on two engine arms out of one tree, test/run.sh reads the
+              # series off the binary and stamps every staged mod's info.json
+              # for it, and three suites answer differently on each -- `mig21`
+              # and `mig` INVERT (see their sections) and `flip` runs on 2.0
+              # only and prints a SKIP on 2.1 rather than passing. The packaged
+              # mod is GATED rather than stamped: its bindings are pinned to one
+              # API and the ABI marshals event payloads BY NAME, so a mismatch
+              # with the binary is a defect and is reported as one.
+              # (m1 m2 m3 upg plat mar edge mix mig qual sedge mig21 flip iact
+              # -- plat is
               # the only one needing Space Age, and carries the platform rig,
               # the belt-stacking leg and the stacked-sushi band; mar and edge
               # are the marathon pair; mig is the only one whose two phases
@@ -318,7 +327,8 @@ make test     # headless verification. The DEFAULT is `m1 sedge mig21 m2 m3
               # committed fixture IS phase one; and iact is the only one that
               # is not about this mod's behaviour but about the INTERACTIVE
               # checklist's staged world, which it gates with a single
-              # --create)
+              # --create; and flip drives `bbb-multi-edge-parts` through all
+              # four of its transitions, which only Factorio 2.0 has)
 make check    # the four pure packages' unit tests (plan, skin, carry,
               # edgemode); bindings and lock current; gofmt
 make graphics # regenerate the sprite sheet, the icon and the I/O arrows
@@ -397,6 +407,10 @@ What rules it out now is **multiplayer**. A client joining mid-game would run th
 
 `make test` is the gate and it is a real Factorio run, not a model. `test/run.sh` stages a throwaway mod directory per suite, `--create`s a save whose `on_init` has already built the patterns, `--benchmark`s it, and hands both logs to an assertion script. Every run points `write-data` at a private directory via `-c`, because Factorio locks its user dir and a second instance -- another agent, an open game -- would otherwise fail the run on the `.lock` rather than on anything real.
 
+**WHICH FACTORIO IS RUNNING IS AN INPUT TO THE HARNESS, NOT AN ACCIDENT OF THE MACHINE.** This mod ships on two engine arms out of one tree ([`agents/single-edge.md`](agents/single-edge.md), "Packaging: one tree, two releases"), and a mod whose `info.json` names the other series is refused at the LOADER before an entity is placed. So `test/run.sh` reads `Major.Minor` off `$FACTORIO --version` and STAMPS every staged copy -- every test mod, observer and stand-in -- with it: `factorio_version` unconditionally, and `base >= X.Y.Z` clamped DOWN when it names a series newer than this engine and otherwise left alone, which is what makes the whole thing a no-op on the newer one. **The packaged mod is GATED rather than stamped**, and that asymmetry is the point: a test mod is engine-agnostic Lua, while the mod under test is a guest compiled against a pinned API whose ABI marshals event payloads BY NAME -- so stamping it would let a field the other series added load as mandatory and read as nil, silently. A disagreement between `fklua.toml` and the binary is a real defect and is reported as one.
+
+**Eleven of the fourteen answer the same on both engines. Three do not**, and that is what the release/2.0 verification of 2026-08-24 was for: `mig21` and `mig` INVERT (a multi-edge save is pruned and refused on 2.1, and adopted and kept on 2.0) and take `--engine` from the series `run.sh` read, with no default -- a script that guessed would assert the wrong half and be green for the wrong reason on one of them. `flip` exists on 2.0 alone and prints a SKIP on 2.1 rather than passing.
+
 **TEN OF THE THIRTEEN SUITES RUN ON FACTORIO 2.1.** The wall is in two layers, measured 2026-08-24 rather than assumed: 2.1 refuses a mod whose `info.json` says `factorio_version: 2.0` outright, so every suite fails at the loader before an entity is placed; and past that, a rig that puts two belts on one part is refused by the compiler. `m1` needed nothing but the one token and is green -- it is belt-free, so the rule cannot touch it -- `sedge` is the rule's own suite, `iact` is the interactive checklist's own world staged and checked headlessly, and `mig21` gets past both layers by not BUILDING a multi-edge world at all: it LOADS one out of `test/fixtures-2.0/`, which is the only way a 2.1 binary can ever be shown one.
 
 **`m2`, `mar` and `upg` were the FIRST TRANCHE of the rebuilt estate, 2026-08-24, and `mix`, `plat` and `qual` the second the same day.** Every rig in them was re-laid one belt per part -- which in practice means every column of parts became two, a west column carrying the row's inputs and an east column its outputs -- and every table below that describes what one of them asserts has been re-recorded on 2.1.14. What is unmoved is the point: `m2` delivers the same rates against the same control belt, the same item conservation across a recompile, and the same port count for every shape, because **the same balancer over twice as many parts is the same MACHINE**; `mar`'s per-operation heap slopes are unmoved on every term the 300-hour projection uses; `upg` still adopts every network it finds rather than rebuilding one; and **`plat`'s whole stacking leg came back identical to the item** -- 1,128 items over 336 positions, +0/+128, +16/+0, +0/+48, `smix` exact over nine kinds -- because a hidden network is a function of the BELTS.
@@ -410,6 +424,8 @@ What rules it out now is **multiplayer**. A client joining mid-game would run th
 **`--benchmark` NEVER SAVES, so a leg is exactly two phases and a third is impossible.** That is the shape every leg is designed inside, and it is also why `mig`'s two name probes stop after `--create`: `create_only` runs the first phase and the same `guest_gate` over its log alone, because what those probes ask is answered by what the guest decided at load and a benchmark phase would cost a whole Factorio run to add nothing.
 
 **The audit has TWO DOORS and they are not interchangeable.** `commands.go` registers `/bbb-audit` and `remote.call('better-belt-balancer', 'audit')`, which is how a player or another mod asks; the `bbb-audit` MARKER is the synchronous trigger a test mod's `on_init` uses, and no command can be issued from `on_init` or from a headless run at all. The command is asserted against Factorio's own `commands.commands` registry -- 2.0.77 has no `commands.run_command`, so no suite can type it -- and the remote leg drives the same handler end to end, which is evidence about the command leg because ONE id-dispatched export serves both with no branch that can tell them apart.
+
+**The interface has a SECOND method since 2026-08-24 and its whole justification is the same one.** `remote.call('better-belt-balancer', 'set-multi-edge-parts', true|false)` is the only script route to `bbb-multi-edge-parts`, because Factorio refuses `settings.global[k] = v` from anybody but the mod that DEFINED the setting -- *"Settings can only be changed by the owning player or the mod that made the setting"*, measured, and a runtime-global has no owning player. Without it every transition of the flip handler was reachable by a human and by nothing else, which is the condition this file keeps recording as "a path whose bugs a player finds". It reaches the same `writeMultiEdgeSetting` a keypress does, so the `flip` suite drives the real path; and it is inert on Factorio 2.1 by construction, where the write is gated on a marker that is absent. `edge` asserts the method list as an exact SET, because a method here is public API another mod can come to depend on.
 
 **Two shipped prototypes exist for the harness and are worth knowing about before adding a third.** `bbb-audit` asks the guest to re-classify the world and report; `bbb-insert-probe` asks it to run the miner's-pocket insert against whatever container or character is on the marker's own tile and report what the engine took (`guest/go/probe.go`). Both are hidden, script-placeable only, and both destroy themselves. They ship rather than living in `test/` because the alternative is a second implementation of the thing under test in Lua — and because both answer a question a player with a misbehaving save would want to ask.
 
@@ -724,7 +740,7 @@ The tenth suite, base plus the official `quality` mod, and **every part in every
 
 The eleventh suite, **the only one built to Factorio 2.1's rule and the only one that runs on it**. Eight clusters over thirty-six parts on a flat scratch surface, 3,500 ticks, base only: four single-edge shapes measured against a bare express belt in the same save with their **port counts asserted as an exact multiset before any rate is read**, and the three ways an edit can ask a part for a second belt -- a script BUILD, a silent ROTATION that raises no event at all, and a MERGE whose teardowns belong to `AddPart` and are queued before the compiler sees the cluster they make. Every one is refused in front of its teardown with the standing network still delivering, the audit reads `drift=1 unbuilt=0` and never the reverse, exactly one refusal is issued per distinct edge state, and **zero pieces are handed back and zero items spilled over the whole run**. The rig table, the red proof (fifteen assertions, ten `[BBB] error:` lines and 64 items on the floor with the predicate disabled) and the two design deviations are in [`agents/single-edge.md`](agents/single-edge.md)'s implementation-status section, where the whole port lives.
 
-### `mig21` -- `test/assert-mig21.py`, a Factorio 2.0 multi-edge save opened on 2.1
+### `mig21` -- `test/assert-mig21.py`, a Factorio 2.0 multi-edge save opened
 
 **The twelfth suite, and the only one with no `--create` phase at all.** Its worlds were built by a Factorio 2.0.77 binary that no longer exists here and that a 2.1 binary cannot reproduce at any price, so they are committed under `test/fixtures-2.0/` and **the fixture IS phase one**. Two of them: the m2 save (21 rigs, 77 parts, 4 surfaces) and the edge save (15 clusters, 95 parts, `lim` at 64 belts over 32 parts, and a SECOND FORCE).
 
@@ -748,7 +764,26 @@ The eleventh suite, **the only one built to Factorio 2.1's rule and the only one
 
 **Two refusal lines per cluster is the designed shape**, not a wart: the rebuild refuses with the worst information a refusal will ever have and is forbidden to speak, so it logs and re-queues, and the informed flush a tick later refuses again and delivers the one message.
 
-**And the negative is the half this engine exists to pin**: the grandfather write must never be attempted where the settings key does not exist, so the suite fails on any grandfather line, any failed-write alert and any setting-changed line at all. Red-proven three times, each catching something different -- the condemnation disabled (eleven assertions, 652 hidden entities left standing over 2,320 stranded items, audit `nets=21 drift=21`), the summary suppressed (exactly two, everything else unmoved), and the announce check removed (exactly one, a migration announced with the ordinary "the extra piece was left in place" sentence). Full tables in [`agents/single-edge.md`](agents/single-edge.md)'s phase-2 status section.
+**And the negative is the half THAT engine exists to pin**: the grandfather write must never be attempted where the settings key does not exist, so the 2.1 arm fails on any grandfather line, any failed-write alert and any setting-changed line at all. Red-proven three times, each catching something different -- the condemnation disabled (eleven assertions, 652 hidden entities left standing over 2,320 stranded items, audit `nets=21 drift=21`), the summary suppressed (exactly two, everything else unmoved), and the announce check removed (exactly one, a migration announced with the ordinary "the extra piece was left in place" sentence). Full tables in [`agents/single-edge.md`](agents/single-edge.md)'s phase-2 status section.
+
+**ON FACTORIO 2.0 EVERY LINE OF THAT TABLE INVERTS, AND THE SUITE TAKES `--engine` FOR IT.** Nothing is pruned there -- that engine is the one that CAN stack, which is what multi-edge is -- so the m2 fixture arrives with **145 interfaces over 77 part tiles, 67 of them carrying two**, the standing networks match the edge lists re-derived from the world exactly, and all **21 clusters are ADOPTED with 0 rebuilt**. Nothing is condemned, torn down, spilled or refused; the ground total is **0** at every sample; and the grandfather pass writes this mod's own setting ON, re-queues every cluster (where each one skips on the fingerprint it never lost) and tells force 1 about 21 balancers with **21 pings**. The audit reads `clusters=21 parts=77 nets=21 drift=0 unbuilt=0 refused=0`, twice and identically, and the chests take **10,850 items over 300 ticks** -- because "adopted" has to mean the balancers still WORK, and a save that is merely frozen satisfies every other number here. The `edge` fixture is the same story over 15 clusters and two forces (14 pings and 1). There is no default for `--engine`: the outcomes are opposite, so a script that guessed would be green for the wrong reason on one of them.
+
+### `flip` -- `test/assert-flip.py`, the multi-edge setting turned on and off
+
+**The fourteenth suite, and the only one that cannot run on Factorio 2.1**: `bbb-multi-edge-parts` is defined on 2.0.x and never on 2.1.x, so there is nothing there to flip and `test/run.sh` prints a SKIP rather than passing -- with the assertion script failing on a setting that reads `absent`, which is this file's own "a check that skips is a check that passed" applied to a whole suite. What covers the FOLD on every engine is `go test ./edgemode/`; what nothing else covers is the WORLD it decides about.
+
+Four rigs on a scratch surface: a control belt, `sok` (2 -> 2 over four parts, ONE BELT PER PART, legal in both modes and the control on every window), `me1` (2 -> 2 over two parts, the incumbent's idiom, draining freely) and `me2` (the same shape, DEAD-ENDED and built after the setting went on -- the field report's own rig, full and static). Four transitions:
+
+| | measured |
+|---|---|
+| the false default | `me1` refused, `sok` built. Audit `(2, 6, 1, 0, 0, 1)` |
+| turned ON | the handler re-queues, `me1` compiles, and a multi-edge balancer BUILT while it is on compiles straight away. `(3, 8, 3, 0, 0, 0)` |
+| turned OFF with both standing and `me2` full | **VETOED**: the setting goes straight back on, one message per force with a ping per balancer, and **ground 0 -> 0 -> 0, items inside the networks 120 -> 120 -> 120, 12 interfaces and 21 hidden entities unmoved**. `sok` and `me1` both deliver **2.000x one belt at 0.00% spread over a window spanning the flip** |
+| turned OFF once the multi-edge rigs are gone | it STICKS: the setting stays false, and a second belt on a working part is refused again. `(1, 4, 1, 1, 0, 1)` |
+
+**THE FLIP-OFF IS A VETO AND THE SWEEP THE DESIGN DESCRIBED IS UNREACHABLE**, which is the finding: reaching `edgemode.ActSweep` means the capability marker is present, and the very next thing `settleEdgeMode` asks is `GrandfatherNeeded(marker, Off, n)` -- which is `n > 0`, the same condition under which a sweep finds anything. **Red-proven** with the destructive sweep put back: six assertions, `0 -> 88 -> 64` items on the ground, the networks emptied 120 -> 24, and eight interfaces torn down and rebuilt. See [`agents/single-edge.md`](agents/single-edge.md)'s phase-9 section, which is where the whole 2.0 arm lives.
+
+**And `settings.global` is writable only by the mod that DEFINED the setting** (measured: *"Settings can only be changed by the owning player or the mod that made the setting"*, and a runtime-global has no owning player), so the suite drives the flip through `remote.call('better-belt-balancer', 'set-multi-edge-parts', ...)` -- a second method beside `audit`, reaching the same `writeMultiEdgeSetting` a player's keypress does and inert on 2.1 where the write is gated on the absent marker. Same argument as `bbb-audit`'s: a path only a human can reach is a path whose bugs a player finds.
 
 ### `iact` -- `test/assert-interactive.py`, the interactive checklist's own world
 
@@ -1533,6 +1568,12 @@ Everything above is about an EDIT: somebody asks a part for a second belt and is
 
 **THE GRANDFATHER LATCH IS ONCE PER SAVE BY CONSTRUCTION, not by a flag**: the pass writes the setting it tests, so the next load reads it true and does nothing. A player who later rebuilds single-edge is never flipped back DOWN -- a silent downgrade under somebody relying on multi-edge is a trap -- and turning it off is one click of a Map setting.
 
+**...AND TURNING IT OFF WHILE MULTI-EDGE BALANCERS ARE STILL STANDING IS VETOED, WHICH IS NOT WHAT THE DESIGN SAID.** It called that a SWEEP -- condemn every multi-edge network, spill what it held, tell the player -- and the sweep has never been able to stick. Reaching `edgemode.ActSweep` means the capability marker is present (the anchor said Multi, which requires it), so the very next thing `settleEdgeMode` asks is `GrandfatherNeeded(marker, Off, n)`, which on that path is `n > 0` -- **the same condition under which a sweep finds anything**. So the setting goes straight back on and the player gets the grandfather warning naming what to rebuild. A flip-off with nothing multi-edge standing finds `n == 0`, says nothing, and sticks, which is the only way the setting ever goes off and is the right one.
+
+**And what the sweep did on the way was put the world on the floor.** Reported from a live 2.0.77 session on 2026-08-24 and reproduced headlessly: the condemnation was taken by the flush, the network torn down into an `owned` pool, the compile refused (the setting is still off at that instant), and `closePool` spilled everything -- and only THEN did the grandfather write the setting back and re-queue, so the networks came back EMPTY. **A vetoed flip has to be a no-op on the world**, so the scan counts and announces and touches nothing (`scanStackedMultiEdge`), and the grandfather's own re-queue puts the clusters back where each one skips on the fingerprint it never lost. **Which leaves `condemnStanding` with ONE producer, `rebuildFromWorld`** -- the 2.1 migration, where the machine really cannot exist and the engine has already pruned it. The `flip` suite is the measurement, in both directions; see [`agents/single-edge.md`](agents/single-edge.md), phase 9.
+
+**The warning carries a `[gps=]` per balancer since the same day**, which reverses this design's own reasoning that the 2.0 message should carry none "because the player is not sent on a tour of balancers that are running": the sentence has always ended in *rebuild them one belt per part*, and naming N machines without saying where is the scavenger hunt the pings exist to end. Same cap discipline as the migration summary -- the list stops at what one readable chat line holds and the count in the sentence stays exact -- with the guest's `told force` line carrying the ping count, a truncation note and the FIRST ping verbatim, which is what makes "the pings name real cluster tiles" a measurement rather than an inference from a count.
+
 **THE WRITE IS GATED ON THE MARKER AS A CORRECTNESS MATTER.** Writing a `settings.global` key this engine does not define RAISES (measured on 2.1.14, `LuaCustomTable doesn't contain key`), and a 2.0 save opened on 2.1 is full of exactly the clusters the pass looks for -- so a fold that forgot the marker would raise inside the load of every save the migration exists for. `TestGrandfatherNeverWritesWhereTheKeyDoesNotExist` and the `mig21` suite's negative are the two places that is pinned.
 
 **The anchor is not a cache of the setting.** `edgeAnchor` is guest state and therefore save state: the mode the REGISTRY was last reconciled under. The setting is what the player wants; this is what the networks standing in the world were built to, and a flip is a change only when the two disagree. That comparison is load-bearing rather than defensive -- Factorio raises `on_runtime_mod_setting_changed` for a write of the value already there, and SYNCHRONOUSLY, inside the assigning statement. So the grandfather pass writes the anchor FIRST and the setting second, and its own re-entrant handler finds agreement and does nothing. No self-write flag exists and none is needed.
@@ -1923,6 +1964,20 @@ All nine suites green in **both arms** from clean, 2026-08-16, and **no other su
 
 **What the gate found, and it is one shape seen twice.** Three shared checks and one probe could pass while measuring nothing -- a missing log line was a skipped assertion rather than a failed one, and the probe's own success sentence (*"...and its balancers were left alone"*) printed over a create log carrying nineteen conversions of a still-installed mod's entities. Both are written up in "A CHECK THAT SKIPS IS A CHECK THAT PASSED". What it did NOT find: nothing was weakened by either pass, the original four legs assert everything they always did and five things more, `bench/` was untouched, and every claim in the two passes' tables re-ran to the number recorded.
 
+### And on Factorio 2.0 the outcome splits the other way -- the conversion is grandfathered
+
+**A player who uninstalls Belt Balancer on 2.0 keeps their base, and until 2026-08-24 nothing had ever run that branch.** The conversion is byte-identical on both engines -- `legacy.go` knows nothing about the rule -- and so is the first flush after it: the setting defaults to false, so all seven incumbent-idiom clusters are refused with the same seven alert lines and the same shape multiset `[2, 2, 2, 2, 2, 3, 4]`. What happens NEXT is the whole difference. The capability marker is present, so `settleEdgeMode` asks `edgemode.GrandfatherNeeded(marker, Off, 7)`, gets true, writes `bbb-multi-edge-parts` ON, re-queues every cluster and tells each owning force -- and the very next flush compiles all seven.
+
+| | 2.1 | **2.0** |
+|---|---|---|
+| the final audit | `clusters=9 parts=31 nets=2 drift=0 unbuilt=0 refused=7` | **`nets=9 ... refused=0`** |
+| `sok2` / `sok4` | 2.000x / 3.997x | **2.000x / 3.997x** |
+| `m4x4` / `m3to5` | **0 0 0 0** and **0 0 0 0 0** | **3.997x at 0.15% and 2.996x at 0.26%** -- the pre-port records to the digit |
+| what the player is told | the migration checklist | **the grandfather warning**, both once per force: 6 and 1 |
+| teardowns, spills | 0, 0 | **0, 0** |
+
+**Two constants had to be SPLIT rather than switched**, and both splits are the kind one engine cannot see. The number of refusal LINES is 7 on both; the audit's own `refused=` column is 7 on 2.1 and **0** on 2.0, because the grandfather compiles all seven a flush later and a successful compile clears the feedback memo. And the `added` leg's rebuild-from-world reports **2 adopted / 7 rebuilt on BOTH** -- it runs in the dispatch after the conversion's flush, before the grandfather's re-queue has been flushed -- so that is its own constant and not the audit's. **The per-force log line is SHARED by both messages** (`tellAffected` writes it whichever sentence it is delivering), so what it pins is asserted on both engines; only the summary SENTENCE is 2.1-only, and on 2.0 it would be false of every balancer a flush later.
+
 ### And verified again 2026-08-24, on Factorio 2.1, where the outcome splits
 
 **The single-edge port did not touch this feature and changed its answer completely.** `legacy.go` is byte-identical: 31 parts still convert from 3 surfaces into 9 clusters at their health and their quality, 2 forces are still granted the technology, the item stack still survives and still flips its `place_result`, the witness's 48 copper plates are still 48 at every sample, and the state machine's two axes are untouched because it knows nothing about belts. What moved is what the compiler then does with the clusters: **seven of the nine are laid the incumbent's way -- one column of parts with a belt on both free faces, which is two belts per part -- and Factorio 2.1 refuses them.**
@@ -2022,7 +2077,8 @@ Design fixed 2026-07-31: **compile, don't interpret** -- balancer clusters compi
 | **Nothing the compiler places draws anything** | The hidden prototypes are clones of base belts and kept base's pictures — including a three-by-three linked-belt `structure` on the one prototype that stands where a player looks. All four are blanked, and the `edge` suite asserts the structural half: 180–197 visible-surface entities of ours, **every one on a registered part tile, 0 off one**, across six samples. "The tan streak" |
 | **Its long-game cost is measured, not assumed** | Every net-zero world operation's permanent-heap slope, flat over hundreds of iterations, a 300-hour projection built on it, and — since 2026-08-02 — the one stall that projection predicted, measured at **782 ms** and then removed by shipping `--gc=collected`. See "The marathon save" and "The third decision" |
 | **The art is drawn, not computed** | All four assets are an artist's, delivered 2026-08-19: the 47-cell sheet, the icon, the I/O arrows and the mod logo. They dropped in with no code change but one alignment constant, because the cell order and the eight arrow cells were a contract the spec stated and the delivery met. `tools/make-graphics.py` still generates the placeholders and still DEFINES that contract; it is the fallback and the specification, not the shipped pixels |
-| **One belt per balancer part, on Factorio 2.1** | 2.1 closed the collision-mask loophole two interface linked belts shared a tile through, so trunk targets 2.1 and a cluster tile carries at most one edge. The rule enforces from a per-tile count that falls out of the classification walk, the refusal is the sixty-fifth belt's own machinery down to the wake-race guard, and a merge that would break it is spared by the bridging-tile theorem: measured on the `sedge` suite at 1.002x / 2.000x / 4.004x / 3.001x one belt, three refusals with the standing networks still delivering, and zero spills and zero hand-backs. Red-proven: with the predicate off the same run dies on ten `[BBB] error:` lines and puts 64 items on the floor. **Phases 1 through 7 are done -- all thirteen suites are green on 2.1.14 in both `-gc` arms, which restored the heap-slope gate.** "One belt per balancer part" and [`agents/single-edge.md`](agents/single-edge.md) |
+| **One belt per balancer part, on Factorio 2.1** | 2.1 closed the collision-mask loophole two interface linked belts shared a tile through, so trunk targets 2.1 and a cluster tile carries at most one edge. The rule enforces from a per-tile count that falls out of the classification walk, the refusal is the sixty-fifth belt's own machinery down to the wake-race guard, and a merge that would break it is spared by the bridging-tile theorem: measured on the `sedge` suite at 1.002x / 2.000x / 4.004x / 3.001x one belt, three refusals with the standing networks still delivering, and zero spills and zero hand-backs. Red-proven: with the predicate off the same run dies on ten `[BBB] error:` lines and puts 64 items on the floor. **Phases 1 through 9 are done -- all fourteen suites are green in both `-gc` arms on Factorio 2.1.14 AND on 2.0.77**, which is the other engine arm and which restored the heap-slope gate on both. "One belt per balancer part" and [`agents/single-edge.md`](agents/single-edge.md) |
+| **...and on Factorio 2.0 the mode is a setting, which the mod defends rather than obeys** | Multi-edge survives there behind `bbb-multi-edge-parts`, default off, and turning it OFF while multi-edge balancers are standing is **VETOED**: the setting goes straight back on and the player is told what to rebuild, with a ping per balancer. It was a SWEEP until 2026-08-24 -- tear them down and spill -- which could never stick (the condition that makes a sweep find something is the condition that makes the grandfather write the setting back) and which put a full balancer's contents on the floor on the way. Measured either side of the fix: ground `0 -> 88 -> 64` against `0 -> 0 -> 0`, and the networks' own contents `120 -> 24 -> 76` against `120` throughout. The `flip` suite drives all four transitions, on the only engine that has them |
 | **A 2.0 multi-edge save opened on 2.1 stops honestly, and says where the items went** | The engine has already deleted all but one belt-connectable per tile before any script runs, silently, so the guest wakes into crippled machines. It tears every remnant down -- the one place a refusal demolishes anything, because a stacked linked belt in a 2.1 world is an engine risk rather than a degraded balancer -- recovers what they were holding exactly, spills all of it, refuses every cluster and tells each owning force once with a clickable ping per balancer. Measured on both committed fixtures: 2,320 and 6,540 items recovered and spilled to the item, 0 put back, 0 of the compiler's entities left standing, the player's 77 and 95 parts untouched, and the audit stable at `nets=0 drift=0 unbuilt=0 refused=N`. On Factorio 2.0 the same scan reaches the other outcome: the balancers are kept working, the mod writes its own setting to say so, and the force is warned once. "A save built to the other rule" and [`agents/single-edge.md`](agents/single-edge.md) |
 | **It is not shipped** | No mod-portal release, and no play-testing beyond the suites and one guided pass. Licensed MIT (`LICENSE`, 2026-08-15) |
 

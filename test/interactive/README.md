@@ -121,6 +121,23 @@ Rebuild one of them one belt per part and it compiles and runs, which is the oth
 
 Log lines: `[BBB] single-edge: N balancers were built with several belts per part`, one `[BBB] single-edge: told force ... about N balancers` per affected force, and a `torn down cluster` and `spilled ... items beside cluster` pair per balancer. No `[BBB] error:` anywhere.
 
+## H. Turning off multiple belts per part, on Factorio 2.0
+
+No staged rig, no player index needed, and one thing only a human can do: move the toggle. The headless suite drives every transition of this setting through a remote call and asserts the world either side of each one; what it cannot check is the Map settings screen itself.
+
+Factorio 2.0 only. On 2.1 the setting is not defined and does not appear.
+
+Open a 2.0 save whose balancers connect several belts to one part, so that the mod has turned "Allow multiple belts per balancer part" on for you at load. Let the balancers fill with items. Then open Settings, Mod settings, Map, and turn it off. Expected:
+
+- the toggle goes back on by itself, and a chat message per owning force says how many balancers use several belts per part, that the save keeps working, that they will stop working on Factorio 2.1, and to rebuild them first;
+- a `[gps=...]` ping per balancer in that message. Click them: each must centre the map on a real balancer of yours;
+- nothing on the ground anywhere, no balancer stopping even for a tick, and every item still in the machine it was in. This is the whole point of the check: refusing the change must not cost a single item;
+- `/bbb-audit` reporting `drift=0 unbuilt=0 refused=0`, unchanged from before the keypress.
+
+Then rebuild those balancers one belt per part, or take them apart, and turn it off again. This time it stays off, and laying a second belt against a part of a working balancer is refused with the usual red flying text.
+
+Log lines: `[BBB] single-edge: multiple belts per part turned OFF; N standing balancers were built that way, so the flip is VETOED`, then `[BBB] single-edge: kept multiple belts per part enabled for this save`, a re-queue line, and one `told force ... N pings` per force. No `torn down cluster` and no `spilled` in that window, and no `[BBB] error:` anywhere.
+
 ## The demo scenes (x = 56)
 
 Five saturated scenes in a second column east of the gesture rigs, staged so that the mod portal's animations can be captured again from a known world instead of from a save nobody kept. From north to south:
