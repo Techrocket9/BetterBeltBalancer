@@ -26,7 +26,7 @@ dependencies = ["base >= 2.1.0"]
 # and `fklua api check --to <newer>` says whether an upgrade would break
 # anything this mod actually calls.
 [fklua]
-api = "2.1.14"
+api = "2.1.16"
 lang = ["go"]
 
 # How the GUEST's own heap is managed, and it must match how the guest was
