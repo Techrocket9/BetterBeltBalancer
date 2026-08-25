@@ -18,10 +18,11 @@ owning forces told with a ping per balancer, every gesture rig and every demo
 scene is single-edge and headlessly verified, and **all thirteen suites are
 green on 2.1.14 in both `-gc` arms**. **The `mar` slopes are measured again**,
 which is the gate the first three phases shipped without and which their
-"nothing on any hot path moves" claims were waiting on. What is left is the GIF
-re-capture, which needs a graphical client; the setting-flip legs and the
-multi-edge regression run need a 2.0 binary and belong on the `release/2.0`
-branch.
+"nothing on any hot path moves" claims were waiting on. **The GIF re-capture is
+DONE 2026-08-24** for the five plain scenes; the two `-io-arrows` variants are
+still outstanding, because the capture was made with alt-mode off throughout.
+The setting-flip legs and the multi-edge regression run need a 2.0 binary and
+belong on the `release/2.0` branch.
 
 **The one defect the estate work found and did not fix is FIXED, as phase 8**: a
 BB2/BB3 conversion is the third producer of the migration summary now, so every
@@ -315,8 +316,8 @@ built the suite and ran it:
 
 **DONE 2026-08-24.** What was actually built, what deviates from the paragraphs
 below and why, and the measurements: "Implementation status — phase 3" at the
-end of this file. The GIF re-capture is the one part still outstanding, because
-it needs a graphical client.
+end of this file. The GIF re-capture landed 2026-08-24 for the five plain
+scenes; only the two `-io-arrows` variants are still outstanding.
 
 **`test/interactive/bbb-interactive-setup` is the test-world-generating mod
 behind both the checklist and the portal GIF captures** (the GIF session's
@@ -985,12 +986,45 @@ Five scenes in a column at x = 56, all saturated from world creation:
 cannot carry four belts. The cross is the same 1 -> 3 read and it is already a
 scene, so the count goes from six scenes to five rather than needing a new one.
 
-**The GIFs under `docs/media/` are the pre-port captures and are left in place**
-until the re-capture lands, because deleting them would break the portal
-description's links before there is anything to replace them with. Re-capturing
-needs a graphical client and is the one part of this phase that is not done:
-five scenes, plain and with alt-mode on for the two that have arrow variants,
-and `single-part-1-to-3-fanout.gif` goes when its replacement is uploaded.
+**The five plain GIFs under `docs/media/` are RE-CAPTURED, 2026-08-24**, from a
+world this branch's own demo band staged — so the portal shows the geometry a
+fresh install actually builds rather than the multi-edge shapes it refuses.
+
+| file | scene | size | loop | bytes |
+|---|---|---|--:|--:|
+| `cross-1-to-3.gif` | cross 1 -> 3 | 472x474 | 128 ticks | 1,032,063 |
+| `compact-column-8-to-8.gif` | compact column 8 -> 8 | 432x366 | 128 ticks | 1,567,163 |
+| `c-shape-8-to-8.gif` | c-shape 8 -> 8 | 392x758 | 128 ticks | 2,022,477 |
+| `c-shape-express-8-to-9.gif` | c-shape 8 -> 9 | 434x758 | 96 ticks | 1,821,986 |
+| `long-run-8-to-8.gif` | long run 8 -> 8 | 674x440 | 128 ticks | 2,568,308 |
+
+All five are 15 fps at 40 px per tile, which is the pre-port set's own scale,
+and all five sit inside its 0.99-3.58 MB size envelope.
+
+**Every scene was verified working before it was cut, rather than assumed.** The
+guest's own log has the five compiling to `1->3 over 4 ports`, `8->8 over 8
+ports` three times and `8->9 over 16 ports`, the audit reporting `nets=12
+drift=0 unbuilt=0 refused=0`, and no `[BBB] error:` anywhere in the session; a
+per-belt motion measurement over each scene puts every input and every output
+flowing, at a spread of 0.1% to 5.2%. Nothing was edited during the capture —
+the gesture-rig teardowns in that log are all from before the recording began.
+
+**The loop period is 32 TICKS, not the 8 a saturated express belt's item pattern
+repeats on**, and that is measured rather than derived: seams were searched at
+every multiple of 8 across each still segment and only multiples of 32 come back
+clean, because the belt's own texture animation has a period the item pattern
+does not divide. At the chosen seams no pixel moves further across the wrap than
+it moves across an ordinary frame step — 198 against 198 on the cross, 237
+against 237 on the long run — which is what makes the loop seamless rather than
+merely close. The 8 -> 9 loops at 96 rather than 128 because the camera was only
+still for 127 frames there.
+
+**The two `-io-arrows` files are still the pre-port captures**, because the
+session ran with alt-mode OFF throughout: no arrow variant could be cut from it,
+and both want one more pass with alt-mode held on. They and the retired
+`single-part-1-to-3-fanout.gif` stay in place for the reason they always did —
+the portal description hotlinks them by raw URL, so removing one breaks a live
+page.
 
 ### The `iact` suite
 
