@@ -61,7 +61,16 @@ REQUEUED = re.compile(
 )
 TOLD = re.compile(
     r"\[BBB\] single-edge: told force (\d+) about (\d+) balancers built to the "
-    r"multi-edge rule, (\d+) pings(?:, first \[gps=(-?\d+),(-?\d+),(\S+?)\])?(.*)"
+    r"multi-edge rule, (\d+) pings(?:, first \[gps=(-?\d+),(-?\d+),(\S+?)\])?"
+    r", charted (\d+)(?: from (-?\d+),(-?\d+) to (-?\d+),(-?\d+))?(.*)"
+)
+# THE CHART TRIPWIRE. `is_chunk_charted` answers false for everything on a
+# headless run -- a force with no players has no chart to write into -- so this
+# reports zero before and zero after, with nauvis's own origin chunk as the
+# control. See the test mod's chart_state for the measurements behind that.
+CHART = re.compile(
+    r"\[FLIP\] chart tag=(\S+) force=(\d+) charted=(\d+) of=(\d+) "
+    r"nauvis_origin=(\S+) players=(\d+)"
 )
 REMOTE = re.compile(r"\[BBB\] remote set-multi-edge-parts=(true|false)(.*)")
 TORNDOWN = re.compile(r"\[BBB\] torn down cluster (\d+), returned (\d+) items")
@@ -99,6 +108,11 @@ EXPECT_MULTI = 2
 # ground, which is the scavenger hunt the pings were added to end.
 ME_TILES = {(0, 14), (0, 15), (0, 22), (0, 23)}
 SURFACE = "bbb-flip"
+
+# WHERE THE FIRST CHARTED BOX HAS TO BE. `me1` is two parts at (0, 14) and
+# (0, 15), so its tile box is x 0..0 and y 14..15; a tile covers [x, x+1], so the
+# far corner is one past the last tile, and then `chartMargin` = 8 on every side.
+EXPECT_FIRST_BOX = (0 - 8, 14 - 8, 0 + 1 + 8, 15 + 1 + 8)
 
 # The rate window SPANS the veto: `b` is 105 ticks before the flip-off and `d` is
 # 1,195 after it. A snapshot either side would say the balancers were running
@@ -329,7 +343,7 @@ def main():
           "message is once per FORCE, never once per balancer and never once per "
           "save")
     for m in told:
-        check("FAILED" not in m.group(7),
+        check("FAILED" not in m.group(12),
               f"the message to force {m.group(1)} did not reach it")
         count, pings = int(m.group(2)), int(m.group(3))
         check(count == EXPECT_MULTI,
@@ -339,7 +353,7 @@ def main():
               f"the message named {count} balancers and carried {pings} pings. The "
               "two are equal until a base has more affected balancers than one "
               "readable chat line can point at, and this one has two")
-        check("truncated" not in m.group(7),
+        check("truncated" not in m.group(12),
               "the ping list was truncated with two balancers in it, which means "
               "the cap moved or the buffer did")
         if check(m.group(4) is not None,
@@ -355,6 +369,62 @@ def main():
             check(surf == SURFACE,
                   f"the first ping names surface {surf!r} and the rigs are on "
                   f"{SURFACE!r}")
+        # AND THE MOD CHARTED WHAT IT POINTED AT. One box per ping, and the first
+        # of them has to be this rig's own cluster grown by the margin -- a count
+        # alone would be satisfied by charting the wrong ground N times.
+        charted = int(m.group(7))
+        check(charted == pings,
+              f"the message carried {pings} pings and charted {charted} boxes. A "
+              "`[gps=]` opens the map at a coordinate whether or not the force "
+              "has ever seen it, and an uncharted coordinate is black, so every "
+              "ping in a message a player can click has to be charted")
+        if check(m.group(8) is not None,
+                 "no charted box was logged, so the margin and the geometry "
+                 "behind the pings are unasserted"):
+            box = tuple(int(m.group(i)) for i in (8, 9, 10, 11))
+            print(f"  first charted box: {box}")
+            check(box == EXPECT_FIRST_BOX,
+                  f"the first charted box is {box} and the first pinged cluster "
+                  f"plus the margin is {EXPECT_FIRST_BOX}. It is the CLUSTER's "
+                  "box and not the ping's tile: a point would leave the far end "
+                  "of a long balancer in the dark")
+
+    # --- the chart tripwire ---------------------------------------------------
+    #
+    # NOT A MEASUREMENT OF THE FIX, and it says so. `is_chunk_charted` answers
+    # false for everything on a headless run: with no players a force has no
+    # chart to write into, so `force.chart`, `force.chart_all` over a fully
+    # generated surface and a radar all leave it false, and so does NAUVIS'S OWN
+    # ORIGIN CHUNK, which every real game charts at world creation. That control
+    # is on the same line, which is what makes this a statement about the engine
+    # rather than about the mod.
+    #
+    # So what is asserted is the wall, in both directions -- and the day a
+    # Factorio charts headlessly, this fails and asks for the real assertion
+    # instead of going on passing. Same shape as the `edge` suite's
+    # `player-mine-raise ok=false` probe, and for the same reason.
+    charts = {m.group(1): tuple(int(g) if g.isdigit() else g
+                                for g in m.groups()[2:]) for m in CHART.finditer(text)}
+    for tag in ("default", "post-veto", "final"):
+        if not check(tag in charts, f"no chart sample for tag={tag}"):
+            continue
+        got, of, nauvis, players = charts[tag]
+        print(f"  chart at {tag}: {got} of {of} chunks, nauvis origin {nauvis}, "
+              f"{players} players")
+        check(players == 0,
+              f"{players} players in a headless run. If that is now possible the "
+              "chart assertions here can be real ones: assert the pinged chunks "
+              "ARE charted after the veto, and delete this tripwire")
+        check(nauvis == "false",
+              "nauvis's origin chunk is charted for the player force on a "
+              "headless run. That is the control this suite's chart numbers rest "
+              "on -- if the engine charts anything here now, `force.chart` can be "
+              "checked directly and must be")
+        check(got == 0,
+              f"{got} of the pinged chunks read charted at tag={tag}. Nothing "
+              "headless can chart, so a non-zero here means the wall has fallen "
+              "and the guest's charting can and must be asserted through "
+              "`is_chunk_charted` rather than through its own log line")
 
     # --- the balancers kept running across it ---------------------------------
     a, b = WINDOW

@@ -160,7 +160,15 @@ GFFAILED = re.compile(r"could not be written")
 # whether it pointed anywhere.
 PINGS = re.compile(
     r"multi-edge rule, (\d+) pings(, list truncated)?"
-    r"(?:, first \[gps=(-?\d+),(-?\d+),(\S+?)\])?")
+    r"(?:, first \[gps=(-?\d+),(-?\d+),(\S+?)\])?"
+    # AND WHAT IT CHARTED. A `[gps=]` opens the map at a coordinate whether or
+    # not the force has ever seen it, and an uncharted coordinate is BLACK, so a
+    # ping list charts what it points at. Whether the ENGINE recorded it is
+    # behind the player wall -- a force with no players has no chart to write
+    # into, measured -- so what is asserted here is that the guest made the call
+    # once per ping. The `mig21` and `flip` suites carry the tripwire that says
+    # the wall is still there.
+    r", charted (\d+)")
 REQUEUED = re.compile(
     r"\[BBB\] single-edge: (\d+) clusters re-queued after grandfathering")
 FLIPPED = re.compile(r"\[BBB\] single-edge: multiple belts per part turned (ON|OFF)")
@@ -610,8 +618,13 @@ def check_refusals(lines, leg, fail):
                             "to check; the guest logs it verbatim precisely so "
                             "that this can be a measurement" % m.group(1))
             else:
-                print("    first ping: [gps=%s,%s,%s]"
-                      % (m.group(3), m.group(4), m.group(5)))
+                print("    first ping: [gps=%s,%s,%s], charted %s"
+                      % (m.group(3), m.group(4), m.group(5), m.group(6)))
+            if int(m.group(6)) != int(m.group(1)):
+                fail.append("a per-force message carried %s pings and charted %s "
+                            "boxes; every ping a player can click has to be "
+                            "charted, or the click opens on fog"
+                            % (m.group(1), m.group(6)))
         got_pings = sorted(int(m.group(1)) for m in pings)
         if got_pings != sorted(per_force.values()):
             fail.append("the messages carried %s pings and named %s balancers; "

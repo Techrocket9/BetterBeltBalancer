@@ -93,6 +93,18 @@ TOLD = re.compile(
 PINGS = re.compile(
     r"multi-edge rule, (\d+) pings(, list truncated)?"
     r"(?:, first \[gps=(-?\d+),(-?\d+),(\S+?)\])?"
+    r", charted (\d+)"
+)
+# THE CHART TRIPWIRE, and it is a tripwire rather than a measurement of the fix.
+# A `[gps=]` opens the map at a coordinate whether or not the force has charted
+# it, and an uncharted coordinate is BLACK -- so the mod charts what it pings.
+# The obvious check is `is_chunk_charted` afterwards, and it answers false for
+# everything on a headless run: with no players a force has no chart to write
+# into, and nauvis's own origin chunk (the control on the same line) reads
+# uncharted too. See check_chart_wall.
+CHART = re.compile(
+    r"\[MIG21\] chart tag=(\S+) force=(\d+) (\S+(?: \S+)*?) "
+    r"nauvis_origin=(\S+) players=(\d+)"
 )
 REQUEUED = re.compile(
     r"\[BBB\] single-edge: (\d+) clusters re-queued after grandfathering"
@@ -208,6 +220,52 @@ def report(engine="2.1"):
         print("\na 2.0 multi-edge save opened on 2.1: the remnants came down, "
               "their items are on the ground, every balancer is refused, and each "
               "force was told once\n")
+
+
+
+def check_chart_wall(text, tags):
+    """THE CHART TRIPWIRE, asserted the same way on both engines.
+
+    Both arms emit a ping list -- the 2.1 migration checklist and the 2.0
+    grandfather warning -- and both therefore chart what they point at. Whether
+    the ENGINE recorded it is not answerable here: with no players a force has no
+    chart to write into, so `force.chart`, `force.chart_all` over a fully
+    generated surface and even a radar all leave `is_chunk_charted` false, and so
+    does nauvis's own origin chunk, which every real game charts at world
+    creation. That control is on the same line, which is what makes this a
+    statement about the engine rather than about the mod.
+
+    So the wall is what is asserted, in both directions. The day a Factorio
+    charts headlessly this fails and asks for the real assertion -- the pinged
+    chunks ARE charted after the message -- instead of going on passing. Same
+    shape as the `edge` suite's `player-mine-raise ok=false` probe."""
+    charts = {}
+    for m in CHART.finditer(text):
+        charts.setdefault(m.group(1), []).append(
+            (int(m.group(2)), m.group(3), m.group(4), int(m.group(5))))
+    for tag in tags:
+        if not check(tag in charts, f"no chart sample for tag={tag}"):
+            continue
+        for force, per_surface, nauvis, players in charts[tag]:
+            print(f"  chart at {tag}: force {force} {per_surface}, nauvis origin "
+                  f"{nauvis}, {players} players")
+            check(players == 0,
+                  f"{players} players in a headless run. If that is now possible "
+                  "the chart check here can be a real one: assert the pinged "
+                  "chunks ARE charted after the message, and delete this tripwire")
+            check(nauvis == "false",
+                  "nauvis's origin chunk is charted for a force on a headless "
+                  "run. That is the control these numbers rest on -- if the "
+                  "engine charts anything here now, `force.chart` can be checked "
+                  "directly and must be")
+            for chunk in per_surface.split():
+                got = int(chunk.split(":")[1].split("/")[0])
+                check(got == 0,
+                      f"{chunk} at tag={tag}: chunks read charted on a headless "
+                      "run. Nothing here can chart, so a non-zero means the wall "
+                      "has fallen and the guest's charting can and must be "
+                      "asserted through `is_chunk_charted` rather than through "
+                      "its own log line")
 
 
 def grandfather_arm(text, want):
@@ -368,6 +426,12 @@ def grandfather_arm(text, want):
         check(m.group(2) is None,
               f"force {force}'s ping list was truncated with "
               f"{want['forces'][force]} balancers in it")
+        # AND THE MOD CHARTED WHAT IT POINTED AT, one box per ping. Whether the
+        # engine then recorded it is behind the player wall -- see CHART.
+        check(int(m.group(6)) == want["forces"][force],
+              f"force {force} was told about {want['forces'][force]} balancers "
+              f"and charted {m.group(6)} boxes. Every ping in a message a player "
+              "can click has to be charted, or the click opens on fog")
         if check(m.group(3) is not None,
                  f"force {force}'s message carried no ping to check; the guest "
                  "logs the first one verbatim precisely so that this can be a "
@@ -382,6 +446,8 @@ def grandfather_arm(text, want):
                   f"force {force}'s first ping points at the hidden surface, "
                   "which is the compiler's own and is not somewhere a player can "
                   "go")
+
+    check_chart_wall(text, ("cfg", "t1", "final"))
 
     check(not TOLDPIECE.search(text),
           "a grandfathered cluster was announced with the ORDINARY refusal "
@@ -566,6 +632,35 @@ def main():
     check(told == want["forces"],
           f"the summary went to {told} and this fixture's balancers belong to "
           f"{want['forces']} -- one message per force, never one per balancer")
+    # THE PINGS AND THE CHARTING, on this arm too. Both messages come out of one
+    # `tellAffected`, so the checklist a 2.1 migration hands a player is charted
+    # by the same call the 2.0 grandfather warning uses -- and it has to be, for
+    # the same reason: these fixtures' surfaces have never been charted by
+    # anything, so every ping in them would otherwise open on fog.
+    #
+    # WRITTEN NOW AND EXERCISED WHEN A 2.1 BINARY IS NEXT PRESENT. This machine
+    # has one Factorio and it is 2.0.77, so this branch has not been run; it is
+    # the same assertion the 2.0 arm makes twenty lines up, over the same log
+    # line, and it is here rather than owed so that the next 2.1 run either
+    # confirms it or says which half moved.
+    for m in PINGS.finditer(text):
+        n, charted = int(m.group(1)), int(m.group(6))
+        print(f"    {n} pings, {charted} charted, first "
+              f"{m.group(3)},{m.group(4)} on {m.group(5)}")
+        check(m.group(2) is None, "a ping list was truncated")
+        check(m.group(3) is not None, "a message carried no ping to check")
+        check(m.group(5) != HIDDEN_SURFACE,
+              "a ping points at the hidden surface, which is the compiler's own "
+              "and is not somewhere a player can go")
+        check(charted == n,
+              f"{n} pings went out and {charted} boxes were charted. Every ping "
+              "in a message a player can click has to be charted, or the click "
+              "opens on fog")
+    check(len(PINGS.findall(text)) == len(want["forces"]),
+          f"{len(PINGS.findall(text))} of the {len(want['forces'])} messages "
+          "carried a ping and chart count")
+    check_chart_wall(text, ("cfg", "t1", "final"))
+
     check(not TOLDPIECE.search(text),
           "a migrated cluster was announced with the ORDINARY refusal message, "
           "which says the extra piece was left in place unconnected. Nobody placed "

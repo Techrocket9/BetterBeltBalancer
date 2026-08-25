@@ -1031,10 +1031,16 @@ func tellMigrated(n uint32, stood bool) {
 // affCluster is one balancer on the checklist: everything a ping needs, and no
 // entity reference, because these are read a tick after the rebuild that found
 // them.
+//
+// `root` and the BOX are here for the charting below rather than for the ping,
+// which needs one tile. See chartAffected.
 type affCluster struct {
+	root  uint32
 	force uint32
 	surf  uint32
 	x, y  int32
+	// The cluster's tile bounding box, inclusive, filled by boxAffected.
+	x0, y0, x1, y1 int32
 }
 
 var (
@@ -1042,6 +1048,14 @@ var (
 	affForces []uint32
 	affTile   [1]key
 )
+
+// How far outside a balancer's own tiles the map is charted when it is pinged.
+//
+// Chart works in CHUNKS, so any margin at all pulls in whatever chunk the box's
+// corner sits in; eight tiles is a quarter of one, which is enough that a
+// balancer standing near a chunk edge gets the chunk NEXT to it as well and the
+// player arrives looking at their machine rather than at the seam beside it.
+const chartMargin = 8
 
 // gatherAffected resolves the announced roots into clusters, deduplicating by
 // the root each one resolves to NOW -- a cluster can have been re-rooted between
@@ -1076,7 +1090,12 @@ func gatherAffected() (uint32, bool) {
 		stood = stood || sedgeAnnounce[i].stood
 		k := ppos[r]
 		f := pforce[r]
-		affected = append(affected, affCluster{force: f, surf: k.s, x: k.x, y: k.y})
+		affected = append(affected, affCluster{
+			root: r, force: f, surf: k.s, x: k.x, y: k.y,
+			// A one-tile box until boxAffected runs, so a caller that never
+			// charts is looking at the ping's own tile rather than at zeroes.
+			x0: k.x, y0: k.y, x1: k.x, y1: k.y,
+		})
 		seen := false
 		for j := range affForces {
 			if affForces[j] == f {
@@ -1088,7 +1107,30 @@ func gatherAffected() (uint32, bool) {
 			affForces = append(affForces, f)
 		}
 	}
+	boxAffected()
 	return uint32(len(affected)), stood
+}
+
+// boxAffected fills each cluster's bounding box, and it is a SECOND PASS for a
+// reason rather than for tidiness.
+//
+// `collectCluster` floods with `gen`/`mark`, which is exactly what the dedup
+// loop above uses to decide whether it has already seen a root -- so calling it
+// from inside that loop would bump the generation under the loop's own marks and
+// the deduplication would silently stop working. Run afterwards, the marks have
+// done their job and the flood may have them.
+//
+// No host call: this is the registry's own flood fill over guest memory, and it
+// runs only on a flush that has something to announce.
+func boxAffected() {
+	for i := range affected {
+		tiles := collectCluster(affected[i].root)
+		if len(tiles) == 0 {
+			continue
+		}
+		affected[i].x0, affected[i].y0, affected[i].x1, affected[i].y1 =
+			clusterBox(tiles)
+	}
 }
 
 // tellAffected says one thing to each force that owns an affected balancer.
@@ -1096,26 +1138,33 @@ func gatherAffected() (uint32, bool) {
 // `withPings` is what separates the two messages rather than a second function:
 // the 2.1 one is a checklist of machines to rebuild and every one of them is
 // somewhere the player has to go, so it carries a `[gps=...]` per cluster; the
-// 2.0 one is a warning about a save that still works, so it carries none and the
-// player is not sent on a tour of balancers that are running.
+// 2.0 one is the grandfather warning, which since 2026-08-24 carries them too --
+// it also ends in "rebuild them one belt per part", and naming machines without
+// saying where is the scavenger hunt the pings exist to end.
+//
+// A PING LIST CHARTS WHAT IT POINTS AT, and this is the one place that can be
+// true of every producer at once: the veto, the grandfather and the 2.1
+// migration summary all arrive here. See chartAffected.
+//
+// THE FORCE IS RESOLVED BEFORE THE PING LOOP RATHER THAN AFTER IT, which is the
+// one structural change the charting made. Charting needs the LuaForce and the
+// ping loop is where a cluster is decided to be pinged at all, so the two have
+// to happen together or the second pass would have to re-derive which clusters
+// the first one accepted -- two copies of the cap rule, one edit apart.
 func tellAffected(msgKey string, withPings bool) {
 	for i := range affForces {
 		f := affForces[i]
+		// Which cluster this force's message is addressed FROM. The first of its
+		// clusters, in the order the rebuild found them: any of them would do --
+		// they all belong to this force by construction -- and taking the first
+		// makes it deterministic, which matters because what it produces reaches
+		// every client.
 		count := uint32(0)
-		gpsReset()
 		for j := range affected {
 			if affected[j].force != f {
 				continue
 			}
 			count++
-			if withPings {
-				gpsAdd(&affected[j])
-			}
-			// The FIRST of this force's clusters, in the order the rebuild found
-			// them, is the tile `forceOfCluster` reads the LuaForce off. Any of
-			// them would do -- they all belong to this force by construction --
-			// and taking the first makes it deterministic, which matters because
-			// the message it produces reaches every client.
 			if count == 1 {
 				affTile[0] = key{s: affected[j].surf, x: affected[j].x, y: affected[j].y}
 			}
@@ -1127,8 +1176,22 @@ func tellAffected(msgKey string, withPings bool) {
 		if !ok {
 			// No part of ours left standing on that tile to read a force off, or the
 			// index moved. There is nobody to address and nothing to be done about
-			// it; the log line above is the record either way.
+			// it; the log line below is the record either way.
 			continue
+		}
+		gpsReset()
+		if withPings {
+			for j := range affected {
+				if affected[j].force != f {
+					continue
+				}
+				// CHARTED ONLY IF IT WAS REALLY PINGED. The cap is what decides,
+				// and asking it once keeps the promise exact: every ping in the
+				// message a player can click lands on ground their force has seen.
+				if gpsAdd(&affected[j]) {
+					chartAffected(lf, &affected[j])
+				}
+			}
 		}
 		limMsg[0] = fkapi.OfString(msgKey)
 		limMsg[1] = fkapi.OfNumber(float64(count))
@@ -1168,6 +1231,25 @@ func tellAffected(msgKey string, withPings bool) {
 			if gpsFirstEnd > 0 {
 				logS(", first ")
 				logS(gpsFirst())
+			}
+			// AND WHAT WAS CHARTED FOR THEM. A `[gps=]` opens the map at a
+			// coordinate whether or not the force has ever seen it, and an
+			// uncharted coordinate is black -- reported from a live session where
+			// nineteen right answers all opened on fog. The engine's own
+			// `is_chunk_charted` cannot confirm this headlessly (a force with no
+			// players has no chart at all, measured), so the count and the first
+			// box are the log's evidence and the suites assert them.
+			logS(", charted ")
+			logU(uint32(chartCount))
+			if chartCount > 0 {
+				logS(" from ")
+				logI(int32(chartFirst.LeftTop.X))
+				logS(",")
+				logI(int32(chartFirst.LeftTop.Y))
+				logS(" to ")
+				logI(int32(chartFirst.RightBottom.X))
+				logS(",")
+				logI(int32(chartFirst.RightBottom.Y))
 			}
 		}
 		if err != nil {
@@ -1227,6 +1309,12 @@ func gpsReset() {
 	gpsCut = false
 	gpsFirstEnd = 0
 	gpsSurfOK = false
+	// The chart memo and its tally go with it. A surface handle is an entity
+	// reference and this guest keeps none across a dispatch; both memos live for
+	// one message.
+	chartSurfOK = false
+	chartCount = 0
+	chartFirst = fkapi.BoundingBox{}
 }
 
 // gpsFirst is the first ping of the list, borrowed exactly as gpsString is.
@@ -1260,15 +1348,15 @@ func gpsI(v int32) {
 // gpsAdd appends one ping, and stops appending once the buffer is nearly full.
 // The reserve is comfortably more than the longest ping a real surface name can
 // produce, so a ping is never written half-way.
-func gpsAdd(c *affCluster) {
+func gpsAdd(c *affCluster) bool {
 	if gpsLen > len(gpsBuf)-128 {
 		gpsCut = true
-		return
+		return false
 	}
 	name, ok := gpsSurfaceName(c.surf)
 	if !ok {
 		gpsCut = true
-		return
+		return false
 	}
 	gpsCount++
 	if gpsLen > 0 {
@@ -1284,6 +1372,93 @@ func gpsAdd(c *affCluster) {
 	if gpsFirstEnd == 0 {
 		gpsFirstEnd = gpsLen
 	}
+	return true
+}
+
+// ---------------------------------------------------------------------------
+// Charting what the pings point at
+// ---------------------------------------------------------------------------
+
+// chartAffected reveals the map around one pinged balancer for the force being
+// told about it.
+//
+// WHY IT EXISTS. A `[gps=]` is a coordinate and nothing else: clicking one opens
+// the map at that point whether or not the force has ever seen it, and an
+// uncharted point is BLACK. Reported from a live 2.0.77 session on 2026-08-24 --
+// the veto named nineteen balancers across two surfaces, every coordinate was
+// right, and every click landed in fog. The fixtures' scratch surfaces were
+// built by a headless `--create`, so no player and no radar ever charted them;
+// a real save's balancers usually stand on ground the player has walked, which
+// is why this survived every earlier run. The honest fix is not to hope: a mod
+// that hands somebody a list of places to go charts the places it names.
+//
+// WHAT IT CHARTS is the cluster's own tile box plus `chartMargin`, which is the
+// balancer and a ring around it rather than the ping's single tile -- `lim` is
+// sixty-six parts and spans more than one chunk, so a point would leave the far
+// end of the machine in the dark.
+//
+// COST: one host call per PINGED balancer, plus one surface lookup per surface
+// (memoised, and consecutive clusters are almost always on the same one, which
+// is the same memo `gpsSurfaceName` keeps for the same reason). It runs on a
+// path that runs at most once per gesture -- a load that grandfathers, a
+// keypress that is vetoed, a migration summary -- and never on any path an
+// ordinary edit reaches. `chart` is idempotent: charting an already-charted
+// chunk is what every radar in the game does every few seconds.
+func chartAffected(lf fkapi.LuaForce, c *affCluster) {
+	s, ok := chartSurface(c.surf)
+	if !ok {
+		return
+	}
+	// A tile (x, y) covers the map square [x, x+1], so the far corner is one
+	// past the last tile before the margin is added.
+	chartBox.LeftTop.X = float64(c.x0 - chartMargin)
+	chartBox.LeftTop.Y = float64(c.y0 - chartMargin)
+	chartBox.RightBottom.X = float64(c.x1 + 1 + chartMargin)
+	chartBox.RightBottom.Y = float64(c.y1 + 1 + chartMargin)
+	// A FAILURE IS REPORTED BY NOT BEING COUNTED, which is why it needs no line
+	// of its own: the tally below is what the `told force` line carries, and the
+	// suites assert that tally against the number of pings. A chart that did not
+	// land is a ping without a box, and that is exactly what fails there.
+	if err := lf.Chart(s.Object, chartBox); err != nil {
+		return
+	}
+	// WHAT WENT OUT, because nothing else can say so. `is_chunk_charted` answers
+	// FALSE for everything on a headless run -- measured on 2.0.77: a force with
+	// no players has no chart at all, so `chart`, `chart_all` and even nauvis's
+	// own origin chunk all read uncharted -- which puts the EFFECT behind the
+	// player wall beside the flying text and the hand-back. What is on this side
+	// of it is that the call was made, for which cluster, over which box, and
+	// without an error. See chartFirst.
+	chartCount++
+	if chartCount == 1 {
+		chartFirst = chartBox
+	}
+}
+
+var (
+	chartBox fkapi.BoundingBox
+	// How many boxes this message charted, and the first of them -- the log
+	// line's evidence, for the reason chartAffected gives.
+	chartCount int
+	chartFirst fkapi.BoundingBox
+	// One-entry surface memo, the twin of gpsSurfaceName's and for the same
+	// reason: consecutive clusters are almost always on one surface and
+	// `game.get_surface` is a host call.
+	chartSurfIdx uint32
+	chartSurfObj fkapi.LuaSurface
+	chartSurfOK  bool
+)
+
+func chartSurface(si uint32) (fkapi.LuaSurface, bool) {
+	if chartSurfOK && chartSurfIdx == si {
+		return chartSurfObj, true
+	}
+	s, ok := surfaceByIndex(si)
+	if !ok {
+		return fkapi.LuaSurface{}, false
+	}
+	chartSurfIdx, chartSurfObj, chartSurfOK = si, s, true
+	return s, true
 }
 
 func gpsSurfaceName(si uint32) (string, bool) {

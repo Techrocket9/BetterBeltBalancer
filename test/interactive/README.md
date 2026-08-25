@@ -112,7 +112,7 @@ Also no staged rig, and also no player. The headless suite loads two committed 2
 Take a save of your own built on Factorio 2.0 with balancers whose parts connect to more than one belt, which is every balancer built before this rule existed. Open it on Factorio 2.1 with this mod installed. Factorio itself gets there first: it deletes all but one belt-connectable per tile at load, silently and before any script runs, so the balancers arrive already crippled. Expected, once the save is open:
 
 - one chat message per force that owns an affected balancer, saying how many need rebuilding and that each part now connects to one belt;
-- a `[gps=...]` ping per balancer in that message. Click them: each must centre the map on a real balancer of yours, on the right surface;
+- a `[gps=...]` ping per balancer in that message. Click them: each must centre the map on a real balancer of yours, on the right surface, and on charted ground rather than on black. The mod charts the map around each balancer it pings, and a headless run cannot check that, so this is the only place it is checked at all;
 - those balancers stopped, with what they were holding on the ground beside them;
 - every part still standing and still yours, with nothing of the mod's own machinery left around them;
 - `/bbb-audit` reporting `drift=0 unbuilt=0` with `refused=` equal to the number of balancers the message named.
@@ -130,7 +130,7 @@ Factorio 2.0 only. On 2.1 the setting is not defined and does not appear.
 Open a 2.0 save whose balancers connect several belts to one part, so that the mod has turned "Allow multiple belts per balancer part" on for you at load. Let the balancers fill with items. Then open Settings, Mod settings, Map, and turn it off. Expected:
 
 - the toggle goes back on by itself, and a chat message per owning force says how many balancers use several belts per part, that the save keeps working, that they will stop working on Factorio 2.1, and to rebuild them first;
-- a `[gps=...]` ping per balancer in that message. Click them: each must centre the map on a real balancer of yours;
+- a `[gps=...]` ping per balancer in that message. Click them: each must centre the map on a real balancer of yours, on charted ground rather than on black. The mod charts the map around each balancer it pings, and a headless run cannot check that, so this is the only place it is checked at all;
 - nothing on the ground anywhere, no balancer stopping even for a tick, and every item still in the machine it was in. This is the whole point of the check: refusing the change must not cost a single item;
 - `/bbb-audit` reporting `drift=0 unbuilt=0 refused=0`, unchanged from before the keypress.
 
