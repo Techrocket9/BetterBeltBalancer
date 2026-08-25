@@ -75,6 +75,12 @@ local function box(s, name, x, y)
 end
 
 local function prep_ground(s)
+  -- Clouds off, for the same reason the ground below becomes uniform grass:
+  -- this surface exists to be RECORDED, and drifting cloud shadows change the
+  -- pixels of every frame of a capture. The original portal GIFs were captured
+  -- with clouds turned off by hand at the console; this is that, staged.
+  s.show_clouds = false
+  log("[BBB-INTERACTIVE] surface prepped: clouds off")
   s.request_to_generate_chunks({ x = (X0 + X1) / 2, y = (Y0 + Y1) / 2 }, 4)
   s.force_generate_chunk_requests()
   for _, e in pairs(s.find_entities_filtered { area = { { X0 - 4, Y0 - 4 }, { X1 + 4, Y1 + 4 } } }) do

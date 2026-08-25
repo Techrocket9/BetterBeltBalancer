@@ -46,7 +46,7 @@ Log lines: `carrying more than one belt` for the refusal, and `handed the refuse
 
 ## C. The sixty-fifth belt (y = 0)
 
-Sixty-four parts carrying one input belt each, one part below them carrying the single output, and one spare part above them at (20, -1) with nothing against it. P = 64, the limit exactly, and visibly running. Lay one more belt against the spare part at (20, -2), facing south. Expected, all at once:
+Sixty-four parts carrying one input belt each, one part below them carrying the single output, and one spare part above them at (20, -1) with nothing against it. P = 64, the limit exactly, and visibly running. Most of the input belts are bare single-tile stubs and only eight rows have sources behind them; that is deliberate, not clutter. Each stub is one of the sixty-four ports the gesture is about (the port count comes from the belts standing against the machine, fed or not), and sixty-four sources would bury the rig in chests for no extra evidence. The same goes for band D's two blocks. Lay one more belt against the spare part at (20, -2), facing south. Expected, all at once:
 
 - red flying text at the refused belt naming the 64-belt limit (at the belt, not over the machine's centre, which on a 34-row column is off screen);
 - the standard cannot-build sound;
