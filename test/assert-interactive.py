@@ -35,7 +35,7 @@ import sys
 
 PLACEFAIL = re.compile(r"\[BBB-INTERACTIVE\] could not place (\S+) at \(([-\d]+),([-\d]+)\)")
 STAGED = re.compile(r"\[BBB-INTERACTIVE\] gestures staged: ")
-CLOUDS = re.compile(r"\[BBB-INTERACTIVE\] surface prepped: clouds off")
+PREPPED = re.compile(r"\[BBB-INTERACTIVE\] surface prepped: clouds off, daytime frozen at noon")
 DEMO = re.compile(r"\[BBB-INTERACTIVE\] demo scenes staged ")
 AUDITED = re.compile(r"\[BBB-INTERACTIVE\] audited (\S+)")
 COMPILED = re.compile(
@@ -108,9 +108,10 @@ def main():
     if not any(DEMO.search(l) for l in lines):
         fail.append("the staging mod never reported its demo scenes: on_init "
                     "did not finish")
-    if not any(CLOUDS.search(l) for l in lines):
-        fail.append("the staging mod never turned the clouds off: a capture "
-                    "surface with drifting cloud shadows")
+    if not any(PREPPED.search(l) for l in lines):
+        fail.append("the staging mod never staged the capture conditions: a "
+                    "looping GIF needs clouds off and the daytime frozen, and "
+                    "the prep line is missing")
 
     # --- every rig is legal ---------------------------------------------------
     over = [l for l in lines if OVERLIMIT.search(l)]
