@@ -1,7 +1,8 @@
 # BetterBeltBalancer build pipeline.
 #
 #   make guest    TinyGo -> dist/bbb.wasm (GC=leaking for the other arm)
-#   make mod      fklua mod -> dist/<name>_<version>/, data stage included
+#                 AND dist/bbbdata.wasm, the data-stage guest
+#   make mod      fklua mod -> dist/<name>_<version>/, both guests included
 #   make zip      the same, as an installable dist/<name>_<version>.zip
 #   make install  the built mod into a Factorio mods directory
 #   make test     headless verification, FOURTEEN suites, and the default is all
@@ -13,13 +14,20 @@
 #                 2.1). SUITES=m2 names one. See test/run.sh's SUITES block and
 #                 agents/single-edge.md.
 #   make check    the generated bindings and the lock are current
+#   make datastage-check
+#                 the data stage's own gate: Factorio's --dump-data, hashed
 #
 # `fklua mod` GENERATES the control stage (control.lua, info.json, fk_abi.lua,
 # fk_api_gen.lua, fk_module.lua) and REPLACES its output directory each time, so
-# nothing hand-written can live there. The DATA STAGE is hand-written Lua in
-# mod-data/, and `fklua mod` merges it into the package itself now -- fklua.toml
-# `[mod] data` is the default for --include, and the merge happens before the
-# directory writer AND the zip writer, so both carry the same bytes.
+# nothing hand-written can live there.
+#
+# THERE IS NO HAND-WRITTEN LUA IN THIS MOD AT ALL. The settings and data stages
+# were ten Lua files under mod-data/ and are a second compiled guest now
+# (guest/go/data -> dist/bbbdata.wasm, declared in fklua.toml as `data_module`);
+# `fklua mod` writes settings.lua, data.lua and data-final-fixes.lua for it, one
+# per hook the module exports. What is left in mod-data/ is assets -- graphics,
+# locale, changelog, thumbnail -- merged into the package before the directory
+# writer AND the zip writer, so both carry the same bytes.
 # Never edit anything under dist/.
 
 SHELL := /bin/bash
@@ -29,15 +37,24 @@ FACTORIO_BIN ?= $(HOME)/Library/Application Support/Steam/steamapps/common/Facto
 MODS_DIR     ?= $(HOME)/Library/Application Support/factorio/mods
 
 # Single source of truth: fklua.toml, and `fklua mod` READS IT -- identity,
-# dependencies and the data-stage directory all come from the manifest, so the
-# package command takes no identity flags at all. The two below are needed only
-# to NAME the output that command produces.
+# dependencies, the asset directory and the data module all come from the
+# manifest, so the package command below types none of them. Every one of them
+# HAS a flag form (--name, --version, --dependency, --data-module and the rest);
+# they exist so one checkout can package several mods from one manifest, and a
+# flag overrides the key, which is what `make GC=leaking` does. Passing them
+# here would put a second statement of this mod's identity in the build.
+#
+# The two below are needed only to NAME the output that command produces.
 MOD_NAME    := $(shell sed -n 's/^name = "\(.*\)"$$/\1/p' fklua.toml)
 MOD_VERSION := $(shell sed -n 's/^version = "\(.*\)"$$/\1/p' fklua.toml)
 
-DIST    := dist
-WASM    := $(DIST)/bbb.wasm
-MOD_DIR := $(DIST)/$(MOD_NAME)_$(MOD_VERSION)
+DIST      := dist
+WASM      := $(DIST)/bbb.wasm
+# The data-stage guest. Its path is fklua.toml's `data_module` and `fklua mod`
+# reads it from there, so this variable exists only to BUILD the file and to
+# depend on it; the package command is passed no flag for it.
+DATA_WASM := $(DIST)/bbbdata.wasm
+MOD_DIR   := $(DIST)/$(MOD_NAME)_$(MOD_VERSION)
 
 # --gc. `make GC=collected` builds the guest with FkLua's paced conservative
 # collector (../FkLua/agents/gc.md) instead of the mandatory-by-default leaking
@@ -137,16 +154,24 @@ endif
 # in each client's own order, which is a multiplayer desync (CLAUDE.md).
 PERSIST := packed
 
-GUEST_SRC := $(shell find guest/go -name '*.go' -not -path '*/fkapi/*') guest/go/go.mod
+# The control guest is everything under guest/go EXCEPT the generated bindings
+# and the data guest's own main package -- the two are compiled separately and a
+# shared source list would rebuild each of them whenever the other moved.
+GUEST_SRC := $(shell find guest/go -name '*.go' -not -path '*/fkapi/*' -not -path 'guest/go/data/*') guest/go/go.mod
+# The data guest: its own main package, plus the PURE packages it shares with
+# the control guest. `engine` is the version branch both stages ask, and `skin`
+# is where the sprite sheet's cell count comes from -- neither is copied here,
+# which is the whole reason the two guests are one Go module.
+DATA_GUEST_SRC := $(shell find guest/go/data guest/go/engine guest/go/skin -name '*.go' -not -name '*_test.go') guest/go/go.mod
 DATA_SRC  := $(shell find mod-data -type f)
 
-.PHONY: all guest mod zip install test check clean graphics
+.PHONY: all guest mod zip install test check datastage-check clean graphics
 
 all: mod
 
 # --- guest -------------------------------------------------------------------
 
-guest: $(WASM)
+guest: $(WASM) $(DATA_WASM)
 
 # The gc mode changes the WASM and touches no source file, so a file target
 # would happily hand back a module built with the other allocator. Same shape as
@@ -163,6 +188,26 @@ $(WASM): $(GUEST_SRC) $(shell find guest/go/plan -name '*.go' -not -name '*_test
 	cd guest/go && tinygo build $(TINYGO_FLAGS) -o ../../$(WASM) .
 	@ls -l $(WASM)
 
+# THE DATA GUEST'S FLAGS ARE ITS OWN AND DO NOT MOVE WITH GC=.
+#
+# -gc=leaking always, and no `-tags bbbquiet` either. A data module runs ONCE, at
+# load, and dies with the Lua state that built it: there is no tick to pace a
+# collector against, nothing to persist, and `fklua mod` packages it
+# --persist=none whatever the control guest uses. Giving it the collector would
+# attach 73 KB of metadata and a pacing surface to a program with no steady state
+# to pace.
+#
+# So it takes no GC_STAMP dependency, which is what makes `make GC=leaking` and
+# the default arm share one data module rather than rebuilding it twice for no
+# difference. The one flag it does share is -opt=2, for the reason the control
+# guest has it: -opt=z optimises for size, which is the cost this target does not
+# have.
+$(DATA_WASM): $(DATA_GUEST_SRC)
+	@mkdir -p $(DIST)
+	cd guest/go && tinygo build -target=wasm-unknown -scheduler=none -gc=leaking \
+	  -opt=2 -o ../../$(DATA_WASM) ./data
+	@ls -l $(DATA_WASM)
+
 # --- mod ---------------------------------------------------------------------
 
 # One step. Identity, dependencies and the mod-data/ tree all come out of
@@ -174,7 +219,7 @@ $(WASM): $(GUEST_SRC) $(shell find guest/go/plan -name '*.go' -not -name '*_test
 # event offsets went when `fk.subscribe` gained a field mask, and the four
 # `defines.direction` values went when `gen-bindings` started emitting an
 # accessor per define. See CLAUDE.md, "The layout check is gone".
-mod: $(WASM) $(DATA_SRC) fklua.toml
+mod: $(WASM) $(DATA_WASM) $(DATA_SRC) fklua.toml
 	$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) -o $(DIST)
 	python3 test/check-sprites.py $(MOD_DIR)
 	python3 test/check-changelog.py $(MOD_DIR)/changelog.txt $(MOD_VERSION)
@@ -198,7 +243,7 @@ PERSIST_STAMP := $(DIST)/.persist-$(PERSIST)
 $(PERSIST_STAMP):
 	@mkdir -p $(DIST) && rm -f $(DIST)/.persist-* $(MOD_DIR).zip && touch $@
 
-$(MOD_DIR).zip: $(WASM) $(DATA_SRC) fklua.toml $(PERSIST_STAMP) $(GC_STAMP)
+$(MOD_DIR).zip: $(WASM) $(DATA_WASM) $(DATA_SRC) fklua.toml $(PERSIST_STAMP) $(GC_STAMP)
 	$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) --zip -o $(DIST)
 	@ls -l $(MOD_DIR).zip
 
@@ -252,7 +297,21 @@ check:
 	@# all eighteen of its states are checked -- including the one that matters
 	@# most on 2.1, which is that the write is never attempted where the key does
 	@# not exist.
-	cd guest/go && go test ./plan/ ./skin/ ./carry/ ./edgemode/
+	@#
+	@# ./engine is the fifth and it is there for the SAME reason, one stage
+	@# earlier: it is the data stage's version branch -- can this Factorio put two
+	@# belt-connectables on one tile -- and its `true` arm emits prototypes only a
+	@# 2.0 binary can be shown. `test/check-datastage.py` hashes what the data
+	@# stage EMITS and can only ever cover the flavour of the binary it runs on,
+	@# so the DECISION is pinned here and the 2.0 emission's dump golden is
+	@# deferred to the release/2.0 recut. It is also the only shape a test can
+	@# reach at all: a package that imports fkdata cannot be built by a host
+	@# toolchain, because //go:wasmimport is rejected outside GOARCH=wasm.
+	cd guest/go && go test ./plan/ ./skin/ ./carry/ ./edgemode/ ./engine/
+	@# Both guests have to COMPILE, and the data guest is the one a `go test`
+	@# cannot reach. `go vet` over ./data type-checks it under the wasm build
+	@# tags without asking TinyGo for a wasm module.
+	cd guest/go && GOOS=wasip1 GOARCH=wasm go vet ./data/
 	@# --lang comes from fklua.toml's `lang = ["go"]`; passing it was a
 	@# workaround for a gen-bindings that ignored the manifest.
 	$(FKLUA) gen-bindings --check
@@ -260,6 +319,23 @@ check:
 	@out=$$(cd guest/go && gofmt -l . | grep -v '^fkapi/' || true); \
 	  if [ -n "$$out" ]; then echo "gofmt: $$out"; exit 1; fi
 	@echo "check: ok"
+
+# THE DATA STAGE'S OWN GATE, and it is not part of `make test` on purpose.
+#
+# `test/run.sh`'s fourteen suites are all about the RUNTIME: they --create a
+# save, --benchmark it and read the guest's own log lines. Not one of them can
+# see a prototype field, because by the time a suite is looking the data stage
+# has been over for a whole load. This runs Factorio's `--dump-data`, which
+# executes the settings and data stages and STOPS BEFORE control.lua, and hashes
+# the normalised result against a golden captured from the hand-written Lua the
+# data guest replaced.
+#
+# Separate target because it is a different question and a different cost --
+# about three seconds per arm against the suites' minutes -- and because it is
+# the one gate that stays meaningful when the guest under test has no runtime
+# behaviour to measure at all.
+datastage-check: mod
+	FACTORIO_BIN="$(FACTORIO_BIN)" test/check-datastage.py
 
 clean:
 	rm -rf $(DIST) test/tmp

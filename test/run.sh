@@ -943,7 +943,7 @@ for suite in $SUITES; do
       ;;
     flip)
       # `bbb-multi-edge-parts`, DRIVEN. The setting exists on Factorio 2.0 only
-      # -- mod-data/settings.lua defines it on 2.0.x and never on 2.1.x -- so
+      # -- guest/go/data/settings.go defines it on 2.0.x and never on 2.1.x -- so
       # this is the one suite that cannot run on trunk's own engine, and it says
       # so out loud rather than passing.
       #

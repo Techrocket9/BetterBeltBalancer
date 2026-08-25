@@ -2,7 +2,7 @@
 
 A Factorio 2.1 mod. Balancer parts are 1x1 tiles: place several next to each other and they become one balancer, of whatever shape you built. The belts feeding it are its inputs and the belts it feeds are its outputs; orientation alone decides, so there is nothing to configure. Each part connects to one belt, so a four-in four-out balancer is eight parts: four carrying the inputs and four carrying the outputs. Items are balanced across every output exactly, per lane, under every load condition: saturated, starved, partially blocked, asymmetric.
 
-The mod's logic is written in Go, compiled to WebAssembly by TinyGo and then to Lua by [FkLua](https://github.com/Techrocket9/FkLua).
+The mod is written in Go, compiled to WebAssembly by TinyGo and then to Lua by [FkLua](https://github.com/Techrocket9/FkLua). That covers both halves of a Factorio mod: the control stage that runs while you play, and the settings and data stages that declare the prototypes. There is no hand-written Lua in the shipped mod.
 
 ## How it works
 
@@ -99,11 +99,11 @@ make test     # headless verification in a real Factorio
 
 | path | contents |
 | --- | --- |
-| `guest/go/` | the Go guest; `plan/` is the network planner, `fkapi/` the generated FkLua bindings |
-| `mod-data/` | the hand-written data stage: prototypes, graphics, locale |
+| `guest/go/` | the control guest; `data/` is the settings and data stages, `plan/` the network planner, `fkapi/` the generated FkLua bindings |
+| `mod-data/` | the assets the package carries verbatim: graphics, locale, changelog, thumbnail |
 | [`bench/`](bench/README.md) | the head-to-head benchmark harness, its setup mod and the results |
 | `test/` | the headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the seven things a headless run cannot check, and the mod that stages both its rigs and the demo scenes |
-| `fklua.toml` | mod identity, the API pin (2.0.77), guest language and GC mode |
+| `fklua.toml` | mod identity, the API pin, guest language, GC mode and the data module |
 | `CLAUDE.md`, `agents/` | maintainer design notes and the full measurement record |
 
 ## Licence

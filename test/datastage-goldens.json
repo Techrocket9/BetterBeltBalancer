@@ -1,0 +1,22 @@
+{
+  "2.1.16": {
+    "_note": "Captured from the hand-written Lua data stage before the Go port, and re-verified against the Go data guest after it. Per engine and per mod set: the dump carries every prototype every mod defined.",
+    "base": {
+      "data_raw_sha256": "957bfa81da5125bf9a3f1ea8a071a826138792f7a75569b9a574037380d992bc",
+      "mod_settings_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "mods": [
+        "better-belt-balancer"
+      ],
+      "prototype_list_checksum": "918808251"
+    },
+    "incumbent": {
+      "data_raw_sha256": "4ffb0e3b68f149d85a25134718467c1efc010b45405a931b869f1658ab67cd83",
+      "mod_settings_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "mods": [
+        "better-belt-balancer",
+        "belt-balancer-2"
+      ],
+      "prototype_list_checksum": "2044872442"
+    }
+  }
+}

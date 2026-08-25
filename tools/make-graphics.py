@@ -281,7 +281,7 @@ def write_png(path, rows):
 # on an output edge -- and the colour says which of the two it is without having
 # to work out which edge of which part you are looking at.
 #
-# The cell says which SIDE the belt is on; the prototype (mod-data/prototypes/
+# The cell says which SIDE the belt is on; the prototype (guest/go/data/
 # sprite.lua) carries the shift that puts the arrow on that side of the tile, so
 # the guest names a sprite and passes nothing but a target.
 

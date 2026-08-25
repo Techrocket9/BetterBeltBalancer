@@ -9,13 +9,26 @@ __better-belt-balancer__/... path, and require the file to exist in the
 package. Paths into other mods (__base__, __core__) are the engine's problem
 and are not checked here.
 
+WHAT IT READS IS A COMPILED GUEST NOW, and that moved the regex. Every sprite
+path this mod names used to sit in a hand-written Lua table between quotes;
+since the data-stage purge they are string constants in the data guest's packed
+data blob, laid END TO END with no delimiter of any kind. A GREEDY match then
+runs straight off the end of one path, through whatever strings follow it, and
+terminates on a LATER `.png` -- which is not a stale reference, it is one
+enormous fabricated one, and it fails the build with a message nobody can act
+on. Measured, the first time this ran against a packaged data guest.
+
+So the path body is NON-GREEDY: it stops at the first extension after the mod
+prefix, which in a blob of concatenated constants is the only correct answer.
+Do not "tidy" the `+?` back to a `+`.
+
 Usage: check-sprites.py <packaged-mod-dir>
 """
 import re
 import sys
 from pathlib import Path
 
-MOD_REF = re.compile(r'__better-belt-balancer__/([A-Za-z0-9_/.-]+\.(?:png|ogg))')
+MOD_REF = re.compile(r'__better-belt-balancer__/([A-Za-z0-9_/.-]+?\.(?:png|ogg))')
 
 def main() -> int:
     if len(sys.argv) < 2:

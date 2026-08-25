@@ -527,7 +527,7 @@ below is measured on Factorio 2.1.14 against the shipped configuration
 
 | what | where |
 |---|---|
-| the data-stage version branch: `not_colliding_with_itself` on 2.0.x only, and the `bbb-can-stack` marker in the same `if` | `mod-data/prototypes/hidden.lua` |
+| the data-stage version branch: `not_colliding_with_itself` on 2.0.x only, and the `bbb-can-stack` marker in the same `if` | `guest/go/data/hidden.go`, over `guest/go/engine` |
 | trunk targets 2.1 (`factorio_version`, `base >= 2.1.0`) | `fklua.toml` |
 | the capability, the predicate, the refusal, the bridging-tile theorem and the backstop | `guest/go/sedge.go` |
 | the per-tile count, taken out of the walk that was happening anyway | `classifyEdges`, `guest/go/compile.go` |
@@ -709,8 +709,8 @@ explicitly that it cannot be.
 
 | what | where |
 |---|---|
-| the version branch, now shared by the DATA and SETTINGS stages instead of duplicated | `mod-data/engine.lua`, required by `prototypes/hidden.lua` and by `settings.lua` |
-| `bbb-multi-edge-parts`, runtime-global, default false, defined on 2.0.x only | `mod-data/settings.lua` |
+| the version branch, shared by the DATA and SETTINGS stages instead of duplicated | `guest/go/engine`, called by both hooks of the data guest. It was `mod-data/engine.lua` required by two Lua files until the data stage became a guest |
+| `bbb-multi-edge-parts`, runtime-global, default false, defined on 2.0.x only | `guest/go/data/settings.go` |
 | the fold -- capability AND policy, the flip's obligation, and whether to grandfather -- as PURE GO with all eighteen of its states proved | `guest/go/edgemode/`, run by `make check` |
 | the policy read, the write, the anchor, the flip handler, the sweep, the condemnation, and both summaries | `guest/go/sedge.go` |
 | the ordering carve-out: a condemned network comes down BEFORE the refusal | `compile`, `guest/go/compile.go` |

@@ -9,14 +9,21 @@ description = "Belt balancers that click together into arbitrary shapes. Highly 
 # right release per game version, so the 2.0 arm is a `release/2.0` branch
 # carrying this key, the 2.0.77 api pin and its generated bindings, and nothing
 # hand-written. The mod-data tree is IDENTICAL on both branches -- the
-# engine-version guard in prototypes/hidden.lua is what makes one tree correct
+# engine-version guard in guest/go/engine is what makes one tree correct
 # on both engines. See agents/single-edge.md, "Packaging: one tree, two
 # releases".
 factorio_version = "2.1"
-# The DATA STAGE. `fklua mod` generates the control stage and rm -rf's its
-# output directory first, so nothing hand-written can live there; this key is
-# the default for --include, and the tree is merged into the package before
-# either writer runs -- so `--zip` carries it too.
+# The mod's ASSETS -- graphics, locale, changelog, thumbnail, and since the
+# data-stage purge NOTHING ELSE. `fklua mod` generates the control stage and
+# rm -rf's its output directory first, so nothing hand-written can live there;
+# this key is the default for --include, and the tree is merged into the package
+# before either writer runs -- so `--zip` carries it too.
+#
+# It used to carry ten hand-written Lua files, which is what `data_module` below
+# replaced. The two keys do not overlap and cannot: an included file named
+# `data.lua`, `settings.lua` or `data-final-fixes.lua` COLLIDES with the stage
+# file the data module generates, and `fklua mod` reports that as an error at
+# package time rather than picking a winner.
 data = "mod-data"
 # info.json's dependencies, verbatim. The data stage extends base prototypes.
 dependencies = ["base >= 2.1.0"]
@@ -28,6 +35,27 @@ dependencies = ["base >= 2.1.0"]
 [fklua]
 api = "2.1.16"
 lang = ["go"]
+
+# THE DATA GUEST: a SECOND wasm module, which becomes the mod's settings.lua,
+# data.lua and data-final-fixes.lua. `guest/go/data` is its source and it is a
+# second `main` package inside the one guest module, so it shares
+# guest/go/engine and guest/go/skin with the control guest.
+#
+# `fklua mod` writes a stage file per hook the module EXPORTS and for no others,
+# so there is no data-updates.lua in the package and nothing here wants one.
+#
+# It is a separate module from the control guest rather than more exports on it,
+# and that is measured rather than tidy: sharing would parse and instantiate a
+# 3 MB program at every data-family stage -- +150 ms per game load, per stage,
+# for a program the stage never calls -- and would run the control guest's
+# package initialisers against a runtime API that does not exist there.
+# `fklua mod` refuses a data module that imports fkapi at all, which is the same
+# rule enforced rather than advised. See FkLua's docs/data-stage.md.
+#
+# It is always built -gc=leaking and packaged --persist=none whatever the
+# control guest's arms are, because it runs once and dies with the Lua state
+# that built it -- so the Makefile's GC= stamp does not reach it.
+data_module = "dist/bbbdata.wasm"
 
 # How the GUEST's own heap is managed, and it must match how the guest was
 # BUILT: "collected" means `tinygo -gc=custom` plus an import of

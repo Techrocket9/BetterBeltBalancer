@@ -1393,7 +1393,7 @@ def main():
     if cans["part-over-belt"] != "true":
         fail("the engine refuses to fast-replace a belt with a balancer part: "
              "`fast_replaceable_group` is missing from bbb-balancer-part in "
-             "mod-data/prototypes/entity.lua, or it is not base's own "
+             "guest/go/data/entity.go, or it is not base's own "
              "\"transport-belt\"")
     fwd = FREPFWD.search("\n".join(lines))
     if not fwd:
