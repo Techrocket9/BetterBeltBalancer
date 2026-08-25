@@ -377,7 +377,13 @@ arbitrary shapes. Highly performant; megabase-ready (UPS hit is ~equal to
 vanilla hand-crafted belt balancers).").
 
 `factorio_version` is one value per release; the portal serves the right
-release per game version. Plan:
+release per game version. **AND A VERSION NUMBER IS ONE RELEASE, FULL STOP: the
+portal refuses a second upload of the same version**, so the two arms cannot
+both ship as 0.2.0. The track scheme, decided at the 0.2.0 upload: the 2.0 arm
+owns 0.2.x and the 2.1 arm ships as 0.3.x (bump trunk's version before the 2.1
+upload; the in-game browser filters by factorio_version, so 2.0 clients keep
+getting the latest 0.2.x and 2.1 clients the latest 0.3.x, and every upgrade
+path still moves the version, which is fk_migrate's front door). Plan:
 
 - **Trunk targets 2.1**: `fklua.toml` moves to `factorio_version = "2.1"`,
   `api` re-pins to the 2.1.x runtime JSON, bindings regenerate (`fklua api

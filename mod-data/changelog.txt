@@ -1,0 +1,18 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.2.0
+Date: 2026-08-24
+  Major Features:
+    - Factorio 2.1 support. 2.1 closed the collision behaviour this mod's belt interfaces relied on, so the rule is now one belt per balancer part: a 4-in 4-out balancer is eight parts, a west column carrying the inputs and an east column carrying the outputs.
+    - A map setting, "Allow multiple belts per balancer part", available on Factorio 2.0 only and off by default. A save that already connects several belts to one part keeps working: the mod turns the setting on for that save at first load and says so in chat.
+  Features:
+    - Turning the setting off while such balancers stand is refused with a chat message that lists every one of them as a clickable map ping, and the map is revealed around each pinged balancer.
+    - A belt laid against a part that already has one is refused with the reason on screen, and the belt is returned to your inventory. Returned pieces say which rule sent them back.
+    - On Factorio 2.1, opening a save built with multiple belts per part keeps every balancer part and belt in place, recovers what the machines were holding onto the ground beside them, and posts a per-force chat checklist with a map ping for each balancer to rebuild.
+    - Balancers adopted from Belt Balancer, Belt Balancer 2 or Belt Balancer 3 that are already built one belt per part compile and run; the rest get the same rebuild checklist.
+  Changes:
+    - The mod description now leads with what the mod does for a megabase.
+---------------------------------------------------------------------------------------------------
+Version: 0.1.0
+Date: 2026-08-23
+  Major Features:
+    - Initial release.
