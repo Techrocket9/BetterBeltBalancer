@@ -19,8 +19,10 @@ scene is single-edge and headlessly verified, and **all thirteen suites are
 green on 2.1.14 in both `-gc` arms**. **The `mar` slopes are measured again**,
 which is the gate the first three phases shipped without and which their
 "nothing on any hot path moves" claims were waiting on. **The GIF re-capture is
-DONE 2026-08-24** for the five plain scenes; the two `-io-arrows` variants are
-still outstanding, because the capture was made with alt-mode off throughout.
+DONE 2026-08-24** for the five plain scenes, plus a sixth cut the same day that
+is the cross on NORMAL belts rather than a new scene; the two `-io-arrows`
+variants are still outstanding, because the capture was made with alt-mode off
+throughout.
 The setting-flip legs and the multi-edge regression run need a 2.0 binary and
 belong on the `release/2.0` branch.
 
@@ -317,7 +319,8 @@ built the suite and ran it:
 **DONE 2026-08-24.** What was actually built, what deviates from the paragraphs
 below and why, and the measurements: "Implementation status — phase 3" at the
 end of this file. The GIF re-capture landed 2026-08-24 for the five plain
-scenes; only the two `-io-arrows` variants are still outstanding.
+scenes, and a sixth file the same day carries the cross on NORMAL belts; only
+the two `-io-arrows` variants are still outstanding.
 
 **`test/interactive/bbb-interactive-setup` is the test-world-generating mod
 behind both the checklist and the portal GIF captures** (the GIF session's
@@ -997,9 +1000,22 @@ fresh install actually builds rather than the multi-edge shapes it refuses.
 | `c-shape-8-to-8.gif` | c-shape 8 -> 8 | 392x758 | 128 ticks | 2,022,477 |
 | `c-shape-express-8-to-9.gif` | c-shape 8 -> 9 | 434x758 | 96 ticks | 1,821,986 |
 | `long-run-8-to-8.gif` | long run 8 -> 8 | 674x440 | 128 ticks | 2,568,308 |
+| `cross-1-to-3-yellow-belt.gif` | cross 1 -> 3, NORMAL belts | 480x480 | 144 ticks | 1,937,617 |
 
-All five are 15 fps at 40 px per tile, which is the pre-port set's own scale,
-and all five sit inside its 0.99-3.58 MB size envelope.
+All six are 15 fps at 40 px per tile, which is the pre-port set's own scale, and
+all six sit inside its 0.99-3.58 MB size envelope.
+
+**The sixth is a TIER variant rather than a sixth scene**, captured 2026-08-24
+from a separate 2.7 s recording: the same cross the first row shows, built on
+NORMAL belts where every other capture in this repo runs express. It is the
+first evidence anywhere in this repo that the geometry reads on the tier a
+fresh save actually starts with. Its own working verdict, from the pixels
+rather than from a log: all four belts move at 2.00 px per tick against the
+64 px per tile the capture was made at, which is 0.03125 tiles per tick and so
+the normal belt's speed exactly; the input runs compressed at 12.5 items per
+1.5 tiles, which is the 4-per-tile-per-lane a compressed belt holds; and the
+three outputs carry 0.338, 0.333 and 0.336 of it, summing to 1.006. A 1 -> 3
+that balances to a 1.6% spread over the three.
 
 **Every scene was verified working before it was cut, rather than assumed.** The
 guest's own log has the five compiling to `1->3 over 4 ports`, `8->8 over 8
@@ -1018,6 +1034,35 @@ it moves across an ordinary frame step — 198 against 198 on the cross, 237
 against 237 on the long run — which is what makes the loop seamless rather than
 merely close. The 8 -> 9 loops at 96 rather than 128 because the camera was only
 still for 127 frames there.
+
+**And on NORMAL belts the period is 48 TICKS, which is the second data point
+beside express's 32 and settles that the period is the belt's own and not the
+item pattern's.** Measured the same way, on the yellow capture: seams searched
+at every multiple of 4 from 4 to 152, and 48, 96 and 144 come back clean —
+125 to 453 pixels differing by more than 20 out of 589,824 — while every other
+multiple comes back at 3,100 to 20,000. The item pattern repeats on 8 ticks
+there (0.25 tiles, one item pitch) and 8 is not clean, so the item period is
+not the loop. In DISTANCE the two tiers disagree as well — 32 express ticks is
+3.0 tiles and 48 normal ticks is 1.5 — so neither a fixed tick count nor a
+fixed distance carries across, and a new tier has to be measured rather than
+derived. At the shipped seam no pixel of the static 78% of the frame differs by
+more than 20 across the wrap, and every wrap metric lands inside the ordinary
+step's own range: max difference 224 against an ordinary median of 224 over a
+220-229 range, and the items advance 5.00 px across the wrap against 5.02 +/-
+0.03 across the 35 ordinary steps.
+
+**Two things about that capture are worth carrying to the next one.** macOS
+records VARIABLE frame rate — this clip averaged 55.3 fps and 22 of the 161
+frames a 60 fps normalisation produces are duplicates, so 21 game ticks were
+never captured at all. Reading the tick each frame actually shows, off the
+belt's own 2 px per tick displacement, is what makes a loop arithmetic
+possible: the ticks that ARE present turn out to include every tick divisible
+by 4, so a 15 fps cut samples 36 genuine, evenly spaced frames and no frame is
+a duplicate. And the loop's first frame is the MEAN of the two source frames
+showing that one tick, which is legitimate because they are the same game state
+and it halves the codec noise the wrap would otherwise step through: without
+it the wrap's static-region noise is 3.04 against an ordinary step's worst
+2.11, and with it 1.78, which is inside.
 
 **The two `-io-arrows` files are still the pre-port captures**, because the
 session ran with alt-mode OFF throughout: no arrow variant could be cut from it,
