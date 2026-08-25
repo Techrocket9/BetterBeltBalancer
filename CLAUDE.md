@@ -344,6 +344,26 @@ README.md                the outward-facing page: what the mod is, how it
 
 **`fklua mod` still `rm -rf`s its output directory** before writing, so nothing hand-written can survive there; the tree named by `[mod] data` is merged in before the directory writer AND the zip writer, so both carry the same bytes.
 
+### What it cost, measured either side of the port
+
+Both packages built from clean on 2026-08-25, shipped config (`--persist=packed --gc=collected`), same FkLua, same pin, same machine:
+
+| | before | after | |
+|---|--:|--:|---|
+| `dist/better-belt-balancer_0.3.0.zip` | 453,975 B | **546,004 B** | +20.3% |
+| `fk_module.lua` (the control guest) | 3,136,956 B | **3,136,956 B** | **byte-identical** |
+| `fk_data_module.lua` (the data guest) | — | **1,498,245 B** | new |
+| `fk_data.lua` (the shim, verbatim) | — | 24,106 B | new |
+| `dist/bbbdata.wasm` | — | 141,799 B | new |
+| hand-written Lua in the package | **45,037 B** | **0** | eleven files |
+| members bound into the mod | 54 | **54** | of 4,859, none added |
+
+**The control guest is byte-identical, and that is the shape of the whole change**: nothing in `guest/go` outside the new `data/` and `engine/` packages was touched, so `fk_module.lua` comes out the same file. What the zip pays is a second compiled guest for a stage that used to be 45 KB of source — 92 KB of download, once, against a data stage `go test` can reach and that cannot drift from the runtime consuming it.
+
+**Nothing on any hot path moved, measured rather than argued.** A data module runs at load and is not in the game at all afterwards, so the standing gate is that the CONTROL guest's per-operation heap slopes do not move — and the `mar` suite's leaking arm came back **identical to the byte** against a build of the pre-port commit run in the same session: **1,280 / 352 / 1,209 / 32 / 560 / 3,736 / 2,080 B** per primitive over **3.92 MiB** of linear memory, 1,136 B of calibration at 0.0% spread, 0 items lost over 200 teardowns, 681 audits at drift=0. That is the set this file has recorded since the single-edge port, and it is what says a second guest costs the first one nothing.
+
+**All fourteen suites are green in BOTH arms** over the ported package (1m49s collected, 1m59s leaking, one invocation each), and **no suite's numbers moved at all** — which, for a change that touches only the load-time half, is the only result available, and is the second validator behind the dump.
+
 ## Build
 
 ```sh
@@ -2144,6 +2164,7 @@ Design fixed 2026-07-31: **compile, don't interpret** -- balancer clusters compi
 | | |
 |---|---|
 | **The brain is Go** | 4,600 lines of it, plus 92k of generated bindings. No hand-written Lua in the control stage at all — `fklua mod` writes every byte of it. `guest/go/host.go` and `test/check-layout.py`, the two files that existed because a binding could not do something, are both deleted |
+| **...and so is the DATA STAGE, so the mod contains no hand-written Lua at all** | Since 2026-08-25 the settings and data stages are `guest/go/data`, a second compiled guest, and `mod-data/` is graphics, locale, a changelog and a thumbnail. Eleven Lua files and 45,037 bytes gone; the version branch two Lua states had to share a file for is one Go function two exports call; the technology's aliasing of base's own unit table died with the reference. Proved BYTE-IDENTICAL against goldens taken from the Lua before the port, on both mod sets, by hashing Factorio's own `--dump-data`, with the control guest's `fk_module.lua` and the `mar` heap slopes unmoved to the byte. "The shipped mod holds no Lua" |
 | **It beats the incumbent** | 45×/47× against belt-balancer-2 and -3 on a saturated express 4×4, `scriptUpdate` at the no-mod control's in every cell, exact balance under every load condition. [`bench/baselines/RESULTS.md`](bench/baselines/RESULTS.md) |
 | **It is correct under the whole 2.0 lifecycle** | Eight headless suites in a real Factorio, and the stale-reference crash class is impossible by construction rather than by handling |
 | **A teardown never destroys an item, whatever is on the belt** | A recompile reinserts what it drained; only a removal spills — and past the carry pool's 32-group bound, which used to DROP the overflow after reading it off a line about to be destroyed, it spills that too. 48 kinds through one saturated 4x4: 4,336 items in, 4,336 out, every name exact. "More than thirty-two kinds" |
