@@ -2243,7 +2243,14 @@ fires and `writeMultiEdgeSetting` returns false before it writes).
 
 ## Implementation status — phase 10, a ping that opens on fog, 2026-08-24
 
-**Shipped: a ping list charts what it points at.** A follow-up field report on the
+**Shipped: a ping list charts what it points at — and the EFFECT is
+field-verified.** The one check no suite can ever make (a playerless force has
+no chart at all; the engine finding below) was closed by the same live 2.0.77
+session that reported the defect: with the fix installed, clicking the pings
+centres the map on revealed balancers rather than on black. 2026-08-24, the
+same day the fix shipped.
+
+A follow-up field report on the
 veto, and the good half first: the veto fired in a live 2.0.77 session naming
 **19 balancers with nineteen pings across TWO surfaces** (18 on `bbb-m2-a`, one on
 `bbb-m2-b`, which is the `xsurf` rig), matching a save that had been partly
