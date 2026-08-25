@@ -772,6 +772,75 @@ func fkFree(p uint32) {
 //go:wasmexport fk_api_pin_2_1_16
 func fkAPIPin() {}
 
+// Factorio's three GLOBAL FUNCTIONS, which belong to no class and are
+// package-level here for that reason. fk.call's handle operand is
+// unread for them and the bindings pass 0.
+
+// LocalisedPrint is Factorio's GLOBAL localised_print(). It is on no class, so
+// it is a top-level binding here rather than a method, and the handle
+// the dispatch import takes is ignored for it.
+//
+// It writes to STDOUT rather than to the log file, which is what it is
+// for: a tool that launched Factorio as a child process reads it there.
+// A headless run's stdout is the terminal, so nothing in a log file
+// records it.
+func LocalisedPrint(string_ Value) error {
+	mark := allocMark()
+	defer allocRelease(mark)
+	a := (*[16]byte)(block(16))
+	writeDyn(&a[0], string_)
+	if st := hostCall(0, 4857, ptr(&a[0]), 0); st != 0 {
+		return Status(st)
+	}
+	return nil
+}
+
+// Log is Factorio's GLOBAL log(). It is on no class, so
+// it is a top-level binding here rather than a method, and the handle
+// the dispatch import takes is ignored for it.
+//
+// IT TAKES A LocalisedString, WHICH IS WHAT MAKES IT THE ONLY WAY TO READ
+// A LuaProfiler. LuaProfiler has no accessor returning its duration --
+// the engine renders one only as an ELEMENT of a localised string, so
+// log{"", "took ", p} is the whole idiom and what lands in
+// factorio-current.log is: ... Duration: 12.368959ms
+//
+// In tier-2 terms that is an array of OfString(""), OfString("took ")
+// and OfObject(p) -- an empty first element is LocalisedString's
+// "concatenate the rest" form. For a plain string with no localisation
+// and no profiler in it, fk.Log is one import rather than a host call.
+func Log(string_ Value) error {
+	mark := allocMark()
+	defer allocRelease(mark)
+	a := (*[16]byte)(block(16))
+	writeDyn(&a[0], string_)
+	if st := hostCall(0, 4858, ptr(&a[0]), 0); st != 0 {
+		return Status(st)
+	}
+	return nil
+}
+
+// TableSize is Factorio's GLOBAL table_size(). It is on no class, so
+// it is a top-level binding here rather than a method, and the handle
+// the dispatch import takes is ignored for it.
+//
+// NOT FOR A LuaCustomTable, which the description says outright: use the
+// class's own length operator, which answers without the table ever
+// crossing. This counts the keys of a plain Lua table, which for a guest
+// means a tier-2 value it built or one a callback handed it.
+func TableSize(table Value) (uint32, error) {
+	mark := allocMark()
+	defer allocRelease(mark)
+	a := (*[16]byte)(block(16))
+	r := (*[4]byte)(block(4))
+	writeDyn(&a[0], table)
+	if st := hostCall(0, 4859, ptr(&a[0]), ptr(&r[0])); st != 0 {
+		return 0, Status(st)
+	}
+	v0 := *(*uint32)(unsafe.Pointer(&r[0]))
+	return v0, nil
+}
+
 // LuaAISettings wraps a handle to a LuaAISettings.
 type LuaAISettings struct{ Object }
 
