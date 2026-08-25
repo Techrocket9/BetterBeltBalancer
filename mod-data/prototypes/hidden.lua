@@ -370,7 +370,16 @@ if CAN_STACK then
       name = "bbb-can-stack",
       hidden = true,
       hidden_in_factoriopedia = true,
-      flags = util.table.deepcopy(HIDDEN_FLAGS),
+      -- NOT HIDDEN_FLAGS: that list carries `placeable-neutral` and
+      -- `player-creation`, and a placeable simple-entity must declare an
+      -- `icon` -- the 2.0 loader refuses the mod without one ("Key \"icon\"
+      -- not found"), which the first graphical 2.0 session found, because this
+      -- prototype exists only on 2.0.x and nothing on 2.1 ever loads the
+      -- branch. The legacy stub's flag list is the load-tested shape for a
+      -- prototype that exists to be looked up and never placed.
+      flags = { "not-blueprintable", "not-deconstructable", "not-on-map",
+        "no-copy-paste", "not-selectable-in-game", "not-upgradable",
+        "not-in-kill-statistics", "not-in-made-in", "hide-alt-info" },
       max_health = 1,
       collision_mask = { layers = {} },
       collision_box = { { 0, 0 }, { 0, 0 } },
