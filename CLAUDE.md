@@ -231,7 +231,20 @@ mod-data/                the DATA STAGE, hand-written Lua: data.lua, prototypes/
                          both stages, because they are separate Lua states and
                          two copies of a version match would be one edit away
                          from a guest that believes it may stack over a
-                         prototype that cannot
+                         prototype that cannot. changelog.txt is the portal and
+                         in-game changelog, written to FACTORIO'S OWN GRAMMAR
+                         (lua-api.factorio.com/latest/auxiliary/changelog-format.html:
+                         99-dash separators, `Version: X.Y.Z` immediately after
+                         each, 2-space categories ending in a colon, `    - `
+                         entries, 6-space continuations, no tabs, no trailing
+                         whitespace) -- the engine drops a malformed changelog
+                         WHOLE and silently, and headless never reads it, so
+                         `make mod` runs test/check-changelog.py over the
+                         packaged copy: the grammar, plus the tripwire that
+                         fklua.toml's version must be the TOP section, because
+                         a release bumped without its changelog section is the
+                         drift no suite can see. Red-proven on eight injected
+                         defects the day it was written (2026-08-24)
 tools/                   make-graphics.py -- the 47-cell adaptive sprite
                          sheet, the icon and the I/O arrows, all COMPUTED
                          rather than drawn, and their committed PNGs

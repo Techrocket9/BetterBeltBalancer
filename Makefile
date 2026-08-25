@@ -177,6 +177,7 @@ $(WASM): $(GUEST_SRC) $(shell find guest/go/plan -name '*.go' -not -name '*_test
 mod: $(WASM) $(DATA_SRC) fklua.toml
 	$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) -o $(DIST)
 	python3 test/check-sprites.py $(MOD_DIR)
+	python3 test/check-changelog.py $(MOD_DIR)/changelog.txt $(MOD_VERSION)
 	@echo "mod ready: $(MOD_DIR)"
 
 # The distributable form. It carries the data stage too, which it could not
