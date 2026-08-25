@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.0
+Date: 2026-08-24
+  Info:
+    - The Factorio 2.1 release. Same mod as 0.2.0: on 2.1 every balancer part connects to one belt, the multiple-belts setting does not exist, and opening a 2.0 save that used multiple belts per part recovers each machine's contents beside it and posts the rebuild checklist described under 0.2.0.
+---------------------------------------------------------------------------------------------------
 Version: 0.2.0
 Date: 2026-08-24
   Major Features:
