@@ -282,7 +282,7 @@ def write_png(path, rows):
 # to work out which edge of which part you are looking at.
 #
 # The cell says which SIDE the belt is on; the prototype (guest/go/data/
-# sprite.lua) carries the shift that puts the arrow on that side of the tile, so
+# sprite.go) carries the shift that puts the arrow on that side of the tile, so
 # the guest names a sprite and passes nothing but a target.
 
 ARROW = 32
