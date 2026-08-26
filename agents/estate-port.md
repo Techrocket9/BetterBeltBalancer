@@ -1,4 +1,4 @@
-# The test estate, in Go -- and, since phase 8, one observer in Rust
+# The test estate, in Go
 
 **There is to be no hand-written Lua in this repository, anywhere.** The shipped
 mod got there in two rounds -- `fklua mod` has always generated the control
@@ -10,13 +10,14 @@ toolchain type-checks, and that only a Factorio run can execute at all. It was
 8,524 over twenty-four files when the pilot started, and none of what is left is a
 SUITE.
 
-**AND THE ESTATE IS MIXED-LANGUAGE SINCE PHASE 8**: thirteen Go observers and one
-RUST one, `mig21`, which is the same program the Go one was and produces the same
-51 log lines on the same two fixtures byte for byte. It is there because FkLua
-maintains Go/Rust bindings at member-id parity and guards it with mirror tests
-against a host STUB; this holds the same claim against a real engine, on every
-`make test`, forever. Its own section is phase 8, and it is what closed the
-on-engine programme.
+**THE ESTATE IS FOURTEEN GO OBSERVERS AND ONE TOOLCHAIN.** It was mixed for one
+day: phase 8 re-ported `mig21` to RUST as a parity exercise and the arm was
+REVERTED on 2026-08-26, on the user's decision that continuous Rust coverage for
+FkLua belongs to the fklua-ports repositories. **Phase 8's measurement stands and
+its section is unchanged** -- 51 log lines on two fixtures byte for byte, with a
+byte-identical member table across the two backends -- and the reversion has its
+own dated section below, after phase 8's. The Rust implementation is recoverable
+in full from git history at `5f91937`.
 
 This file is the programme for removing it, and the record of what each phase
 measured. The pilot is `m1` and `sedge`, phase 2 is `mar`, `mig21` and `qual`,
@@ -1929,6 +1930,14 @@ repository has carried since the single-edge port, with the calibration at
 
 ## Phase 8: `mig21` again, in RUST -- done 2026-08-25, and it CLOSES THE ON-ENGINE PROGRAMME
 
+> **THE RUST ARM WAS REVERTED ON 2026-08-26 AND EVERYTHING IN THIS SECTION
+> STANDS AS MEASURED.** The parity claim was proved here and it is a COMPLETED
+> MEASUREMENT; what the reversion turns off is the continuous exercise, which
+> belongs to the fklua-ports repositories instead. The section below is the
+> record of what phase 8 did and found, unedited apart from this note; the
+> reversion's own record follows it, and the Rust implementation is recoverable
+> in full from git history at `5f91937`.
+
 **One observer, written twice against one ABI, producing the same 51 log lines on
 the same two committed fixtures -- byte for byte, with no mask at all.** That is
 the whole phase, and it is the strongest parity statement this estate can make:
@@ -1938,7 +1947,9 @@ somebody is holding to the byte.
 
 `guest/rust/obs/mig21` is the observer and `guest/go/obs/mig21` is DELETED. The
 estate is thirteen Go observers and one Rust one from here, and it stays that way
-on every `make test`.
+on every `make test`. (**It did not**: one day, and then the reversion
+recorded after this section. The claim below was the argument for staging the Rust one, and it
+is what the reversion weighed against a second toolchain in the build.)
 
 **Nothing else in the programme is left that this machine can run.** The estate's
 hand-written Lua is unmoved at **478 lines over two files**, both of them
@@ -2289,6 +2300,128 @@ working: a run that had passed there would have been a run that never rebuilt.
   diff above is the instrument, already established and already empty. The
   transcript would catch an under-drain the way it caught red proof B.
 
+---
+
+## The reversion: pure Go again -- 2026-08-26
+
+**The user's decision, in their own words: *BBB should be pure Go. Let other mods
+handle Rust coverage for FkLua.*** `guest/rust/` is deleted, `guest/go/obs/mig21`
+is restored, and the estate is fourteen Go observers built by one toolchain.
+
+**WHAT IS REVERTED IS THE CONTINUOUS EXERCISE, NOT THE CLAIM, and the distinction
+is the whole of this section.** Phase 8's argument for STAGING the Rust observer
+rather than keeping both was that the estate would then exercise FkLua's second
+backend *continuously* -- every `make test`, both arms, on real fixtures -- and
+that "a parity claim that is checked once is a parity claim about a commit". That
+argument is sound and it is answered rather than dismissed: **the continuous
+exercise belongs to the fklua-ports repositories**, which are mods written for
+that purpose and which run their own gates, and carrying a second toolchain in
+THIS build to make the same statement a second time is a cost this mod does not
+have to pay. Phase 8's MEASUREMENT is a completed measurement and its section is
+unchanged.
+
+**What guards `mig21` from here is what phase 8 said guards it: the suite.**
+`test/assert-mig21.py` is untouched by both the port and the reversion.
+
+### The gate: transcript-exact, and taken in phase 8's own order
+
+The reversion is a port like any other and cleared the same first gate, in the
+same order: **goldens first, twice, before a line was touched.**
+
+| | m2 | edge |
+|---|--:|--:|
+| the golden, captured off the RUST observer | 26 tagged lines | 25 |
+| masks | **0** | **0** |
+| self-diff, run A against run B | **identical** | **identical** |
+| **restored GO observer against that golden** | **EMPTY DIFF** | **EMPTY DIFF** |
+| ...and the mod's own `[BBB]` lines beside them | identical, 237 | identical, 243 |
+
+Normalisation is phase 8's, verbatim and no wider: everything from the `[MIG21]`
+tag onwards, so what is dropped is Factorio's own timestamp and the
+`control.lua:NNN` the generated Lua logs from. **The transcript is symmetric** --
+phase 8 measured Rust against a Go golden and this measured Go against a Rust
+one, and both are empty, which is a stronger statement than either alone.
+
+### Symmetric with phase 8 everywhere it could be, and the one place it is not
+
+| | |
+|---|---|
+| `guest/go/obs/mig21/main.go` | restored **verbatim** from `74eab29`, 541 lines, `sha256 5477387d…` |
+| ...did it need a touch to build? | **No.** The bindings have not moved since `74eab29` and it compiled unchanged, which is the expectation the reversion was told to report loudly if it failed. It did not fail |
+| `fklua.lock`'s `bindings_sha256` | **back to `b3f41c12…`, byte-identical to the pre-phase-8 value** -- the lock hashes the bindings TREE, so dropping `rust` from `lang` returns it exactly |
+| the packaged `info.json` | **identical** to the Rust arm's, `dependencies` still `["base >= 2.1.0"]` -- the load-order property phase 2 red-proved and phase 8 re-proved is preserved by construction |
+| the packaged `fk_api_gen.lua` | **byte-identical** to the Rust arm's, `a51f0924…`. Phase 8's sharpest parity number, held from the Go side |
+| `fk_module.lua` | 577,418 B, phase 8's recorded Go figure to the byte |
+| `dist/obs-mig21.wasm` | 544,504 B against phase 8's recorded 544,497 -- **7 bytes, and it is the TinyGo build stamp**: this build ran from a worktree whose absolute path is seven characters longer. Not a code difference, and the transcript is the gate |
+
+**The one asymmetry, and it is deliberate**: `a1deca3`'s build-graph fix is NOT
+reverted with phase 8. Every observer package and wasm rule lists `Makefile` as a
+prerequisite -- the fix red proof C provoked -- and the restored `mig21` path
+inherits it through the standard Go pattern rule, which already carried it.
+Reverting a hazard fix because it landed after the thing being reverted would be
+undoing a repair for a reason that has nothing to do with it.
+
+### The no-cargo assertion, which is an absence and therefore has to be grepped
+
+`make observers` from clean: **28.3 s, exit 0**, and the 1,124-line build log
+contains **zero** hits for `cargo`, `rustc`, `rustup`, `wasm32`, `RUSTFLAGS` or
+`obs-mig21-rs`. Twenty-six wasm modules, fifteen packaged mods, one toolchain.
+`wasm-opt` stays a hard dependency -- it always was, of the TinyGo build itself.
+
+### The estate, both arms, and the `mar` slopes
+
+**All fourteen suites green in BOTH arms, one invocation each** -- 2m19.8s
+collected and 2m26.7s leaking, against phase 8's 2m23.7s and 2m26.7s. **No
+suite's number moved at all.**
+
+| leg | B/primitive | | leg | B/primitive |
+|---|--:|---|---|--:|
+| A | 1,280 | | E | 560 |
+| B | 352 | | G | 3,736 |
+| C | 1,209 | | F | 2,080 |
+| D | 32 | | linear memory | **3.92 MiB** |
+
+**Byte-identical to phase 8's**, which is byte-identical to phase 4's and to the
+record this repository has carried since the single-edge port: calibration
+1,136 B at **0.0% spread**, every leg linear (x1.00 to x1.07 against a x1.35
+gate), all ten world tuples unmoved, 0 items lost over 200 teardowns, 681 audits
+at `drift=0 unbuilt=0`, and the collected arm at **9 collections in 6 paced steps
+with 0 forward-progress deadlines**. `mar` is a control here rather than a risk
+-- nothing this reversion touched is on any path it walks -- and it is recorded
+because a change to the BUILD GRAPH is exactly the shape that could have moved
+it.
+
+### What was deleted and what came back
+
+**Deleted, ten tracked files**: `guest/rust/.gitignore`, `Cargo.lock`,
+`Cargo.toml`, `fkapi/Cargo.toml`, `fkapi/src/api.rs` (130,775 lines, generated),
+`fkapi/src/lib.rs`, `obs/mig21/Cargo.toml`, `obs/mig21/src/harness.rs`,
+`obs/mig21/src/lib.rs`, `obs/mig21/src/line.rs` -- and the untracked
+`guest/rust/target`. **Restored**: `guest/go/obs/mig21/main.go`, one file.
+
+**In the Makefile**: `RUST_DIR`, `RUST_SRC`, `RUST_TARGET` and `RUST_FLAGS` are
+gone, so is the `obs-mig21-rs.wasm` rule with its `RUSTFLAGS` and its
+`--llvm-memory-copy-fill-lowering` pass, and so is `clean`'s
+`$(RUST_DIR)/target`. `$(OBS_MIG21_DIR)` takes `$(DIST)/obs-mig21.wasm` from the
+standard pattern rule again. **In `fklua.toml`**: `lang = ["go"]`.
+
+### What a future session should know
+
+- **The Rust implementation is not lost and is not meant to be rewritten.** `git
+  show 5f91937` is the whole of it -- the crate layout, the four
+  language-forced differences, the deviations and the three red proofs -- and
+  this file's phase 8 is the reasoning. Anyone reviving it starts there rather
+  than from scratch.
+- **The four language-forced differences phase 8 wrote down still hold** and are
+  the first hour of the next Rust guest anywhere: `_initialize` rather than a
+  package initialiser, `ChunkPosition` not being `Copy`, the line builder's
+  digit scratch needing a stack copy, and `fk::last_error()` returning
+  `Vec<u8>`. **No FkLua gap was filed for any of them** and none is owed.
+- **`guest/rust/fkgc` was never linked by this estate** (phase 8's own negative:
+  observers are packaged `--gc=leaking` in both arms), so the reversion takes no
+  Rust collected-mode data point away from the FkLua investigation, because
+  there never was one here to take.
+
 ## The phases
 
 Each phase is: goldens, port, the six gates, `git rm` the Lua, and a section in
@@ -2303,7 +2436,7 @@ this file recording what it measured and what it deviated on.
 | **5 (done)** | the interactive staging mod | not a suite -- the world a HUMAN walks, and where the mod portal's demo scenes live. `iact` gated it already, so this phase had a headless check from the start; it is also the first consumer of `fkapi.RemoteCall`, and the only observer with a player event handler |
 | **6 (done)** | `test/mods/belt-balancer-2`, `test/mods/bbb-mig-foreign` | data-stage-only stand-ins, and the first packages here with NO CONTROL STAGE. It was blocked on [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 26 and the fix landed: `fklua mod --data-module` with no positional. The `test/fixtures/fastbelt` workaround it would have needed is deleted rather than spent. These two have no suite of their own, so the goldens are `mig`'s whole log set |
 | **7 (done)** | `bench/mods/*` | LAST, and alone. Every published performance figure in this repository was measured with those setup mods, so the port has to carry a comparability gate the suites do not need: the same matrix cell, INTERLEAVED in one session, old and new setup mods against the same `dist/`, with the no-mod control in the same session. Session drift on this machine is 25-35% |
-| **8 (done)** | `mig21`'s observer again, in RUST | the parity exercise, and it CLOSES the on-engine programme. One observer written twice against one ABI is the strongest statement this repository can make about FkLua's second backend, and `mig21` was the right one: no `--create` phase, so the whole thing is one load and one set of assertions. **51 lines, both fixtures, byte-identical, no mask** -- and the Rust observer is the staged one from here, with the Go source deleted |
+| **8 (done, and REVERTED 2026-08-26)** | `mig21`'s observer again, in RUST | the parity exercise, and it CLOSES the on-engine programme. One observer written twice against one ABI is the strongest statement this repository can make about FkLua's second backend, and `mig21` was the right one: no `--create` phase, so the whole thing is one load and one set of assertions. **51 lines, both fixtures, byte-identical, no mask.** The Rust observer was staged for one day; the arm was reverted and the estate is fourteen Go observers, with the measurement banked and continuous Rust coverage delegated to fklua-ports. See the reversion section |
 
 ### What waits for a 2.0 binary
 

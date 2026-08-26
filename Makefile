@@ -335,47 +335,14 @@ $(DIST)/obs-%.wasm: $(OBS_SRC) guest/go/fkapi/fkapi.go Makefile
 	@mkdir -p $(DIST)
 	cd guest/go && tinygo build $(OBS_TINYGO) -o ../../$@ ./obs/$*
 
-# --- and ONE observer is RUST ------------------------------------------------
-#
-# `mig21`, and which one was decided by what the suite IS rather than by what
-# would be easy to port: it has no storage, builds no world and asserts nothing
-# -- it reads and it logs -- so a difference between the Go and Rust transcripts
-# is a difference in the BINDINGS, the marshalling or the arithmetic, and cannot
-# be a difference in a rig. agents/estate-port.md's phase 8 is the record.
-#
-# WHY THE ESTATE CARRIES A SECOND LANGUAGE AT ALL. FkLua generates Go and Rust
-# bindings at member-id parity and guards that with mirror tests against a host
-# STUB. This is the same claim held against a real engine and two committed
-# fixtures, permanently, on every `make test` -- and it is measurably true at the
-# seam rather than merely asserted upstream: the packaged Go and Rust observers'
-# `fk_api_gen.lua` come out BYTE-IDENTICAL, 20 members pruned from 4859, the
-# same 1 event and the same 1 define.
-#
-# CARGO IS THEREFORE A `make test` DEPENDENCY. That is a real cost and it is
-# stated rather than hidden -- rustc 1.97.1 with the wasm32-unknown-unknown
-# target; see CLAUDE.md's Build section for what it adds to a run.
-#
-# THE RUSTFLAGS ARE NOT OPTIONAL AND NEITHER IS THE wasm-opt PASS, and the two do
-# different halves of one job (FkLua's agents/guests.md, "The flag does not do
-# what it looks like it does"). rustc enables bulk-memory, multivalue and
-# reference-types by default and FkLua compiles none of the three -- but
-# RUSTFLAGS governs only THIS crate's codegen, while `core` and
-# `compiler_builtins` ship PRECOMPILED with bulk-memory on, so a lowered `memcpy`
-# drags `memory.copy` and `memory.fill` in regardless. Without the lowering pass
-# `fklua mod` warns and turns both into raising stubs: a mod that loads happily
-# and dies whenever that path is reached.
-RUST_DIR    := guest/rust
-RUST_SRC    := $(shell find guest/rust -name '*.rs' -not -path '*/target/*') \
-               $(shell find guest/rust -name 'Cargo.toml' -not -path '*/target/*')
-RUST_TARGET := wasm32-unknown-unknown
-RUST_FLAGS  := -C target-feature=-bulk-memory,-multivalue,-reference-types
-
-$(DIST)/obs-mig21-rs.wasm: $(RUST_SRC) Makefile
-	@mkdir -p $(DIST)
-	cd $(RUST_DIR) && RUSTFLAGS="$(RUST_FLAGS)" \
-	  cargo build --release --target $(RUST_TARGET) -p obs-mig21
-	wasm-opt --llvm-memory-copy-fill-lowering -o $@ \
-	  $(RUST_DIR)/target/$(RUST_TARGET)/release/obs_mig21.wasm
+# EVERY OBSERVER IS TINYGO AND THERE IS NO SECOND TOOLCHAIN IN THIS BUILD.
+# `mig21`'s was Rust for one day -- phase 8 of the estate port, which held
+# FkLua's Go/Rust member-id parity against a real engine and two committed
+# fixtures and measured 51 tagged log lines byte-identical with no mask at all.
+# That measurement is BANKED (agents/estate-port.md, phase 8) and the arm was
+# reverted 2026-08-26: continuous Rust coverage for FkLua lives in the
+# fklua-ports repositories, and this mod is pure Go. Cargo is not a dependency
+# of anything here; the pattern rule above builds every one of the fourteen.
 
 OBS_COMMON := --persist=$(PERSIST) --gc=leaking --api=$(MOD_API) \
               --factorio-version $(MOD_SERIES) --author BetterBeltBalancer
@@ -480,17 +447,15 @@ $(OBS_MAR_DIR): $(DIST)/obs-mar.wasm $(DIST)/obs-mardata.wasm Makefile
 #
 # No data stage: it builds no rig and needs no prototype.
 #
-# AND IT IS THE RUST ONE. Everything above this line is unchanged by that, which
-# is the point: the identity, the dependency list and the packaging flags are
-# what they were, and only the wasm handed in came out of cargo instead of
-# TinyGo. The Go source it was ported from is in git history at 74eab29~ --
-# deleted rather than kept, because two observers for one suite means only one of
-# them is ever run and the other rots. What guards the port from here is the
-# suite itself: `test/assert-mig21.py` reads these lines and is unchanged.
-$(OBS_MIG21_DIR): $(DIST)/obs-mig21-rs.wasm Makefile
+# It was packaged from a RUST wasm for one day and everything above this line was
+# unchanged by that, which was the point: identity, dependencies and flags stayed
+# put and only the module handed in came from cargo. Reverted 2026-08-26 -- see
+# the observers block above -- and the two transcripts are byte-identical, so
+# this recipe produces the log `test/assert-mig21.py` has always read.
+$(OBS_MIG21_DIR): $(DIST)/obs-mig21.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
-	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-mig21-rs.wasm) \
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-mig21.wasm) \
 	  $(OBS_COMMON) --name bbb-mig21-observer --version 0.1.0 \
 	  --title "BBB 2.0-save-on-2.1 observer" \
 	  --description "Reports what a Factorio 2.0 balancer save looks like when it is opened on 2.1, before and after this mod's migration runs on it. Builds nothing and asserts nothing." \
@@ -800,11 +765,5 @@ check:
 datastage-check: mod $(OBS_BB2_DIR)
 	FACTORIO_BIN="$(FACTORIO_BIN)" test/check-datastage.py
 
-# `guest/rust/target` goes too, and that is a hazard rather than tidiness.
-# It is gitignored, so `git status` stays clean and a branch switch leaves it
-# alone -- and cargo keeps ONE artifact path per (package, profile) whatever
-# features built it, so the tree can hold rlibs from a crate that no longer
-# exists or from the other arm of an A/B. Stale symbols out of one have already
-# sent an investigation upstream the wrong way (FkLua's agents/guests.md).
 clean:
-	rm -rf $(DIST) test/tmp $(RUST_DIR)/target
+	rm -rf $(DIST) test/tmp

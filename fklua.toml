@@ -34,19 +34,21 @@ dependencies = ["base >= 2.1.0"]
 # anything this mod actually calls.
 [fklua]
 api = "2.1.16"
-# BOTH LANGUAGES, and the second one is not a spare tyre: `guest/rust/obs/mig21`
-# is a real observer in the estate, staged by `test/run.sh` and rebuilt by every
-# `make test`. FkLua maintains Go/Rust member-id parity -- 4857 bound and the
-# same 2 deferred in each -- and a generated table nobody calls is a table
-# nobody can see go wrong.
+# GO ALONE, and this repository is PURE GO: the shipped guest, the data guest
+# and all fourteen test observers are the one language.
 #
-# ONE MANIFEST, ONE PIN, TWO OUTPUTS: `guest/go/fkapi` and `guest/rust/fkapi`,
-# both written from this key, both hashed by `fklua lock`, both verified by
-# `gen-bindings --check`. A directory-scoped project of its own would have been
-# a SECOND PIN, and two pins is exactly how an observer ends up calling
-# different member ids from the mod it is observing -- ids are dense sorted
-# indices over one description's set, so the two would not even fail loudly.
-lang = ["go", "rust"]
+# It read `["go", "rust"]` for one day. Phase 8 of the estate port wrote the
+# `mig21` observer a second time in Rust and staged it, to hold FkLua's Go/Rust
+# member-id parity against a REAL engine rather than only against the mirror
+# tests' host stub. THE MEASUREMENT SUCCEEDED -- 51 tagged log lines over two
+# committed fixtures, byte-identical with no mask at all, and a packaged
+# `fk_api_gen.lua` identical across the two backends -- and it is a COMPLETED
+# MEASUREMENT rather than a standing exercise. Continuous Rust coverage for
+# FkLua belongs to the fklua-ports repositories, which exist for it; this mod
+# reverted to one language on 2026-08-26. The Rust tree is recoverable from git
+# history at 5f91937 and agents/estate-port.md's phase 8 records what it
+# measured.
+lang = ["go"]
 
 # THE DATA GUEST: a SECOND wasm module, which becomes the mod's settings.lua,
 # data.lua and data-final-fixes.lua. `guest/go/data` is its source and it is a
