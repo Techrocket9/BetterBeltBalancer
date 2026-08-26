@@ -44,6 +44,31 @@ The group works in both directions, so a belt held over a part replaces the part
 
 The collision mask is unchanged: a belt still cannot be laid *through* a balancer, only fast-replaced onto one part at a time.
 
+## Cost and research
+
+Two startup settings decide what a balancer part costs. Both are under Settings > Mod settings > Startup, and both default to what the mod has always shipped, so an existing save is unchanged by the update. Startup settings need a restart of Factorio to take effect.
+
+**Balancer part recipe** picks the ingredient list:
+
+| Option | Ingredients |
+|---|---|
+| Default | 4 iron plates, 2 gears, 2 transport belts |
+| Cheap | 2 iron plates, 1 transport belt |
+| Fast belts | 4 iron plates, 2 gears, 2 fast transport belts |
+| Express belts | 4 steel plates, 2 gears, 2 express transport belts |
+| Splitter | 1 splitter, 2 iron plates |
+| Express splitter | 1 express splitter, 2 steel plates |
+
+**Balancer research cost** picks which technology unlocks the balancer: Logistics (the default), Logistics 2 or Logistics 3. The cost is read from that technology rather than written down, so it follows whatever your mods charge for that tier, and the balancer's prerequisite moves with it so that it sits beside its own tier in the technology tree.
+
+Both settings are safe in an overhaul pack. No ingredient name reaches the game unless that item is present: each one has a chain of substitutes ending at iron plate, and the first item your mod set actually has is the one used. A recipe naming an item nobody defined would refuse to load the game, so it cannot happen. The same holds for the research: if the technology an option names is missing, or has been turned into a trigger technology with no research cost, the next tier down is used, and if none of them can be read the balancer costs what base charges for Logistics and has no prerequisite.
+
+## Belt speed
+
+The belts inside the hidden network run at the speed of the fastest belt in your game, and never slower than 0.25 tiles per tick (120 items per second, about 2.7x express and 2x turbo). In a vanilla or Space Age game nothing is faster than that, so the network runs at 0.25 and a balancer never limits the belts feeding it.
+
+If a mod adds a belt faster than 0.25, the network follows it. Every belt-connectable prototype in the game is read at the last data stage, the fastest speed among them wins, and the four hidden prototypes are given it. That covers transport belts, underground belts, splitters, lane splitters, loaders and linked belts, so a mod that raises only one of those families is still seen. A mod whose own final data stage runs after this one and raises a belt then is the one case that is missed, and the cost is the old behaviour: the network runs at the second-fastest belt's speed.
+
 ## Performance
 
 Measured on Factorio 2.0.77 headless, base only, Apple M3 Pro, against belt-balancer-2 v2.0.9 and belt-balancer-3 v1.0.1 on identical rigs with a no-balancer control, every arm run back to back in one session. Method, caveats and raw rows: [`bench/baselines/RESULTS.md`](bench/baselines/RESULTS.md); harness: [`bench/README.md`](bench/README.md).
@@ -99,10 +124,10 @@ make test     # headless verification in a real Factorio
 
 | path | contents |
 | --- | --- |
-| `guest/go/` | the control guest; `data/` is the settings and data stages, `plan/` the network planner, `fkapi/` the generated FkLua bindings |
+| `guest/go/` | the control guest; `data/` is the settings and data stages, `plan/` the network planner, `tune/` what the cost settings and the belt-speed derivation decide, `fkapi/` the generated FkLua bindings |
 | `mod-data/` | the assets the package carries verbatim: graphics, locale, changelog, thumbnail |
 | [`bench/`](bench/README.md) | the head-to-head benchmark harness, its setup mod and the results |
-| `test/` | the headless suites and their assertion scripts; [`test/interactive/`](test/interactive/README.md) is the checklist for the seven things a headless run cannot check, and the mod that stages both its rigs and the demo scenes |
+| `test/` | the headless suites and their assertion scripts; `fixtures/` holds a small mod, also written in Go, that a data-stage check builds and stages; [`test/interactive/`](test/interactive/README.md) is the checklist for the seven things a headless run cannot check, and the mod that stages both its rigs and the demo scenes |
 | `fklua.toml` | mod identity, the API pin, guest language, GC mode and the data module |
 | `CLAUDE.md`, `agents/` | maintainer design notes and the full measurement record |
 

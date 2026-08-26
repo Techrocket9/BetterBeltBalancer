@@ -1,9 +1,9 @@
 {
   "2.1.16": {
-    "_note": "Captured from the hand-written Lua data stage before the Go port, and re-verified against the Go data guest after it. Per engine and per mod set: the dump carries every prototype every mod defined.",
+    "_note": "Captured from the hand-written Lua data stage before the Go port, re-verified against the Go data guest after it, and re-captured for 0.3.1, whose two startup cost settings are the only difference: the mod-settings dump moved from {} to those two prototypes and the data-raw dump did not move at all. Per engine and per mod set: the dump carries every prototype every mod defined. Only the DEFAULT settings are hashed; the variant and speed arms assert values.",
     "base": {
       "data_raw_sha256": "957bfa81da5125bf9a3f1ea8a071a826138792f7a75569b9a574037380d992bc",
-      "mod_settings_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "mod_settings_sha256": "c1c8c44b50b6c724b67297e2a3a486e65b07697672452fd501a4f81b98bf2683",
       "mods": [
         "better-belt-balancer"
       ],
@@ -11,7 +11,7 @@
     },
     "incumbent": {
       "data_raw_sha256": "4ffb0e3b68f149d85a25134718467c1efc010b45405a931b869f1658ab67cd83",
-      "mod_settings_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "mod_settings_sha256": "c1c8c44b50b6c724b67297e2a3a486e65b07697672452fd501a4f81b98bf2683",
       "mods": [
         "better-belt-balancer",
         "belt-balancer-2"

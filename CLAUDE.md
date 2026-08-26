@@ -229,7 +229,35 @@ guest/go/data/           THE DATA GUEST: this mod's SETTINGS and DATA stages, an
                          Read "The shipped mod holds no Lua" before touching it,
                          and main.go's //go:noinline block before ADDING to it --
                          Lua 5.2 cannot compile an arbitrarily long function and
-                         this stage is exactly the shape LLVM inlines into one
+                         this stage is exactly the shape LLVM inlines into one.
+                         THREE OF ITS DECISIONS ARE NOT CONSTANTS ANY MORE:
+                         recipe.go and technology.go read a startup setting for
+                         what a balancer part costs to build and to research, and
+                         hidden.go's `deriveHiddenSpeed` runs at final-fixes and
+                         gives the four hidden prototypes the speed of the
+                         fastest belt any mod loaded. All three folds are
+                         guest/go/tune; what is left here is the two things only
+                         a data stage can do, ask the game whether a name exists
+                         and emit. "Cost, research and belt speed"
+guest/go/tune/           WHAT THE DATA STAGE DECIDES that is not fixed: the
+                         recipe's ingredients, the research's cost, and the
+                         hidden network's belt speed. PURE Go, the SIXTH package
+                         to earn that, for a reason only `engine` shares -- THE
+                         INTERESTING STATES ARE STATES OF SOMEBODY ELSE'S MOD
+                         SET. A fallback rung is taken only in a game with no
+                         `express-transport-belt` in it and no mod set this
+                         machine can install has that shape, so inside
+                         guest/go/data those arms would be branches nothing
+                         could execute. `Resolve` cannot return a name the
+                         caller's predicate rejected, which is the whole safety
+                         argument: an ingredient naming a prototype nobody
+                         defined is a HARD LOAD FAILURE with this mod's name on
+                         it, in somebody's overhaul pack. It also carries the one
+                         check nothing else in this repo could make -- every
+                         allowed value of both settings has its own
+                         [string-mod-setting] locale entry, in both directions,
+                         because --dump-data does not read locale and no suite
+                         opens a menu
 guest/go/engine/         WHICH FACTORIO THIS IS, and the FIFTH pure package. One
                          function: is `mods["base"]` 2.0.x. Both data-stage
                          hooks call it -- the collision flag and the marker on
@@ -319,7 +347,17 @@ test/                    headless verification, FOURTEEN suites (see below), and
                          SURFACE, because health, quality, the per-force
                          technology grant and the every-surface walk are four
                          things legacy.go claims and nothing measured -- and
-                         the first run of the first of them found a defect
+                         the first run of the first of them found a defect.
+                         fixtures/fastbelt is not a test mod at all but a whole
+                         FACTORIO MOD WRITTEN IN GO, built by the dump gate and
+                         thrown away: it defines a belt at 0.4 and an UNDERGROUND
+                         at 0.5, which is the only way to show this machine a
+                         belt faster than the hidden network's own floor. The
+                         underground is the faster on purpose -- the 0.5 the gate
+                         asserts can only come from a scan that walks more than
+                         one belt family. Its `inert` package is an empty control
+                         guest and exists solely because `fklua mod` cannot
+                         package a data-module-only mod (FKLUA-GAPS.md item 26)
 bench/                   the benchmark harness (separate concern, do not disturb)
 dist/                    build output, gitignored. NOTHING here is hand-written
 README.md                the outward-facing page: what the mod is, how it
@@ -363,6 +401,83 @@ Both packages built from clean on 2026-08-25, shipped config (`--persist=packed 
 **Nothing on any hot path moved, measured rather than argued.** A data module runs at load and is not in the game at all afterwards, so the standing gate is that the CONTROL guest's per-operation heap slopes do not move — and the `mar` suite's leaking arm came back **identical to the byte** against a build of the pre-port commit run in the same session: **1,280 / 352 / 1,209 / 32 / 560 / 3,736 / 2,080 B** per primitive over **3.92 MiB** of linear memory, 1,136 B of calibration at 0.0% spread, 0 items lost over 200 teardowns, 681 audits at drift=0. That is the set this file has recorded since the single-edge port, and it is what says a second guest costs the first one nothing.
 
 **All fourteen suites are green in BOTH arms** over the ported package (1m49s collected, 1m59s leaking, one invocation each), and **no suite's numbers moved at all** — which, for a change that touches only the load-time half, is the only result available, and is the second validator behind the dump.
+
+## Cost, research and belt speed -- the three things the data stage stopped writing down
+
+**The mod portal's first feature request, in three parts, shipped as 0.3.1.** All three are data-stage decisions and none of them is a constant any more: what a balancer part costs to craft, which technology unlocks it and what that costs, and how fast the hidden network's belts run. **The DEFAULT of all three is what shipped before**, and that is the property everything else in this repository rests on -- every rate, every heap slope and both dump goldens were measured on it.
+
+**The three folds live in `guest/go/tune`, which is PURE GO and is the sixth package to earn that.** The reason is `engine`'s and no other package's: **the interesting states are states of somebody else's mod set.** A fallback rung is taken only in a game with no `express-transport-belt` in it, and the speed derivation only does anything in a game with a belt faster than 0.25 -- neither is a mod set this machine can install, so inside `guest/go/data` those arms would be branches nothing could execute and nothing could check. What is left in the data guest is the two things only a data stage can do: ask the game whether a name exists, and emit.
+
+### The recipe, and the ladder that is the whole risk
+
+`bbb-recipe-cost`, a STARTUP string setting, defined on both engines (unlike `bbb-multi-edge-parts`, which exists on 2.0 alone). Startup is forced rather than preferred: a recipe is a PROTOTYPE, so what it costs has to be readable at the data stage, and `fkdata.StartupSetting` is the only kind that is.
+
+| option | ingredients |
+|---|---|
+| **`vanilla`** (DEFAULT) | 4 iron-plate, 2 iron-gear-wheel, 2 transport-belt -- **byte-identical to 0.3.0** |
+| `cheap` | 2 iron-plate, 1 transport-belt |
+| `belt-fast` | 4 iron-plate, 2 iron-gear-wheel, 2 fast-transport-belt |
+| `belt-express` | 4 steel-plate, 2 iron-gear-wheel, 2 express-transport-belt |
+| `splitter` | 1 splitter, 2 iron-plate |
+| `splitter-express` | 1 express-splitter, 2 steel-plate |
+
+**AN INGREDIENT NAMING A PROTOTYPE NOBODY DEFINED IS A HARD LOAD FAILURE WITH THIS MOD'S NAME ON IT**, in somebody else's overhaul pack, before a prototype of theirs is read. That is the entire risk of the feature and it is measured rather than feared: with the guard removed and a plan pointing at a Space-Age-only belt, a base-only `--dump-data` dies on `Error in assignID: item with name 'turbo-transport-belt' does not exist.`
+
+So every ingredient is a LADDER of candidate names and `tune.Resolve` takes the first one the caller's predicate proved present. Three properties, all of them `go test ./tune/`:
+
+- **Resolve can never return a name the predicate rejected.** Walked over every option against every one-name-present and every one-name-missing world the ladders can reach. A nil predicate means nothing exists, so a caller who forgot one emits an empty recipe rather than an unchecked one.
+- **Every ladder terminates, and at the same rung**: `iron-plate`, the cheapest thing any game with belts in it has. A game whose only item is iron plate gets every option as iron plate; a game with no iron plate at all gets a recipe with NO ingredients, which is a strange machine and a load that COMPLETES. That is the trade, stated: never break the load, always say so in the log.
+- **The vanilla plan is byte-equal to a literal copy of 0.3.0's ingredient list**, written out a second time in the test rather than restated from the plan.
+
+**The predicate is `itemExists`, and it probes the prototype's `name` LEAF rather than the prototype.** `Get("item", "iron-plate")` marshals a whole prototype across the wasm boundary to answer yes or no; `name` is mandatory on everything in data.raw, so its presence and the prototype's are the same fact and the read is one string. It walks the twenty-one prototype types an ITEM can be, because a modpack is entitled to make an ingredient a `capsule` or a `module`, and being wrong in that list is cheap in one direction only: a type left out steps a ladder past a name that did exist, and a type that does not exist simply answers absent.
+
+**"The identity plan is the last resort" is implemented and is a tripwire rather than a live path.** `ResolveRecipe` falls back to vanilla when the chosen plan resolves to nothing -- and no plan here can do that while vanilla resolves to something, because every ladder ends at the same rung. It exists for the plan somebody adds later.
+
+### The technology, where the prerequisite moves with the unit
+
+`bbb-tech-cost`, the same shape: `logistics` (DEFAULT, today's behaviour), `logistics-2`, `logistics-3`. The strings ARE the base technology names, so there is no mapping table under them.
+
+**The unit was already READ rather than written down** -- that is 0.1.0's decision and the reason this mod follows whatever an overhaul charges for a tier. What the setting picks is which technology to read, and **the PREREQUISITE comes from the same read**. Charging `logistics-3`'s science while still hanging off `logistics` would put a machine that costs blue science at a place in the tree a player reaches with red: researchable long before it is affordable, and out of order in Factoriopedia. One technology is named once and both fields come from it.
+
+The ladder is `logistics-3` -> `logistics-2` -> `logistics` -> the vanilla fallback (20 automation science over 15 s), and a rung is taken only when that technology exists AND carries a `unit` -- the trigger-technology case 2.0 introduced and base itself uses. **The fallback emits NO prerequisite**, which is strictly better than what 0.3.0 did: `prerequisites = {"logistics"}` naming a technology nobody defined is a load error, not a cost.
+
+Measured, base only: `logistics-2` is 200 units over 30 s and `logistics-3` is 300 over 15 s, and the gate asserts each against that technology's OWN unit in the same dump rather than against a figure transcribed here -- which is the only comparison that stays true the day base re-costs a tier.
+
+### The belt speed, and the claim that was wrong for five milestones
+
+**`hiddenSpeed` was 0.25 from M2 to 0.3.0 and this file called it a CEILING.** It is not. The measurement: a belt faster than 0.25 runs FULLY COMPRESSED and delivers **480 x speed items/s**, so a modded belt above 120 items/s was silently throttled to 120 at every port of every balancer -- which is what the portal's "Turbo-belts" ask was about. The false ceiling claim is purged from `hidden.go` rather than corrected in place.
+
+0.25 is a **FLOOR** now, and `deriveHiddenSpeed` at `data-final-fixes` raises the four hidden prototypes to the fastest belt any loaded mod defines. The scan is `fkdata.Keys` per belt family and one leaf `Get` per member -- the sorted-enumeration primitive's whole purpose, because a `pairs()` walk over `data.raw["transport-belt"]` is insertion order and a data stage that branched on one would be a join refusal nobody can reproduce. Seven families (`transport-belt`, `underground-belt`, `splitter`, `lane-splitter`, `loader`, `loader-1x1`, `linked-belt`), all descending from `TransportBeltConnectablePrototype` where `speed` is mandatory. About thirty host calls, once per game load, and nothing on any tick.
+
+**THERE IS NO UPPER CAP AND THERE MUST NOT BE ONE.** Every candidate is a value the engine ALREADY ACCEPTED, on the very prototype it was read from: a belt-connectable's `speed` is validated when that mod's prototype loads, so mirroring it onto four more prototypes of the same families cannot reach a value the loader would refuse. A cap would be this mod second-guessing a number Factorio validated, and it would re-introduce the throttle for exactly the player who installed the fast belt. A NaN is ignored, and that is a property of `>` rather than a guard.
+
+**The ordering caveat, stated rather than hidden**: `data-final-fixes` is the LAST stage there is, so the scan sees every belt every mod defined at data, data-updates and final-fixes-before-us. A mod whose own `data-final-fixes` runs AFTER this one and raises a belt then is missed, and there is nowhere later to move to. The cost for that one player is the old behaviour: the network at the second-fastest belt's speed.
+
+**Our own four clones are IN the scan, at the floor, and that is deliberate.** They are `transport-belt`, `splitter`, `lane-splitter` and `linked-belt` prototypes, so the families enumerate them. It is not a ratchet -- `data.raw` is rebuilt on every load, so the clone is at the floor again next time and the maximum is a function of the installed mods alone. Excluding them would be a name filter that has to stay in step with `hidden.go`, to change an answer the floor already covers. **The floor is not made redundant by that**, and the red proof below is why: lowering `SpeedFloor` lowers the creation value too, so the whole thing follows it down.
+
+### What it costs
+
+Both packages from clean, 2026-08-25, shipped config (`--persist=packed --gc=collected`), same FkLua (b185900), same pin, same machine:
+
+| | before (0.3.0) | after (0.3.1) | |
+|---|--:|--:|---|
+| `dist/better-belt-balancer_*.zip` | 546,003 B | **560,909 B** | +2.73% |
+| `fk_module.lua` (the control guest) | 3,136,956 B | **3,136,956 B** | **byte-identical** |
+| `fk_data_module.lua` (the data guest) | 1,498,245 B | **1,763,788 B** | +17.7% |
+| `dist/bbb.wasm` | 1,293,635 B | 1,293,683 B | +48 B, the build stamp |
+| `dist/bbbdata.wasm` | 141,793 B | 173,028 B | +22.0% |
+| members bound into the mod | 54 | **54** | of 4,859, none added |
+| events subscribed / defines read | 23 / 4 | 23 / 4 | unmoved |
+
+**The control guest is byte-identical and that is the shape of the whole change**: this is a load-time feature and nothing in `guest/go` outside `data/` and the new `tune/` was touched. **The `mar` slopes came back identical to the byte** in the leaking arm -- **1,280 / 352 / 1,209 / 32 / 560 / 3,736 / 2,080 B** per primitive over **3.92 MiB** of linear memory, 1,136 B of calibration at 0.0% spread, 0 items lost over 200 teardowns, 681 audits at drift=0 -- which is the standing gate for any pass that claims to touch only the load path.
+
+### Red-proven three times, and the three catch different things
+
+| injected defect | what fired |
+|---|---|
+| **the existence guard deleted** from `tune.Resolve` (with a plan pointing at a Space-Age-only belt, so a base-only game lacks it) | the unit test names every unproven ingredient in every option, and the `recipe-belt-express` gate arm dies on the ENGINE's own `Error in assignID: item with name 'turbo-transport-belt' does not exist.` -- `--dump-data exited 1`. **With the guard IN PLACE and the same plan the arm is green**, stepping past the missing rung to `express-transport-belt`: that control is what makes this a proof of the guard rather than of the plan |
+| **the floor dropped** from 0.25 to 0.125 in `tune.SpeedFloor` | three unit-test failures, and **BOTH golden `data_raw_sha256` arms move** -- the four hidden prototypes come out at 0.125, half the speed the whole estate was measured on. The SPEED arm stays green, correctly: 0.5 beats either floor. That division is the point -- the goldens are the no-change proof and the speed arm is the change proof |
+| **the vanilla default drifted** (iron-plate 4 -> 3) | `TestVanillaIsTodaysRecipe` names both lists, BOTH golden `data_raw_sha256` arms move, and the `recipe-vanilla` gate arm prints the drifted list against the expected one. Three independent detectors for the one change that would invalidate every recorded number in this repository |
 
 ## Build
 
@@ -409,7 +524,7 @@ make test     # headless verification, FOURTEEN suites, and the DEFAULT is all
               # checklist's staged world, which it gates with a single
               # --create; and flip drives `bbb-multi-edge-parts` through all
               # four of its transitions, which only Factorio 2.0 has)
-make check    # the FIVE pure packages' unit tests (plan, skin, carry,
+make check    # the SIX pure packages' unit tests (plan, skin, carry, tune,
               # edgemode, engine); `go vet` over the data guest, which is the
               # one package no `go test` can reach (//go:wasmimport is rejected
               # outside GOARCH=wasm); bindings and lock current; gofmt
@@ -417,7 +532,13 @@ make datastage-check
               # THE DATA STAGE'S OWN GATE, and deliberately not part of
               # `make test`: Factorio's `--dump-data` runs the settings and data
               # stages and STOPS BEFORE control.lua, so it answers a question no
-              # suite can ask. Two mod sets, ~3 s each. See Verification
+              # suite can ask. ELEVEN ARMS SINCE 0.3.1, ~27 s: two mod sets
+              # HASHED against goldens, seven VARIANT arms (one per non-default
+              # value of each cost setting, driven through a mod-settings.dat
+              # the gate writes) asserting the exact ingredient list or the
+              # exact research unit, and one SPEED arm that builds a Go fixture
+              # mod defining a belt faster than the network's floor -- because
+              # no mod set this machine can install has one. See Verification
 make graphics # regenerate the sprite sheet, the icon and the I/O arrows
 ```
 
@@ -494,7 +615,7 @@ What rules it out now is **multiplayer**. A client joining mid-game would run th
 
 `make test` is the gate and it is a real Factorio run, not a model. `test/run.sh` stages a throwaway mod directory per suite, `--create`s a save whose `on_init` has already built the patterns, `--benchmark`s it, and hands both logs to an assertion script. Every run points `write-data` at a private directory via `-c`, because Factorio locks its user dir and a second instance -- another agent, an open game -- would otherwise fail the run on the `.lock` rather than on anything real.
 
-**`make datastage-check` IS A SECOND GATE AND A DIFFERENT QUESTION, and it is not part of `make test`.** All fourteen suites are about the RUNTIME: they build a world, run it and read the guest's own log lines, and by the time any of them is looking the data stage has been over for a whole load. Not one of them can see a prototype FIELD. `test/check-datastage.py` runs Factorio's own `--dump-data`, which executes the settings and data stages and **stops before `control.lua`**, normalises the result with `jq -S` and hashes it against a golden in `test/datastage-goldens.json`. About three seconds per arm, against the suites' minutes.
+**`make datastage-check` IS A SECOND GATE AND A DIFFERENT QUESTION, and it is not part of `make test`.** All fourteen suites are about the RUNTIME: they build a world, run it and read the guest's own log lines, and by the time any of them is looking the data stage has been over for a whole load. Not one of them can see a prototype FIELD. `test/check-datastage.py` runs Factorio's own `--dump-data`, which executes the settings and data stages and **stops before `control.lua`**, normalises the result with `jq -S` and hashes it against a golden in `test/datastage-goldens.json`. About three seconds per arm, against the suites' minutes. **ELEVEN ARMS SINCE 0.3.1 and about 27 seconds**: the two hashed mod sets, seven VARIANT arms and one SPEED arm, which are not hashed and are described below.
 
 **It exists because the data stage became a guest** ("The shipped mod holds no Lua") and a behaviour-preserving port needs an instrument that can say so. The goldens were captured from the hand-written Lua **before** a line of Go was written, and the Go stage reproduced them **byte for byte on both arms, first run**. Four things about how it is built:
 
@@ -510,7 +631,16 @@ What rules it out now is **multiplayer**. A client joining mid-game would run th
 | **one field value moved**: the part item's `stack_size` 50 -> 49 | **BOTH arms' `data_raw` hashes**, and the engine's own **prototype list checksum did not move at all** -- no prototype appeared or vanished, so the smoke test is silent on it. That is the disqualifying blindness quoted above, met in this repo rather than taken from upstream's note |
 | **the legacy stub defined unconditionally**, so it lands even when an incumbent owns `balancer-part` | **the `incumbent` arm ALONE**, with `base` green to the digit -- because where nobody owns the name the stub is defined either way, so that arm cannot see it. The checksum DID move here (2044872442 -> 3917129794) and the gate reported it as a note. **This is the whole justification for the second mod set**: a one-armed gate is green on a mod that eats a still-installed neighbour's prototypes |
 
-**What it CANNOT cover here is the 2.0 flavour, and that is a property of the branch rather than of the gate.** `guest/go/engine` keys on the RUNNING engine, so a 2.1 binary produces the 2.1 flavour whatever the manifest says: no `not_colliding_with_itself`, no `bbb-can-stack`, and an empty mod-settings dump. The other flavour's golden is captured wherever a 2.0 binary is, which is the `release/2.0` recut, and the script prints the command. **The DECISION does not wait for it**: `go test ./engine/` proves 2.0.x true, 2.1.x false and false-safe for anything unreadable, which is the same split `edgemode` already makes one stage later.
+**THE VARIANT AND SPEED ARMS ARE NOT HASHED, AND THAT IS A DIFFERENT INSTRUMENT FOR A DIFFERENT QUESTION.** 0.3.1 made three data-stage decisions depend on things a golden cannot hold still ("Cost, research and belt speed"). A hash is right for *nothing moved*; it is wrong for *this moved to exactly that*, because a hash that changed says nothing about WHAT changed and has to be re-captured by whoever moved it -- which is the one thing a golden must never make easy. So the DEFAULT settings stay hashed, and:
+
+- **one VARIANT arm per non-default value of each cost setting, one variable at a time.** Seven arms where three would do: the two settings decide two different prototypes and could be driven together, and an arm that moved two things is an arm whose failure does not say which. Each asserts the exact ingredient list, or the exact research unit AND prerequisite -- and the unit is compared against the SOURCE TECHNOLOGY'S OWN unit in the same dump, which is a statement no transcribed figure could make and which stays true the day base re-costs a tier. **`recipe-vanilla` is an arm too**, and it is not redundant with the golden: the golden arm writes no settings file at all, so it proves the prototype's `default_value`, while this one drives the writer.
+- **the SPEED arm builds a Factorio mod out of Go**, `test/fixtures/fastbelt`, because vanilla's fastest belt is turbo at 0.125 -- HALF this mod's floor -- so on every other arm a correct derivation and one that does nothing are the same dump. Its BELT is 0.4 and its UNDERGROUND is 0.5, so the 0.5 the arm asserts can only come from a scan that walks more than `transport-belt`. It is built at gate time rather than committed, and it checks the FIXTURE'S OWN belts before believing anything about ours: a fixture that failed to load leaves the hidden prototypes at the floor, which is also what a broken derivation leaves them at.
+
+**A VARIANT ARM DRIVES THE REAL SETTING, through a `mod-settings.dat` the gate WRITES.** That is the only way to ask a settings stage a question from outside, there is no flag for it, and there is no Lua in this repository to do it with. The format is Factorio's own binary property tree -- eight bytes of version, a bool, and a three-key dictionary of `{value = ...}` wrappers -- and the writer was verified by ROUND-TRIPPING the engine's own `mod-settings.dat` before it was used to write one. **Its anti-vacuity is structural**: if the file were ignored or unreadable, every variant arm would read back the DEFAULT recipe, and the assertion is an equality against the variant's own list. There is no way for these arms to pass while measuring nothing.
+
+**A golden failure no longer stops them.** A drifted default moves the hash AND every arm downstream of it, and the hash alone does not say which prototype -- so stopping there would throw away the eight lines that name it. One report, one exit code.
+
+**What it CANNOT cover here is the 2.0 flavour, and that is a property of the branch rather than of the gate.** `guest/go/engine` keys on the RUNNING engine, so a 2.1 binary produces the 2.1 flavour whatever the manifest says: no `not_colliding_with_itself`, no `bbb-can-stack`, and a mod-settings dump carrying the two startup cost settings and no `runtime-global` entry. (It was an EMPTY dump until 0.3.1, when the two cost settings became the first thing this mod's settings stage emits on 2.1; the 2.0 golden, when it is captured, will carry those two plus the bool.) The other flavour's golden is captured wherever a 2.0 binary is, which is the `release/2.0` recut, and the script prints the command. **The DECISION does not wait for it**: `go test ./engine/` proves 2.0.x true, 2.1.x false and false-safe for anything unreadable, which is the same split `edgemode` already makes one stage later.
 
 **WHICH FACTORIO IS RUNNING IS AN INPUT TO THE HARNESS, NOT AN ACCIDENT OF THE MACHINE.** This mod ships on two engine arms out of one tree ([`agents/single-edge.md`](agents/single-edge.md), "Packaging: one tree, two releases"), and a mod whose `info.json` names the other series is refused at the LOADER before an entity is placed. So `test/run.sh` reads `Major.Minor` off `$FACTORIO --version` and STAMPS every staged copy -- every test mod, observer and stand-in -- with it: `factorio_version` unconditionally, and `base >= X.Y.Z` clamped DOWN when it names a series newer than this engine and otherwise left alone, which is what makes the whole thing a no-op on the newer one. **The packaged mod is GATED rather than stamped**, and that asymmetry is the point: a test mod is engine-agnostic Lua, while the mod under test is a guest compiled against a pinned API whose ABI marshals event payloads BY NAME -- so stamping it would let a field the other series added load as mandatory and read as nil, silently. A disagreement between `fklua.toml` and the binary is a real defect and is reported as one.
 

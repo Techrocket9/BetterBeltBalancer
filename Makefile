@@ -159,10 +159,11 @@ PERSIST := packed
 # shared source list would rebuild each of them whenever the other moved.
 GUEST_SRC := $(shell find guest/go -name '*.go' -not -path '*/fkapi/*' -not -path 'guest/go/data/*') guest/go/go.mod
 # The data guest: its own main package, plus the PURE packages it shares with
-# the control guest. `engine` is the version branch both stages ask, and `skin`
-# is where the sprite sheet's cell count comes from -- neither is copied here,
-# which is the whole reason the two guests are one Go module.
-DATA_GUEST_SRC := $(shell find guest/go/data guest/go/engine guest/go/skin -name '*.go' -not -name '*_test.go') guest/go/go.mod
+# the control guest. `engine` is the version branch both stages ask, `skin` is
+# where the sprite sheet's cell count comes from, and `tune` is what the two
+# cost settings and the belt-speed derivation decide -- none of them is copied
+# here, which is the whole reason the two guests are one Go module.
+DATA_GUEST_SRC := $(shell find guest/go/data guest/go/engine guest/go/skin guest/go/tune -name '*.go' -not -name '*_test.go') guest/go/go.mod
 DATA_SRC  := $(shell find mod-data -type f)
 
 .PHONY: all guest mod zip install test check datastage-check clean graphics
@@ -298,6 +299,17 @@ check:
 	@# most on 2.1, which is that the write is never attempted where the key does
 	@# not exist.
 	@#
+	@# ./tune is the sixth and its reason is ./engine's, one step out: the
+	@# interesting states of a fallback ladder are states of SOMEBODY ELSE'S MOD
+	@# SET. A rung falls through only in a game with no `express-transport-belt`
+	@# in it, and no mod set this repository can install has that shape -- so
+	@# inside guest/go/data those arms would be branches nothing could execute.
+	@# It also carries the one check nothing else in this repo could make: every
+	@# allowed value of both cost settings has its own [string-mod-setting]
+	@# locale entry, in BOTH directions. --dump-data does not read locale and no
+	@# suite opens a menu, so a missing entry loads perfectly and renders as
+	@# `Unknown key: ...` in front of the player.
+	@#
 	@# ./engine is the fifth and it is there for the SAME reason, one stage
 	@# earlier: it is the data stage's version branch -- can this Factorio put two
 	@# belt-connectables on one tile -- and its `true` arm emits prototypes only a
@@ -307,17 +319,23 @@ check:
 	@# deferred to the release/2.0 recut. It is also the only shape a test can
 	@# reach at all: a package that imports fkdata cannot be built by a host
 	@# toolchain, because //go:wasmimport is rejected outside GOARCH=wasm.
-	cd guest/go && go test ./plan/ ./skin/ ./carry/ ./edgemode/ ./engine/
+	cd guest/go && go test ./plan/ ./skin/ ./carry/ ./edgemode/ ./engine/ ./tune/
 	@# Both guests have to COMPILE, and the data guest is the one a `go test`
 	@# cannot reach. `go vet` over ./data type-checks it under the wasm build
 	@# tags without asking TinyGo for a wasm module.
 	cd guest/go && GOOS=wasip1 GOARCH=wasm go vet ./data/
+	@# The fast-belt fixture is a WHOLE FACTORIO MOD written in Go -- built by
+	@# test/check-datastage.py for the speed arm and never shipped -- and it is
+	@# its OWN Go module, so neither the tests nor the vet above reach it. Same
+	@# two checks, one directory over.
+	cd test/fixtures/fastbelt && GOOS=wasip1 GOARCH=wasm go vet ./...
 	@# --lang comes from fklua.toml's `lang = ["go"]`; passing it was a
 	@# workaround for a gen-bindings that ignored the manifest.
 	$(FKLUA) gen-bindings --check
 	$(FKLUA) lock --check
 	@out=$$(cd guest/go && gofmt -l . | grep -v '^fkapi/' || true); \
-	  if [ -n "$$out" ]; then echo "gofmt: $$out"; exit 1; fi
+	  out="$$out $$(cd test/fixtures/fastbelt && gofmt -l . || true)"; \
+	  if [ -n "$$(echo $$out)" ]; then echo "gofmt: $$out"; exit 1; fi
 	@echo "check: ok"
 
 # THE DATA STAGE'S OWN GATE, and it is not part of `make test` on purpose.

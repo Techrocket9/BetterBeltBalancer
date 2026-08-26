@@ -44,7 +44,7 @@ settings and data stages, whose only engine dependency is the one this mod reads
 explicitly -- `mods["base"]`, in guest/go/data/engine.go -- and that is a fact
 about the BINARY rather than about the manifest.
 
-TWO ARMS, AND THE SECOND ONE IS THE HALF THAT COULD ROT SILENTLY.
+TWO GOLDEN ARMS, AND THE SECOND ONE IS THE HALF THAT COULD ROT SILENTLY.
 
   base        this mod alone. The legacy stub IS defined (nobody else owns
               `balancer-part`), so data-final-fixes emits three prototypes.
@@ -59,6 +59,42 @@ contains every prototype every mod defined, base's own bundled data included, so
 a machine with different DLC produces a different hash for a mod that is
 perfectly fine. A golden line whose engine does not match the binary is a SKIP
 with a message, never a failure.
+
+...AND SEVEN VARIANT ARMS AND A SPEED ARM, WHICH ARE NOT HASHED.
+
+0.3.1 made the recipe's cost, the research's cost and the hidden network's belt
+speed depend on things a golden cannot hold still. A hash is the right
+instrument for "nothing moved"; it is the wrong one for "this moved to exactly
+that", because a hash that changed tells you nothing about WHAT changed and has
+to be re-captured by whoever moved it -- which is the one thing a golden must
+never make easy. So:
+
+  the DEFAULT settings are hashed, as before. Every recorded number in this
+  repository was measured on them and the hash is what says they did not drift.
+
+  every NON-DEFAULT value of both settings gets its own arm, one variable at a
+  time, and a TARGETED assertion: the recipe's exact ingredient list, or the
+  technology's exact unit and prerequisite. Nothing else in the dump is looked
+  at, because everything else is the golden's business.
+
+  the SPEED derivation gets an arm with a mod in it that defines a faster belt,
+  because no mod set this machine can otherwise install has one -- vanilla tops
+  out at turbo, 0.125, which is HALF this mod's floor, so on every other arm the
+  correct behaviour and a derivation that does nothing at all are the same dump.
+
+A VARIANT ARM DRIVES THE REAL SETTING, through a `mod-settings.dat` this script
+writes into the staged mods directory. That file is Factorio's own binary
+property tree -- an eight-byte version, a bool, and a three-key dictionary of
+`{value = ...}` wrappers -- and `write_mod_settings` below is a writer for it,
+verified by round-tripping the engine's own file before it was used. There is no
+Lua anywhere in this and there must not be: a settings stage cannot be asked a
+question from outside except through this file.
+
+Its anti-vacuity is structural rather than added. If the .dat were ignored, or
+malformed enough to be skipped, every variant arm would read back the DEFAULT
+recipe -- and the assertion is an equality against the variant's own ingredient
+list, so it fails and names it. There is no way for these arms to pass while
+measuring nothing.
 
 THE 2.0 FLAVOUR IS DEFERRED AND THE COMMAND IS BELOW. Both of this mod's
 version-gated branches key on the RUNNING ENGINE (`mods["base"]` is 2.0.x or it
@@ -83,6 +119,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -128,6 +165,80 @@ ARMS = {
     "base": [],
     "incumbent": [INCUMBENT],
 }
+
+# ---------------------------------------------------------------------------
+# THE VARIANT ARMS: one per non-default value of each cost setting.
+#
+# ONE VARIABLE AT A TIME. `bbb-recipe-cost` and `bbb-tech-cost` decide two
+# different prototypes and could be driven together in half the runs; they are
+# not, because an arm that moved two things is an arm whose failure does not say
+# which. Seven Factorio runs at about three seconds each is the price of a
+# failure that names itself.
+#
+# THE EXPECTED INGREDIENT LISTS ARE WRITTEN OUT HERE, not derived from
+# guest/go/tune. A gate that computed the answer from the same source as the
+# thing under test would agree with a defect -- it is the same reason the test
+# mods in test/run.sh assert the guest's own log lines rather than recomputing
+# what the guest should have said. These are what a player gets, transcribed
+# from the option's own locale label.
+# ---------------------------------------------------------------------------
+
+RECIPE_SETTING = "bbb-recipe-cost"
+TECH_SETTING = "bbb-tech-cost"
+
+RECIPE_VARIANTS = {
+    "cheap": [("iron-plate", 2), ("transport-belt", 1)],
+    "belt-fast": [("iron-plate", 4), ("iron-gear-wheel", 2),
+                  ("fast-transport-belt", 2)],
+    "belt-express": [("steel-plate", 4), ("iron-gear-wheel", 2),
+                     ("express-transport-belt", 2)],
+    "splitter": [("splitter", 1), ("iron-plate", 2)],
+    "splitter-express": [("express-splitter", 1), ("steel-plate", 2)],
+}
+
+# The default, for the one assertion that has to be made about it here as well
+# as by the golden: an arm that wrote NO mod-settings.dat and one that wrote the
+# default must produce the same recipe, or the writer is doing something.
+RECIPE_DEFAULT = [("iron-plate", 4), ("iron-gear-wheel", 2), ("transport-belt", 2)]
+
+# The non-default technologies. The expected UNIT is not written out, because
+# the claim is not "20 automation science" -- it is "whatever base charges for
+# that technology", which is the whole reason the cost is read rather than
+# pinned. So the assertion compares this mod's unit against the SOURCE
+# TECHNOLOGY'S OWN unit in the same dump, which is a statement no transcription
+# could make.
+TECH_VARIANTS = ["logistics-2", "logistics-3"]
+
+# ---------------------------------------------------------------------------
+# THE SPEED ARM's fixture: a Factorio mod written in Go whose whole job is to
+# define a belt faster than this mod's hidden network.
+#
+# Built here rather than committed. The alternative is half a megabyte of
+# generated Lua in test/ that would have to be rebuilt by hand whenever FkLua's
+# emitter moved, and this gate already requires the toolchain that builds it --
+# `make datastage-check` depends on `make mod`.
+#
+# THE UNDERGROUND IS THE FASTER OF THE TWO (0.5 against the belt's 0.4), so the
+# speed the assertion expects can only come from a scan that walks more than
+# `transport-belt`. See test/fixtures/fastbelt.
+# ---------------------------------------------------------------------------
+
+FIXTURE_SRC = ROOT / "test" / "fixtures" / "fastbelt"
+FIXTURE_NAME = "bbbt-fastbelt"
+FIXTURE_VERSION = "0.0.1"
+FIXTURE_SPEED = 0.5
+
+# The four prototypes the compiler places, and the families they live in.
+HIDDEN_BELTS = [
+    ("linked-belt", "bbb-linked-belt"),
+    ("transport-belt", "bbb-belt"),
+    ("splitter", "bbb-splitter"),
+    ("lane-splitter", "bbb-lane-splitter"),
+]
+
+# What they run at with nothing faster installed. guest/go/tune's SpeedFloor,
+# transcribed for the same reason the ingredient lists are.
+SPEED_FLOOR = 0.25
 
 
 def engine_version(factorio: str) -> str:
@@ -196,8 +307,113 @@ def normalised_sha(path: Path, out: Path | None) -> str:
     return hashlib.sha256(blob).hexdigest()
 
 
+def write_mod_settings(path: Path, version: str, startup: dict) -> None:
+    """Factorio's own mod-settings.dat, written from scratch.
+
+    THE ONLY WAY TO ASK A SETTINGS STAGE A QUESTION FROM OUTSIDE. A startup
+    setting is read by the data stage out of `settings.startup`, and what fills
+    that table is this file -- there is no command-line flag for it and no Lua
+    this repository is allowed to write.
+
+    The format is a `PropertyTree`, and it is stable and documented: eight bytes
+    of version (four little-endian uint16), one bool byte, then one node. A node
+    is a type byte, an "any-type" byte, and a payload -- 1 bool, 2 double,
+    3 string, 4 list, 5 dictionary. A string is an empty-flag byte and then a
+    space-optimised length (one byte, or 255 followed by a uint32). A dictionary
+    is a uint32 count and then that many key-string / node pairs.
+
+    VERIFIED BY ROUND-TRIPPING THE ENGINE'S OWN FILE before it was used to write
+    one: the mod-settings.dat in this machine's Factorio mods directory parses
+    to exactly the three-key dictionary above, consuming every byte. That is a
+    stronger check than agreeing with a wiki page, and mod-settings-dump.json
+    from the run is what says the engine agreed with the writer.
+    """
+    def s(text: str) -> bytes:
+        raw = text.encode()
+        if not raw:
+            return b"\x01"                       # the empty-string flag
+        if len(raw) < 255:
+            return b"\x00" + bytes([len(raw)]) + raw
+        return b"\x00\xff" + struct.pack("<I", len(raw)) + raw
+
+    def node(v) -> bytes:
+        if v is None:
+            return b"\x00\x00"
+        if isinstance(v, bool):
+            return b"\x01\x00" + (b"\x01" if v else b"\x00")
+        if isinstance(v, (int, float)):
+            return b"\x02\x00" + struct.pack("<d", float(v))
+        if isinstance(v, str):
+            return b"\x03\x00" + s(v)
+        if isinstance(v, dict):
+            out = b"\x05\x00" + struct.pack("<I", len(v))
+            for k, x in v.items():
+                out += s(k) + node(x)
+            return out
+        raise TypeError(f"no PropertyTree encoding for {type(v).__name__}")
+
+    maj, minor, patch = (int(x) for x in version.split(".")[:3])
+    tree = {
+        # Every setting is wrapped in a one-key `{value = ...}` table, which is
+        # what the engine's own file holds and what `settings.startup[name]`
+        # unwraps. All three sections must be present even when empty.
+        "startup": {k: {"value": v} for k, v in startup.items()},
+        "runtime-global": {},
+        "runtime-per-user": {},
+    }
+    path.write_bytes(struct.pack("<HHHH", maj, minor, patch, 0) + b"\x00" + node(tree))
+
+
+def build_fixture(series: str, out: Path) -> Path:
+    """Build test/fixtures/fastbelt into a staged mod directory.
+
+    A WHOLE FACTORIO MOD, COMPILED FROM GO, and the reason it is built rather
+    than committed is in FIXTURE_SRC's own go.mod.
+
+    THE INERT CONTROL GUEST IS A WORKAROUND AND IS LABELLED AS ONE. `fklua mod`
+    takes the control module as its one positional argument and answers
+    `fklua mod: no input module` without it, so a data-stage-only mod cannot be
+    packaged -- FKLUA-GAPS.md item 25. The `inert` package is an empty `main`
+    that exports no hook, which the packager itself reports as "the mod will load
+    and then never be called again". That is exactly the wanted behaviour and
+    exactly what the gap costs.
+    """
+    fklua = os.environ.get("FKLUA", str(ROOT.parent / "FkLua" / "bin" / "fklua"))
+    if not os.access(fklua, os.X_OK):
+        sys.exit(f"fklua not found at {fklua} (set FKLUA); the speed arm needs it "
+                 f"to build test/fixtures/fastbelt")
+    if shutil.which("tinygo") is None:
+        sys.exit("tinygo is not on PATH; the speed arm builds its fixture from Go")
+
+    flags = ["-target=wasm-unknown", "-scheduler=none", "-gc=leaking", "-opt=2"]
+    for pkg, name in (("./datastage", "data.wasm"), ("./inert", "inert.wasm")):
+        subprocess.run(["tinygo", "build", *flags, "-o", str(out / name), pkg],
+                       cwd=FIXTURE_SRC, check=True)
+    subprocess.run(
+        [fklua, "mod", str(out / "inert.wasm"), "--persist=none",
+         "--data-module", str(out / "data.wasm"),
+         "--name", FIXTURE_NAME, "--version", FIXTURE_VERSION,
+         "--title", "BBB fast-belt fixture", "--author", "BetterBeltBalancer",
+         "--description", "A belt faster than the hidden network, for the "
+                          "data-stage gate's speed arm. Never shipped.",
+         "--dependency", f"base >= {series}.0",
+         "--factorio-version", series, "-o", str(out)],
+        # CWD IS THE OUTPUT DIRECTORY, WHICH HAS NO fklua.toml IN IT, and that
+        # is the whole point: `fklua mod` reads the manifest in its working
+        # directory for every identity it was not given a flag for. Run from the
+        # repository root it would package the fixture with THIS MOD's asset
+        # tree merged in (`data = "mod-data"` is the default for --include) and
+        # with `gc = "collected"`, which the inert guest does not export a
+        # collector for -- measured, and it is a packaging error rather than a
+        # silent one. A directory with no manifest is a fixture built from its
+        # flags alone.
+        cwd=str(out), check=True, capture_output=True, text=True)
+    return out / f"{FIXTURE_NAME}_{FIXTURE_VERSION}"
+
+
 def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
-            keep: Path | None) -> dict:
+            keep: Path | None, extras: list[Path] | None = None,
+            startup: dict | None = None, probe=None) -> dict:
     work = Path(tempfile.mkdtemp(prefix=f"bbb-datastage-{arm}-"))
     try:
         mods = work / "mods"
@@ -206,19 +422,26 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
         shutil.copytree(mod_dir, mods / mod_dir.name)
         stamped = stamp_engine(mods / mod_dir.name / "info.json", series)
 
-        for extra in ARMS[arm]:
-            shutil.copytree(ROOT / "test" / "mods" / extra, mods / extra)
-            stamped |= stamp_engine(mods / extra / "info.json", series)
+        staged = [ROOT / "test" / "mods" / e for e in ARMS.get(arm, [])]
+        staged += list(extras or [])
+        for extra in staged:
+            shutil.copytree(extra, mods / extra.name)
+            stamped |= stamp_engine(mods / extra.name / "info.json", series)
         if stamped:
             print(f"  note {arm}: a staged manifest was re-stamped for {series}; "
                   f"this is the cross-series path, not the shipping one")
 
         mod_name = json.loads((mods / mod_dir.name / "info.json").read_text())["name"]
+        extra_names = [json.loads((mods / e.name / "info.json").read_text())["name"]
+                       for e in staged]
         entries = [{"name": "base", "enabled": True}]
         entries += [{"name": k, "enabled": v} for k, v in sorted(DLC.items())]
         entries += [{"name": mod_name, "enabled": True}]
-        entries += [{"name": e, "enabled": True} for e in ARMS[arm]]
+        entries += [{"name": e, "enabled": True} for e in extra_names]
         (mods / "mod-list.json").write_text(json.dumps({"mods": entries}, indent=2))
+
+        if startup:
+            write_mod_settings(mods / "mod-settings.dat", series + ".0", startup)
 
         # A private write-data, so a concurrent Factorio -- another agent, an
         # open game -- cannot take the .lock out from under the run. Same trick
@@ -254,8 +477,8 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
         if m:
             checksum = m.group(1)
 
-        return {
-            "mods": [mod_name] + ARMS[arm],
+        out = {
+            "mods": [mod_name] + extra_names,
             "data_raw_sha256": normalised_sha(so / "data-raw-dump.json", keep_raw),
             "mod_settings_sha256": normalised_sha(so / "mod-settings-dump.json", keep_set),
             # A SMOKE TEST AND LABELLED AS ONE. It is over the prototype LIST, so
@@ -264,8 +487,38 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
             # to "a prototype appeared or vanished" in one glance.
             "prototype_list_checksum": checksum,
         }
+        # The probe runs while the work directory still exists, because a
+        # data-raw dump is thirteen megabytes and copying it out to look at four
+        # fields would cost more than the Factorio run did.
+        if probe is not None:
+            out["probe"] = probe(so / "data-raw-dump.json")
+        return out
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def project(dump: Path, filt: str):
+    """One small jq projection out of a big dump.
+
+    `jq` rather than `json.load`, because the dump is thirteen megabytes of
+    which every assertion here wants four fields: the projection is a
+    hundredth of a second and the parse is most of a gigabyte of Python objects.
+    """
+    out = subprocess.run(["jq", "-c", filt, str(dump)],
+                         capture_output=True, check=True).stdout
+    return json.loads(out)
+
+
+def ingredients_of(dump: Path) -> list:
+    """This mod's recipe, as (name, amount) pairs in emitted order.
+
+    ORDER IS PART OF THE ASSERTION. The plans in guest/go/tune are slices and
+    the recipe is built by walking one, so a plan that emitted its ingredients in
+    a different order would be a different recipe in the crafting UI while
+    holding the same items -- which a set comparison would call equal.
+    """
+    got = project(dump, '.recipe["bbb-balancer-part"].ingredients')
+    return [(i["name"], i["amount"]) for i in got]
 
 
 def main() -> int:
@@ -276,7 +529,9 @@ def main() -> int:
     ap.add_argument("--diff", action="store_true",
                     help="keep the normalised dumps so a mismatch can be diffed")
     ap.add_argument("--arm", choices=sorted(ARMS), action="append",
-                    help="run one arm (default: all of them)")
+                    help="run one golden arm (default: all of them)")
+    ap.add_argument("--golden-only", action="store_true",
+                    help="skip the variant and speed arms, which are not hashed")
     args = ap.parse_args()
 
     factorio = os.environ.get(
@@ -300,17 +555,14 @@ def main() -> int:
     if keep is not None:
         shutil.rmtree(keep, ignore_errors=True)
 
-    print(f"==> Factorio {version_full}; --dump-data over {len(arms)} arm(s)")
+    print(f"==> Factorio {version_full}; --dump-data over {len(arms)} golden arm(s)")
     got = {a: run_arm(a, factorio, series, mod_dir, keep) for a in arms}
 
     book = json.loads(GOLDENS.read_text()) if GOLDENS.exists() else {}
 
     if args.capture:
         book.setdefault(version_full, {}).update(got)
-        book[version_full]["_note"] = (
-            "Captured from the hand-written Lua data stage before the Go port, "
-            "and re-verified against the Go data guest after it. Per engine and "
-            "per mod set: the dump carries every prototype every mod defined.")
+        book[version_full]["_note"] = 'Captured from the hand-written Lua data stage before the Go port, re-verified against the Go data guest after it, and re-captured for 0.3.1, whose two startup cost settings are the only difference: the mod-settings dump moved from {} to those two prototypes and the data-raw dump did not move at all. Per engine and per mod set: the dump carries every prototype every mod defined. Only the DEFAULT settings are hashed; the variant and speed arms assert values.'
         GOLDENS.write_text(json.dumps(book, indent=2, sort_keys=True) + "\n")
         for a in arms:
             print(f"  {a:<10} data-raw {got[a]['data_raw_sha256'][:16]}  "
@@ -363,10 +615,119 @@ def main() -> int:
                   f"diff them against a golden run's")
         else:
             print("\nre-run with --diff to keep the normalised dumps")
-        return 1
 
+    # THE VARIANT ARMS RUN EVEN WHEN A GOLDEN MOVED, deliberately. A default
+    # that drifted moves the hash AND every arm downstream of it, and the hash
+    # alone does not say which prototype -- so stopping here would throw away
+    # the eight lines that name it. One report, one exit code.
+    if not args.golden_only:
+        bad |= check_variants(factorio, series, mod_dir)
+        bad |= check_speed(factorio, series, mod_dir)
+
+    if bad:
+        return 1
     print("check-datastage: ok")
     return 0
+
+
+def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
+    """Every non-default value of both cost settings, one arm each.
+
+    Returns True on a failure, which is the shape main() already counts in.
+    """
+    print(f"==> the cost settings, {len(RECIPE_VARIANTS) + len(TECH_VARIANTS) + 1} "
+          f"variant arm(s)")
+    bad = False
+
+    # THE DEFAULT, WRITTEN EXPLICITLY, and it is not redundant with the golden
+    # above. The golden arm writes NO mod-settings.dat at all, so it proves the
+    # prototype's own `default_value`; this one writes `vanilla` through the same
+    # writer every variant uses. A writer that produced a file the engine could
+    # not read would make every variant arm silently fall back to the default and
+    # this arm is the only one that could tell.
+    for value, want in [("vanilla", RECIPE_DEFAULT)] + sorted(RECIPE_VARIANTS.items()):
+        arm = f"recipe-{value}"
+        got = run_arm(arm, factorio, series, mod_dir, None,
+                      startup={RECIPE_SETTING: value},
+                      probe=ingredients_of)["probe"]
+        if got != want:
+            bad = True
+            print(f"FAIL {arm}: the recipe is {got}\n"
+                  f"{'':>5}  and `{value}` should be {want}")
+        else:
+            print(f"  ok   {arm:<26} {got}")
+
+    for value in TECH_VARIANTS:
+        arm = f"tech-{value}"
+
+        def probe(dump: Path, src=value):
+            # THE SOURCE TECHNOLOGY'S OWN UNIT, out of the same dump. The claim
+            # is not a number, it is "this costs what base charges for that
+            # technology" -- so the comparison has to be against that technology
+            # rather than against a figure transcribed here, which would go
+            # stale the day base re-costs a tier.
+            return project(dump, '{ours: .technology["bbb-balancer"], '
+                                 'src: .technology["%s"]}' % src)
+
+        p = run_arm(arm, factorio, series, mod_dir, None,
+                    startup={TECH_SETTING: value}, probe=probe)["probe"]
+        ours, src = p["ours"], p["src"]
+        if src is None:
+            bad = True
+            print(f"FAIL {arm}: base has no `{value}` technology, so this arm "
+                  f"proves nothing; the fallback would pass it")
+            continue
+        if ours["unit"] != src["unit"]:
+            bad = True
+            print(f"FAIL {arm}: the research unit is {ours['unit']}\n"
+                  f"{'':>5}  and `{value}` charges {src['unit']}")
+        elif ours["prerequisites"] != [value]:
+            bad = True
+            print(f"FAIL {arm}: the prerequisite is {ours['prerequisites']}, "
+                  f"not [{value}] -- the unit moved and the tree position did not")
+        else:
+            u = ours["unit"]
+            print(f"  ok   {arm:<26} {u['count']} x {u['time']}s, after {value}")
+    return bad
+
+
+def check_speed(factorio: str, series: str, mod_dir: Path) -> bool:
+    """The hidden network follows a modded belt faster than its floor.
+
+    THE ONE ARM THAT NEEDS A MOD THIS REPOSITORY WROTE. Vanilla's fastest belt is
+    turbo at 0.125, half the floor, so on every other arm in this file a correct
+    derivation and one that did nothing produce the same dump -- which is why the
+    default goldens are the no-change proof and this is the change proof.
+    """
+    print("==> the belt-speed derivation, 1 arm with a faster belt in it")
+    work = Path(tempfile.mkdtemp(prefix="bbb-fastbelt-"))
+    try:
+        fixture = build_fixture(series, work)
+        got = run_arm("speed", factorio, series, mod_dir, None, extras=[fixture],
+                      probe=lambda d: project(d, "{ours: [%s], fixture: [%s]}" % (
+                          ", ".join('.["%s"]["%s"].speed' % (t, n) for t, n in HIDDEN_BELTS),
+                          '.["transport-belt"]["bbbt-fast-belt"].speed, '
+                          '.["underground-belt"]["bbbt-fast-underground"].speed')))["probe"]
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+    # ANTI-VACUITY FIRST. A fixture that failed to load, or one whose belts came
+    # out at some other speed, would leave the four hidden prototypes at the
+    # floor -- which is also what a broken derivation leaves them at. Check the
+    # fixture's own belts before believing anything about ours.
+    if got["fixture"] != [0.4, FIXTURE_SPEED]:
+        print(f"FAIL speed: the fixture's own belts are {got['fixture']}, "
+              f"not [0.4, {FIXTURE_SPEED}]; this arm proves nothing")
+        return True
+    if got["ours"] != [FIXTURE_SPEED] * len(HIDDEN_BELTS):
+        print("FAIL speed: the hidden network runs at "
+              f"{dict(zip((n for _, n in HIDDEN_BELTS), got['ours']))}\n"
+              f"{'':>5}  and the fastest belt in that game is {FIXTURE_SPEED}. "
+              f"{SPEED_FLOOR} means the derivation did not run or did not find it")
+        return True
+    print(f"  ok   speed{'':<22} all four hidden prototypes at {FIXTURE_SPEED}, "
+          f"from an underground belt")
+    return False
 
 
 if __name__ == "__main__":

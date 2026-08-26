@@ -1,6 +1,9 @@
 package main
 
-import "github.com/Techrocket9/fklua/guest/go/fkdata"
+import (
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/tune"
+	"github.com/Techrocket9/fklua/guest/go/fkdata"
+)
 
 // The hidden network's prototypes: everything the compiler places, and nothing
 // a player can ever see, hold, blueprint or clone.
@@ -54,23 +57,86 @@ import "github.com/Techrocket9/fklua/guest/go/fkdata"
 // list, three callers, no way for one copy to drift.
 // ---------------------------------------------------------------------------
 //
-// SPEED = 0.25 and that number is a ceiling, not a preference. A transport line
-// accepts at most one item per tick per lane, so 0.25 tiles/tick -- one item
-// width per tick -- is the fastest a belt can still run COMPRESSED: 60
-// items/s/lane, 120/s/belt, 2.67x express and 1.33x turbo. Going higher buys
-// nothing (the line cannot be fed any faster) and starts to open gaps.
+// SPEED = 0.25 IS A FLOOR SINCE 0.3.1, NOT THE ANSWER. The four clones are
+// created at that value here and `deriveHiddenSpeed` raises them at
+// data-final-fixes to the fastest belt any loaded mod defines.
 //
-// 0.25 is enough by construction: the network spreads N input belts over
-// P >= N lines, so no hidden line ever carries more than one visible belt's
-// rate. A modded belt faster than 0.25 would bottleneck here; nothing in base or
-// Space Age is.
+// 0.25 tiles/tick is one item width per tick -- 60 items/s/lane, 120/s/belt,
+// 2.67x express and 2x turbo -- and it is enough by construction for a vanilla
+// game: the network spreads N input belts over P >= N lines, so no hidden line
+// ever carries more than one visible belt's rate. What it is NOT is an engine
+// ceiling, and an earlier note in this file said it was. A belt faster than this
+// runs fully COMPRESSED and delivers 480 x speed items/s, measured -- so until
+// 0.3.1 a modded belt above 120 items/s was silently throttled to 120 at every
+// port, which is what the portal's "Turbo-belts" request was about.
+// guest/go/tune's speed.go is the derivation, the argument for having no upper
+// bound, and the one ordering caveat.
 //
-// THE SPEED IS A CANDIDATE FOR DERIVATION rather than a constant -- the fastest
-// belt in the game is one `fkdata.Keys("transport-belt")` walk away, and that is
-// the sorted-enumeration primitive's whole purpose. Deliberately not done here:
-// this pass is a behaviour-preserving port and a derived speed is a different
-// number in a modded game, which is a FEATURE with its own gate.
-const hiddenSpeed = 0.25
+// It stays the CREATION value rather than being left to final-fixes alone so
+// that the prototype is valid and fast enough for a vanilla game from the moment
+// it is cloned: no stage this mod does not control ever sees it half-built, and
+// the patch below is an assignment rather than a repair.
+const hiddenSpeed = tune.SpeedFloor
+
+// deriveHiddenSpeed is the FASTEST-BELT scan and the patch it drives, and it
+// runs at `data-final-fixes` because that is the last stage there is: every mod
+// that adds a belt has defined it by then.
+//
+// The scan is `Keys` per family and one leaf `Get` per member, which is the
+// sorted-enumeration primitive's whole purpose -- a `pairs()` walk over
+// data.raw["transport-belt"] would be insertion order, and a data stage that
+// branched on one would be a join refusal nobody can reproduce. A maximum does
+// not care about order; taking the order away anyway is what makes that true by
+// construction rather than by argument.
+//
+// It costs one host call per belt family plus one per belt prototype, ONCE PER
+// GAME LOAD: about thirty on a base+Space Age game, and nothing at all on any
+// tick.
+//
+//go:noinline
+func deriveHiddenSpeed() {
+	var speeds []float64
+	var names []string
+	for _, family := range tune.BeltFamilies() {
+		for _, name := range fkdata.Keys(family) {
+			if v, ok := fkdata.Get(family, name, "speed"); ok && v.Tag == fkdata.TagNumber {
+				speeds = append(speeds, v.Number())
+				names = append(names, name)
+			}
+		}
+	}
+
+	speed := tune.HiddenSpeed(speeds)
+	if speed == hiddenSpeed {
+		// The vanilla answer, and by far the common one: turbo is 0.125, half
+		// the floor. Nothing is written, so a stock game's prototype table is
+		// byte-identical to the one every number in this repo was measured on.
+		return
+	}
+
+	// The WINNER'S NAME rather than its speed, and that is not squeamishness:
+	// formatting a float here means linking a formatter into a module that is
+	// parsed on every game load to print one line. A prototype name says which
+	// mod's belt won, which is the question anybody reading this log has.
+	winner := "a modded belt"
+	for i, s := range speeds {
+		if s == speed {
+			winner = names[i]
+			break
+		}
+	}
+	fkdata.Log("[BBB] " + winner + " is faster than the hidden network's floor; " +
+		"the hidden network follows it")
+
+	for _, p := range []at{
+		{"linked-belt", "bbb-linked-belt"},
+		{"transport-belt", "bbb-belt"},
+		{"splitter", "bbb-splitter"},
+		{"lane-splitter", "bbb-lane-splitter"},
+	} {
+		p.set(num(speed), "speed")
+	}
+}
 
 // ---------------------------------------------------------------------------
 // AND THE VISUALS ARE BLANKED, WHICH IS NOT TIDYING. A clone of a base belt

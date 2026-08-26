@@ -124,7 +124,18 @@ func onData() {
 
 //go:wasmexport fk_data_final_fixes
 //go:noinline
-func onFinalFixes() { legacy() }
+func onFinalFixes() {
+	// THE ORDER IS NOT ARBITRARY AND IT IS ALSO NOT DELICATE. The speed scan
+	// reads every belt-connectable's `speed` and writes four of them; the legacy
+	// stub defines a `simple-entity-with-force` and an `item`. Neither can see
+	// the other's prototypes, so this reads in the order the two were added.
+	//
+	// data-final-fixes is the last stage there is, which is what BOTH of them
+	// are here for -- one needs every mod's belts to have been defined, the
+	// other needs every mod's chance to have claimed `balancer-part` to be over.
+	deriveHiddenSpeed()
+	legacy()
+}
 
 // canStack is WHICH ENGINE THIS IS: can this Factorio put two belt-connectables
 // on one tile, which decides `not_colliding_with_itself`, the `bbb-can-stack`

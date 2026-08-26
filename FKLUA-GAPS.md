@@ -8,7 +8,7 @@ Items are numbered in the order they were found; FkLua's own notes refer to thes
 | --- | --- |
 | Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25 |
 | Closed, no change needed | 17 (a budget rather than a defect) |
-| Open | 18 |
+| Open | 18, 26 |
 
 ## 1. `fklua mod` could not carry the data stage
 
@@ -119,6 +119,16 @@ This mod's `mod-data/` tree holds no Lua at all now: graphics, locale, a changel
 The acceptance gate is `factorio --dump-data`, which runs the settings and data stages and stops before `control.lua`, under the same private write directory the test suites use, in about three seconds per mod set. Its key order is insertion-dependent, so two prototype sets that differ only in `data:extend` order compare unequal; `jq -S` normalisation removes exactly that difference and preserves a real one. The engine's own `Prototype list checksum` is order-insensitive and blind to field values (unchanged when a `stack_size` moved from 1 to 42), so it is a smoke test and never a proof. A normalised hash of the dump against a golden taken from the Lua original makes prototype-level equivalence a mechanical check: the port matched on both mod sets, byte for byte, with the fourteen runtime suites untouched as the second validator.
 
 One limit found by porting a real mod, and it is not in the ABI. A data stage is straight-line table building through small helpers, which is what LLVM inlines most eagerly: at `-opt=2` all six of this mod's data-stage sections folded into one wasm function, which lowered to one Lua function of 28,139 lines, and Lua 5.2 refused to compile it (`control structure too long near 'trap_unreachable'`) because a jump offset lives in an 18-bit field. Marking the section functions `//go:noinline` restores the source's own boundaries, one Go function to one Lua function, and the largest fell to 3,414 lines with the emitted module 27% smaller as well. The cost is one call per section on a path that runs once per game load. The message names neither the cause nor a file, so a guest author meeting it has nothing to go on; an emitter that split an over-long function, or a packaging check on emitted function length, would turn it into something actionable.
+
+## 26. `fklua mod` cannot package a mod that has only a data stage
+
+`fklua mod` takes the control module as its one positional argument and answers `fklua mod: no input module` without it, so a mod whose whole content is prototypes has no way to be packaged. A data-stage-only mod is an ordinary shape: most of the mod portal adds items, recipes and entities and no behaviour at all, and item 25's own design point is that the data stage is now a separate module from the control one.
+
+Found while building a test fixture for this mod's belt-speed derivation. The derivation reads every belt-connectable prototype in the game and gives the hidden network the fastest speed among them, and no mod set that can be installed here has a belt faster than the network's own floor, so proving it derives anything at all requires a mod that adds one. That mod needs a data stage and nothing else.
+
+The workaround is a control module that is an empty `main` with no exported hook, packaged alongside the real data module. It works, and `fklua mod` reports it accurately ("This guest exports no event hook, so the mod will load and then never be called again"), at a cost of about 113 KB of generated Lua that is `require`d and never called. It is confined to [`test/fixtures/fastbelt`](test/fixtures/fastbelt) and nothing about it reaches the shipped mod.
+
+What would close it: accept `--data-module` with no positional module and write `info.json` plus the stage files alone, generating no `control.lua`. The stage-file generation is already gated on which hooks the wasm exports, so the machinery to emit a package with no control stage is present; what is missing is a way to ask for one.
 
 ## Smaller notes
 

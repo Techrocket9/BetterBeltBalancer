@@ -1,14 +1,31 @@
 package main
 
-import "github.com/Techrocket9/fklua/guest/go/fkdata"
+import (
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/tune"
+	"github.com/Techrocket9/fklua/guest/go/fkdata"
+)
 
-// One technology, hanging off `logistics` -- the same place the incumbent's
-// first tier hangs, so a player who knows that mod finds this one where they
-// expect it.
+// One technology, hanging off a belt tier -- `logistics` by default, which is
+// the same place the incumbent's first tier hangs, so a player who knows that
+// mod finds this one where they expect it.
 //
-// THE UNIT IS COPIED FROM `logistics` rather than written out, so the mod
-// follows whatever the base game (or an overhaul mod) says that tier costs
-// instead of pinning a number that is wrong in every modpack.
+// THE UNIT IS COPIED FROM THAT TECHNOLOGY rather than written out, so the mod
+// follows whatever the base game (or an overhaul mod) says the tier costs
+// instead of pinning a number that is wrong in every modpack. WHICH tier is the
+// `bbb-tech-cost` startup setting since 0.3.1, asked for on the portal beside
+// the recipe cost, and its default is `logistics` -- today's behaviour to the
+// digit.
+//
+// # The prerequisite moves with the unit, and that is not decoration
+//
+// Charging `logistics-3`'s science while still hanging off `logistics` would put
+// a machine that costs blue science at a place in the tree a player reaches with
+// red: researchable long before it is affordable, and out of order in
+// Factoriopedia. So ONE technology is named and BOTH fields come from it. The
+// prerequisite is therefore a technology this file has already proved present,
+// which also removes the way today's unguarded `prerequisites = {"logistics"}`
+// could fail -- a prerequisite naming a technology nobody defined is a load
+// error, not a fallback.
 //
 // # The aliasing hazard that died in the port
 //
@@ -28,9 +45,9 @@ import "github.com/Techrocket9/fklua/guest/go/fkdata"
 //
 //go:noinline
 func technology() {
-	count, time, ingredients := logisticsUnit()
+	source, count, time, ingredients := researchUnit()
 
-	fkdata.Extend(obj(
+	proto := []fkdata.KV{
 		f("type", str("technology")),
 		f("name", str("bbb-balancer")),
 		f("icon", str(partIcon)),
@@ -39,23 +56,37 @@ func technology() {
 			f("type", str("unlock-recipe")),
 			f("recipe", str("bbb-balancer-part")),
 		))),
-		f("prerequisites", list(str("logistics"))),
+	}
+	// A prerequisite only where there is a technology to name. `source` is "" on
+	// the fallback path, which is a game whose whole logistics chain is missing
+	// or trigger-researched -- and `prerequisites = {"logistics"}` there is a
+	// load error rather than a cost.
+	if source != "" {
+		proto = append(proto, f("prerequisites", list(str(source))))
+	}
+	proto = append(proto,
 		f("unit", obj(
 			f("count", count),
 			f("ingredients", ingredients),
 			f("time", time),
 		)),
 		f("order", str("a-b-bbb")),
-	))
+	)
+
+	fkdata.Extend(obj(proto...))
 }
 
-// logisticsUnit reads base's `logistics` research cost, or falls back to what
-// base has always charged for it.
+// researchUnit picks the technology this one copies and reads its cost, walking
+// the chosen option's ladder down the belt tiers and falling back to what base
+// has always charged for `logistics`.
 //
-// THE GUARD IS NEW AND IT CHANGES NOTHING ON THE GOLDEN PATH, which is what
-// makes it safe to add inside a behaviour-preserving port: where `logistics`
-// has a `unit`, every field below is that unit's and the dump is unmoved. What
-// it removes is the one way this file could fail badly.
+// The first result is the technology the cost came from, which is also the
+// PREREQUISITE -- "" when nothing in the ladder had a unit.
+//
+// THE GUARD CHANGES NOTHING ON THE DEFAULT PATH, which is what makes it safe:
+// where `logistics` has a `unit`, the first rung wins, every field below is that
+// unit's and the dump is unmoved. What it removes is the one way this file could
+// fail badly.
 //
 // The Lua indexed `data.raw.technology["logistics"].unit.count` unguarded, so a
 // modpack in which `logistics` is absent -- or, much likelier now, one in which
@@ -67,25 +98,41 @@ func technology() {
 // THE FALLBACK IS TODAY'S BEHAVIOUR, LITERALLY: base's own logistics unit, 20
 // automation science over 15 seconds, which is what this technology has cost in
 // every save this mod has ever been in. So a pack that removes or retriggers
-// `logistics` gets the vanilla cost rather than a broken load, and nobody who
-// has not done that can tell the difference.
+// every logistics tier gets the vanilla cost rather than a broken load, and
+// nobody who has not done that can tell the difference.
 //
 //go:noinline
-func logisticsUnit() (count, time, ingredients fkdata.V) {
-	// The three fields are read from the `unit` map rather than by three
-	// separate deep Gets, because the question being asked is about the unit as
-	// a whole: a `unit` that is not a table is the trigger-technology case, and
-	// three independent absent answers could not tell that apart from a
-	// technology with a unit that happens to be missing a field.
-	unit, ok := fkdata.Get("technology", "logistics", "unit")
-	if !ok || unit.Tag != fkdata.TagMap {
-		fkdata.Log("[BBB] base's `logistics` technology has no research unit " +
-			"(removed, or a trigger technology); bbb-balancer falls back to " +
-			"vanilla's own logistics cost")
-		return num(20), num(15), list(list(str("automation-science-pack"), num(1)))
+func researchUnit() (source string, count, time, ingredients fkdata.V) {
+	for _, name := range tune.TechLadder(techOption()) {
+		// The three fields are read from the `unit` map rather than by three
+		// separate deep Gets, because the question being asked is about the unit
+		// as a whole: a `unit` that is not a table is the trigger-technology
+		// case, and three independent absent answers could not tell that apart
+		// from a technology with a unit that happens to be missing a field.
+		unit, ok := fkdata.Get("technology", name, "unit")
+		if !ok || unit.Tag != fkdata.TagMap {
+			continue
+		}
+		count, _ = unit.At("count")
+		time, _ = unit.At("time")
+		ingredients, _ = unit.At("ingredients")
+		return name, count, time, ingredients
 	}
-	count, _ = unit.At("count")
-	time, _ = unit.At("time")
-	ingredients, _ = unit.At("ingredients")
-	return count, time, ingredients
+
+	fkdata.Log("[BBB] no logistics technology in this game has a research unit " +
+		"(removed, or trigger technologies); bbb-balancer falls back to " +
+		"vanilla's own logistics cost and has no prerequisite")
+	return "", num(20), num(15), list(list(str("automation-science-pack"), num(1)))
+}
+
+// techOption is which technology the player asked to hang this one off. See
+// recipeOption: same read, same reasons, same treatment of an absent answer.
+//
+//go:noinline
+func techOption() string {
+	v, ok := fkdata.StartupSetting(tune.SettingTechCost)
+	if !ok || v.Tag != fkdata.TagString {
+		return tune.TechDefault()
+	}
+	return v.String()
 }

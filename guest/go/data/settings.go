@@ -1,8 +1,42 @@
 package main
 
-import "github.com/Techrocket9/fklua/guest/go/fkdata"
+import (
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/tune"
+	"github.com/Techrocket9/fklua/guest/go/fkdata"
+)
 
-// THE SETTINGS STAGE, and there is exactly one setting in it.
+// THE SETTINGS STAGE. Three settings: two costs on every engine, and one
+// engine-gated rule.
+//
+// ---------------------------------------------------------------------------
+// THE TWO COST SETTINGS ARE STARTUP AND THAT IS FORCED, exactly the other way
+// round from the rule setting below.
+//
+// A recipe and a technology are PROTOTYPES. They are built once, at the data
+// stage, before a map exists -- so what they cost has to be readable there, and
+// `fkdata.StartupSetting` is the only kind that is. A runtime setting would be
+// a dropdown that changes nothing until the game is restarted, which is worse
+// than a restart prompt.
+//
+// The consequence a player meets: changing either one restarts Factorio, and
+// changing it on an EXISTING save re-costs the recipe under them. That is
+// vanilla's own behaviour for every startup setting in the game and it is what
+// the "(startup)" tab in the menu means.
+//
+// DEFINED ON BOTH ENGINES, unlike `bbb-multi-edge-parts`. What a balancer part
+// costs means the same thing on 2.0 and on 2.1, so there is no version branch
+// here and the `release/2.0` recut carries these two identically.
+//
+// THE ALLOWED VALUES AND THE DEFAULT COME OUT OF ONE PLACE. Factorio validates
+// that `default_value` is a member of `allowed_values` and refuses the mod at
+// load when it is not, so the two must not be two lists; guest/go/tune is the
+// one list, its head is the default, and `go test ./tune/` also checks every
+// value against the locale file -- which is the half no dump and no suite can
+// see, because a value with no `[string-mod-setting]` entry renders as
+// `Unknown key: ...` in the menu and loads perfectly.
+// ---------------------------------------------------------------------------
+//
+// The engine-gated one:
 //
 // `bbb-multi-edge-parts` is the per-save policy half of the 2.1 port's rule:
 // Factorio 2.1 allows one belt-connectable per tile, so a balancer part carries
@@ -62,14 +96,20 @@ import "github.com/Techrocket9/fklua/guest/go/fkdata"
 // (measured, along with `feature_flags`), which is what makes the question
 // answerable here at all.
 //
-// ON A 2.1 ENGINE THIS FUNCTION EMITS NOTHING AT ALL, and the packaged mod still
-// carries a generated `settings.lua` that calls it -- an empty settings stage
-// rather than an absent one. That is the same thing the Lua did with its early
-// `return`, and `test/check-datastage.py` pins it: the mod-settings dump on
-// trunk's engine is `{}`.
+// ON A 2.1 ENGINE THE BOOL IS NOT EMITTED AT ALL, and `test/check-datastage.py`
+// pins that from the other side: trunk's mod-settings dump carries the two
+// startup dropdowns and no `runtime-global` entry. It used to be `{}` -- this
+// function emitted nothing whatever on 2.1 -- and the two cost settings are why
+// it is not any more. The early `return` is still the same early `return` the
+// Lua had; what moved is that there are now two settings in front of it.
 //
 //go:noinline
 func settings() {
+	fkdata.Extend(
+		stringSetting(tune.SettingRecipeCost, tune.RecipeOptions(), "a"),
+		stringSetting(tune.SettingTechCost, tune.TechOptions(), "b"),
+	)
+
 	if !canStack() {
 		return
 	}
@@ -89,4 +129,26 @@ func settings() {
 		f("default_value", no),
 		f("order", str("a")),
 	))
+}
+
+// stringSetting is one startup dropdown: the allowed values, and the FIRST of
+// them as the default.
+//
+// The default being the head of the list rather than a second argument is what
+// makes "the default is a value the engine will accept" true by construction.
+// Factorio refuses a mod whose `default_value` is not in `allowed_values`, by
+// name, at load -- so the two coming from one slice removes the only way to get
+// that wrong.
+//
+//go:noinline
+func stringSetting(name string, values []string, order string) fkdata.V {
+	return obj(
+		f("type", str("string-setting")),
+		// STARTUP, because what it decides is a prototype. See the header.
+		f("setting_type", str("startup")),
+		f("name", str(name)),
+		f("default_value", str(values[0])),
+		f("allowed_values", strs(values...)),
+		f("order", str(order)),
+	)
 }
