@@ -6,7 +6,7 @@ Items are numbered in the order they were found; FkLua's own notes refer to thes
 
 | status | items |
 | --- | --- |
-| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28 |
+| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 |
 | Closed, no change needed | 17 (a budget rather than a defect) |
 | Open | 18 |
 
@@ -153,6 +153,10 @@ Its own documentation draws the line this repository needed drawn. The text is a
 Verified here against a golden log, which is what this port asks of a first consumer. The line comes out `err=on_player_mined_entity (ID 76) (76) can't be raised through script.` -- byte-identical to the Lua's `tostring(err)` with its whitespace runs collapsed, which is the same normalisation the Lua applied.
 
 **And it surfaced a neighbouring trap that is NOT a gap.** The event has to be named to `raise_event` by FACTORIO'S id, and `fkapi.EventOnPlayerMinedEntity` is not that: it is FkLua's own dense index over the description's event set, which is what `fk.subscribe` takes and which the generated control stage maps to `defines.events[name]` at load. Handing 114 to `raise_event` does not fail -- 114 is `on_player_pipette` to the engine -- so the probe proved a DIFFERENT event unraiseable, and the suite's own assertion, which checks only that the call was refused, passed it. The golden-log diff is what caught it. `defines.events` is excluded from the generated define accessors deliberately (*"offering a guest both spellings of `on_tick` would be a trap dressed as a convenience"*, `internal/factorio/gen.go`), and `script.get_event_id(name)` is the door left open for exactly this: the name travels and the engine resolves the number. Nothing upstream needs to change; the hazard is worth knowing before the next guest calls `raise_event`.
+
+## 29. The collector could silently free the last small object in a span
+
+A `--gc=collected` build of the bench harness's setup observer delivered 198,016 items where three leaking runs delivered 199,680 exactly: one 2-to-2 rig of 120 had silently stopped draining, with no error and every other number plausible. The cause was upstream's and affected both guest languages: the collector's slot table stored slot indices as bytes with 255 as its none sentinel, and the smallest size class packs exactly 256 objects into a span, so the last object's index collided with the sentinel, the mark pass read it as tail waste, and the sweep freed it while a live reference stood. Twenty of the twenty-one size classes cannot reach the collision; the retained-handle slice holding two sink chest handles landed in the twenty-first. Fixed upstream: the slot table is sixteen bits wide in both collectors, the sentinel-exceeds-largest-index invariant is enforced at compile time, and a torture example asks the allocator whether an address was handed out again while a reference stood -- because a swept block keeps its bytes until overwritten, so reading the values back had passed against the defect. This mod ships `--gc=collected`, so every packaged build before the fix carried the exposure; nothing was ever observed in any suite or session, and the whole estate was re-gated green in both arms against the fixed collector with the `mar` suite's collected-arm figures unmoved.
 
 ## Smaller notes
 
