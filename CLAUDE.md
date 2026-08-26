@@ -285,7 +285,16 @@ guest/go/obs/            THE TEST OBSERVERS, and the second half of "no
                          schedule and the log-line builder -- which every one of
                          those files used to carry its own copy of. obs/m1 and
                          obs/sedge are the PILOT, 2026-08-25, and obs/sedgedata
-                         is the first observer DATA STAGE. They are thin `main`s
+                         is the first observer DATA STAGE; obs/mar, obs/mig21
+                         and obs/qual are PHASE 2 the same day, and mig21 is the
+                         first with no fk_on_init at all -- it builds no world,
+                         and its whole "before" is fk_on_configuration_changed.
+                         IT IS ALSO THE ONE WHOSE PACKAGING IS A CORRECTNESS
+                         SURFACE: it must NOT depend on better-belt-balancer,
+                         because mod load order is what decides whether its
+                         sample is taken before the migration or after it, so
+                         the Makefile's --dependency list is red-proven rather
+                         than merely written down. They are thin `main`s
                          in the MOD'S OWN module, so they share one generated
                          bindings tree with it; pruning is per WASM MODULE, so
                          what an observer calls cannot reach the mod's member
@@ -323,8 +332,10 @@ tools/                   make-graphics.py -- the 47-cell adaptive sprite
 test/                    headless verification, FOURTEEN suites (see below).
                          WHAT LIVES HERE IS SHRINKING: a suite's observer mod
                          is being ported to a compiled guest under
-                         guest/go/obs, and `m1` and `sedge` are gone from
-                         test/mods since 2026-08-25 (agents/estate-port.md).
+                         guest/go/obs, and `m1`, `sedge`, `mar`, `mig21` and
+                         `qual` are gone from test/mods since 2026-08-25
+                         (agents/estate-port.md). Sixteen Lua files and 6,156
+                         lines left there, from twenty-one and 7,323.
                          run.sh's `copy_testmod` is the seam -- a packaged
                          observer out of dist/obs when there is one, a Lua
                          directory out of test/mods when there is not, staged
@@ -2426,6 +2437,12 @@ Inside them, the property worth stating is what did NOT move: `m3`'s twelve rig 
 
 **THE GOLDEN-LOG DIFF IS THE HEADLINE AND IT IS EMPTY.** Both suites' create and benchmark logs were captured before a line was ported, normalised on the elapsed-seconds column and the `control.lua:N:` line number and nothing else, and diffed: **all 320 `[BBB]`, `[BBB-TEST]` and `[BBB-SEDGE]` lines are byte-identical, in order** -- 44 + 106 in `m1`, 100 + 70 in `sedge`. What is left over is six lines per log and none of them is behaviour: the run's start timestamp and the free-disk figure; the observer's own control.lua and (for `sedge`) data-stage checksums, which IS the port; `script.dat` growing 223 KB -> 454 KB and 261 KB -> 635 KB, because the observer's guest heap is in the save where its Lua `storage` tables were; and Factorio's own state checksum, which covers every mod's `storage`. **`Checksum of better-belt-balancer` and `Checksum for script __better-belt-balancer__/control.lua` are identical in every log**, which is the member-table hash said from the other end. Two red proofs, one per suite and each firing in its own family: `phase=` renamed to `phaseno=` reports all nine of `m1`'s phases as never having run, and one space inserted into `sedge`'s `tick=` empties all three of its rate windows -- `run.sh` exit 1 both times, and green again on revert.
 
+**And verified 2026-08-25 after PHASE 2 OF THE ESTATE PORT** -- `mar`, `mig21`'s observer and `qual`, which are the first observers with real per-tick STATE and arithmetic ([`agents/estate-port.md`](agents/estate-port.md)). 1,194 more lines of Lua deleted; the estate is **7,357 lines over twenty files**, from 8,524 over twenty-four. `make check` green with bindings and lock unmoved and **no member, define, event or prototype added to the mod**; `fklua api check --from 2.1.16 --to 2.0.77` **clean with 0 findings on all three** new guests (21, 20 and 19 members, one event each), which is what keeps them STAMPED for the running engine rather than gated against it. **All fourteen suites green in BOTH arms** (2m2s collected, 2m19s leaking, one invocation each) and **no suite's number moved at all** -- the `mar` slopes back **identical to the byte**, 1,280 / 352 / 1,209 / 32 / 560 / 3,736 / 2,080 B per primitive over **3.92 MiB**, with all seven linearity ratios, the 1,136 B calibration at 0.0% spread and all ten world tuples unmoved, and the collected arm again 9 collections in 6 paced steps with 0 deadlines on a 10,192 B live set.
+
+**THE GOLDEN DIFF IS AGAIN EMPTY, AND `mar`'S IS THE ONE THAT MATTERS.** Five logs, the pilot's two masks and no others: **9,835 + 480 + 204 tagged lines byte-identical, in order** -- 65 + 9,835 in `mar`, 237 and 243 in `mig21`'s two fixtures, 172 + 32 in `qual`. `mar`'s tag set is `[BBB-MAR]` AND `[BBB]`, so those 9,835 include **all 681 `[BBB] heap sys=... alloc=...` probes the MOD wrote** -- the number this suite exists to measure, identical tick for tick under a Go observer. The leftovers are the pilot's own five categories: the timestamp and free-disk figure, the observer's control.lua checksum (which IS the port), the data-stage checksum for the two that have one (`mig21` has none and its mod checksum is unmoved at 0, exactly as `m1`'s was), `script.dat` growing where the observer's guest heap is now in the save (`mar` 240 KB -> 754 KB, `qual` 442 KB -> 939 KB; `mig21` unmoved, because `--benchmark` never saves and its `script.dat` is the committed fixture's), and Factorio's own state checksum.
+
+**The red proof is the PACKAGING this time, not a log line's format.** `mig21` is the first observer whose `info.json` is a correctness surface: it samples the world from its own `on_configuration_changed`, which is the only "before" any script can reach, and whether that runs before this mod's is decided by MOD LOAD ORDER -- so it must not declare a dependency on `better-belt-balancer`, and that is now one `--dependency` flag in the Makefile rather than a hand-written file. Add the dependency back and **five assertions fire with `run.sh` exit 1**, led by the one the observer's own header promises: *"nothing was seeded into the networks before the migration ran ... every item number below would be a vacuous zero"*, over `seeded 0 items` and `0 interfaces on 77 part tiles`. That is the whole chain proved end to end -- a Makefile flag, into a generated `info.json`, into Factorio's ordering, into which handler sees the world first. And all three generated `info.json` files are **field-for-field identical** to the hand-written ones they replace, which is the same statement from the other end.
+
 **One gap found and filed**: `fklua mod` cannot package a mod that has only a data stage (FKLUA-GAPS.md item 26). The speed arm's fixture needs a data stage and nothing else; the workaround is an empty `main` with no exported hook as its control module, confined to `test/fixtures/fastbelt` and reaching nothing that ships.
 
 **What is deferred**: the `release/2.0` golden. The two cost settings are defined on BOTH engines, so when that arm is captured its mod-settings dump will carry these two plus `bbb-multi-edge-parts` -- three settings where this file's older note says one.
@@ -3042,7 +3059,7 @@ Two things that are NOT arguments for flipping, recorded so they are not mistake
 
 The 2026-08-02 projection said the leaking arm's one player-visible defect is a `memory.grow` stall of **~450 ms** when linear memory steps from 16 MiB to 32, and that nothing downstream can bound it. That was arithmetic — 4,194,304 words × 107 ns. **It is now a measurement, and it is worse than the arithmetic said.**
 
-The instrument is a scratchpad copy of `test/mods/bbb-marathon-test` running one leg — G, the 4×4 teardown-and-rebuild, the most expensive net-zero operation the suite has — 3,400 times over 13,700 ticks, benchmarked with per-tick `--benchmark-verbose`. (Scratchpad, not committed, for the same reason the 54× churn arm was: the shipped suite keeps its calibrated schedule.) The guest's own `[BBB] heap … sys=` line marks each rung, the probe's iteration number fixes the tick it was read at, and the grow tick is the one outlier inside that window.
+The instrument is a scratchpad copy of the `mar` suite's observer (`test/mods/bbb-marathon-test` then, `guest/go/obs/mar` since the 2026-08-25 estate port) running one leg — G, the 4×4 teardown-and-rebuild, the most expensive net-zero operation the suite has — 3,400 times over 13,700 ticks, benchmarked with per-tick `--benchmark-verbose`. (Scratchpad, not committed, for the same reason the 54× churn arm was: the shipped suite keeps its calibrated schedule.) The guest's own `[BBB] heap … sys=` line marks each rung, the probe's iteration number fixes the tick it was read at, and the grow tick is the one outlier inside that window.
 
 | rung | words filled | **leaking worst tick** | ns/word |
 |---|--:|--:|--:|

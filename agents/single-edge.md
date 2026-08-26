@@ -719,7 +719,7 @@ explicitly that it cannot be.
 | `refused=` on the audit line | `auditAll`, `guest/go/lifecycle.go` |
 | the subscription and its dispatch | `guest/go/main.go` |
 | the two summary keys, the setting's name and its description | `mod-data/locale/en/better-belt-balancer.cfg` |
-| the suite | `test/mods/bbb-mig21-observer/`, `test/assert-mig21.py`, `test/run.sh` |
+| the suite | `guest/go/obs/mig21/`, `test/assert-mig21.py`, `test/run.sh` |
 
 ### The shape of it, in one paragraph per decision
 

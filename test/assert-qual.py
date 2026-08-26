@@ -81,7 +81,7 @@ TOLDFORCE = re.compile(
 HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
 SAMPLE = re.compile(r"\[BBB-QUAL\] sample tick=(\d+) (.*)")
 
-# The rig geometry the probes aim at (must match bbb-qual-test/control.lua).
+# The rig geometry the probes aim at (must match guest/go/obs/qual/main.go).
 QCOL_REPLACED = (0, 27)   # QCOL + 1: the interior part the belt replaces
 QLONE_TILE = (0, 40)      # the lone part the colliding belt lands on
 

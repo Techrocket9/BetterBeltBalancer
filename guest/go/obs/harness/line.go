@@ -79,6 +79,15 @@ func (l *Line) U(v uint64) *Line {
 	return l
 }
 
+// B appends "true" or "false", which is what Lua's `tostring` on a boolean
+// writes and therefore what the assertion scripts read.
+func (l *Line) B(v bool) *Line {
+	if v {
+		return l.S("true")
+	}
+	return l.S("false")
+}
+
 // I appends a signed decimal. Tile coordinates go negative.
 func (l *Line) I(v int64) *Line {
 	if v < 0 {

@@ -315,6 +315,22 @@ type Piece struct {
 	// Force defaults to PlayerForce.
 	Force string
 
+	// Quality is `quality = "..."`, absent when empty.
+	//
+	// THE `qual` SUITE IS ENTIRELY THIS ONE FIELD. `find_entity` resolves a bare
+	// name as NORMAL QUALITY ONLY, so a guest lookup that used it worked on every
+	// other suite's save and silently failed on a quality-rolled part
+	// (guest/go/findpart.go). Every part that suite builds carries it.
+	Quality string
+
+	// FastReplace sends `fast_replace = true`.
+	//
+	// IT IS NOT THE PLAYER'S GESTURE AND MUST NOT BE READ AS ONE. Handed a
+	// replace the engine would refuse, `create_entity` falls back to CREATING --
+	// so a rig that wants to drive the real thing asks `can_fast_replace` first,
+	// which is what `qual`'s replace probe does.
+	FastReplace bool
+
 	// Raise sends `raise_built = true`, so the engine dispatches
 	// `script_raised_built` before create_entity returns. Every piece of a rig
 	// that the mod under test must SEE needs it; a source or sink chest does
@@ -334,13 +350,25 @@ func Place(s fkapi.LuaSurface, p Piece) fkapi.Object {
 	return o
 }
 
+// PlaceSoft builds one piece and reports whether anything came back, WITHOUT
+// being Fatal about it.
+//
+// It is for the one shape Place cannot serve: a placement whose failure is a
+// legitimate outcome of the schedule rather than a broken rig. The estate's Lua
+// called this `put_soft`, and `mar` is where it earns its keep -- every leg
+// there places and removes the same tiles a hundred times over, and a collision
+// with a piece the previous iteration has not finished giving up is a fact about
+// the schedule, not a reason to fail the run. `qual`'s two probes use it for a
+// different reason: what came back IS the measurement (`created=true`).
+func PlaceSoft(s fkapi.LuaSurface, p Piece) (fkapi.Object, bool) { return place(s, p) }
+
 func place(s fkapi.LuaSurface, p Piece) (fkapi.Object, bool) {
 	force := p.Force
 	if force == "" {
 		force = PlayerForce
 	}
 	pos := Center(p.X, p.Y)
-	kv := make([]fkapi.KeyValue, 0, 6)
+	kv := make([]fkapi.KeyValue, 0, 8)
 	kv = append(kv,
 		fkapi.KeyValue{Key: fkapi.OfString("name"), Val: fkapi.OfString(p.Name)},
 		fkapi.KeyValue{Key: fkapi.OfString("position"),
@@ -354,6 +382,14 @@ func place(s fkapi.LuaSurface, p Piece) (fkapi.Object, bool) {
 	if p.Type != "" {
 		kv = append(kv, fkapi.KeyValue{Key: fkapi.OfString("type"),
 			Val: fkapi.OfString(p.Type)})
+	}
+	if p.Quality != "" {
+		kv = append(kv, fkapi.KeyValue{Key: fkapi.OfString("quality"),
+			Val: fkapi.OfString(p.Quality)})
+	}
+	if p.FastReplace {
+		kv = append(kv, fkapi.KeyValue{Key: fkapi.OfString("fast_replace"),
+			Val: fkapi.OfBool(true)})
 	}
 	if p.Raise {
 		kv = append(kv, fkapi.KeyValue{Key: fkapi.OfString("raise_built"),
@@ -400,6 +436,83 @@ func FindOnTile(s fkapi.LuaSurface, name string, x, y int) (fkapi.Object, bool) 
 		return fkapi.Object{}, false
 	}
 	return found[0], true
+}
+
+// FindAt is the estate's `at(s, x, y, filter)`: a POINT query at the tile
+// centre, optionally filtered by name or by type (empty means the key is not
+// sent).
+//
+// A POINT AND NOT A BOX, and the difference is load-bearing wherever a rig lays
+// belts side by side. `find_entities_filtered` with an `area` returns everything
+// whose bounding box TOUCHES it, and a transport belt's selection box is the
+// whole of its tile -- so a box query on tile x can also reach the belt on x+1
+// along the shared edge, and `[0]` of that is whichever the engine listed first.
+// `mar` removes one named belt out of a run of four, a hundred times over, and
+// the wrong one would be a different world with a plausible slope. A position
+// query returns what CONTAINS the point, which is one entity.
+//
+// FindOnTile above stays the box form: it is what a lookup wants when the answer
+// is "is there one of these here at all", and the pilot's rigs have nothing
+// beside the tiles they ask about.
+func FindAt(s fkapi.LuaSurface, x, y int, name, typ string) (fkapi.Object, bool) {
+	pos := Center(x, y)
+	f := fkapi.EntitySearchFilters{Position: &pos}
+	if name != "" {
+		v := fkapi.OfString(name)
+		f.Name = &v
+	}
+	if typ != "" {
+		v := fkapi.OfString(typ)
+		f.Type = &v
+	}
+	found, err := s.FindEntitiesFiltered(f)
+	if err != nil || len(found) == 0 {
+		return fkapi.Object{}, false
+	}
+	return found[0], true
+}
+
+// KillAt removes what FindAt finds, the way a player mining it does as far as
+// the mod under test is concerned: an event is raised and the entity is gone
+// when the dispatch returns. It reports whether there was anything there.
+//
+// NOTHING HERE IS FATAL ABOUT A MISS, for the same reason PlaceSoft exists: a
+// leg that removes what a previous iteration may not have placed is a fact about
+// the schedule.
+func KillAt(s fkapi.LuaSurface, x, y int, name, typ string) bool {
+	o, ok := FindAt(s, x, y, name, typ)
+	if !ok {
+		return false
+	}
+	Destroy(o, true)
+	return true
+}
+
+// Destroy destroys one entity, optionally raising `script_raised_destroy`.
+func Destroy(o fkapi.Object, raise bool) {
+	args := fkapi.LuaEntityDestroyArgs{}
+	if raise {
+		args.RaiseDestroy = &raise
+	}
+	if _, err := (fkapi.LuaEntity{Object: o}).Destroy(args); err != nil {
+		fatalCall("destroying an entity")
+	}
+}
+
+// EntitiesIn is every entity in a box, optionally filtered by name. It is the
+// raw sweep `mar`'s conservation count and `qual`'s tile probes are built on.
+func EntitiesIn(s fkapi.LuaSurface, box fkapi.BoundingBox, name string) []fkapi.Object {
+	f := fkapi.EntitySearchFilters{Area: &box}
+	if name != "" {
+		v := fkapi.OfString(name)
+		f.Name = &v
+	}
+	found, err := s.FindEntitiesFiltered(f)
+	if err != nil {
+		fatalCall("sweeping a box")
+		return nil
+	}
+	return found
 }
 
 // FindExactlyOne is FindOnTile with the estate's own sanity check: a rig that
@@ -467,6 +580,13 @@ func ChestCount(s fkapi.LuaSurface, name string, x, y int) int64 {
 	if !ok {
 		return -1
 	}
+	return InventoryTotal(o)
+}
+
+// InventoryTotal is everything in one entity's CHEST inventory, or -1 if it has
+// none. Split out of ChestCount because three suites total a chest they are
+// already holding rather than one they have to look up.
+func InventoryTotal(o fkapi.Object) int64 {
 	inv, err := (fkapi.LuaControl{Object: o}).GetInventory(fkapi.DefinesInventoryChest())
 	if err != nil || inv == nil {
 		return -1
@@ -480,6 +600,49 @@ func ChestCount(s fkapi.LuaSurface, name string, x, y int) int64 {
 		total += int64(item.Count)
 	}
 	return total
+}
+
+// TransportLineItems is every item standing in one entity's transport lines, or
+// 0 for an entity that has none.
+//
+// THE `err != nil` ARM IS THE ESTATE'S `pcall` AND NOT AN ERROR PATH. Asking a
+// chest for its transport lines RAISES in Factorio, so the Lua wrapped
+// `get_max_transport_line_index` in a pcall and read a failure as "no lines" --
+// which is what a sweep over every entity in a box needs, because most of them
+// are not belts. A generated binding hands the same refusal back as a Status.
+func TransportLineItems(o fkapi.Object) int64 {
+	e := fkapi.LuaEntity{Object: o}
+	n, err := e.GetMaxTransportLineIndex()
+	if err != nil {
+		return 0
+	}
+	var total int64
+	for i := uint32(1); i <= n; i++ {
+		line, err := e.GetTransportLine(i)
+		if err != nil {
+			continue
+		}
+		if c, err := (fkapi.LuaTransportLine{Object: line}).GetItemCount(nil); err == nil {
+			total += int64(c)
+		}
+	}
+	return total
+}
+
+// ForceByName is `game.forces[name]`, which is a LuaCustomTable index: the raw
+// handle plus its index operator, two host calls and no allocation. The
+// whole-table attribute would build a Go slice of every force in the game to
+// answer a point query.
+func ForceByName(name string) (fkapi.Object, bool) {
+	raw, err := fkapi.Game.ForcesRaw()
+	if err != nil {
+		return fkapi.Object{}, false
+	}
+	v, err := fkapi.LuaCustomTable{Object: raw}.Get(fkapi.OfString(name))
+	if err != nil || v.Tag != fkapi.TagObject {
+		return fkapi.Object{}, false
+	}
+	return v.Object, true
 }
 
 // ---------------------------------------------------------------------------

@@ -1,9 +1,0 @@
-{
-  "name": "bbb-qual-test",
-  "version": "0.1.0",
-  "title": "BBB quality verification",
-  "author": "BetterBeltBalancer",
-  "factorio_version": "2.1",
-  "description": "Builds balancers whose parts are UNCOMMON quality and drives every path where the guest asks the world for a part by name. Asserts nothing itself.",
-  "dependencies": ["base >= 2.0.0", "quality"]
-}

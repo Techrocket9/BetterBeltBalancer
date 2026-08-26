@@ -332,8 +332,12 @@ OBS_COMMON := --persist=$(PERSIST) --gc=leaking --api=$(MOD_API) \
 
 OBS_M1_DIR    := $(OBS_DIST)/bbb-m1-test_0.1.0
 OBS_SEDGE_DIR := $(OBS_DIST)/bbb-sedge-test_0.1.0
+OBS_MAR_DIR   := $(OBS_DIST)/bbb-marathon-test_0.1.0
+OBS_MIG21_DIR := $(OBS_DIST)/bbb-mig21-observer_0.1.0
+OBS_QUAL_DIR  := $(OBS_DIST)/bbb-qual-test_0.1.0
 
-observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR)
+observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR) $(OBS_MAR_DIR) $(OBS_MIG21_DIR) \
+           $(OBS_QUAL_DIR)
 
 $(OBS_M1_DIR): $(DIST)/obs-m1.wasm
 	@mkdir -p $(OBS_DIST)
@@ -357,6 +361,58 @@ $(OBS_SEDGE_DIR): $(DIST)/obs-sedge.wasm $(DIST)/obs-sedgedata.wasm
 	  --title "BBB single-edge verification" \
 	  --description "Builds balancers to Factorio 2.1's one-belt-per-part rule and drives the three ways an edit can break it. Asserts nothing itself." \
 	  --dependency "base >= 2.1.0" --dependency "better-belt-balancer" \
+	  -o .
+
+# The marathon suite. Its data stage is the same 1x1 express loader sedge's is,
+# under its own name: the two guests cannot share a package, because a data guest
+# may not import fkapi and a control guest may not import fkdata.
+$(OBS_MAR_DIR): $(DIST)/obs-mar.wasm $(DIST)/obs-mardata.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-mar.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-mardata.wasm) \
+	  --name bbb-marathon-test --version 0.1.0 \
+	  --title "BBB marathon: the permanent-heap slope per world operation" \
+	  --description "Runs hundreds of NET-ZERO world cycles -- place a balancer and remove it, lay a belt beside one and pick it up, rotate an edge, paste and undo -- and reads the guest's own heap probe after each one. Under -gc=leaking the slope of that number IS the marathon-save cost. Asserts nothing itself; test/assert-marathon.py does." \
+	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
+	  -o .
+
+# THE ONE OBSERVER THAT MUST NOT DEPEND ON THE MOD UNDER TEST, and the dependency
+# list is the whole of why.
+#
+# It samples the world from its own `on_configuration_changed`, which is the only
+# "before" any script can reach: the migration runs from `fk_migrate` before tick
+# 0, so a sample taken from a tick handler is a sample taken afterwards. Handlers
+# run in MOD LOAD ORDER, `bbb-mig21-observer` sorts before `better-belt-balancer`
+# by name, and a dependency on it would put this one AFTER -- at which point the
+# seeding finds nothing to seed, reports zero, and test/assert-mig21.py fails on
+# the zero. So the list is `base` alone, exactly as its hand-written info.json
+# said, and `--dependency` REPLACES rather than adds.
+#
+# No data stage: it builds no rig and needs no prototype.
+$(OBS_MIG21_DIR): $(DIST)/obs-mig21.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-mig21.wasm) \
+	  $(OBS_COMMON) --name bbb-mig21-observer --version 0.1.0 \
+	  --title "BBB 2.0-save-on-2.1 observer" \
+	  --description "Reports what a Factorio 2.0 balancer save looks like when it is opened on 2.1, before and after this mod's migration runs on it. Builds nothing and asserts nothing." \
+	  --dependency "base >= 2.1.0" \
+	  -o .
+
+# The quality suite. `quality` rather than `better-belt-balancer` in the second
+# slot, exactly as its info.json had it: the mod under test is pulled in by the
+# mod-list, and what this one cannot load without is the quality prototype tree
+# every part in every rig is rolled from.
+$(OBS_QUAL_DIR): $(DIST)/obs-qual.wasm $(DIST)/obs-qualdata.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-qual.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-qualdata.wasm) \
+	  --name bbb-qual-test --version 0.1.0 \
+	  --title "BBB quality verification" \
+	  --description "Builds balancers whose parts are UNCOMMON quality and drives every path where the guest asks the world for a part by name. Asserts nothing itself." \
+	  --dependency "base >= 2.0.0" --dependency "quality" \
 	  -o .
 
 # --- housekeeping ------------------------------------------------------------

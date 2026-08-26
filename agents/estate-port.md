@@ -4,14 +4,16 @@
 mod got there in two rounds -- `fklua mod` has always generated the control
 stage, and the 2026-08-25 round replaced ten hand-written data-stage files with a
 second compiled guest ([`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 25). What is left
-is the TEST ESTATE, and after the pilot it is **8,524 committed lines** of it:
-7,323 across twenty-one files under `test/mods`, 462 in the interactive
-checklist's staging mod, 739 in the `bench/` harness's setup mod. Lua that
-nothing in `make check` can reach, that no toolchain type-checks, and that only a
-Factorio run can execute at all.
+is the TEST ESTATE, and after phase 2 it is **7,357 committed lines** of it:
+6,156 across sixteen files under `test/mods`, 462 in the interactive checklist's
+staging mod, 739 in the `bench/` harness's setup mod. Lua that nothing in
+`make check` can reach, that no toolchain type-checks, and that only a Factorio
+run can execute at all. It was 8,524 over twenty-four files when the pilot
+started.
 
-This file is the programme for removing it, and the record of what the PILOT
-measured. The pilot is `m1` and `sedge`, done 2026-08-25.
+This file is the programme for removing it, and the record of what each phase
+measured. The pilot is `m1` and `sedge` and phase 2 is `mar`, `mig21` and
+`qual`, all done 2026-08-25.
 
 ---
 
@@ -58,6 +60,9 @@ guest/go/obs/harness/    the shared kit: surface, placement, lookups, chests,
 guest/go/obs/m1/         package main -- one observer, one wasm
 guest/go/obs/sedge/      package main
 guest/go/obs/sedgedata/  package main -- sedge's DATA STAGE, a second module
+guest/go/obs/mar/        phase 2, and its data stage in obs/mardata/
+guest/go/obs/mig21/      phase 2 -- no data stage, and no fk_on_init either
+guest/go/obs/qual/       phase 2, and its data stage in obs/qualdata/
 ```
 
 **Inside the mod's own Go module (`guest/go`), not a module of their own.** That
@@ -98,8 +103,10 @@ something in this repository:
   into a test mod. `test/check-datastage.py`'s fixture builder hit this first;
   same trick, same reason.
 - **Every identity is a flag**, including `--dependency`, which REPLACES the
-  manifest's list rather than adding to it. The two observers carry exactly the
-  dependency lists their `info.json` files used to.
+  manifest's list rather than adding to it. Every observer carries exactly the
+  dependency list its `info.json` file used to -- checked field for field against
+  the deleted original, and for `mig21` that list is a CORRECTNESS surface rather
+  than an identity: see phase 2's red proof.
 - **`--api=$(MOD_API)` is not optional.** With no manifest in the working
   directory the packager falls back to FkLua's own default pin (2.0.77 today),
   and a guest built against 2.1.16 bindings packaged against a 2.0.77 member
@@ -319,6 +326,178 @@ before, 7.1 s after), because what grew is a parse, not a tick.
 
 ---
 
+## Phase 2: `mar`, `mig21`, `qual` -- done 2026-08-25
+
+1,194 lines of Lua deleted across three mods; the estate is **7,357 lines over
+twenty files**, from 8,524 over twenty-four. `flip` was chartered here and is
+deferred to the 2.0 session (above).
+
+### The golden diff, which is empty
+
+Same two masks as the pilot's and no others. **Every one of the 9,835 + 480 + 204
+tagged lines is byte-identical, in order**, across five logs:
+
+| log | tagged lines | verdict |
+|---|--:|---|
+| `mar` create + run | 65 + **9,835** | identical |
+| `mig21` m2 | 237 | identical |
+| `mig21` edge | 243 | identical |
+| `qual` create + run | 172 + 32 | identical |
+
+**`mar`'s 9,835 is the one worth reading twice**, because the tag set is
+`[BBB-MAR]` AND `[BBB]` -- so it contains every `[BBB] heap ... sys=... alloc=...`
+probe the MOD wrote, 681 of them, each one the number this suite exists to
+measure. Identical in order means the mod's heap trajectory is the same tick for
+tick under a Go observer as under the Lua one.
+
+What is left over is the pilot's own five categories and nothing else: the run
+timestamp and the free-disk figure; `Checksum for script
+__<observer>__/control.lua`, which IS the port; `Checksum of <observer>` for the
+two that have a data stage (`mig21` has none, and its mod checksum is unmoved at
+0, exactly as `m1`'s was); `Loading script.dat` where the observer has a guest
+heap in the save now (`mar` 239,912 -> 753,972 B, `qual` 441,505 -> 938,963 B --
+and `mig21` is unmoved, because `--benchmark` never saves and its script.dat is
+the committed fixture's); and the benchmark's own `checksum:` and ms figures,
+Factorio's state checksum covering every mod's `storage`.
+
+### The gate this phase had that the pilot did not
+
+**The `mar` slope table, in the `-gc=leaking` arm, byte-identical.** It is the
+sharpest measurement in the repository and the one a scheduling drift of a single
+tick would move:
+
+| leg | B/primitive | | leg | B/primitive |
+|---|--:|---|---|--:|
+| A | 1,280 | | E | 560 |
+| B | 352 | | G | 3,736 |
+| C | 1,209 | | F | 2,080 |
+| D | 32 | | linear memory | **3.92 MiB** |
+
+...and `diff` over the WHOLE of `assert-marathon.py`'s output -- every raw
+`B/iter`, every net figure, all seven linearity ratios, the 1,136 B calibration
+at 0.0% spread and all ten world tuples -- is **empty**.
+
+### The red proof: the dependency list is load-bearing end to end
+
+The pilot's two red proofs perturbed a log line's FORMAT. This one perturbs the
+PACKAGING, because `mig21` is the first observer whose `info.json` is a
+correctness surface rather than an identity.
+
+Add `--dependency "better-belt-balancer"` to the `mig21` recipe -- one flag,
+nothing else touched -- and Factorio's load order puts the observer AFTER the mod
+under test, so its `on_configuration_changed` runs after the migration has
+already torn the remnants down. **Five assertions fire and `run.sh` exits 1**,
+and the one with the name on it is the anti-vacuity the observer's own header
+promises:
+
+> nothing was seeded into the networks before the migration ran. Either the
+> observer's `on_configuration_changed` now runs AFTER this mod's -- in which case
+> there was nothing left to seed -- or the fixture arrived with no networks at
+> all. Every item number below would be a vacuous zero
+
+with `seeded 0 items`, `0 interfaces on 77 part tiles` and `0 hidden entities` in
+the report beneath it. That is the whole `--dependency` chain proved: a Makefile
+flag, into a generated `info.json`, into Factorio's mod ordering, into which
+handler sees the world first.
+
+**And the three generated `info.json` files are field-for-field identical to the
+hand-written ones they replace** -- name, version, title, author,
+`factorio_version`, description and dependencies -- which is the same statement
+from the other end. `--dependency ""` was considered and NOT used: it means an
+EMPTY list, and these mods' lists are not empty (`mig21`'s is `base >= 2.1.0`
+alone). What the suite needs is the absence of one entry, not the absence of all
+of them.
+
+### What it cost
+
+| | Lua | Go |
+|---|--:|--:|
+| `bbb-marathon-test` source | 496 + 16 lines | 609 + 53 lines |
+| `bbb-marathon-test` staged | 3 files, ~19 KB | 8 files, **876 KB** |
+| `bbb-mig21-observer` source | 277 lines | 541 lines |
+| `bbb-mig21-observer` staged | 2 files, ~11 KB | 5 files, **740 KB** |
+| `bbb-qual-test` source | 357 + 20 lines | 423 + 41 lines |
+| `bbb-qual-test` staged | 3 files, ~15 KB | 8 files, **916 KB** |
+
+`make observers` for all five packages is 13.3 s warm. The three suites together
+run in 39.8 s against the goldens' 32.2 s; what grew is five hundred kilobytes of
+`fk_module.lua` being PARSED three times, not anything a tick does.
+
+`fklua api check --from 2.1.16 --to 2.0.77`, which every phase owes for the
+observers it ports:
+
+| guest | surface | verdict |
+|---|---|---|
+| `obs-mar.wasm` | 21 members, 1 event, 12 concepts | **clean**, 0 findings, exit 0 |
+| `obs-mig21.wasm` | 20 members, 1 event, 5 concepts | **clean**, 0 findings, exit 0 |
+| `obs-qual.wasm` | 19 members, 1 event, 12 concepts | **clean**, 0 findings, exit 0 |
+
+So all three stay STAMPED for the running engine rather than gated against it,
+which is what the pilot's table established and what this one re-establishes for
+three guests whose member counts are nearly double the pilot's.
+
+### What the harness gained, and it is nine things
+
+Everything below was in two or three of the three observers, which is the bar the
+pilot set for putting something in the shared package:
+
+| | |
+|---|---|
+| `PlaceSoft` | the Lua's `put_soft`: a placement whose failure is a fact about the schedule (`mar`, a hundred iterations over the same tiles) or IS the measurement (`qual`'s two probes report `created=true`) |
+| `Piece.Quality` | the whole of the `qual` suite in one field |
+| `Piece.FastReplace` | `qual`'s replace probe |
+| `FindAt` | the Lua's `at()`, a POINT query -- see the deviation below |
+| `KillAt` | `FindAt` plus a raising destroy, which is every removal `mar` makes |
+| `Destroy` | the same for an object already in hand |
+| `EntitiesIn` | a box sweep, for `mar`'s conservation count and `qual`'s tile probes |
+| `InventoryTotal` | a chest total for an entity already in hand (`ChestCount` is now this plus a lookup) |
+| `TransportLineItems` | every item on one entity's lines, with the `pcall` the Lua wrapped `get_max_transport_line_index` in becoming an `err != nil` arm |
+| `ForceByName` | `game.forces[name]` as a LuaCustomTable point query, which is what `can_fast_replace` needs and the whole-table read would allocate around |
+| `Line.B` | `tostring` on a boolean, which three observers' log lines carry |
+
+### Three deviations, all recorded rather than hidden
+
+- **`FindAt` is a POINT query where `FindOnTile` is a box**, and the difference is
+  load-bearing rather than stylistic. `find_entities_filtered` with an `area`
+  returns everything whose bounding box TOUCHES it, and a transport belt's
+  selection box is the whole of its tile -- so a box query on tile x can also
+  reach the belt on x+1 along the shared edge, and `[0]` of that is whichever the
+  engine listed first. `mar` removes one named belt out of a run of four, a
+  hundred times over, and the wrong one would be a different world with a
+  plausible slope. The Lua used `position` and so does this. The pilot's own box
+  deviation stands where it is: its rigs have nothing beside the tiles they ask
+  about.
+- **`#line` is `LuaTransportLine.Length()`**, which is the bound form of the same
+  Lua length operator and not a substitution. `get_item_count()` was the other
+  candidate and would differ on a stacked belt; nothing in these fixtures is
+  stacked, and the faithful one costs nothing.
+- **The loader name is written down twice per suite**, in `obs/<suite>` and in
+  `obs/<suite>data`. It is forced: a data guest may not import fkapi and a control
+  guest may not import fkdata, so no package can be shared between them. A
+  constants-only package with no imports at all WOULD work and is deliberately not
+  built yet -- phase 3 adds two more loaders (`mix` and `plat`), and a shared
+  package that three of five data stages use is worse than none. Build it when
+  phase 3 makes it five of five, and bring `sedge` into it then.
+
+### What phase 3 inherits from this one
+
+- **`fk_on_configuration_changed` works and is a plain no-argument export.**
+  `mig21` is the first observer to use it and `mig` in phase 3 is the second --
+  that suite's two phases run under different mod sets, which is precisely what
+  the hook reports.
+- **`fkapi.Log(Value)` is still untried.** Nothing here needed a `LuaProfiler`,
+  so the note above stands exactly as the pilot left it: `plat` is the first
+  consumer, and it should verify the line against its golden before anything is
+  built on it.
+- **`fkapi.TableSize` is still unused.** `mig21` needed a `#`-over-a-table twice
+  (`by_tile` and `per_surface`) and both became ordinary Go slices, which is what
+  every census in the estate probably becomes.
+- **The package-time jump-span check has not fired.** `mar`'s `fk_on_init` builds
+  four rigs including a 4x4 and is comfortably inside it; `edge`'s fifteen
+  clusters over 198 parts in phase 4 is still the first place likely to meet it.
+
+---
+
 ## The phases
 
 Each phase is: goldens, port, the six gates, `git rm` the Lua, and a section in
@@ -327,13 +506,37 @@ this file recording what it measured and what it deviated on.
 | phase | suites | what is new about it |
 |---|---|---|
 | **1 (done)** | `m1`, `sedge` | the harness, the build recipe, the staging seam. `sedge` brings the first observer DATA STAGE |
-| **2** | `mar`, `mig21`'s observer, `qual`, `flip` | the first suites whose observers carry real per-tick STATE and arithmetic. `mar` reads the mod's `[BBB] heap` probe and drives 680 world operations from a schedule; `flip` drives `remote.call`, which is a member no observer has bound yet |
+| **2 (done)** | `mar`, `mig21`'s observer, `qual` | the first observers with real per-tick STATE and arithmetic. `mar` reads the mod's `[BBB] heap` probe and drives 680 world operations from a schedule; `mig21` brings the first `fk_on_configuration_changed` and the first observer whose PACKAGING is load-bearing. **`flip` was in this phase and is DEFERRED** -- see below |
 | **3** | `mix`, `plat`, `mig` | `plat` needs Space Age surfaces and `helpers.create_profiler`; `mix` needs infinity-chest filter rotation over 48 item names; `mig` is the only suite whose two phases run under different mod sets, and its observer is the one that reports a census |
 | **4** | `m2`, `m3`, `edge` | the big ones. `m3` carries an LCG and 600 ticks of randomised churn; `edge` counts every item on two surfaces inside one tick. These are where the harness will earn or fail to earn its keep |
 | **5** | `test/interactive/bbb-interactive-setup` | not a suite -- the world a HUMAN walks, and where the mod portal's demo scenes live. `iact` gates it, so the port has a headless check already |
 | **6** | `test/mods/belt-balancer-2`, `test/mods/bbb-mig-foreign` | data-stage-only stand-ins, and **blocked on [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 26**: `fklua mod` cannot package a mod with no control module. The `test/fixtures/fastbelt` workaround (an inert empty `main`) works and costs ~113 KB of generated Lua that is required and never called; whether to spend that on two stand-ins or wait for the gap is a phase-6 decision |
 | **7** | `bench/mods/*` | LAST, and alone. Every published performance figure in this repository was measured with those setup mods, so the port has to carry a comparability gate the suites do not need: the same matrix cell, INTERLEAVED in one session, old and new setup mods against the same `dist/`, with the no-mod control in the same session. Session drift on this machine is 25-35% |
 | **8** | `mig21`'s observer again, in RUST | the parity exercise. One observer written twice against one ABI is the strongest statement this repository can make about FkLua's second backend, and `mig21` is the right one: no `--create` phase, so the whole thing is one load and one set of assertions |
+
+### What waits for a 2.0 binary
+
+**`flip` cannot be ported on this machine and it is not a scheduling
+preference.** The suite drives `bbb-multi-edge-parts`, which
+`guest/go/data/settings.go` defines on 2.0.x and never on 2.1.x, so on trunk's
+own engine `test/run.sh` prints a SKIP rather than running it -- and **THE FIRST
+GATE OF EVERY PHASE IS A GOLDEN LOG.** There is no run here that can produce one,
+so a ported `flip` would be a transcription nothing had ever executed, sitting in
+the tree looking green because the suite it belongs to skips. That is the exact
+shape of "a check that skips is a check that passed", which this repository
+already has a section about.
+
+So it moves to the `release/2.0` session, with the other things owed there: the
+grandfather write actually landing, both arms of the flip handler, and
+`sweepStackedInterfaces` against a standing multi-edge world.
+
+**And it carries one thing no other observer needs.** `flip` drives the setting
+through `remote.call('better-belt-balancer', 'set-multi-edge-parts', ...)`,
+because Factorio refuses `settings.global[k] = v` from anybody but the mod that
+DEFINED the setting. That is an OUTBOUND `remote.call` -- bound in fkapi as
+`RemoteCall`, and **used by no observer in the estate so far**. Whoever ports it
+should treat that call the way phase 3 is told to treat `fkapi.Log(Value)`:
+verify it against a golden line before building anything on it.
 
 ### What later phases inherit that the pilot did not need
 
