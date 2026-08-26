@@ -1,9 +1,0 @@
-{
-  "name": "bbb-sedge-test",
-  "version": "0.1.0",
-  "title": "BBB single-edge verification",
-  "author": "BetterBeltBalancer",
-  "factorio_version": "2.1",
-  "description": "Builds balancers to Factorio 2.1's one-belt-per-part rule and drives the three ways an edit can break it. Asserts nothing itself.",
-  "dependencies": ["base >= 2.1.0", "better-belt-balancer"]
-}

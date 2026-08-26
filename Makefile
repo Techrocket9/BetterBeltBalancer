@@ -47,6 +47,13 @@ MODS_DIR     ?= $(HOME)/Library/Application Support/factorio/mods
 # The two below are needed only to NAME the output that command produces.
 MOD_NAME    := $(shell sed -n 's/^name = "\(.*\)"$$/\1/p' fklua.toml)
 MOD_VERSION := $(shell sed -n 's/^version = "\(.*\)"$$/\1/p' fklua.toml)
+# ...and these two are read for the TEST OBSERVERS, which are packaged from
+# their own flags rather than from this manifest (see the observers block near
+# the bottom). They are the two identity facts an observer MUST share with the
+# mod under test: the API description its generated bindings came from, and the
+# engine series its info.json declares.
+MOD_API     := $(shell sed -n 's/^api = "\(.*\)"$$/\1/p' fklua.toml)
+MOD_SERIES  := $(shell sed -n 's/^factorio_version = "\(.*\)"$$/\1/p' fklua.toml)
 
 DIST      := dist
 WASM      := $(DIST)/bbb.wasm
@@ -157,7 +164,12 @@ PERSIST := packed
 # The control guest is everything under guest/go EXCEPT the generated bindings
 # and the data guest's own main package -- the two are compiled separately and a
 # shared source list would rebuild each of them whenever the other moved.
-GUEST_SRC := $(shell find guest/go -name '*.go' -not -path '*/fkapi/*' -not -path 'guest/go/data/*') guest/go/go.mod
+#
+# `guest/go/obs` is excluded for the same reason `guest/go/data` is: it is a set
+# of separate main packages that the control guest does not import, so a change
+# to a test observer must not relink the mod, and a change to the mod must not
+# re-package fourteen observers.
+GUEST_SRC := $(shell find guest/go -name '*.go' -not -path '*/fkapi/*' -not -path 'guest/go/data/*' -not -path 'guest/go/obs/*') guest/go/go.mod
 # The data guest: its own main package, plus the PURE packages it shares with
 # the control guest. `engine` is the version branch both stages ask, `skin` is
 # where the sprite sheet's cell count comes from, and `tune` is what the two
@@ -166,7 +178,7 @@ GUEST_SRC := $(shell find guest/go -name '*.go' -not -path '*/fkapi/*' -not -pat
 DATA_GUEST_SRC := $(shell find guest/go/data guest/go/engine guest/go/skin guest/go/tune -name '*.go' -not -name '*_test.go') guest/go/go.mod
 DATA_SRC  := $(shell find mod-data -type f)
 
-.PHONY: all guest mod zip install test check datastage-check clean graphics
+.PHONY: all guest mod zip install test check datastage-check clean graphics observers
 
 all: mod
 
@@ -273,8 +285,79 @@ interactive-install:
 
 # --- test --------------------------------------------------------------------
 
-test: mod
+test: mod observers
 	FACTORIO_BIN="$(FACTORIO_BIN)" test/run.sh $(SUITES)
+
+# --- the test observers ------------------------------------------------------
+#
+# THERE IS NO HAND-WRITTEN LUA ANYWHERE IN THIS REPOSITORY, AND THAT INCLUDES
+# THE TEST ESTATE. The suites' observer mods -- the mods that build the rigs,
+# drive the schedule and report what they see -- were fourteen control.lua files
+# and are becoming compiled Go guests, one phase at a time.
+# agents/estate-port.md is the programme; `m1` and `sedge` are the pilot.
+#
+# ONE GO MODULE, N THIN MAINS. The observers live under guest/go/obs inside the
+# mod's OWN module, which is what lets them share one generated bindings tree
+# (guest/go/fkapi) and one harness package instead of vendoring either. Pruning
+# is PER WASM MODULE at package time, so what an observer calls cannot reach the
+# shipped mod's member table -- measured, not assumed: the packaged mod's
+# fk_api_gen.lua is byte-identical either side of this directory existing.
+#
+# EVERY IDENTITY COMES FROM A FLAG AND THE PACKAGER RUNS FROM $(OBS_DIST).
+# `fklua mod` reads the manifest in its WORKING DIRECTORY for anything it was
+# not given a flag for, so packaging an observer from the repository root would
+# merge this mod's `data = "mod-data"` asset tree and its `gc = "collected"` into
+# a test mod. A directory with no fklua.toml in it is a package built from its
+# flags alone. (test/check-datastage.py's fixture builder learned this first;
+# same trick, same reason.)
+#
+# --gc=leaking, not the mod's collected: an observer runs for seconds in a world
+# that is thrown away, so a collector would be 73 KB of metadata and a pacing
+# surface for nothing. --persist=$(PERSIST), because an observer's rig registry
+# is written in `fk_on_init` during `--create` and read during `--benchmark`, so
+# it crosses the save exactly as the mod's own heap does.
+OBS_SRC  := $(shell find guest/go/obs -name '*.go') guest/go/go.mod
+OBS_DIST := $(DIST)/obs
+
+# -opt=2 for the reason the mod has it, and -gc=leaking for the reason above.
+# No GC_STAMP dependency: the observers do not move with `make GC=`.
+OBS_TINYGO := -target=wasm-unknown -scheduler=none -gc=leaking -opt=2
+
+$(DIST)/obs-%.wasm: $(OBS_SRC) guest/go/fkapi/fkapi.go
+	@mkdir -p $(DIST)
+	cd guest/go && tinygo build $(OBS_TINYGO) -o ../../$@ ./obs/$*
+
+OBS_COMMON := --persist=$(PERSIST) --gc=leaking --api=$(MOD_API) \
+              --factorio-version $(MOD_SERIES) --author BetterBeltBalancer
+
+OBS_M1_DIR    := $(OBS_DIST)/bbb-m1-test_0.1.0
+OBS_SEDGE_DIR := $(OBS_DIST)/bbb-sedge-test_0.1.0
+
+observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR)
+
+$(OBS_M1_DIR): $(DIST)/obs-m1.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-m1.wasm) \
+	  $(OBS_COMMON) --name bbb-m1-test --version 0.1.0 \
+	  --title "BBB M1 Test" \
+	  --description "Places and removes bbb-balancer-part in known patterns so the M1 cluster registry can be asserted from the log. Not a gameplay mod." \
+	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
+	  -o .
+
+# The one observer so far with a DATA STAGE of its own: a 1x1 loader fast enough
+# to saturate an express belt, which base has no buildable form of. A second
+# wasm module, exactly as the mod's own data guest is.
+$(OBS_SEDGE_DIR): $(DIST)/obs-sedge.wasm $(DIST)/obs-sedgedata.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-sedge.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-sedgedata.wasm) \
+	  --name bbb-sedge-test --version 0.1.0 \
+	  --title "BBB single-edge verification" \
+	  --description "Builds balancers to Factorio 2.1's one-belt-per-part rule and drives the three ways an edit can break it. Asserts nothing itself." \
+	  --dependency "base >= 2.1.0" --dependency "better-belt-balancer" \
+	  -o .
 
 # --- housekeeping ------------------------------------------------------------
 
@@ -324,6 +407,11 @@ check:
 	@# cannot reach. `go vet` over ./data type-checks it under the wasm build
 	@# tags without asking TinyGo for a wasm module.
 	cd guest/go && GOOS=wasip1 GOARCH=wasm go vet ./data/
+	@# The TEST OBSERVERS, for the same reason: they are `main` packages full of
+	@# //go:wasmexport that no `go test` can reach, and the harness under them is
+	@# what fourteen suites will share. gofmt below already covers them, because
+	@# they are inside guest/go; this is what type-checks them.
+	cd guest/go && GOOS=wasip1 GOARCH=wasm go vet ./obs/...
 	@# The fast-belt fixture is a WHOLE FACTORIO MOD written in Go -- built by
 	@# test/check-datastage.py for the speed arm and never shipped -- and it is
 	@# its OWN Go module, so neither the tests nor the vet above reach it. Same

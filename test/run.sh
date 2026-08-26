@@ -263,6 +263,44 @@ write-data=$USERDIR
 locale=auto
 INI
 
+# copy_testmod <test-mod-name> <destination-directory>
+#
+# THE ESTATE IS BEING PORTED FROM HAND-WRITTEN LUA TO COMPILED GO OBSERVERS, ONE
+# PHASE AT A TIME (agents/estate-port.md), and this is the one place that has to
+# know which half a suite is in.
+#
+# A PORTED suite's observer is a PACKAGED MOD that `make observers` writes into
+# dist/obs/<name>_<version>/: a generated control.lua, fk_module.lua, info.json,
+# and for `sedge` a data stage as well. An unported one is still a directory of
+# hand-written Lua under test/mods/<name>/. Both are staged identically from here
+# on -- copied to $work/mods/<name> and stamped for the running engine -- so
+# nothing else in this file has to care, and porting a suite is a Makefile
+# recipe plus a deletion rather than an edit here.
+#
+# The version is GLOBBED rather than known, because it is the observer's own and
+# has nothing to do with this mod's. There is exactly one package per name: the
+# recipe rm -rf's its output directory before writing it, so a stale copy from a
+# renamed version cannot accumulate beside it.
+#
+# The destination is the BARE NAME, not name_version. That is what this estate
+# has always staged, Factorio accepts it, and it keeps every
+# `$work/mods/$testmod` path below working whichever half the suite is in --
+# including the mig21 suite's control.lua overwrite, which neutralizes a ported
+# observer exactly as well as a Lua one.
+copy_testmod() {
+  local name="$1" dest="$2" d
+  for d in "$ROOT/dist/obs/${name}_"*/; do
+    [ -d "$d" ] || continue
+    cp -R "$d" "$dest"
+    return
+  done
+  [ -d "$ROOT/test/mods/$name" ] || {
+    echo "no observer package under dist/obs for $name, and no test/mods/$name." >&2
+    echo "A ported suite needs \`make observers\`; \`make test\` does that for you." >&2
+    exit 1; }
+  cp -R "$ROOT/test/mods/$name" "$dest"
+}
+
 # stage <workdir> <test-mod-name> [space-age] [quality]
 #
 # `quality` defaults to the Space Age flag (the DLC set moves together), and
@@ -275,7 +313,7 @@ stage() {
   rm -rf "$work"
   mkdir -p "$work/mods"
   cp -R "$MOD_DIR" "$work/mods/"
-  cp -R "$ROOT/test/mods/$testmod" "$work/mods/$testmod"
+  copy_testmod "$testmod" "$work/mods/$testmod"
   stamp_engine "$work/mods/$testmod"
   # The Space Age DLC mods ship inside the Factorio install's data/ directory,
   # so they load no matter what --mod-directory says. Base only wherever
@@ -447,13 +485,13 @@ stage_mig() {
   local work="$1" extra="$2" ver="$3" bbb="$4"
   rm -rf "$work"
   mkdir -p "$work/mods"
-  cp -R "$ROOT/test/mods/bbb-mig-test" "$work/mods/bbb-mig-test"
+  copy_testmod bbb-mig-test "$work/mods/bbb-mig-test"
   stamp_engine "$work/mods/bbb-mig-test"
   if [ -n "$extra" ]; then
     if [ -n "$ver" ]; then
       mig_standin "$work" "$extra" "$ver"
     else
-      cp -R "$ROOT/test/mods/$extra" "$work/mods/$extra"
+      copy_testmod "$extra" "$work/mods/$extra"
       stamp_engine "$work/mods/$extra"
     fi
   fi
@@ -549,8 +587,8 @@ stage_fixture() {
   rm -rf "$work"
   mkdir -p "$work/mods"
   cp -R "$MOD_DIR" "$work/mods/"
-  cp -R "$ROOT/test/mods/$testmod" "$work/mods/$testmod"
-  cp -R "$ROOT/test/mods/bbb-mig21-observer" "$work/mods/bbb-mig21-observer"
+  copy_testmod "$testmod" "$work/mods/$testmod"
+  copy_testmod bbb-mig21-observer "$work/mods/bbb-mig21-observer"
   stamp_engine "$work/mods/$testmod" "$work/mods/bbb-mig21-observer"
 
   # The prototypes, and nothing else. See above.
@@ -627,6 +665,24 @@ guest_gate() {
   if grep -qE "\[BBB\] error:" "$@"; then
     echo "the guest reported a compile error:" >&2
     grep -hE "\[BBB\] error:" "$@" | head -20 >&2; exit 1
+  fi
+  # THE OBSERVER'S OWN ERROR LEVEL, and it is here because the port took away
+  # the thing that used to do this job.
+  #
+  # A hand-written test mod called Lua's `error()` when a rig failed to land --
+  # `error("could not place X at (x,y)")` -- which aborts on_init outright, and
+  # that is the correct severity: a rig that is not there makes every number
+  # after it a measurement of a different world. A GUEST CANNOT DO THAT. There
+  # are no coroutines under a wasm frame, so nothing can unwind, and the honest
+  # equivalent is a line the runner refuses to see.
+  #
+  # A SEPARATE TAG FROM THE MOD'S OWN. `[BBB] error:` above means one narrow
+  # thing -- a compile produced no network -- and is the mod under test speaking.
+  # This is the HARNESS speaking, about the world it was asked to build, and one
+  # tag serves all fourteen observers whichever half of the port they are in.
+  if grep -qE "\[BBB-OBS\] error:" "$@"; then
+    echo "the test observer could not build its world:" >&2
+    grep -hE "\[BBB-OBS\] error:" "$@" | head -20 >&2; exit 1
   fi
   # THE COLLECTOR'S OWN ROOT-SET LINE, and this assertion is what replaced a
   # hand-rolled check in guest/go/gc.go.
