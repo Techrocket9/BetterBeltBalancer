@@ -1066,6 +1066,232 @@ has carried since the single-edge port.
   `table_size` in the estate has become an ordinary Go slice length.
 - **The jump-span note is retired** (above). Nothing here will reach it.
 
+---
+
+## Phase 5: the interactive staging mod -- done 2026-08-25
+
+462 lines of Lua deleted from one mod, and it is the first thing this programme
+has ported that is NOT A SUITE. The estate is **1,365 lines over six files**,
+from 8,524 over twenty-four when the pilot started: `bench/mods/*` (phase 7),
+the two data-stage-only stand-ins (phase 6) and `bbb-flip-test` (the 2.0
+session). Nothing else is left.
+
+`guest/go/obs/iact` and `guest/go/obs/iactdata` are the observer and its data
+stage. What makes it different from the eleven above it:
+
+- **Its consumer is a HUMAN, not an assertion script.** It stages the five
+  player-gesture rigs and the five mod-portal demo scenes beside spawn on a
+  fresh world, hands the player the pieces and prints where to walk;
+  `test/interactive/README.md` is the checklist that world exists for. The
+  `iact` suite is a headless `--create` over the same package, and what it
+  asserts is that the staging is LEGAL -- every piece landed, nothing refused,
+  the exact compiled-shape multiset, both audit tuples.
+- **`make interactive-install` installs the very package the suite stages.**
+  That target used to copy a directory of Lua and now builds and copies
+  `dist/obs/bbb-interactive-setup_0.2.0`, under the bare name Factorio also
+  accepts. Its prerequisite is the one package rather than `observers`, so
+  installing the rigs relinks nothing else and touches nothing the shipped mod
+  owns.
+- **It is the only package here whose version is not 0.1.0.** 0.2.0 is what its
+  hand-written `info.json` carried, and `copy_testmod` globs the version for
+  exactly this reason.
+- **It has a player event handler, and nothing headless can reach it.**
+  `on_player_created` teleports the arriving player, hands over 50 belts and 10
+  parts, charts the map, tags every rig and prints the greeting. A `--create`
+  has no players, so the `iact` suite sees none of it -- the same wall the
+  miner's pocket's trigger is behind, and the same wall the Lua was behind.
+
+### The masks, proved by self-diff before a line was ported
+
+Phase 4's method, and it cost one extra run. Two golden runs of the unmodified
+tree, back to back, normalised on the three established masks and diffed against
+each other: **identical across all 498 tagged lines**, with the only differences
+anywhere in the file being the run's start timestamp and the free-disk figure.
+So those three masks are the only nondeterminism in this log, and any diff after
+the port is a port defect rather than a candidate for a fourth mask.
+
+### The golden diff, which is empty -- and the smallest one yet
+
+**All 498 `[BBB]` and `[BBB-INTERACTIVE]` lines are byte-identical, in order**,
+and so is every number `test/assert-interactive.py` prints: the twelve-shape
+multiset, both audit tuples `(12, 228, 0, 0, 12, 0)` and `(12, 228, 12, 0, 0, 0)`,
+and zero on all three of placements refused, refusals and spills.
+
+The whole masked diff is **four lines**:
+
+| difference | what it is |
+|---|---|
+| the run's start timestamp, and the free-disk figure | wall clock, and both moved between the two goldens too |
+| `Checksum of bbb-interactive-setup` | its data stage is a different file. That IS the port |
+| `Checksum for script __bbb-interactive-setup__/control.lua` | its control stage is a different file. That IS the port |
+
+`Checksum of better-belt-balancer` is 3503679581 and `Checksum for script
+__better-belt-balancer__/control.lua` is 507607469 in the golden AND in the
+ported run. The mod under test did not move.
+
+**There is no `Loading script.dat` row here, and its absence is why this diff is
+smaller than every previous phase's**: `iact` is the estate's only create-only
+suite, so nothing is ever loaded, no state checksum is taken and no benchmark
+milliseconds are printed. The guest heap this observer writes into the save is
+never read back by anything.
+
+### `fkapi.RemoteCall`, verified before anything rested on it
+
+The charter has carried a standing note since phase 2: `RemoteCall` is the
+outbound half of mod-to-mod interop, no observer had used it, and whoever
+reached it first should treat it the way phase 3 was told to treat
+`fkapi.Log(Value)`. This mod is that consumer -- it asks `freeplay` to disable
+the crash site and skip the intro -- and the calls it makes are SILENT, so the
+golden diff could not have seen a failure. A throwaway spike, packaged and run
+through one `--create` before the port was trusted:
+
+```
+[BBB-SPIKE] remote audit status=0 tag=2 number=0
+[BBB-SPIKE] remote freeplay status=0
+[BBB-SPIKE] remote nomethod status=5
+```
+
+**It works in both directions.** The first line calls the mod under test's own
+`better-belt-balancer` interface -- `audit`, which every suite in the estate
+already drives through a marker -- and gets `StatusOK` back with a `TagNumber`
+value: arguments crossed out, a return value crossed back, and the mod's own
+`[BBB] audit` line landed in the log where the call was made. The second says
+`freeplay` is present even in a headless `--create`, so these calls really do
+fire rather than being inert. The third is the one that licenses the deviation
+below: a missing METHOD is `StatusCallFailed` and not a raise.
+
+`LuaForce.Chart` and `LuaForce.AddChartTag` were spiked in the same run
+(`chart err=false`, `chart_tag err=false got=true`), because the player block
+uses both and nothing headless can enter it.
+
+### Two red proofs, in two families
+
+**The suite's own documented one, re-run against the PORTED observer.** Stage a
+second belt against a part that already carries one -- one line added to band B
+-- and three assertions fire, one per family, with `run.sh` exiting 1:
+
+```
+1 cluster(s) were refused for carrying more than one belt per part while STAGING
+the staged world compiled [... '2->2/P2' missing ...] and the checklist's geometry is [...]
+the second audit reads clusters=12 parts=228 nets=11 drift=0 unbuilt=0 refused=1
+```
+
+**And one for the seam this port actually moved.** `put` used to be a Lua
+`create_entity` whose nil return was reported by `log(string.format(...))`; it is
+`harness.PlaceSoft` plus this observer's own `Line` now, and if that line's format
+drifted a genuinely missing rig would go unnoticed while every other number
+stayed green. The injection is the port's own new hazard: **the observer and its
+data stage are two separate wasm modules**, which is what `obs/protos` exists to
+keep in step, so give the observer a loader name the data stage does not define.
+97 placements fail, each named with its piece and its tile:
+
+```
+bbbi-loader-x did not land at (17,-24)
+...and 87 more placements that did not land
+```
+
+Two things this proof settled on the way, both worth knowing before writing a
+third: `create_entity` places THROUGH a collision -- a chest dropped on an
+occupied belt tile lands happily -- and a duplicate part on an occupied tile is
+created too, with the registry deduping it by tile and no count moving. Neither
+is a way to make a placement fail. A prototype that does not exist is.
+
+### `fklua api check --from 2.1.16 --to 2.0.77`
+
+| guest | surface | verdict |
+|---|---|---|
+| `obs-iact.wasm` | 22 members, 1 event, 10 concepts | **clean**, 0 findings, exit 0 |
+| `obs-iactdata.wasm` | 0 members, 0 events, 0 concepts | **clean**, 0 findings, exit 0 |
+
+So it stays STAMPED for the running engine rather than gated against it, which
+matters more here than for a suite: this is the one package a person installs by
+hand into their own Factorio. The data module's empty surface is the expected
+answer and is recorded rather than assumed -- a data guest imports fkdata and
+never fkapi, so it has no runtime API surface to break.
+
+**And the generated `info.json` is field-for-field identical to the hand-written
+one it replaces** -- name, version, title, author, `factorio_version`,
+description and both dependencies -- which is the same statement phase 2 made
+about its three.
+
+### What it cost
+
+| | Lua | Go |
+|---|--:|--:|
+| `bbb-interactive-setup` source | 446 + 16 lines / 20,294 B | 609 + 26 lines |
+| `bbb-interactive-setup` staged | 3 files, ~21 KB | 8 files, **880 KB** |
+
+`make observers` builds and packages all TWELVE. The `iact` suite itself is
+unmoved at about fifteen seconds, because a `--create` parses the package once
+and never ticks.
+
+### Deviations, all recorded rather than hidden
+
+- **Two guards collapse into one status.** The Lua wrote
+  `if remote.interfaces["freeplay"] then pcall(remote.call, ...) end` -- an
+  existence test and then a protected call, because `remote.call` RAISES on a
+  missing interface or method. `fkapi.RemoteCall` returns `StatusCallFailed`
+  instead, deliberately, so the two guards are the return value and both
+  spellings mean the same thing: do it if freeplay is there, carry on if it is
+  not. Measured above rather than assumed.
+- **The surface crosses as a HANDLE where the Lua passed a name.** `p.teleport`
+  takes a SurfaceID, which the description spells `string or LuaSurface or uint`
+  and whose generated parameter is an `Object`. It is the same deviation
+  `harness.QualityProto` and `harness.SpaceLocationProto` record for their own
+  unions, and the same reading the shipped guest already takes.
+- **`put` is `PlaceSoft` and NOT `harness.Place`.** Every other observer in the
+  estate is Fatal about a placement that did not land, because a rig that is not
+  there makes every number after it a measurement of a different world. Here the
+  gate is `test/assert-interactive.py`, which reads
+  `[BBB-INTERACTIVE] could not place <name> at (x,y)` by name and reports which
+  piece missed which tile -- so the placement is soft and the report is this
+  observer's own. Red-proven above.
+- **The capture conditions are CHECKED where the Lua ignored the return.**
+  `show_clouds`, `always_day`, `freeze_daytime` and `daytime` are what make a
+  portal GIF loop seamlessly, and a setter that silently failed would be
+  discovered by a ruined recording. They are `harness.Fatal` now, which is what
+  `Flat.Make` already does with the same `always_day` call.
+- **The player block is transcribed and cannot be executed here.** Teleport,
+  insert, chart, chart tags and the seven printed lines are behind the same wall
+  as the miner's pocket's trigger, in the Go exactly as in the Lua. `go vet`
+  type-checks it, the spike above proved the two force members it leans on, and
+  the rest is a human's first thirty seconds in the staged world.
+- **The prep of an EXISTING surface stays in the observer.** `harness.Flat`
+  makes a scratch surface; this mod preps nauvis, which nothing else does, so the
+  only piece that moved into the shared package is the pave (`harness.PaveBox`,
+  which already existed for `plat`). One caller is below the bar for a helper.
+
+### What phase 6 inherits
+
+- **The estate's remaining Lua is 1,365 lines over six files**: `bench/mods/*`
+  (722 + 17, phase 7), `test/mods/belt-balancer-2/data.lua` (94) and
+  `test/mods/bbb-mig-foreign/data.lua` (54), which are phase 6, and
+  `bbb-flip-test` (458 + 20), which waits for a 2.0 binary.
+- **The two stand-ins have no golden of their own, and that is the phase's first
+  problem.** Every phase so far took goldens of the suite it was porting; these
+  two are DATA STAGES inside other suites' runs, so what phase 6 has to diff is
+  `mig`'s seven legs and two name probes, and `foreign`'s leg within them. Take
+  those goldens before touching anything.
+- **`mig_standin`'s `info.json` REWRITE SURVIVES THE PORT UNCHANGED, and that
+  is measured rather than assumed.** It stages ONE directory under all four of
+  `legacyIncumbents`' names by rewriting `name` and `version` with `perl -pi`,
+  guarded by two greps -- because a silently unrenamed copy would stage
+  belt-balancer-2 under every name and pass every leg. Its substitutions are
+  anchored `^(\s*)"name":\s*"[^"]*"`, and `fklua mod` emits a
+  two-space-indented `"name": "..."` that matches: run over a generated
+  `info.json` from phase 5's own package, both rewrites land and both greps
+  pass. So that half of phase 6 is already answered; keep the greps.
+- **A data-stage-only package still needs a control module** (item 26). The
+  `test/fixtures/fastbelt` workaround is an inert empty `main` and costs about
+  113 KB of generated Lua that is required and never called. An upstream fix for
+  data-module-only packaging is being built in parallel; if it lands, prefer it,
+  and note that these two stand-ins would then be the first packages in the
+  repository with no control stage at all -- which `stage_fixture`'s
+  `control.lua` overwrite, and `copy_testmod` itself, have never had to face.
+- **`copy_testmod` handles a non-0.1.0 version and a bare-name destination
+  without any change to the runner**, which phase 5 is the proof of.
+- **`fkapi.TableSize` is STILL unused**, five phases in.
+
 ## The phases
 
 Each phase is: goldens, port, the six gates, `git rm` the Lua, and a section in
@@ -1077,7 +1303,7 @@ this file recording what it measured and what it deviated on.
 | **2 (done)** | `mar`, `mig21`'s observer, `qual` | the first observers with real per-tick STATE and arithmetic. `mar` reads the mod's `[BBB] heap` probe and drives 680 world operations from a schedule; `mig21` brings the first `fk_on_configuration_changed` and the first observer whose PACKAGING is load-bearing. **`flip` was in this phase and is DEFERRED** -- see below |
 | **3 (done)** | `mix`, `plat`, `mig` | `plat` needs Space Age surfaces and `helpers.create_profiler`; `mix` needs infinity-chest filter rotation over 48 item names; `mig` is the only suite whose two phases run under different mod sets, and its observer is the one that reports a census |
 | **4 (done)** | `m2`, `m3`, `edge` | the big ones. `m3` carries an LCG and 600 ticks of randomised churn; `edge` counts every item on two surfaces inside one tick. These are where the harness will earn or fail to earn its keep |
-| **5** | `test/interactive/bbb-interactive-setup` | not a suite -- the world a HUMAN walks, and where the mod portal's demo scenes live. `iact` gates it, so the port has a headless check already |
+| **5 (done)** | the interactive staging mod | not a suite -- the world a HUMAN walks, and where the mod portal's demo scenes live. `iact` gated it already, so this phase had a headless check from the start; it is also the first consumer of `fkapi.RemoteCall`, and the only observer with a player event handler |
 | **6** | `test/mods/belt-balancer-2`, `test/mods/bbb-mig-foreign` | data-stage-only stand-ins, and **blocked on [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 26**: `fklua mod` cannot package a mod with no control module. The `test/fixtures/fastbelt` workaround (an inert empty `main`) works and costs ~113 KB of generated Lua that is required and never called; whether to spend that on two stand-ins or wait for the gap is a phase-6 decision |
 | **7** | `bench/mods/*` | LAST, and alone. Every published performance figure in this repository was measured with those setup mods, so the port has to carry a comparability gate the suites do not need: the same matrix cell, INTERLEAVED in one session, old and new setup mods against the same `dist/`, with the no-mod control in the same session. Session drift on this machine is 25-35% |
 | **8** | `mig21`'s observer again, in RUST | the parity exercise. One observer written twice against one ABI is the strongest statement this repository can make about FkLua's second backend, and `mig21` is the right one: no `--create` phase, so the whole thing is one load and one set of assertions |

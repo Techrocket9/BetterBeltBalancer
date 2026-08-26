@@ -335,7 +335,7 @@ end of this file. The GIF re-capture landed 2026-08-24 for the five plain
 scenes, and a sixth file the same day carries the cross on NORMAL belts; only
 the two `-io-arrows` variants are still outstanding.
 
-**`test/interactive/bbb-interactive-setup` is the test-world-generating mod
+**The interactive staging mod (`guest/go/obs/iact`) is the test-world-generating mod
 behind both the checklist and the portal GIF captures** (the GIF session's
 `mod-list.json.bak` shows it installed; no separate demo mod ever existed),
 and every world it stages is multi-edge. Reworking it is part of the port,
@@ -917,8 +917,8 @@ configuration (`--persist=packed --gc=collected`).
 
 | what | where |
 |---|---|
-| the five gesture bands and the five demo scenes, all single-edge | `test/interactive/bbb-interactive-setup/control.lua` |
-| `factorio_version` 2.1, `base >= 2.1.0`, version 0.2.0 | `test/interactive/bbb-interactive-setup/info.json` |
+| the five gesture bands and the five demo scenes, all single-edge | `guest/go/obs/iact/main.go` |
+| `factorio_version` 2.1, `base >= 2.1.0`, version 0.2.0 | the `$(OBS_IACT_DIR)` recipe in the Makefile, which generates the `info.json` |
 | the checklist, rewritten for the new geometry and two new gestures | `test/interactive/README.md` |
 | the headless staging gate | `test/assert-interactive.py`, `stage_interactive` and the `iact` leg in `test/run.sh` |
 

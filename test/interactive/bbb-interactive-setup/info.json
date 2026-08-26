@@ -1,9 +1,0 @@
-{
-  "name": "bbb-interactive-setup",
-  "version": "0.2.0",
-  "title": "BBB interactive checklist rigs",
-  "author": "BetterBeltBalancer",
-  "factorio_version": "2.1",
-  "description": "Pre-stages the five player-gesture rigs the headless suites cannot drive (the miner's pocket, the belt at the edge, the 65th belt, the over-limit bridge, fast replace both ways) and the five mod-portal demo scenes, beside spawn on a fresh world. Every rig is built to Factorio 2.1's one-belt-per-part rule. Enable together with better-belt-balancer, start a new world, follow test/interactive/README.md, then disable.",
-  "dependencies": ["base >= 2.1.0", "better-belt-balancer"]
-}

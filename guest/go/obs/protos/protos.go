@@ -42,6 +42,12 @@ const ExpressSpeed = 0.09375
 // The loader each suite's data stage defines and its observer places. One
 // constant per suite rather than one shared name, because the names are what the
 // goldens have and three of them happen to coincide only by history.
+//
+// IactLoader is the odd one out and is not a suite's at all: it belongs to the
+// rig-staging mod a HUMAN enables to walk test/interactive/README.md. It is the
+// same prototype for the same reason -- half of those gestures are about where a
+// FULL machine's items go when it is taken apart, and an empty balancer would
+// prove nothing -- and it keeps the name the hand-written data stage gave it.
 const (
 	SedgeLoader = "bbbs-loader"
 	MarLoader   = "bbbt-loader"
@@ -52,6 +58,7 @@ const (
 	M2Loader    = "bbbt-loader"
 	M3Loader    = "bbbt-loader"
 	EdgeLoader  = "bbbt-loader"
+	IactLoader  = "bbbi-loader"
 )
 
 // M2LaneSplitter is the `m2` suite's `lsio` rig, and it is the one prototype in

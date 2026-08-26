@@ -334,18 +334,23 @@ JSON
 }
 
 # The `iact` suite's staging. It differs from `stage` in exactly one thing: the
-# mod it copies does not live under test/mods, because it is not a test mod. It
-# is the rig-staging mod a HUMAN installs beside the real one to walk
-# test/interactive/README.md, and `make interactive-install` copies the same
-# directory into a Factorio mods folder. Staging it from where it really lives
-# is the point -- a copy under test/mods would be a second world that could
-# drift from the one the checklist describes.
+# mod it stages is not a test mod. It is the rig-staging mod a HUMAN installs
+# beside the real one to walk test/interactive/README.md, and
+# `make interactive-install` installs the very same package. Staging what the
+# human gets is the point -- a second copy anywhere would be a second world that
+# could drift from the one the checklist describes.
+#
+# It goes through copy_testmod like every other observer, because it IS one now:
+# a compiled Go guest under guest/go/obs/iact, packaged into dist/obs by
+# `make observers`. What is still special is only the name, which is not a
+# suite's, and the version, which is 0.2.0 rather than the estate's 0.1.0 --
+# copy_testmod globs it for exactly that reason.
 stage_interactive() {
   local work="$1"
   rm -rf "$work"
   mkdir -p "$work/mods"
   cp -R "$MOD_DIR" "$work/mods/"
-  cp -R "$ROOT/test/interactive/bbb-interactive-setup" "$work/mods/bbb-interactive-setup"
+  copy_testmod bbb-interactive-setup "$work/mods/bbb-interactive-setup"
   stamp_engine "$work/mods/bbb-interactive-setup"
   cat > "$work/mods/mod-list.json" <<JSON
 {
