@@ -10,7 +10,8 @@ One invocation is one matrix cell and appends one row to [`baselines/results.tsv
 
 ## Requirements
 
-- A Factorio 2.0 install. `run.sh` looks for the binary at the default Steam location on macOS; set `FACTORIO_BIN` otherwise.
+- A Factorio install. `run.sh` looks for the binary at the default Steam location on macOS; set `FACTORIO_BIN` otherwise. Which series it is is an input rather than an assumption: see "Which Factorio is running" below.
+- The setup mod, which is a compiled guest. `run.sh` runs `make bench-setup` before every cell unless `BENCH_NO_BUILD` is set; that target builds one package and relinks nothing else.
 - For `--mod bbb`, a built BetterBeltBalancer: `run.sh` runs `make zip` first (see the top-level [README](../README.md) for the build prerequisites), unless `BENCH_NO_BUILD` is set.
 - For `--mod bb2` and `--mod bb3`, the incumbents' zips (`belt-balancer-2_2.0.9.zip`, `belt-balancer-3_*.zip`) in a directory named by `BB_MODS_SRC`. Third-party zips are never copied into the repository; they are staged into `bench/tmp/`, which is ignored by git.
 
@@ -18,13 +19,31 @@ One invocation is one matrix cell and appends one row to [`baselines/results.tsv
 
 Factorio's `--create` runs a mod's `on_init` while the map is generated, so a setup mod can place the entire benchmark into the save. For each cell `run.sh`:
 
-1. stages a throwaway mod directory under `$BENCH_TMP/<cell>/mods/`: a copy of `bench/mods/bbb-bench-setup`, a generated `config.lua`, the balancer mod's zip, and a `mod-list.json`;
+1. stages a throwaway mod directory under `$BENCH_TMP/<cell>/mods/`: the built `bbb-bench-setup` package, a `mod-settings.dat` carrying that cell's configuration, the balancer mod's zip, and a `mod-list.json`;
 2. `--create`s a save with a private write directory (`-c config.ini`), during which the setup mod's `on_init` builds `n` rigs;
 3. `--benchmark`s that save with `--benchmark-ticks` and `--benchmark-runs`, uninstrumented, for the headline `avg_ms`;
-4. re-runs it more briefly with `--benchmark-verbose` over `wholeUpdate`, `transportLinesUpdate`, `entityUpdate` and `scriptUpdate` for the per-system breakdown, averaged over the steady-state second half;
+4. re-runs it more briefly with `--benchmark-verbose` for the per-system breakdown, where the engine supports it (see "The per-system breakdown" below);
 5. checks that items moved and that the outputs are balanced, and appends the row.
 
 Space Age, quality and elevated-rails are disabled explicitly in `mod-list.json`; they ship inside the Factorio install and `--mod-directory` alone does not hide them. A base-only baseline keeps prototype counts and update costs comparable, and belt-balancer-2 lists Space Age only as an optional dependency.
+
+### How a cell is configured
+
+The setup mod's eight knobs are Factorio **startup settings**, which its own settings stage defines and `run.sh` writes into the staged `mod-settings.dat` before creating the save. `tools/mod-settings.py` is the writer; the keys are `bbb-bench-scenario`, `-n`, `-k`, `-tier`, `-item`, `-part-name`, `-meter` and `-hitch`, and every one of them is echoed back on the `BENCH-SETUP` line of the create log, so a misconfigured cell is visible in its own output.
+
+Startup rather than map settings because a cell is two Factorio processes: `--create` and `--benchmark` read the same file directly, with no state carried in the save between them.
+
+### Which Factorio is running
+
+A mod whose `info.json` names a different series is refused at the loader before an entity is placed, so `run.sh` reads `Major.Minor` off `$FACTORIO --version` and **stamps** the staged setup mod for it: `factorio_version` unconditionally, and `base >= X.Y.Z` clamped down when it names a series newer than this engine. Both rewrites are no-ops when the manifest already agrees.
+
+The balancer mod is not stamped. `--mod bbb` is built from this repository against a pinned API whose ABI marshals event payloads by name, so a disagreement with the binary is a real defect rather than a manifest token; the third-party zips are somebody else's and are used as they are.
+
+### The per-system breakdown
+
+`--benchmark-verbose` **crashes Factorio 2.1.16**: it emits the first tick row and then takes a SIGSEGV inside the engine's own benchmark loop, with any counter list, on any save. Measured on a vanilla no-mod save as the control, so it is the engine's defect and not a mod's. The crash also leaves a reporter process holding the run's write-directory lock, which would fail the next cell of a matrix on something unrelated to it.
+
+So on 2.1 the pass is skipped with the reason printed, and `whole_us`, `belts_us`, `entity_us` and `script_us` are empty in the row. `BENCH_VPROF_FORCE=1` runs it anyway, which is how a future engine gets re-tested. Where the pass does run, it averages `wholeUpdate`, `transportLinesUpdate`, `entityUpdate` and `scriptUpdate` over the steady-state second half.
 
 ## The rig
 
@@ -42,9 +61,11 @@ col +5       steel-chest, drained by the meter
 
 The `K` belts on the west face of the part block are the inputs and the `K` on the east face the outputs; belt orientation is what decides, for belt-balancer-2 and for BetterBeltBalancer alike. Entities are created with `raise_built = true`, so the balancer mod's `script_raised_built` handler registers them exactly as if a player had placed them, and every compile happens during `--create`. The benchmark window therefore contains no compiles, which `run.sh` checks for BetterBeltBalancer by counting `[BBB]` log lines inside the benchmark (the guest logs on every code path it has, so a non-zero count means script ran during the measurement).
 
-Rigs are laid out in a `ceil(sqrt(n))`-wide grid on a dedicated `bbb-bench` surface: no water, cliffs, resources, decoratives or enemies, paved flat, always day. Pollution, enemy evolution and enemy expansion are disabled and any enemy on any surface is destroyed at init.
+Rigs are laid out in a `ceil(sqrt(n))`-wide grid on a dedicated `bbb-bench` surface: no water, cliffs, resources, decoratives or enemies, paved flat, always day and frozen there. The surface is created peaceful with no entity autoplace, and any enemy on any surface is destroyed at init, so nothing in a bench save has anything to pollute or evolve.
 
-The meter drains every sink chest every `--meter` ticks and logs cumulative per-output-column totals. It is what keeps the rigs saturated; it costs about one chest read and clear per rig output per interval (well under a microsecond per tick, amortised) and it is identical in every scenario, so it cancels out of any delta.
+The meter drains every sink chest every `--meter` ticks and logs cumulative per-output-column totals. It is what keeps the rigs saturated, and it is identical in every scenario, so it cancels out of any delta.
+
+What it costs is two host calls per chest that has something in it and one per chest that does not, plus one guest dispatch per tick. The setup mod is a compiled guest, and there is no binding for Factorio's `on_nth_tick` because that call takes a Lua function: a mod that wants work every N ticks is entered on all of them and counts for itself. Both costs are the same in every cell including the no-mod controls, which is what makes them cancel; what they move is the absolute milliseconds a row reports.
 
 ### Uniform scenarios
 
@@ -111,7 +132,9 @@ BENCH_TMP=/tmp/bbb-bench MODS="bb2 bb3 bbb" bench/matrix.sh
 
 Every mod for a geometry runs before the next geometry, and the control with them, because absolute timings drift 25-35% between sessions on one machine with background load, and a slow-moving drift scales a whole cell group together. Point `BENCH_TMP` outside the repository for a long matrix: the saves are hundreds of MB, and Spotlight indexing them inside the tree was measured to account for about 25% of the drift on its own.
 
-`MEGA=1` runs the megabase matrix instead: `mega`, `mega-idle` and their controls, `REPS` times, with `--keep-save` because the save size is one of the things a megabase cell is for (about 2 MB, not the hundreds of MB the uniform `n=200` cells produce).
+`MEGA=1` runs the megabase matrix instead: `mega`, `mega-idle` and their controls, `REPS` times, with `--keep-save` because the save size is one of the things a megabase cell is for.
+
+A mega save is about 35 MB, of which most is the setup mod's own guest heap: it places about twenty thousand entities inside one `on_init`, and a guest that allocates during a dispatch has no tick in which to collect. That heap is in `script.dat` and therefore in the save, at 64 MiB of linear memory for `-n 40`. It is not the hundreds of megabytes the uniform `n=200` cells produce, and it is charged identically to every arm of a mega geometry, so it cancels out of the deltas those cells are compared on.
 
 ```sh
 BENCH_TMP=/tmp/bbb-mega BENCH_VPROF_TICKS=3600 MEGA=1 REPS=3 bench/matrix.sh
@@ -151,11 +174,11 @@ BENCH_TMP=/tmp/bbb-mega BENCH_VPROF_TICKS=3600 MEGA=1 REPS=3 bench/matrix.sh
 --keep-save      do not delete the generated save
 ```
 
-Environment: `FACTORIO_BIN`, `BB_MODS_SRC` (where the third-party zips live; the default is your Factorio `mods` directory), `BENCH_TMP` (default `bench/tmp`), `BENCH_VPROF_TICKS` (length of the verbose pass; 0 disables it), `BENCH_VPROF_EXTRA` (extra `--benchmark-verbose` counters for that pass, for example `luaGarbageIncremental`), `BENCH_NO_BUILD` (skip the `make zip` that `--mod bbb` runs).
+Environment: `FACTORIO_BIN`, `BB_MODS_SRC` (where the third-party zips live; the default is your Factorio `mods` directory), `BENCH_TMP` (default `bench/tmp`), `BENCH_VPROF_TICKS` (length of the verbose pass; 0 disables it), `BENCH_VPROF_EXTRA` (extra `--benchmark-verbose` counters for that pass, for example `luaGarbageIncremental`), `BENCH_VPROF_FORCE` (run the verbose pass on an engine where it is known to crash), `BENCH_NO_BUILD` (skip the builds that `--mod bbb` and the setup mod run).
 
 `--mod bb2` resolves to `$BB_MODS_SRC/belt-balancer-2_2.0.9.zip` and `--mod bb3` to `$BB_MODS_SRC/belt-balancer-3_*.zip`. `--mod bbb` is this repository: it runs `make zip` (a real file target, so it rebuilds only when something changed) and uses `dist/<name>_<version>.zip`, named from `fklua.toml`. Any other value is a path to a mod zip.
 
-The setup mod places whichever entity `config.lua`'s `part_name` names. belt-balancer-2 and belt-balancer-3 both call theirs `balancer-part` (bb3 is a fork of bb2); BetterBeltBalancer's is `bbb-balancer-part`. `run.sh` derives it from the mod name inside the zip and `--part-name` overrides. A scenario that places parts against a mod without that prototype fails in the setup mod's `on_init` with a clear message.
+The setup mod places whichever entity the `bbb-bench-part-name` setting names. belt-balancer-2 and belt-balancer-3 both call theirs `balancer-part` (bb3 is a fork of bb2); BetterBeltBalancer's is `bbb-balancer-part`. `run.sh` derives it from the mod name inside the zip and `--part-name` overrides. A scenario that places parts against a mod without that prototype fails in the setup mod's `on_init` with a clear message.
 
 ## Reading `results.tsv`
 
@@ -165,19 +188,22 @@ The setup mod places whichever entity `config.lua`'s `part_name` names. belt-bal
 | `whole_us` | `wholeUpdate`, mean over the steady-state half of the verbose pass, in µs |
 | `belts_us` | `transportLinesUpdate`, the engine's own belt cost |
 | `entity_us` | `entityUpdate` |
-| `script_us` | `scriptUpdate`: all mod Lua, the balancer plus this harness's meter |
+| `script_us` | `scriptUpdate`: all mod Lua, the balancer plus this harness's own |
 | `throughput` | cumulative items delivered by the end of run 1 |
 | `balance` | max/min across the output columns; 1.000 is perfect |
+| `factorio` | the engine version that produced the row |
 | `note` | free text; the head-to-head rows are tagged `head2head`, the megabase rows `mega r1..r3` |
 
 `avg_ms` includes the couple of hundred ticks it takes to fill empty belts at the start of a run; the `*_us` columns do not.
 
-`max_ms` is not a worst tick. Every `--benchmark` run begins by loading the save, and for a mod holding a guest heap that load is tens of milliseconds inside the measured window. Where a worst tick is really the question, read the per-tick `wholeUpdate` column out of the verbose pass's own log (`$BENCH_TMP/<cell>/verbose.log`) and drop the first hundred ticks. Factorio emits verbose columns in its own canonical order rather than the order asked for, which is why the parser reads the header.
+The file is an append-only record, so it holds rows from more than one engine version and more than one session. **Only rows from one session are comparable with each other**, which is what the `factorio` and `date` columns are for and why `matrix.sh` interleaves every arm of a geometry: absolute timings on one machine drift 25-35% between sessions, and a whole Factorio version is a larger step than that.
+
+`max_ms` is not a worst tick. Every `--benchmark` run begins by loading the save, and for a mod holding a guest heap that load is tens of milliseconds inside the measured window. Where a worst tick is really the question, read the per-tick `wholeUpdate` column out of the verbose pass's own log (`$BENCH_TMP/<cell>/verbose.log`) and drop the first hundred ticks. Factorio emits verbose columns in its own canonical order rather than the order asked for, which is why the parser reads the header. On an engine where the verbose pass crashes there is no such column and no worst tick can be read at all.
 
 ## Caveats
 
 - `control` has `K` extra transport-belt tiles per row where the balancer scenario has `K` part columns, because items have to cross that gap. Belts are cheaper to update than parts but not free, so the control slightly overstates the non-balancer floor. The effect is small next to the numbers compared.
-- `script_us` is total mod Lua, including the meter. Compare it against the `control` row at the same `n` and `k` to isolate the balancer.
+- `script_us` is total mod Lua, including the setup mod's per-tick dispatch and its meter. Compare it against the `control` row at the same `n` and `k` to isolate the balancer.
 - Each rig is an independent balancer, so the numbers are per-balancer marginal costs taken from the slope across `n`, not from one absolute reading: a fresh save costs about 0.09 ms/tick before any rig exists.
 - Cells compared with each other must be measured in the same session, for the drift reason above. Re-measure the control alongside whatever it is being subtracted from rather than reusing an old row.
 - `luaGarbageIncremental` is not part of `script_us`; Factorio counts it separately and both live inside `wholeUpdate`. A mod that allocates is charged there, so run a pass with `BENCH_VPROF_EXTRA=luaGarbageIncremental` whenever `max_ms` looks worse than `script_us` can explain.

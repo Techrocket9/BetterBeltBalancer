@@ -4,9 +4,8 @@
 mod got there in two rounds -- `fklua mod` has always generated the control
 stage, and the 2026-08-25 round replaced ten hand-written data-stage files with a
 second compiled guest ([`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 25). What is left
-is the TEST ESTATE, and after phase 6 it is **1,217 committed lines** of it: 478
-in `bbb-flip-test`, which waits for a Factorio 2.0 binary, and 739 in the
-`bench/` harness's setup mod. Lua that nothing in `make check` can reach, that no
+is the TEST ESTATE, and after phase 7 it is **478 committed lines** of it, all of
+them in `bbb-flip-test`, which waits for a Factorio 2.0 binary. Lua that nothing in `make check` can reach, that no
 toolchain type-checks, and that only a Factorio run can execute at all. It was
 8,524 over twenty-four files when the pilot started, and none of what is left is a
 SUITE.
@@ -14,8 +13,9 @@ SUITE.
 This file is the programme for removing it, and the record of what each phase
 measured. The pilot is `m1` and `sedge`, phase 2 is `mar`, `mig21` and `qual`,
 phase 3 is `mix`, `plat` and `mig`, phase 4 is `m2`, `m3` and `edge` -- the three
-biggest -- phase 5 is the interactive staging mod and phase 6 the two
-data-stage-only stand-ins, all done 2026-08-25. **Every suite in the estate is a
+biggest -- phase 5 is the interactive staging mod, phase 6 the two
+data-stage-only stand-ins and phase 7 the `bench/` harness's setup mod, all done
+2026-08-25. **Every suite in the estate is a
 Go observer now, and so is every mod either of them stages.**
 
 ---
@@ -1548,6 +1548,375 @@ spread.
   examples of the data half on its own.
 - **`fkapi.TableSize` is STILL unused**, six phases in.
 
+---
+
+## Phase 7: the `bench/` harness's setup mod -- done 2026-08-25
+
+739 lines of Lua deleted from one mod, and it is the LAST one this machine can
+do. **The estate is 478 lines over two files**, from 8,524 over twenty-four when
+the pilot started, and both of them are `bbb-flip-test`, which waits for a
+Factorio 2.0 binary. Nothing else in this repository is hand-written Lua.
+
+`guest/go/obs/bench` and `guest/go/obs/benchdata` are the setup mod and its
+settings stage. Four things make it unlike the fourteen packages above it:
+
+- **Its consumer is `bench/run.sh`, not a `test/assert-*.py`**, so its gate is
+  not a golden log. Every published performance figure in this repository was
+  measured with this mod, so what the port owes is a **COMPARABILITY** run: the
+  same matrix cells, both setup mods, INTERLEAVED IN ONE SESSION against one
+  `dist/`, with the no-mod control in the same session, because absolute timings
+  on this machine drift 25-35% between sessions.
+- **It is dispatched EVERY TICK** and no other package here is.
+- **It is the estate's only package built `--persist=table`**, which is a
+  measurement rather than a preference.
+- **It holds RETAINED handles**, which the estate's own habit says not to do.
+
+### Two findings about Factorio 2.1.16, before a line was ported
+
+The first gate of every phase is a baseline, and this one could not be taken:
+**`bench/` had not run since trunk moved to 2.1.**
+
+**The harness was refused at the loader.** The setup mod's `info.json` said
+`factorio_version: 2.0`, and 2.1 refuses such a mod before an entity is placed --
+`Incompatible Factorio version (current: 2.1, required: 2.0)` -- which is exactly
+the wall `test/run.sh` grew `stamp_engine` for. `bench/run.sh` stamps the staged
+setup mod now, the same perl over the same two fields; the balancer mod stays
+unstamped for the reason that file states at length.
+
+**`--benchmark-verbose` SIGSEGVs, and it is the ENGINE'S defect.** It emits the
+`t0` row and then crashes inside `Benchmark.cpp`, with any counter list.
+Measured on a completely **vanilla no-mod save** as the control, so it is nothing
+this repository ships:
+
+| | exit | tick rows | SIGSEGV |
+|---|---|--:|---|
+| `--benchmark` plain, vanilla save | 0 | -- | no |
+| `--benchmark-verbose wholeUpdate`, vanilla save | 1 | **1** | **yes** |
+| the same over a staged bench save, any counter list | 1 | **1** | **yes** |
+
+So `whole_us`, `belts_us`, `entity_us` and `script_us` are **unobtainable on this
+engine**, and so is the per-tick `wholeUpdate` column CLAUDE.md sends every
+worst-tick question to. The crash also leaves a reporter process holding the
+run's own `.lock`, which fails the NEXT cell of a matrix on something unrelated
+to it -- so `run.sh` skips the pass on 2.1 with the reason printed rather than
+crashing Factorio once per cell. `BENCH_VPROF_FORCE=1` is how a future engine
+gets re-tested.
+
+**The consequence is that the gate rests on `avg_ms`, throughput and balance**,
+which is the right place for it: `avg_ms` is uninstrumented and is exactly where
+a per-tick guest dispatch shows up, and throughput and balance are deterministic
+COUNTS rather than timings.
+
+### The configuration channel
+
+`config.lua` was a table the harness **rewrote inside the staged copy of the
+mod** and the mod `require`d. A Go guest cannot require a Lua file, so the eight
+keys are **startup settings**: `obs/benchdata` defines one per key,
+`bench/run.sh` composes a `mod-settings.dat` per cell, and `obs/bench` reads them
+out of `settings.startup` at `fk_on_init`.
+
+- **`tools/mod-settings.py` is the PropertyTree writer**, MOVED out of
+  `test/check-datastage.py` rather than transcribed. That file has had it since
+  the data-stage gate needed to drive a non-default cost setting, and it was
+  verified then by round-tripping the engine's own `mod-settings.dat`. Both
+  callers produce byte-identical output through one function, and
+  `make datastage-check` is green over all eight of its variant arms, which is
+  the engine agreeing with the refactor rather than this paragraph.
+- **STARTUP rather than runtime-global**, because a cell is two Factorio
+  processes: `--create` and `--benchmark` read the same file directly, with no
+  state carried in the save between them.
+- **`guest/go/obs/protos` holds the key names.** It is that package's first entry
+  that is not a prototype name, and it is there for the package's own reason: the
+  mod's two wasm modules cannot import each other's half.
+
+**AND THE CHANNEL NEEDED AN ANTI-VACUITY GUARD THAT `config.lua` DID NOT.** A
+missing key in a Lua table is `nil` and the mod's own `assert` caught it; a
+settings stage defines a DEFAULT for every key, so a key misspelled on either
+side of this channel is not absent at runtime -- it reads back as the default,
+and the cell builds a plausible rig for a configuration nobody asked for, with a
+throughput and a balance that look perfectly reasonable. So the setup mod echoes
+**all eight keys** on its `BENCH-SETUP` line and `run.sh` compares that line,
+field for field, against what it wrote. That is this phase's red proof and it is
+below.
+
+### The gate: comparability, interleaved, one session
+
+Three cells, three reps of each, `lua / go` back to back within every rep so a
+slow-moving drift scales both, plus a separate session for the n=200 headline
+geometry. `avg_ms` is Factorio's own per-run average, median of three reps.
+
+**Correctness first, and it is exact.** Item throughput and the per-output vector
+are deterministic counts, and they are IDENTICAL under the two setup mods in
+every cell:
+
+| cell | items | per output |
+|---|--:|---|
+| n=1 control | 8,648 | 2162, 2162, 2162, 2162 |
+| n=50 control | 432,400 | 108100 x4 |
+| n=50 saturated, `--mod bbb` | 435,000 | 108700, 108800, 108700, 108800 |
+| n=200 control | 1,729,600 | 432400 x4 |
+| n=200 saturated, `--mod bbb` | **1,740,000** | 434800, 435200, 434800, 435200 |
+| mega, 404 rigs, `--mod bbb` | **1,204,725** | worst rig 480, 482, 482, 484, 482 (`3->5`) |
+
+The n=200 row is the headline geometry and it reproduces CLAUDE.md's own figure
+for it TO THE ITEM, at balance 1.001, under both setup mods.
+
+**Then the timings, and THE THING THE HARNESS PUBLISHES IS UNMOVED.** What a
+matrix cell is FOR is a delta -- `saturated` minus its own `control`, over `n` --
+and the setup mod is in both halves of it:
+
+| n=200 k=4 express | `lua` setup | `go` setup |
+|---|--:|--:|
+| saturated, median of 3 | 0.4440 ms/tick | 0.4695 |
+| control, median of 3 | 0.4490 | 0.4740 |
+| **saturated - control** | **-0.0050** | **-0.0045** |
+| **per balancer** | **-0.025 µs** | **-0.023 µs** |
+
+Both arms put the marginal whole-tick cost of one 4x4 balancer at zero, which is
+what this repository has measured since M4, and they agree with each other to
+0.002 µs.
+
+**What DOES move is the absolute milliseconds, by a constant:**
+
+| cell | `lua` | `go` | delta |
+|---|--:|--:|--:|
+| n=1 control (4 sink chests) | 0.1835 | 0.1900 | +0.0065 (+3.5%) |
+| n=50 control (200 chests) | 0.2225 | 0.2335 | +0.0110 (+4.9%) |
+| n=50 saturated (200 chests) | 0.2270 | 0.2475 | +0.0205 (+9.0%) |
+| n=200 saturated (800 chests) | 0.4440 | 0.4695 | +0.0255 (+5.7%) |
+| n=200 control (800 chests) | 0.4490 | 0.4740 | +0.0250 (+5.6%) |
+
+Every one of those spans overlaps the other arm's three reps. And it decomposes
+into the two things a guest pays that a Lua mod does not, both of them named in
+the observer's own header before either was measured:
+
+| term | measured |
+|---|---|
+| the per-tick dispatch | **~6.5 µs/tick**, which is the n=1 row: four chests cost almost nothing and what is left is the dispatch |
+| the meter, per sink chest per sample | **~14 µs**, from the n=1 to n=200 slope (796 more chests for +0.0185 ms/tick over a 600-tick interval). Two host calls at the ~12.6 µs this repository has measured for years on a chest that has something in it, and one on a chest that does not |
+
+**IT CANCELS OUT OF EVERY DELTA AND IT DOES NOT CANCEL OUT OF A ROW.** That is
+the same statement `bench/README.md` has always made about the meter, and the
+README says it about both terms now.
+
+### `--persist=table`, and the 37% it was worth
+
+**THE FIRST GATE FAILED**, and the number was not subtle: packaged
+`--persist=$(PERSIST)` like every other observer, the Go setup mod was **+33% to
++54%** on absolute `avg_ms`, with the three reps of each arm tight enough that it
+could not be read as drift.
+
+`packed` mirrors the live heap into `string.pack` pages and **repacks every dirty
+page after every guest call**, at about 40 µs a page. That is the right trade for
+the shipped mod, which is dispatched when a player edits something and whose save
+a person keeps forever. This mod is dispatched **sixty times a second** for a save
+that is deleted at the end of the cell.
+
+Measured on the same three cells, each arm against the `lua` baseline of its own
+session:
+
+| cell | `go` packed | `go` table |
+|---|--:|--:|
+| n=1 control | +33.2% | **+3.5%** |
+| n=50 control | +35.9% | **+4.9%** |
+| n=50 saturated | +37.4% | **+9.0%** |
+
+**The whole of that was the repack.** `table` makes `storage.fk_mem` BE the word
+table the guest writes into, so a store lands in what Factorio serializes with no
+sync step and the steady-state cost is nothing; what it costs instead is save
+size, which for a save deleted at the end of the cell is not a cost.
+
+It is the one package in the estate whose recipe does not take `$(PERSIST)`, and
+the recipe carries these numbers.
+
+### There is no `on_nth_tick` binding and there cannot be one
+
+`LuaBootstrap::on_nth_tick` takes a Lua FUNCTION, which a guest has no way to
+hand over, and FkLua's documented answer -- a self-re-arming `fk.Defer()` -- has
+**exactly the same cost**, because a one-shot timer that must reach tick 600
+re-arms 600 times. So the meter is a per-tick dispatch that returns immediately on
+599 ticks out of 600 where the Lua's was an engine-side modulo. It is measured
+above at ~6.5 µs/tick, and `tick()` is deliberately the cheapest function in the
+file: two integer tests and no host call on the ticks that do nothing.
+
+**And the subscription has to be made from `init()` rather than from
+`fk_on_init`.** An event registration does not survive a save, so a
+`fk.subscribe` made from `fk_on_init` is live during `--create`, which never
+reaches a tick, and gone during `--benchmark`, which is the only phase that has
+any. The first cut of this file did that and **the meter never fired once** --
+the cell failed on `no BENCH-METER line past tick 0`, which is a check `run.sh`
+already had.
+
+### The sink handles are RETAINED, which is a deliberate exception
+
+Every other observer holds TILES and re-finds an entity on the tile it was built
+on. Here that would be a THIRD host call per chest per sample on the harness's
+dominant cost, so the sinks are `Object.Retain()`ed -- FkLua's persistent handle
+space is `storage.fk_handles`, Factorio serializes the reference, and it is
+adopted on load under the same-build gate the guest heap uses. `--create` and
+`--benchmark` are the same build by construction. **It works at 1,553 handles**,
+which is what the mega population's sinks come to.
+
+### The MEGA smoke: identical world, and one cost that is not
+
+`--create` over the 404-rig heterogeneous save, both setup mods, plus the
+`--hitch` legs. **Every structural number is identical:**
+
+| | `lua` | `go` |
+|---|---|---|
+| rigs | 404 | **404** |
+| shape classes | 120 `2->2`, 80 `3->3`, 80 `4x4`, 40 `3->5`, 40 `5->3`, 40 `8x8`, 1 each of `16x16`, `32x32`, `64x64`, `65->1` | **identical** |
+| hidden splitters | 4,376 (2,504 + 1,872) | **4,376 (2,504 + 1,872)** |
+| surface | 152x408 | **152x408** |
+| the 65-input cluster | refused once | **refused once** |
+| the 64x64's first compile | 1866.8 ms audit-only, 2074.4 ms with it | 1878.4, 2044.9 |
+| throughput / worst-rig balance | 1,204,725 / 1.008 | **1,204,725 / 1.008** |
+| the `--hitch` legs | 3 idle-tick pairs and 6 recompile windows, all rendering `Duration: N ms` | **the same, through `harness.Profiler`** |
+
+The hitch figures are in family and show the same within-run rise the Lua's do
+(371/340, 439/466, 479/480 ms against 376/352, 462/494, 525/520): the network is
+still filling, which is what CLAUDE.md's own megabase section records.
+
+**What is NOT identical is the save.** The Go setup mod places about twenty
+thousand entities inside one `fk_on_init`, and a guest that allocates during a
+dispatch has no tick in which to collect anything:
+
+| | `lua` | `go` |
+|---|--:|--:|
+| guest linear memory | -- | **64 MiB** |
+| `script.dat` | 3.6 MB | **305 MB** |
+| the mega save | 2.25 MB | **35.7 MB** |
+| mega `avg_ms`, 1800t | 1.128 | 1.755, 1.845, 2.025 |
+
+`bench/README.md` said a mega save was about 2 MB and says 35 MB now. It is
+charged identically to every arm of a mega geometry, so it cancels out of the
+deltas those cells are compared on, and the population and the throughput above
+are what the smoke was for.
+
+**A COLLECTED BUILD WAS TRIED AND REVERTED, and the reason it was reverted is
+worth more than the heap it saved.** `-gc=custom` plus `--gc=collected`, with a
+synchronous `fkgc.Collect()` at the end of `fk_on_init` (which is the one caller
+`fkgc.Collect` documents itself for) and `CollectIfNeeded` from the tick handler,
+took linear memory 64 MiB -> 36 and `script.dat` 305 MB -> 178. **And it silently
+dropped one rig**: the `2->2` class delivered 198,016 items against 199,680,
+which is exactly one rig of 120, and that rig reported `per_output=0,0` -- so its
+sinks were never drained. Three further runs of the leaking build returned
+`cumulative=1204725` exactly, the Lua's own figure, so the loss belongs to the
+collected arm. A benchmark harness that silently stops measuring one rig is worse
+than a large save by a wide margin, and chasing a conservative collector's
+interaction with `--persist=table` is not this phase's subject.
+
+So the shipped configuration is `--persist=table --gc=leaking`, and the heap is a
+recorded cost with a named cause. **The cause is in the shared harness rather
+than here**: `harness.place` builds a `[]KeyValue` of up to eight entries per
+placement, and a `KeyValue` is two `Value`s, which is roughly 1.8 KB of
+short-lived allocation per entity placed. Twenty thousand of those in one
+dispatch is the 64 MiB. Reusing a package-level buffer there would be a
+harness-wide change with an estate-wide blast radius, and it belongs to a pass
+with its own measurement rather than to the end of this one.
+
+### One thing the port could not do at all
+
+The Lua set `game.map_settings.pollution.enabled = false` and the same for enemy
+evolution and expansion. `LuaGameScript::map_settings` is a read-only attribute
+returning a concept BY VALUE, so the generated binding hands over a copy and there
+is nothing to write back; in Lua the returned table was a live proxy.
+`--map-settings` was the other candidate and it takes a COMPLETE settings tree --
+`Key "diffusion_ratio" not found in property tree at ROOT.pollution`, measured --
+so a three-boolean patch is not a thing it accepts.
+
+It is belt-and-braces over a world that already has nothing to pollute or evolve:
+the bench surface is created peaceful with no entity autoplace, and every enemy on
+every surface is destroyed at init. **The comparability gate is the evidence
+rather than that sentence**, and it is one of the reasons the gate is worth more
+here than a log diff would have been.
+
+### The red proof: the configuration channel is load-bearing end to end
+
+Two injections into `bench/run.sh`'s settings writer, run against a control cell
+of `n=8`. The second is the one with teeth.
+
+| injected | what came out |
+|---|---|
+| **the VALUE is wrong**: the harness asks for `n=8` and writes `n+1` | the setup mod builds 9 rigs and `run.sh` **exits 1**, printing `asked:` and `got:` side by side |
+| **the KEY is wrong**: `bbb-bench-n` written as `bbb-bench-nn` | the value never reaches the guest, **the settings stage's own default does**, and the cell builds `n=1`. Caught by the same check, by name, with the same pair printed |
+
+The control run is `rigs_built=8` and `cumulative=11584`. That is the whole chain
+proved: a shell variable, into JSON, into a PropertyTree, into `mod-settings.dat`,
+into a settings stage, out of `settings.startup`, into a rig count and into an
+item total. **And the second row is a failure mode a golden-log diff could never
+have found**, because a defaulted setting produces a perfectly well-formed log.
+
+### `fklua api check --from 2.1.16 --to 2.0.77`
+
+| guest | surface | verdict |
+|---|---|---|
+| `obs-bench.wasm` | 24 members, 1 event, 11 concepts | **clean**, 0 findings, exit 0 |
+| `obs-benchdata.wasm` | 0 members, 0 events, 0 concepts | **clean**, 0 findings, exit 0 |
+
+So it stays STAMPED for the running engine rather than gated against it, which is
+what `bench/run.sh`'s new stamp depends on. The data module's empty surface is the
+expected answer and is recorded rather than assumed.
+
+**And the generated `info.json` is field-for-field identical to the hand-written
+one it replaces** -- name, version, title, author, description and all four
+dependencies, including the three OPTIONAL ones, which are load-bearing in the
+same way `mig`'s are: this mod is present in every cell including the no-mod
+controls, so it may not REQUIRE a balancer mod.
+
+### What it cost
+
+| | Lua | Go |
+|---|--:|--:|
+| `bbb-bench-setup` source | 722 + 17 lines / 28.8 KB | 1,080 + 123 lines |
+| `bbb-bench-setup` staged | 3 files, ~29 KB | 8 files, **1.30 MB** |
+| `dist/obs-bench.wasm` | -- | 593,104 B |
+| `dist/obs-benchdata.wasm` | -- | 62,441 B |
+
+`make bench-setup` from clean is **2.8 s**, and `bench/run.sh` runs that one
+target rather than `observers` for the reason `interactive-install` names one
+package rather than all: a matrix run is dozens of cells and none of them should
+relink the estate.
+
+### The estate, both arms, and the `mar` slopes
+
+Whole estate green in **both `-gc` arms**, one invocation each, with the ported
+setup mod in the tree. `make check` green with bindings and lock unmoved;
+`make datastage-check` green, which is the shared settings writer proved by the
+engine's own `--dump-data`.
+
+| leg | B/primitive | | leg | B/primitive |
+|---|--:|---|---|--:|
+| A | 1,280 | | E | 560 |
+| B | 352 | | G | 3,736 |
+| C | 1,209 | | F | 2,080 |
+| D | 32 | | linear memory | **3.92 MiB** |
+
+Byte-identical to phase 6's, which is byte-identical to the record this
+repository has carried since the single-edge port, with the calibration at
+1,136 B and 0.0% spread. This phase touched `harness/line.go` (one new `F4`) and
+`obs/protos` (constants), so it is a real check rather than a formality.
+
+### What phase 8 inherits
+
+- **The estate's remaining Lua is 478 lines over two files, and both are
+  `bbb-flip-test`.** It cannot be ported here: the suite drives a setting that
+  exists on Factorio 2.0 only, `test/run.sh` prints a SKIP for it on 2.1, and the
+  first gate of every phase is a run. It moves to the `release/2.0` session with
+  the other things owed there.
+- **`bench/` is the only consumer of the estate that is not `test/run.sh`**, and
+  it stages its own package. `copy_testmod` was not touched and does not know
+  about it.
+- **The bench harness is UNVERIFIED against its own history.** Every row in
+  `results.tsv` older than this phase was measured on Factorio 2.0.77 with the
+  Lua setup mod, and the two engine findings above mean neither variable can be
+  held while the other moves. A re-run of the matrix on 2.1 is owed and is a pass
+  of its own; the README says which rows are comparable with which.
+- **`harness.place` allocates ~1.8 KB per entity placed**, quantified above. It
+  is the largest single number the estate port has left on the table and it
+  belongs to a pass with an estate-wide gate.
+- **`fkapi.TableSize` is STILL unused**, seven phases in.
+
 ## The phases
 
 Each phase is: goldens, port, the six gates, `git rm` the Lua, and a section in
@@ -1561,7 +1930,7 @@ this file recording what it measured and what it deviated on.
 | **4 (done)** | `m2`, `m3`, `edge` | the big ones. `m3` carries an LCG and 600 ticks of randomised churn; `edge` counts every item on two surfaces inside one tick. These are where the harness will earn or fail to earn its keep |
 | **5 (done)** | the interactive staging mod | not a suite -- the world a HUMAN walks, and where the mod portal's demo scenes live. `iact` gated it already, so this phase had a headless check from the start; it is also the first consumer of `fkapi.RemoteCall`, and the only observer with a player event handler |
 | **6 (done)** | `test/mods/belt-balancer-2`, `test/mods/bbb-mig-foreign` | data-stage-only stand-ins, and the first packages here with NO CONTROL STAGE. It was blocked on [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 26 and the fix landed: `fklua mod --data-module` with no positional. The `test/fixtures/fastbelt` workaround it would have needed is deleted rather than spent. These two have no suite of their own, so the goldens are `mig`'s whole log set |
-| **7** | `bench/mods/*` | LAST, and alone. Every published performance figure in this repository was measured with those setup mods, so the port has to carry a comparability gate the suites do not need: the same matrix cell, INTERLEAVED in one session, old and new setup mods against the same `dist/`, with the no-mod control in the same session. Session drift on this machine is 25-35% |
+| **7 (done)** | `bench/mods/*` | LAST, and alone. Every published performance figure in this repository was measured with those setup mods, so the port has to carry a comparability gate the suites do not need: the same matrix cell, INTERLEAVED in one session, old and new setup mods against the same `dist/`, with the no-mod control in the same session. Session drift on this machine is 25-35% |
 | **8** | `mig21`'s observer again, in RUST | the parity exercise. One observer written twice against one ABI is the strongest statement this repository can make about FkLua's second backend, and `mig21` is the right one: no `--create` phase, so the whole thing is one load and one set of assertions |
 
 ### What waits for a 2.0 binary
