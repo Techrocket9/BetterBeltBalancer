@@ -887,7 +887,7 @@ func buildPlatform() {
 		return
 	}
 	sp := fkapi.LuaSpacePlatform{Object: *p}
-	if _, err := sp.ApplyStarterPack(nil); err != nil {
+	if err := applyStarterPack(sp); err != nil {
 		plat.Open("could not apply the starter pack").End()
 		return
 	}

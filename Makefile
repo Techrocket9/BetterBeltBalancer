@@ -327,9 +327,28 @@ test: mod observers
 OBS_SRC  := $(shell find guest/go/obs -name '*.go') guest/go/go.mod
 OBS_DIST := $(DIST)/obs
 
+# THE ENGINE ARM, AS A BUILD TAG, AND IT IS DERIVED RATHER THAN TYPED.
+#
+# One call in the whole estate has a generated signature that DIFFERS between the
+# two pins this mod ships on: `LuaSpacePlatform::apply_starter_pack` gained an
+# optional `silent` parameter after 2.0.77, and an absent optional is still a
+# parameter in Go -- so `obs/plat`'s one call site cannot be written to satisfy
+# both descriptions. `guest/go/obs/plat/starterpack*.go` is the two-line shim and
+# its header is the long form.
+#
+# `factorio20` comes off MOD_SERIES, which is fklua.toml's `factorio_version`,
+# which is the same key that decides the api pin the bindings were generated
+# from. So the tag cannot be set independently of the description it is about,
+# and trunk and the release/2.0 recut carry identical source: only this derived
+# value differs, and it differs because the pin does.
+#
+# It reaches `go vet` in the check target too. A tag that compiled the wasm and
+# not the vet would be a type check of the arm that is not being built.
+OBS_TAGS := $(if $(filter 2.0,$(MOD_SERIES)),-tags factorio20,)
+
 # -opt=2 for the reason the mod has it, and -gc=leaking for the reason above.
 # No GC_STAMP dependency: the observers do not move with `make GC=`.
-OBS_TINYGO := -target=wasm-unknown -scheduler=none -gc=leaking -opt=2
+OBS_TINYGO := -target=wasm-unknown -scheduler=none -gc=leaking -opt=2 $(OBS_TAGS)
 
 $(DIST)/obs-%.wasm: $(OBS_SRC) guest/go/fkapi/fkapi.go Makefile
 	@mkdir -p $(DIST)
@@ -729,7 +748,7 @@ check:
 	@# //go:wasmexport that no `go test` can reach, and the harness under them is
 	@# what fourteen suites will share. gofmt below already covers them, because
 	@# they are inside guest/go; this is what type-checks them.
-	cd guest/go && GOOS=wasip1 GOARCH=wasm go vet ./obs/...
+	cd guest/go && GOOS=wasip1 GOARCH=wasm go vet $(OBS_TAGS) ./obs/...
 	@# The fast-belt fixture is a WHOLE FACTORIO MOD written in Go -- built by
 	@# test/check-datastage.py for the speed arm and never shipped -- and it is
 	@# its OWN Go module, so neither the tests nor the vet above reach it. Same
