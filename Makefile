@@ -331,7 +331,7 @@ OBS_DIST := $(DIST)/obs
 # No GC_STAMP dependency: the observers do not move with `make GC=`.
 OBS_TINYGO := -target=wasm-unknown -scheduler=none -gc=leaking -opt=2
 
-$(DIST)/obs-%.wasm: $(OBS_SRC) guest/go/fkapi/fkapi.go
+$(DIST)/obs-%.wasm: $(OBS_SRC) guest/go/fkapi/fkapi.go Makefile
 	@mkdir -p $(DIST)
 	cd guest/go && tinygo build $(OBS_TINYGO) -o ../../$@ ./obs/$*
 
@@ -370,7 +370,7 @@ RUST_SRC    := $(shell find guest/rust -name '*.rs' -not -path '*/target/*') \
 RUST_TARGET := wasm32-unknown-unknown
 RUST_FLAGS  := -C target-feature=-bulk-memory,-multivalue,-reference-types
 
-$(DIST)/obs-mig21-rs.wasm: $(RUST_SRC)
+$(DIST)/obs-mig21-rs.wasm: $(RUST_SRC) Makefile
 	@mkdir -p $(DIST)
 	cd $(RUST_DIR) && RUSTFLAGS="$(RUST_FLAGS)" \
 	  cargo build --release --target $(RUST_TARGET) -p obs-mig21
@@ -428,7 +428,7 @@ observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR) $(OBS_MAR_DIR) $(OBS_MIG21_DIR) \
 # cell must not relink the estate, and a matrix run is dozens of cells.
 bench-setup: $(OBS_BENCH_DIR)
 
-$(OBS_M1_DIR): $(DIST)/obs-m1.wasm
+$(OBS_M1_DIR): $(DIST)/obs-m1.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-m1.wasm) \
@@ -441,7 +441,7 @@ $(OBS_M1_DIR): $(DIST)/obs-m1.wasm
 # The one observer so far with a DATA STAGE of its own: a 1x1 loader fast enough
 # to saturate an express belt, which base has no buildable form of. A second
 # wasm module, exactly as the mod's own data guest is.
-$(OBS_SEDGE_DIR): $(DIST)/obs-sedge.wasm $(DIST)/obs-sedgedata.wasm
+$(OBS_SEDGE_DIR): $(DIST)/obs-sedge.wasm $(DIST)/obs-sedgedata.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-sedge.wasm) \
@@ -455,7 +455,7 @@ $(OBS_SEDGE_DIR): $(DIST)/obs-sedge.wasm $(DIST)/obs-sedgedata.wasm
 # The marathon suite. Its data stage is the same 1x1 express loader sedge's is,
 # under its own name: the two guests cannot share a package, because a data guest
 # may not import fkapi and a control guest may not import fkdata.
-$(OBS_MAR_DIR): $(DIST)/obs-mar.wasm $(DIST)/obs-mardata.wasm
+$(OBS_MAR_DIR): $(DIST)/obs-mar.wasm $(DIST)/obs-mardata.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-mar.wasm) \
@@ -487,7 +487,7 @@ $(OBS_MAR_DIR): $(DIST)/obs-mar.wasm $(DIST)/obs-mardata.wasm
 # deleted rather than kept, because two observers for one suite means only one of
 # them is ever run and the other rots. What guards the port from here is the
 # suite itself: `test/assert-mig21.py` reads these lines and is unchanged.
-$(OBS_MIG21_DIR): $(DIST)/obs-mig21-rs.wasm
+$(OBS_MIG21_DIR): $(DIST)/obs-mig21-rs.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-mig21-rs.wasm) \
@@ -501,7 +501,7 @@ $(OBS_MIG21_DIR): $(DIST)/obs-mig21-rs.wasm
 # slot, exactly as its info.json had it: the mod under test is pulled in by the
 # mod-list, and what this one cannot load without is the quality prototype tree
 # every part in every rig is rolled from.
-$(OBS_QUAL_DIR): $(DIST)/obs-qual.wasm $(DIST)/obs-qualdata.wasm
+$(OBS_QUAL_DIR): $(DIST)/obs-qual.wasm $(DIST)/obs-qualdata.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-qual.wasm) \
@@ -512,7 +512,7 @@ $(OBS_QUAL_DIR): $(DIST)/obs-qual.wasm $(DIST)/obs-qualdata.wasm
 	  --dependency "base >= 2.0.0" --dependency "quality" \
 	  -o .
 
-$(OBS_MIX_DIR): $(DIST)/obs-mix.wasm $(DIST)/obs-mixdata.wasm
+$(OBS_MIX_DIR): $(DIST)/obs-mix.wasm $(DIST)/obs-mixdata.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-mix.wasm) \
@@ -528,7 +528,7 @@ $(OBS_MIX_DIR): $(DIST)/obs-mix.wasm $(DIST)/obs-mixdata.wasm
 # guaranteed loaded when this mod's data stage runs, and `bbbt-stackloader`'s
 # `max_belt_stack_size` is refused at load outright without the `space_travel`
 # feature flag the DLC brings.
-$(OBS_PLAT_DIR): $(DIST)/obs-plat.wasm $(DIST)/obs-platdata.wasm
+$(OBS_PLAT_DIR): $(DIST)/obs-plat.wasm $(DIST)/obs-platdata.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-plat.wasm) \
@@ -551,7 +551,7 @@ $(OBS_PLAT_DIR): $(DIST)/obs-plat.wasm $(DIST)/obs-platdata.wasm
 # order, so `prototypes.entity["balancer-part"]` resolves to whoever really owns
 # the name rather than to a race. `--dependency` REPLACES the manifest's list
 # rather than adding to it, so this list is the whole of it.
-$(OBS_MIG_DIR): $(DIST)/obs-mig.wasm $(DIST)/obs-migdata.wasm
+$(OBS_MIG_DIR): $(DIST)/obs-mig.wasm $(DIST)/obs-migdata.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-mig.wasm) \
@@ -574,7 +574,7 @@ $(OBS_MIG_DIR): $(DIST)/obs-mig.wasm $(DIST)/obs-migdata.wasm
 # which is only a measurement of the recompile if the mod's own deferred flush
 # has already run when the observer's tick handler is entered. The dependency is
 # what fixes the load order, which fixes the handler order.
-$(OBS_M2_DIR): $(DIST)/obs-m2.wasm $(DIST)/obs-m2data.wasm
+$(OBS_M2_DIR): $(DIST)/obs-m2.wasm $(DIST)/obs-m2data.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-m2.wasm) \
@@ -585,7 +585,7 @@ $(OBS_M2_DIR): $(DIST)/obs-m2.wasm $(DIST)/obs-m2data.wasm
 	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
 	  -o .
 
-$(OBS_M3_DIR): $(DIST)/obs-m3.wasm $(DIST)/obs-m3data.wasm
+$(OBS_M3_DIR): $(DIST)/obs-m3.wasm $(DIST)/obs-m3data.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-m3.wasm) \
@@ -596,7 +596,7 @@ $(OBS_M3_DIR): $(DIST)/obs-m3.wasm $(DIST)/obs-m3data.wasm
 	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
 	  -o .
 
-$(OBS_EDGE_DIR): $(DIST)/obs-edge.wasm $(DIST)/obs-edgedata.wasm
+$(OBS_EDGE_DIR): $(DIST)/obs-edge.wasm $(DIST)/obs-edgedata.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-edge.wasm) \
@@ -616,7 +616,7 @@ $(OBS_EDGE_DIR): $(DIST)/obs-edge.wasm $(DIST)/obs-edgedata.wasm
 # --creates one save over it, which is what keeps the checklist's world from
 # rotting: a rig that stopped landing, or one this mod refuses, costs a human a
 # session to discover and costs a single --create to catch.
-$(OBS_IACT_DIR): $(DIST)/obs-iact.wasm $(DIST)/obs-iactdata.wasm
+$(OBS_IACT_DIR): $(DIST)/obs-iact.wasm $(DIST)/obs-iactdata.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-iact.wasm) \
@@ -640,7 +640,7 @@ $(OBS_IACT_DIR): $(DIST)/obs-iact.wasm $(DIST)/obs-iactdata.wasm
 # test/obs-data/<mod>/ holds each mod's tree and --include merges its CONTENTS
 # into the package -- the observers' form of the `data = "mod-data"` the shipped
 # mod's manifest carries. See test/obs-data/README.md.
-$(OBS_BB2_DIR): $(DIST)/obs-bb2data.wasm $(shell find test/obs-data/belt-balancer-2 -type f)
+$(OBS_BB2_DIR): $(DIST)/obs-bb2data.wasm $(shell find test/obs-data/belt-balancer-2 -type f) Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod \
@@ -684,7 +684,7 @@ $(OBS_BB2_DIR): $(DIST)/obs-bb2data.wasm $(shell find test/obs-data/belt-balance
 # Measured on the interleaved comparability gate, n=50 k=4 express saturated,
 # median of three: 0.3490 ms/tick packed against 0.2540 for the Lua setup mod it
 # replaces, and 0.2555 under table. The whole of that 37% was the repack.
-$(OBS_BENCH_DIR): $(DIST)/obs-bench.wasm $(DIST)/obs-benchdata.wasm
+$(OBS_BENCH_DIR): $(DIST)/obs-bench.wasm $(DIST)/obs-benchdata.wasm Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-bench.wasm) \
@@ -700,7 +700,7 @@ $(OBS_BENCH_DIR): $(DIST)/obs-bench.wasm $(DIST)/obs-benchdata.wasm
 	  --dependency "(?) better-belt-balancer" \
 	  -o .
 
-$(OBS_FOREIGN_DIR): $(DIST)/obs-foreigndata.wasm $(shell find test/obs-data/bbb-mig-foreign -type f)
+$(OBS_FOREIGN_DIR): $(DIST)/obs-foreigndata.wasm $(shell find test/obs-data/bbb-mig-foreign -type f) Makefile
 	@mkdir -p $(OBS_DIST)
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod \
