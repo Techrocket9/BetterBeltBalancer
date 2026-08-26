@@ -1,7 +1,7 @@
 # What this mod is. These become info.json.
 [mod]
 name = "better-belt-balancer"
-version = "0.3.0"
+version = "0.3.1"
 title = "Better Belt Balancer"
 author = "Techrocket9"
 description = "Belt balancers that click together into arbitrary shapes. Highly performant; megabase-ready (UPS hit is ~equal to vanilla hand-crafted belt balancers)."
