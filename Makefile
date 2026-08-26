@@ -178,7 +178,7 @@ GUEST_SRC := $(shell find guest/go -name '*.go' -not -path '*/fkapi/*' -not -pat
 DATA_GUEST_SRC := $(shell find guest/go/data guest/go/engine guest/go/skin guest/go/tune -name '*.go' -not -name '*_test.go') guest/go/go.mod
 DATA_SRC  := $(shell find mod-data -type f)
 
-.PHONY: all guest mod zip install test check datastage-check clean graphics observers
+.PHONY: all guest mod zip install test check datastage-check clean graphics observers bench-setup
 
 all: mod
 
@@ -371,11 +371,20 @@ OBS_IACT_DIR  := $(OBS_DIST)/bbb-interactive-setup_0.2.0
 # names.
 OBS_BB2_DIR     := $(OBS_DIST)/belt-balancer-2_2.0.9
 OBS_FOREIGN_DIR := $(OBS_DIST)/bbb-mig-foreign_0.1.0
+# THE ONE PACKAGE HERE `test/run.sh` NEVER STAGES: it is the `bench/` harness's
+# setup mod, and `bench/run.sh` stages it. `make observers` builds it all the
+# same, so that target still means "everything the estate compiles".
+OBS_BENCH_DIR   := $(OBS_DIST)/bbb-bench-setup_0.1.0
 
 observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR) $(OBS_MAR_DIR) $(OBS_MIG21_DIR) \
            $(OBS_QUAL_DIR) $(OBS_MIX_DIR) $(OBS_PLAT_DIR) $(OBS_MIG_DIR) \
            $(OBS_M2_DIR) $(OBS_M3_DIR) $(OBS_EDGE_DIR) $(OBS_IACT_DIR) \
-           $(OBS_BB2_DIR) $(OBS_FOREIGN_DIR)
+           $(OBS_BB2_DIR) $(OBS_FOREIGN_DIR) $(OBS_BENCH_DIR)
+
+# `bench/run.sh` builds THIS ONE TARGET rather than `observers`, for the reason
+# `interactive-install` names one package rather than all fourteen: a benchmark
+# cell must not relink the estate, and a matrix run is dozens of cells.
+bench-setup: $(OBS_BENCH_DIR)
 
 $(OBS_M1_DIR): $(DIST)/obs-m1.wasm
 	@mkdir -p $(OBS_DIST)
@@ -591,6 +600,54 @@ $(OBS_BB2_DIR): $(DIST)/obs-bb2data.wasm $(shell find test/obs-data/belt-balance
 	  --title "Belt Balancer 2 (harness stand-in)" \
 	  --description "A DATA-STAGE-ONLY stand-in for Belt Balancer 2, for the mig suite. It defines the prototypes the real mod defines, under the real mod's own name and version, and nothing else: no runtime, no balancing, no art of theirs." \
 	  --dependency "base >= 2.1.0" \
+	  -o .
+
+# THE bench/ HARNESS'S SETUP MOD, which is not a suite's observer and is not
+# staged by test/run.sh at all. `bench/run.sh` stages it, one cell at a time, and
+# `bench/README.md` is the method.
+#
+# ITS DATA MODULE DEFINES NO PROTOTYPE. Every piece of every rig is a stock belt,
+# loader or chest, or the balancer mod's own part -- so `obs/benchdata` exports
+# `fk_settings` and no `fk_data`, and the package carries a settings.lua and no
+# data.lua. What those settings ARE is the harness's configuration channel: the
+# eight keys of the `config.lua` that `bench/run.sh` used to rewrite inside the
+# staged copy of the mod, which a Go guest cannot read. See guest/go/obs/protos.
+#
+# THE DEPENDENCY LIST IS THE HAND-WRITTEN info.json's, field for field, and its
+# three OPTIONALS are load-bearing in the same way `mig`'s are: this mod is
+# present in every cell including the no-mod controls, so it may not REQUIRE a
+# balancer mod -- and an optional dependency is what puts it after whichever one
+# is installed in Factorio's load order.
+# --persist=table, WHICH IS THE ONE PACKAGE HERE THAT DOES NOT TAKE $(PERSIST),
+# and it is a measurement rather than a preference.
+#
+# `packed` mirrors the live heap into string.pack pages and REPACKS EVERY DIRTY
+# PAGE AFTER EVERY GUEST CALL, at about 40 us a page. That is the right trade for
+# the shipped mod, which is dispatched only when a player edits something and
+# whose save a person keeps forever. This mod is dispatched EVERY TICK -- the
+# meter has to be, because there is no on_nth_tick binding -- so it pays that
+# repack sixty times a second for a save that is deleted at the end of the cell.
+# `table` makes storage.fk_mem BE the word table the guest writes into, so a
+# store lands in what Factorio serializes with no sync step and the steady-state
+# cost is nothing.
+#
+# Measured on the interleaved comparability gate, n=50 k=4 express saturated,
+# median of three: 0.3490 ms/tick packed against 0.2540 for the Lua setup mod it
+# replaces, and 0.2555 under table. The whole of that 37% was the repack.
+$(OBS_BENCH_DIR): $(DIST)/obs-bench.wasm $(DIST)/obs-benchdata.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-bench.wasm) \
+	  --persist=table --gc=leaking --api=$(MOD_API) \
+	  --factorio-version $(MOD_SERIES) --author BetterBeltBalancer \
+	  --data-module $(abspath $(DIST)/obs-benchdata.wasm) \
+	  --name bbb-bench-setup --version 0.1.0 \
+	  --title "BBB Bench Setup" \
+	  --description "Headless benchmark rig builder for BetterBeltBalancer. Not a gameplay mod." \
+	  --dependency "base >= 2.0.0" \
+	  --dependency "(?) belt-balancer-2" \
+	  --dependency "(?) belt-balancer-3" \
+	  --dependency "(?) better-belt-balancer" \
 	  -o .
 
 $(OBS_FOREIGN_DIR): $(DIST)/obs-foreigndata.wasm $(shell find test/obs-data/bbb-mig-foreign -type f)

@@ -121,6 +121,35 @@ func (l *Line) F1(v float64) *Line {
 	return l.U(scaled / 10).S(".").U(scaled % 10)
 }
 
+// F4 appends a number to FOUR decimal places, which is Lua's `%.4f`.
+//
+// IT ALSO EXISTS FOR EXACTLY ONE THING: the bench harness's per-shape line
+// (`balance=%.4f`), which is how a megabase cell reports whether each class of
+// balancer in a heterogeneous save is still splitting evenly.
+//
+// THE PADDING IS THE WHOLE DIFFERENCE FROM F1. One decimal place cannot need a
+// leading zero and four can: `%.4f` of 1.0 is `1.0000`, so the fractional part
+// is written with its zeros rather than as the number 0. F1's own rounding note
+// applies here unchanged, and it is reachable here in a way it is not there --
+// a balance is a real measurement -- so a value exactly halfway may round up
+// where C's printf would round to even. A balance is a diagnostic read against
+// bounds of 1.02 and 1.25; nothing anywhere compares its last digit.
+func (l *Line) F4(v float64) *Line {
+	if v < 0 {
+		v = -v
+		l.S("-")
+	}
+	scaled := uint64(v*10000 + 0.5)
+	frac := scaled % 10000
+	l.U(scaled / 10000).S(".")
+	for div := uint64(1000); div > 1; div /= 10 {
+		if frac < div {
+			l.S("0")
+		}
+	}
+	return l.U(frac)
+}
+
 // End hands the buffer to the host as a string that borrows it.
 //
 // `unsafe.String` rather than a conversion, which would copy. `buf` is inside a

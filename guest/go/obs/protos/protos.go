@@ -91,3 +91,54 @@ const PlatStackLoader = "bbbt-stackloader"
 
 // PlatStackSize is that loader's `max_belt_stack_size`.
 const PlatStackSize = 4
+
+// ---------------------------------------------------------------------------
+// the bench harness's configuration channel
+// ---------------------------------------------------------------------------
+//
+// THE ONE PLACE IN THE ESTATE WHERE THIS PACKAGE CARRIES SOMETHING THAT IS NOT
+// A PROTOTYPE NAME, and it is here for the reason the package exists: two wasm
+// modules of one mod have to agree about a name and neither can import the
+// other's half.
+//
+// `bench/mods/bbb-bench-setup` was configured by a `config.lua` that
+// `bench/run.sh` REWROTE per matrix cell -- eight keys in a table the mod
+// `require`d. A Go guest cannot require a Lua file, so the channel is
+// STARTUP SETTINGS: `obs/benchdata` defines one per key, `bench/run.sh` writes
+// them into a `mod-settings.dat` it composes per cell (tools/mod-settings.py),
+// and `obs/bench` reads them out of `settings.startup` at `fk_on_init`.
+//
+// STARTUP RATHER THAN RUNTIME-GLOBAL, and the reason is the two-phase shape of
+// a cell rather than a preference. A runtime-global is seeded from
+// mod-settings.dat into the SAVE at creation and read from the save thereafter,
+// which would work; a startup setting is read from mod-settings.dat by both
+// processes directly, so `--create` and `--benchmark` are configured by one
+// file with no state in between. Nothing here shapes a prototype, so the data
+// stage never reads one.
+const (
+	BenchScenario = "bbb-bench-scenario"
+	BenchN        = "bbb-bench-n"
+	BenchK        = "bbb-bench-k"
+	BenchTier     = "bbb-bench-tier"
+	BenchItem     = "bbb-bench-item"
+	BenchPartName = "bbb-bench-part-name"
+	BenchMeter    = "bbb-bench-meter"
+	BenchHitch    = "bbb-bench-hitch"
+)
+
+// BenchScenarios is every value BenchScenario may take, and the FIRST of them is
+// the default -- which is `stringSetting`'s rule in the shipped guest's own
+// settings stage, and it is what makes "the default is a value the engine will
+// accept" true by construction rather than by a second list.
+//
+// The four `mega` scenarios build a HETEROGENEOUS population where the four
+// above them build `n` copies of one shape; `bench/README.md` is the table.
+var BenchScenarios = []string{
+	"saturated", "idle", "control", "control-idle",
+	"mega", "mega-idle", "mega-control", "mega-control-idle",
+}
+
+// BenchTiers is every value BenchTier may take. Same rule: the head is the
+// default, and `express` is the head because it is the tier that matters for a
+// late-game base and the worst case for the incumbent's polling divisor.
+var BenchTiers = []string{"express", "fast", "normal"}
