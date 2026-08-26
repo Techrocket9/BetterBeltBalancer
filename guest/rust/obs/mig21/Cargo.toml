@@ -1,0 +1,28 @@
+[package]
+name = "obs-mig21"
+version = "0.1.0"
+edition = "2021"
+description = "BBB test estate: the 2.0-save-on-2.1 observer, in Rust"
+
+[lib]
+name = "obs_mig21"
+crate-type = ["cdylib"]
+
+# `fk` is a SIBLING CHECKOUT, exactly as guest/go/go.mod's replace directive
+# makes it one -- and at the same relative depth, because both trees hang off
+# the repository root. FkLua and this mod are developed together and a guest
+# substrate has to match the runtime the compiler ships, so a version would be a
+# lie either way.
+#
+# `fkapi` is GENERATED INTO THIS REPO by `fklua gen-bindings` and committed, and
+# is a path dep on a sibling directory rather than a vendored copy for the
+# reason fklua.toml's `lang` key states: one manifest, one pin, two outputs.
+#
+# NOTE THE COLLECTOR IS NOT DECLARED HERE and must never be. `fk/fkgc` is turned
+# on from the COMMAND LINE if it is ever wanted, because cargo's v2 resolver
+# unifies features across a workspace build and declaring it would turn the
+# collector on for every other crate in the same invocation, silently. FkLua's
+# TestNoRustExampleDeclaresTheCollectorFeature is the same rule enforced.
+[dependencies]
+fk = { path = "../../../../../FkLua/guest/rust/fk" }
+fkapi = { path = "../../fkapi" }

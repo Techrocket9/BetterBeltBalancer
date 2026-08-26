@@ -1,4 +1,4 @@
-# The test estate, in Go
+# The test estate, in Go -- and, since phase 8, one observer in Rust
 
 **There is to be no hand-written Lua in this repository, anywhere.** The shipped
 mod got there in two rounds -- `fklua mod` has always generated the control
@@ -10,13 +10,21 @@ toolchain type-checks, and that only a Factorio run can execute at all. It was
 8,524 over twenty-four files when the pilot started, and none of what is left is a
 SUITE.
 
+**AND THE ESTATE IS MIXED-LANGUAGE SINCE PHASE 8**: thirteen Go observers and one
+RUST one, `mig21`, which is the same program the Go one was and produces the same
+51 log lines on the same two fixtures byte for byte. It is there because FkLua
+maintains Go/Rust bindings at member-id parity and guards it with mirror tests
+against a host STUB; this holds the same claim against a real engine, on every
+`make test`, forever. Its own section is phase 8, and it is what closed the
+on-engine programme.
+
 This file is the programme for removing it, and the record of what each phase
 measured. The pilot is `m1` and `sedge`, phase 2 is `mar`, `mig21` and `qual`,
 phase 3 is `mix`, `plat` and `mig`, phase 4 is `m2`, `m3` and `edge` -- the three
 biggest -- phase 5 is the interactive staging mod, phase 6 the two
-data-stage-only stand-ins and phase 7 the `bench/` harness's setup mod, all done
-2026-08-25. **Every suite in the estate is a
-Go observer now, and so is every mod either of them stages.**
+data-stage-only stand-ins, phase 7 the `bench/` harness's setup mod and phase 8
+the RUST re-port of `mig21`, all done 2026-08-25. **Every suite in the estate is a
+compiled observer now, and so is every mod either of them stages.**
 
 ---
 
@@ -1917,6 +1925,370 @@ repository has carried since the single-edge port, with the calibration at
   belongs to a pass with an estate-wide gate.
 - **`fkapi.TableSize` is STILL unused**, seven phases in.
 
+---
+
+## Phase 8: `mig21` again, in RUST -- done 2026-08-25, and it CLOSES THE ON-ENGINE PROGRAMME
+
+**One observer, written twice against one ABI, producing the same 51 log lines on
+the same two committed fixtures -- byte for byte, with no mask at all.** That is
+the whole phase, and it is the strongest parity statement this estate can make:
+FkLua guards Go/Rust member-id parity with mirror tests against a HOST STUB, and
+this is the same claim held against a real engine, real fixtures and a transcript
+somebody is holding to the byte.
+
+`guest/rust/obs/mig21` is the observer and `guest/go/obs/mig21` is DELETED. The
+estate is thirteen Go observers and one Rust one from here, and it stays that way
+on every `make test`.
+
+**Nothing else in the programme is left that this machine can run.** The estate's
+hand-written Lua is unmoved at **478 lines over two files**, both of them
+`bbb-flip-test`, which waits for a Factorio 2.0 binary.
+
+### Why `mig21`, and it was decided by what the suite IS
+
+The estate recon picked it before a line was written, on four properties, and all
+four earned their place:
+
+- **No storage, no world-building, no rigs.** It reads and it logs. So a
+  difference between the two transcripts is a difference in the BINDINGS, the
+  marshalling or the arithmetic, and cannot be a difference in a rig -- which is
+  the property that makes an empty diff mean something.
+- **No `--create` phase at all.** Its worlds are committed fixtures a 2.0 binary
+  built, so the whole suite is one load and one set of assertions. There is no
+  save round-trip for a persisted heap to differ across.
+- **The `on_configuration_changed` pivot**, which is the one hook that makes the
+  observer possible and the one place a Rust guest's export list differs from a
+  Go guest's for a reason (below).
+- **Its PACKAGING is load-bearing**, so the port had a red proof waiting for it
+  that no other suite has.
+
+### The masks, proved by self-diff -- and there are none
+
+Two independent runs of the unmodified tree, both fixture arms, everything from
+the `[MIG21]` tag onwards:
+
+| | m2 | edge |
+|---|--:|--:|
+| tagged lines | 26 | 25 |
+| masked | **0** | **0** |
+| run A against run B | **identical** | **identical** |
+
+**The cleanest mask table in the programme, and it is a property of the suite
+rather than of the port.** What is dropped is the line PREFIX -- Factorio's own
+wall-clock timestamp and the `control.lua:NNN` the generated Lua happens to log
+from -- and neither is the observer's output: one is the harness's clock and the
+other is a fact about the COMPILER, which is exactly the thing that changes when
+the guest changes language. Dropping it is not a concession; keeping it would
+have been comparing TinyGo's line numbering with rustc's.
+
+### The golden diff, which is EMPTY
+
+The gate, and the reason the phase exists:
+
+```
+=== m2:   RUST vs GO golden ===  EMPTY DIFF -- 26 lines byte-identical
+=== edge: RUST vs GO golden ===  EMPTY DIFF -- 25 lines byte-identical
+```
+
+Fifty-one lines across two engines' worth of fixture, including every count, every
+surface name, every `stacked_tiles`/`worst_per_tile` fold, every chart tripwire
+line and both audit tags.
+
+### Three more parity numbers, and none of them was assumed
+
+The transcript is the gate; these came for free once it passed, and each says
+something the transcript does not:
+
+| | Go observer | **Rust observer** |
+|---|---|---|
+| packaged `fk_api_gen.lua` | -- | **BYTE-IDENTICAL** to the Go one |
+| members pruned | 20 of 4859 | **20 of 4859** |
+| events / defines | 1 / 1 | **1 / 1** |
+| `api check --from 2.1.16 --to 2.0.77` | clean, 0 findings, exit 0 | **clean, 0 findings, exit 0** |
+| that check's surface | 20 members, 1 event, 5 concepts | **20 members, 1 event, 5 concepts** |
+| `.wasm` | 544,497 B | **24,760 B** |
+| packaged `fk_module.lua` | 577,418 B | **493,791 B** (-14.5%) |
+
+**The member TABLE being byte-identical is the sharpest of these.** It is not
+"both guests worked": it is the two backends' pruning passes, over two completely
+different wasm modules, selecting the same twenty members and assigning them the
+same dense ids -- which is the property a mismatch would break silently, because
+an id is an index and a wrong one calls a different function rather than failing.
+
+**The api-check verdict is what lets the Rust observer be STAMPED** for the
+running engine, the same as the thirteen Go ones, under the rule phase 1 wrote
+down: a test mod is stamped and the mod under test is gated. The surface being
+identical to the Go observer's is what says the port did not quietly widen it.
+
+**The 22x wasm difference is DWARF and a runtime, not code**, and it is a
+misleading number to watch -- CLAUDE.md already says so about `ls -l dist/bbb.wasm`
+for the shipped guest. The number that reaches a player is the generated Lua,
+which the game PARSES at load, and there Rust is 14.5% smaller for the same
+program.
+
+### Four things the port had to say differently, and none of them is a choice
+
+- **`_initialize`, not a package initialiser -- and NOT `fk_on_init`.** TinyGo
+  runs Go's `init()` from `_initialize`, which `control.lua` calls on EVERY LOAD;
+  Rust has no pre-main initialiser in a cdylib reactor, so the guest exports the
+  hook itself. Putting the subscription in `fk_on_init` would have compiled,
+  packaged and loaded, and the tick handler would simply never have run --
+  **this suite has no `--create` phase at all**, so `script.on_init` never fires
+  in it. FkLua's `examples/api` carries the same warning for the general case;
+  here it is not a latent hazard but a certainty.
+- **`ChunkPosition` is not `Copy`**, so the nauvis control -- one value passed to
+  `is_chunk_generated` and then to `is_chunk_charted` -- is two literals now. The
+  generator derives `Copy` on `Object` and on no generated struct. Caught by the
+  compiler, which is the category FkLua's own notes describe as "what Rust's
+  checker caught that Go's would not".
+- **The line builder's digit scratch needs a stack copy.** `digits` and `buf` are
+  both fields of the same struct, and the borrow checker will not lend one while
+  the other is borrowed mutably. Twenty bytes on the stack per integer written;
+  Go had no such objection and needed no such copy.
+- **`fk::last_error()` returns `Vec<u8>` where Go's returns a string.** The lossy
+  conversion applied here is `getStr`'s own, which is what the Go observer's text
+  came through too, so the two produce the same bytes for the same host error.
+
+**And NO NEW FkLua GAP is filed**, which for the first Rust guest in this
+repository is worth stating rather than passing over. Every one of the four is a
+difference between two languages that FkLua reports accurately in both; nothing
+the port needed was unreachable, nothing had to be worked around in this tree,
+and the four are written down here because the next Rust guest will meet all four
+in its first hour -- not because anything upstream owes a fix.
+
+### The float-folding trap is UNREACHABLE here, measured rather than assumed
+
+The brief flagged it and it is the right thing to flag -- Go's untyped constants
+and Rust's `f64` fold at different times, so a computed float in a log line is
+the one thing a cross-language transcript gate would have to argue about instead
+of measure. **In this observer there is none**, and that is a property worth
+writing down rather than a lucky escape:
+
+- **Not one float is ever PRINTED.** The Go builder's `F1` and `F4` exist for the
+  `mig` fidelity rig and the bench harness's balance line; `mig21` logs counts,
+  names and booleans. The Rust builder therefore has neither, which is a
+  deliberate absence and not an omission.
+- **The float arithmetic that exists lands in an integer first.** `floor_int` on
+  a tile centre, and `floor_int(pos / 32.0)` for a chunk. 32.0 is exact, a tile
+  centre is `n + 0.5`, and both are exactly representable -- there is no rounding
+  for the two languages to disagree about.
+- **`floor_int`'s negative branch is carried and NOT EXERCISED.** Every
+  coordinate in both fixtures is non-negative (measured off the mod's own `[gps=]`
+  pings: x is 0 and y runs 1..123). The branch is correct and stays; nothing here
+  tests it, and the next fixture with a negative coordinate is what would.
+
+`floor_int` is the Go algorithm transcribed rather than `f64::floor`, which is
+`std` and unavailable in a `no_std` guest without pulling in `libm` -- so the
+transcription is forced as well as faithful.
+
+### The red proofs -- three, and the middle one is the phase's real finding
+
+| injected into the Rust observer | what fired |
+|---|---|
+| **A, the FORMATTING family**: one separator, `" hidden_items="` -> `" hidden_items ="` | **the assertion script: 4 failures**, one per tag (*"the observer reported no sample for tag=cfg"* and its three siblings). `TOTAL`'s regex is exact and a single space breaks it |
+| **B, the FLOAT family**: `floor_int` rounds half-up where the original floors | **the assertion script PASSED, exit 0. The GOLDEN DIFF caught it** -- six lines, `bbb-m2-a:0/9` -> `0/10` and `bbb-edge:0/12` -> `0/13`, at `cfg` and at `t1` |
+| **C, the PACKAGING family**: `--dependency "better-belt-balancer >= 0.3.0"` added to the Rust recipe | **5 failures**, headed by *"nothing was seeded into the networks before the migration ran"*. Phase 2's red proof, reproduced against the Rust recipe |
+
+**B is why this phase is worth its Factorio runs.** `check_chart_wall` asserts the
+charted NUMERATOR -- it must be zero, because a headless force has no chart to
+write into -- and says nothing about the DENOMINATOR, which is how many distinct
+chunks the parts occupy. So a float-arithmetic divergence moved a number in six
+log lines, the suite went green, and **only the cross-language transcript caught
+it**. That is phase 4's own lesson arriving again from the other side (*"`assert-edge.py`
+passed it... The golden diff caught it, one line out of 3,152"*) -- here it is six
+lines out of 51, and the defect is precisely the class a port between two
+languages' float handling is most likely to introduce.
+
+It is also the argument for keeping the goldens after this phase, and the argument
+against: they are a snapshot, and the thing that guards the port from here is the
+suite. Which is the decision below.
+
+### The decision: the Rust observer is the staged one, and the Go source is deleted
+
+Taken deliberately and recorded with its reasoning, because "keep both" is the
+obvious answer and it is the wrong one:
+
+- **Two observers for one suite means only one of them is ever run**, and the
+  other rots. There is no `test/run.sh` invocation that stages both, and adding
+  one would double a Factorio run to compare two programs against a third thing
+  (the assertion script) that already reads whichever is staged.
+- **The estate then exercises the Rust backend CONTINUOUSLY** -- every `make
+  test`, both `-gc` arms, on real fixtures -- rather than at one moment in one
+  session. A parity claim that is checked once is a parity claim about a
+  commit.
+- **What guards the port from here is the suite itself.** `test/assert-mig21.py`
+  is unchanged by this phase and reads these lines; red proof A is the
+  demonstration that it fails when they move.
+- **The Go transcript lives in git history**, at `74eab29~` for the source and in
+  this section for the numbers. A future divergence is diffed against what is
+  written here.
+
+### One finding about the estate's BUILD GRAPH, found by red proof C
+
+**An observer's packaged directory does not depend on the Makefile recipe that
+produced it.** Red proof C changed only an identity FLAG, so reverting the
+Makefile and re-running `make observers` re-packaged nothing -- the wasm was
+unchanged and the output directory was present, so make considered it up to date.
+The stale package, still carrying the injected dependency, is what the next full
+estate run picked up: **both arms failed on `mig21` in 8.7 s** with red proof C's
+own five assertions.
+
+The gate did its job -- a stale artifact was caught by the estate rather than
+shipped -- and the hazard is real and pre-existing: it applies to all fifteen
+packages, not to this one, and it bites on any change to identity, dependencies,
+title or version with no source change beside it. **Not fixed here**, because
+adding `Makefile` as a prerequisite to fifteen recipes is an estate-wide decision
+about churn rather than part of this port. `rm -rf dist/obs/<name>_*` before
+`make observers` is the workaround, and it is what a red proof in this family
+should do from now on.
+
+### The layout, and why it is not the one the brief proposed
+
+The brief suggested `guest/rust-obs/` or `test/rust-obs/` with a directory-scoped
+project of its own. **Neither, and the tool decides rather than taste**:
+`fklua gen-bindings` writes Rust bindings to exactly `guest/rust/fkapi`, the way
+it writes Go's to exactly `guest/go/fkapi`, and `fklua lock` hashes both at those
+names. A project anywhere else orphans the generated crate -- which is a defect
+FkLua's own scaffold shipped with for a milestone and fixed on the Rust arm first
+(agents/guests.md, *"guest/go rather than guest"*).
+
+So it is `guest/rust/` beside `guest/go/`, which is also what FkLua's own tree
+looks like, and **there is no second `fklua.toml`.** The mod's own manifest carries
+`lang = ["go", "rust"]`:
+
+- **one manifest, one pin, two outputs.** `gen-bindings` writes both,
+  `gen-bindings --check` verifies both, and `fklua lock` hashes both into the one
+  `bindings_sha256` (which moved, `b3f41c12…` -> `379a8b9b…`, when the Rust arm
+  was added).
+- **a directory-scoped project would have been a SECOND PIN**, and two pins is
+  exactly how an observer ends up calling different member ids from the mod it is
+  observing. Ids are dense sorted indices over one description's set, so the two
+  would not even fail loudly -- which is the defect the standardization pass found
+  in this repository once already (`LuaControl.Insert` 316 -> 317).
+
+That is the same argument the pilot made for putting the Go observers inside the
+mod's own module rather than a module of their own, reached again from the other
+language.
+
+### What it cost, and cargo is now a `make test` dependency
+
+Stated visibly because it is a new tool in the build path:
+
+| | |
+|---|--:|
+| **cold** `cargo build` + `wasm-opt`, from `rm -rf guest/rust/target` | **10.8 s** |
+| warm, nothing changed | **0.03 s** (make no-op) |
+| what it needs | rustc 1.97.1, target `wasm32-unknown-unknown`, `wasm-opt` |
+
+`wasm-opt` was already a hard dependency of the TinyGo build, so the lowering pass
+is a step rather than a dependency. **`rustup target add wasm32-unknown-unknown`
+is the one new install**, and the cold 10.8 s is mostly the 130,775-line generated
+`fkapi` crate, which is compiled once and cached.
+
+**THE RUSTFLAGS AND THE `wasm-opt` PASS ARE BOTH NECESSARY AND THEY DO DIFFERENT
+HALVES OF ONE JOB.** rustc enables `bulk-memory`, `multivalue` and
+`reference-types` by default and FkLua compiles none of the three; `RUSTFLAGS`
+governs only the current crate's codegen, while `core` and `compiler_builtins`
+ship PRECOMPILED with bulk-memory on -- so a lowered `memcpy` drags `memory.copy`
+and `memory.fill` in regardless. Without `--llvm-memory-copy-fill-lowering`,
+`fklua mod` warns and turns both into raising stubs: a mod that loads happily and
+dies whenever that path is reached. Verified here -- the packaged observer reports
+no stub of any kind.
+
+| | Lua (2026-08-25, phase 2) | Go | **Rust** |
+|---|--:|--:|--:|
+| observer source | 396 lines | 541 + a shared harness | **940 lines, self-contained** |
+
+The Rust crate carries its own line builder (125 lines) and its own three-function
+slice of the harness (120), where the Go one imported a 1,342-line package shared
+by fourteen observers. **That is deliberate and it is the phase's one structural
+deviation** -- see below.
+
+### The estate, both arms, and the `mar` slopes
+
+**All fourteen suites green in BOTH arms, one invocation each** -- 2m23.7s
+collected and 2m26.7s leaking, against phase 7's 2m38s and 2m45s. **No suite's
+number moved at all**, which for a phase that replaced one observer's entire
+implementation language is the only acceptable result.
+
+| leg | B/primitive | | leg | B/primitive |
+|---|--:|---|---|--:|
+| A | 1,280 | | E | 560 |
+| B | 352 | | G | 3,736 |
+| C | 1,209 | | F | 2,080 |
+| D | 32 | | linear memory | **3.92 MiB** |
+
+**Byte-identical to phase 7's**, which is byte-identical to phase 4's and to the
+record this repository has carried since the single-edge port -- calibration
+1,136 B at **0.0% spread**, every leg linear (x1.00 to x1.03 against a x1.35
+gate), and the collected arm at **9 collections in 6 paced steps with 0
+forward-progress deadlines**. This phase touches no Go observer and no harness,
+so `mar` is a control rather than a risk; it is recorded because a phase that
+changed the BUILD GRAPH is exactly the shape that could have moved it.
+
+**And the estate caught a stale artifact before it caught anything else.** The
+first attempt at this table failed in both arms in 8.7 s, on red proof C's own
+five assertions, because the packaged observer in `dist/` still carried the
+injected dependency -- see the build-graph finding above. That is the gate
+working: a run that had passed there would have been a run that never rebuilt.
+
+### Deviations, all recorded rather than hidden
+
+- **There is no Rust `harness` CRATE, and the three functions `mig21` needs are a
+  MODULE inside the observer.** The Go harness's own header says what earned it:
+  six-way duplication, measured across the estate before the package was written.
+  There is ONE Rust observer, so there is zero-way duplication to remove, and a
+  crate here would be structure with no measurement behind it -- which is the
+  thing this repository keeps declining to ship. The moment a second Rust
+  observer exists, lifting `line.rs` and `harness.rs` out is a `git mv`. The file
+  NAMES mirror the Go ones so the transcription can be read against its original
+  side by side.
+- **`TileCounts` is a `Vec` and a linear scan, not a `BTreeMap`** -- which Rust
+  would have given a deterministic walk from for free, where a Go map would have
+  been a desync. It is fidelity to the original rather than necessity: the biggest
+  fixture has 95 part tiles and the answer is a MULTISET the caller folds to two
+  numbers, so insertion order is not observable. Recorded because the reasoning
+  the Go file gives (*"a slice is the shape whose determinism needs no argument"*)
+  is a GO reason, and it does not transfer.
+- **`static mut` behind `addr_of_mut!` for the two line builders.** This is a
+  single-threaded wasm reactor with no concurrency to protect against, and the
+  alternative is a 1 KiB buffer on the stack per log line. One `unsafe` accessor
+  each, and it is the Go original's package-level `var out` said in Rust.
+- **The collector feature is NOT declared in the crate's `Cargo.toml`** and must
+  never be. Cargo's v2 resolver unifies features across a workspace build, so
+  declaring `fk/fkgc` would turn the collector on for every other crate in the
+  same invocation, silently. It is a command-line flag against a single `-p`.
+  FkLua's `TestNoRustExampleDeclaresTheCollectorFeature` is the same rule
+  enforced upstream.
+- **No collected-mode arm was run for this observer**, and the reason is that
+  there is nothing to compare: an observer is packaged `--gc=leaking` in both
+  estate arms (`make GC=` does not reach the observers), so the Rust guest runs
+  on `fk`'s default bump allocator in every run above. **`guest/rust/fkgc` is
+  therefore UNEXERCISED by this estate** -- see the note to the collected-mode
+  investigation below.
+
+### What this phase leaves owed
+
+- **`bbb-flip-test`, 478 lines over two files**, unmoved and unmovable here. It
+  goes to the `release/2.0` session with the grandfather write, both arms of the
+  flip handler and `sweepStackedInterfaces`.
+- **The build-graph hazard above**, which is estate-wide and unfixed.
+- **`harness.place`'s ~1.8 KB per entity placed**, still the largest number the
+  programme has left on the table.
+- **`fkapi.TableSize` is STILL unused**, eight phases in.
+- **A note for the FkLua collected-mode investigation**, and it is a NEGATIVE
+  rather than a finding: **this phase saw no collected-vs-leaking asymmetry in
+  Rust `fkgc` land, because it could not.** Every observer in the estate is
+  packaged `--gc=leaking` and `make GC=` moves the MOD's arm and not theirs, so
+  the Rust guest ran on the bump allocator in both estate arms and `guest/rust/fkgc`
+  was never linked. Phase 7's finding -- a collected-GC build of the bench
+  observer silently under-draining one rig -- has no counterpart here and is not
+  contradicted by anything measured here. **If that investigation wants a Rust
+  data point, this observer is the cheapest one available**: `--features fk/fkgc`
+  on the cargo line, `--gc=collected` on the `fklua mod` line, and the golden
+  diff above is the instrument, already established and already empty. The
+  transcript would catch an under-drain the way it caught red proof B.
+
 ## The phases
 
 Each phase is: goldens, port, the six gates, `git rm` the Lua, and a section in
@@ -1931,7 +2303,7 @@ this file recording what it measured and what it deviated on.
 | **5 (done)** | the interactive staging mod | not a suite -- the world a HUMAN walks, and where the mod portal's demo scenes live. `iact` gated it already, so this phase had a headless check from the start; it is also the first consumer of `fkapi.RemoteCall`, and the only observer with a player event handler |
 | **6 (done)** | `test/mods/belt-balancer-2`, `test/mods/bbb-mig-foreign` | data-stage-only stand-ins, and the first packages here with NO CONTROL STAGE. It was blocked on [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 26 and the fix landed: `fklua mod --data-module` with no positional. The `test/fixtures/fastbelt` workaround it would have needed is deleted rather than spent. These two have no suite of their own, so the goldens are `mig`'s whole log set |
 | **7 (done)** | `bench/mods/*` | LAST, and alone. Every published performance figure in this repository was measured with those setup mods, so the port has to carry a comparability gate the suites do not need: the same matrix cell, INTERLEAVED in one session, old and new setup mods against the same `dist/`, with the no-mod control in the same session. Session drift on this machine is 25-35% |
-| **8** | `mig21`'s observer again, in RUST | the parity exercise. One observer written twice against one ABI is the strongest statement this repository can make about FkLua's second backend, and `mig21` is the right one: no `--create` phase, so the whole thing is one load and one set of assertions |
+| **8 (done)** | `mig21`'s observer again, in RUST | the parity exercise, and it CLOSES the on-engine programme. One observer written twice against one ABI is the strongest statement this repository can make about FkLua's second backend, and `mig21` was the right one: no `--create` phase, so the whole thing is one load and one set of assertions. **51 lines, both fixtures, byte-identical, no mask** -- and the Rust observer is the staged one from here, with the Go source deleted |
 
 ### What waits for a 2.0 binary
 
