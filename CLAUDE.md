@@ -421,11 +421,14 @@ test/                    headless verification, FOURTEEN suites (see below).
                          STACKED at once -- the pair of conditions `kindAt`
                          needs to be reached at all ("Stacked sushi").
                          `mig` is the only suite whose two phases run under
-                         DIFFERENT MOD SETS, and mods/belt-balancer-2 is a
-                         data-stage-only stand-in that is staged under ALL FOUR
-                         of `legacyIncumbents`' names -- one directory, its
-                         info.json rewritten at staging time, because what
-                         differs between the four is the NAME and nothing else.
+                         DIFFERENT MOD SETS, and its incumbent stand-in
+                         (guest/go/obs/bb2data) is a DATA-STAGE-ONLY package --
+                         no control module at all, one of two here -- staged
+                         under ALL FOUR of `legacyIncumbents`' names: one
+                         package, its info.json rewritten at staging time,
+                         because what differs between the four is the NAME and
+                         nothing else. The stranger who owns the same prototype
+                         name is guest/go/obs/foreigndata, the second.
                          Its observer builds a DAMAGED part, an UNCOMMON one, a
                          column of four parts across TWO FORCES and a SECOND
                          SURFACE, because health, quality, the per-force
@@ -713,7 +716,7 @@ What rules it out now is **multiplayer**. A client joining mid-game would run th
 
 - **The WHOLE dump is hashed, not this mod's prototypes.** A data stage can reach anything: `technology.go` reads base's `logistics` unit, and the Lua it replaced held that unit BY REFERENCE, so an edit to our copy would silently have edited base's technology. A subset hash is blind to the entire class of defect where a data stage damages somebody else's prototypes.
 - **`jq -S` and not the engine's own `Prototype list checksum`.** Key order in the dump is INSERTION order, so re-ordering six `data:extend` calls -- which is exactly what a port from six files to one hook does -- makes byte-different dumps of an identical game; `-S` sorts that away and preserves a real field change. The engine's checksum is order-insensitive, which is the tempting shortcut, and it is measured BLIND TO FIELD VALUES (unmoved when a `stack_size` went 1 -> 42). A gate that cannot fail on the defect class a port most likely produces is not a gate. It is recorded as a smoke test and labelled as one.
-- **TWO MOD SETS, because `legacy.go` has two arms.** `base` is this mod alone, where nobody owns `balancer-part` and the stub IS defined; `incumbent` stages `test/mods/belt-balancer-2` beside it, which owns the name, so the branch takes its other arm and emits nothing. A one-armed gate would never have looked at the half that matters to a migrating player.
+- **TWO MOD SETS, because `legacy.go` has two arms.** `base` is this mod alone, where nobody owns `balancer-part` and the stub IS defined; `incumbent` stages the `mig` suite's Belt Balancer stand-in beside it, which owns the name, so the branch takes its other arm and emits nothing. A one-armed gate would never have looked at the half that matters to a migrating player.
 - **A golden is per ENGINE and per MOD SET** and the file says so. The dump carries every prototype every mod defined, so a machine with different DLC produces a different hash for a mod that is perfectly fine; a golden whose engine does not match the binary is a SKIP with a message, never a failure.
 
 **Red-proven twice, and the two proofs catch different things — which is the result rather than a formality.** Both injected, observed and reverted on 2026-08-25:
@@ -1048,7 +1051,7 @@ And **the butterfly balances COUNTS, not KINDS.** Nothing in `plan.Build` knows 
 
 ### `mig` -- `test/assert-mig.py`, a save that used to be somebody else's
 
-The ninth suite, **seven legs and two name probes**, and **the only one whose two phases run under different mod sets** -- a mod is installed or uninstalled between `--create` and `--benchmark`. Its rigs, its numbers, its seventeen red proofs and the run against the real Belt Balancer 2 are in "Adopting a Belt Balancer 2 or 3 save", which is where the whole feature lives; what is worth knowing here is that `test/mods/belt-balancer-2` is a DATA-STAGE-ONLY stand-in carrying the real mod's own name and version, so `script.active_mods` sees what it would really see -- and that it is staged under **all four** of `legacyIncumbents`' names, by copying the one directory and rewriting its `info.json` at staging time.
+The ninth suite, **seven legs and two name probes**, and **the only one whose two phases run under different mod sets** -- a mod is installed or uninstalled between `--create` and `--benchmark`. Its rigs, its numbers, its seventeen red proofs and the run against the real Belt Balancer 2 are in "Adopting a Belt Balancer 2 or 3 save", which is where the whole feature lives; what is worth knowing here is that `guest/go/obs/bb2data` is a DATA-STAGE-ONLY stand-in carrying the real mod's own name and version, so `script.active_mods` sees what it would really see -- and that it is staged under **all four** of `legacyIncumbents`' names, by copying the one package and rewriting its `info.json` at staging time.
 
 **The legs cover TWO AXES and neither is a subset of the other**: WHICH MOD owns `balancer-part` (four incumbent names and a stranger who is none of them), and WHICH TRANSITION of `legacy.go`'s state machine the load makes. The second axis is the one that was empty: until 2026-08-20 only `Blocked -> Done` by removal was ever driven, so the `Done -> Blocked` recheck that `fk_on_configuration_changed` exists for had no test at all, and neither did the promise `legacyCheck` makes to a stranger in as many words. `readd` and `fgone` are those two. **Both axes survived the single-edge port untouched**, because the state machine knows nothing about belts.
 
@@ -2057,7 +2060,7 @@ The **ninth** suite, and the only one whose two phases run under **different mod
 | **which mod** | `belt-balancer-2` (legs 1, 2, 5), `belt-balancer-3` (leg 3), `belt-balancer` and `belt-balancer-performance` (the two probes), a STRANGER who is none of them (legs 6, 7), and nobody at all (leg 4) |
 | **which transition** | `Unchecked -> Done` on a new save (1), `Blocked -> Done` when an incumbent is removed (2, 3), Done with nothing to find and the build path doing the work (4), **`Done -> Blocked` when an incumbent ARRIVES (5)**, Blocked and staying Blocked (6), **Blocked -> Done when the STRANGER is removed (7)** |
 
-`test/mods/belt-balancer-2` is a **DATA-STAGE-ONLY stand-in** under the real mod's own name and version, so `script.active_mods` sees what it would really see. It has no control stage at all, deliberately: the real mod's runtime is the one thing the migration cannot recover, and none of its art is used.
+`guest/go/obs/bb2data` is a **DATA-STAGE-ONLY stand-in** under the real mod's own name and version, so `script.active_mods` sees what it would really see. It has no control stage AT ALL -- not an inert one, none: `fklua mod --data-module` with no control positional, which is what it always wanted and could not have until 2026-08-25 ([`FKLUA-GAPS.md`](FKLUA-GAPS.md) item 26). That is deliberate rather than incidental: the real mod's runtime is the one thing the migration cannot recover, so a stand-in that balanced would be modelling it. None of its art is used.
 
 **IT IS STAGED UNDER ALL FOUR INCUMBENT NAMES AND THERE IS ONE COPY OF IT.** What differs between the four rows of `legacyIncumbents` is the NAME and nothing else — the prototypes are the same prototypes — so `mig_standin` copies the one directory and rewrites `info.json`'s `name` and `version` at staging time, into a directory named for the target mod (Factorio requires that). The rewrite is checked by two greps, because a silently unrenamed copy would stage belt-balancer-2 under every name and pass every leg.
 
@@ -2132,7 +2135,7 @@ Plus **a second surface**, `bbb-mig-b`, carrying two more parts and their belts;
 
 **That last row is the whole reason the leg exists.** `legacyBuilt` is gated on the phase being Done, and a gate reading the wrong phase does not crash, does not lose an item and does not move a rate: it **silently swaps a working mod's freshly built entity out from under it**. Nothing else in this suite can see it.
 
-**Leg 6, `foreign`, is the stranger.** `test/mods/bbb-mig-foreign` defines `balancer-part` exactly as the incumbents do under a name this mod has never heard of, and it STAYS installed while this mod arrives beside it. Measured: **0 converted**, census `31 / 0` unmoved at every sample, the stranger's item still placing the stranger's entity, and the audit at **`clusters=0 parts=0 nets=0 drift=0 unbuilt=0 refused=0`** -- this mod owns nothing at all in that save, which since the port includes REFUSING nothing: a refusal there would mean a stranger's balancer had been converted and then declined. Its damaged part is still at **85.0 of 170.0**, still **uncommon**, and still a `balancer-part`; the second force's `bbb-balancer` is **false**, because a grant there would mean something of the stranger's had been converted.
+**Leg 6, `foreign`, is the stranger.** `guest/go/obs/foreigndata` defines `balancer-part` exactly as the incumbents do under a name this mod has never heard of, and it STAYS installed while this mod arrives beside it. Measured: **0 converted**, census `31 / 0` unmoved at every sample, the stranger's item still placing the stranger's entity, and the audit at **`clusters=0 parts=0 nets=0 drift=0 unbuilt=0 refused=0`** -- this mod owns nothing at all in that save, which since the port includes REFUSING nothing: a refusal there would mean a stranger's balancer had been converted and then declined. Its damaged part is still at **85.0 of 170.0**, still **uncommon**, and still a `balancer-part`; the second force's `bbb-balancer` is **false**, because a grant there would mean something of the stranger's had been converted.
 
 **Leg 7, `fgone`, is the stranger UNINSTALLED**, which `legacyCheck` promises in as many words — *"the stranger can be uninstalled too, and on that load the stub appears and their balancers become ours, which is the same promise the incumbents get"* — and which nothing tested until it existed. It is not leg 6 with a different hook, and the difference is **when this mod is installed**: leg 6 has no guest at all in phase one, so the only thing it can watch a stranger's entities do is stand still. Here both mods are installed from the first byte, so the observer BUILDS nineteen of the stranger's `balancer-part` entities with a guest watching — and the guest must not touch one of them. Measured 2026-08-20:
 

@@ -338,6 +338,14 @@ $(DIST)/obs-%.wasm: $(OBS_SRC) guest/go/fkapi/fkapi.go
 OBS_COMMON := --persist=$(PERSIST) --gc=leaking --api=$(MOD_API) \
               --factorio-version $(MOD_SERIES) --author BetterBeltBalancer
 
+# A DATA-STAGE-ONLY package takes NEITHER of those two flags, and they are
+# refused rather than ignored: each describes how a CONTROL guest is compiled,
+# and there is none. --api goes too, for a plainer reason -- it picks the
+# description the packaged member table comes from and such a package has no
+# member table, no fk_api_gen.lua and no fkapi import anywhere in the guest that
+# fed it. What is left is identity.
+OBS_DATA_ONLY := --factorio-version $(MOD_SERIES) --author BetterBeltBalancer
+
 OBS_M1_DIR    := $(OBS_DIST)/bbb-m1-test_0.1.0
 OBS_SEDGE_DIR := $(OBS_DIST)/bbb-sedge-test_0.1.0
 OBS_MAR_DIR   := $(OBS_DIST)/bbb-marathon-test_0.1.0
@@ -354,10 +362,20 @@ OBS_EDGE_DIR  := $(OBS_DIST)/bbb-edge-test_0.1.0
 # test/interactive/README.md, and 0.2.0 is the version its hand-written
 # info.json carried.
 OBS_IACT_DIR  := $(OBS_DIST)/bbb-interactive-setup_0.2.0
+# THE TWO PACKAGES HERE THAT ARE NOT OBSERVERS AT ALL, and the only two in this
+# repository with no control stage: the `mig` suite's incumbent stand-in and the
+# stranger who owns its prototype name. Their versions are the ones their
+# hand-written info.json files carried -- belt-balancer-2's is the real mod's own
+# 2.0.9, which `script.active_mods` is asserted on -- and mig_standin rewrites
+# that one at staging time to put the same package in under all four incumbent
+# names.
+OBS_BB2_DIR     := $(OBS_DIST)/belt-balancer-2_2.0.9
+OBS_FOREIGN_DIR := $(OBS_DIST)/bbb-mig-foreign_0.1.0
 
 observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR) $(OBS_MAR_DIR) $(OBS_MIG21_DIR) \
            $(OBS_QUAL_DIR) $(OBS_MIX_DIR) $(OBS_PLAT_DIR) $(OBS_MIG_DIR) \
-           $(OBS_M2_DIR) $(OBS_M3_DIR) $(OBS_EDGE_DIR) $(OBS_IACT_DIR)
+           $(OBS_M2_DIR) $(OBS_M3_DIR) $(OBS_EDGE_DIR) $(OBS_IACT_DIR) \
+           $(OBS_BB2_DIR) $(OBS_FOREIGN_DIR)
 
 $(OBS_M1_DIR): $(DIST)/obs-m1.wasm
 	@mkdir -p $(OBS_DIST)
@@ -550,6 +568,43 @@ $(OBS_IACT_DIR): $(DIST)/obs-iact.wasm $(DIST)/obs-iactdata.wasm
 	  --dependency "base >= 2.1.0" --dependency "better-belt-balancer" \
 	  -o .
 
+# THE TWO DATA-STAGE-ONLY PACKAGES, WHICH ARE NOT OBSERVERS AND HAVE NO CONTROL
+# STAGE. They are the `mig` suite's third-party half: the mod the migration
+# adopts a save from, and the stranger it must leave alone. Each is a `fk_data`
+# export and nothing else, so `fklua mod` takes NO control positional -- the
+# packages ship info.json, fk_abi.lua, fk_data.lua, fk_data_module.lua and the
+# stage hook, and no control.lua, fk_module.lua or fk_api_gen.lua at all.
+#
+# THEY ARE THE FIRST PACKAGES IN THE ESTATE TO USE --include, and it carries the
+# one thing neither a Go guest nor `fklua mod` can produce: a locale file. A
+# Factorio locale is .cfg and there is no data-stage API that could emit one, so
+# test/obs-data/<mod>/ holds each mod's tree and --include merges its CONTENTS
+# into the package -- the observers' form of the `data = "mod-data"` the shipped
+# mod's manifest carries. See test/obs-data/README.md.
+$(OBS_BB2_DIR): $(DIST)/obs-bb2data.wasm $(shell find test/obs-data/belt-balancer-2 -type f)
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod \
+	  $(OBS_DATA_ONLY) --data-module $(abspath $(DIST)/obs-bb2data.wasm) \
+	  --include $(abspath test/obs-data/belt-balancer-2) \
+	  --name belt-balancer-2 --version 2.0.9 \
+	  --title "Belt Balancer 2 (harness stand-in)" \
+	  --description "A DATA-STAGE-ONLY stand-in for Belt Balancer 2, for the mig suite. It defines the prototypes the real mod defines, under the real mod's own name and version, and nothing else: no runtime, no balancing, no art of theirs." \
+	  --dependency "base >= 2.1.0" \
+	  -o .
+
+$(OBS_FOREIGN_DIR): $(DIST)/obs-foreigndata.wasm $(shell find test/obs-data/bbb-mig-foreign -type f)
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod \
+	  $(OBS_DATA_ONLY) --data-module $(abspath $(DIST)/obs-foreigndata.wasm) \
+	  --include $(abspath test/obs-data/bbb-mig-foreign) \
+	  --name bbb-mig-foreign --version 0.1.0 \
+	  --title "A stranger who owns the name" \
+	  --description "The mig suite's NEGATIVE: a mod that is not any fork of the incumbent and that defines \`balancer-part\` anyway. Nothing of this mod's may ever be converted, and the guard that says so is the bbb-legacy-stub marker prototype, which this mod's presence stops the data stage defining." \
+	  --dependency "base >= 2.1.0" \
+	  -o .
+
 # --- housekeeping ------------------------------------------------------------
 
 check:
@@ -631,7 +686,11 @@ check:
 # about three seconds per arm against the suites' minutes -- and because it is
 # the one gate that stays meaningful when the guest under test has no runtime
 # behaviour to measure at all.
-datastage-check: mod
+# The incumbent arm stages the `mig` suite's stand-in, which is a compiled data
+# module since phase 6 of the estate port -- so this gate needs that ONE package
+# built. Not `observers`: nothing else here stages a test mod, and relinking
+# twelve of them to hash a data dump would be a worse trade than naming the one.
+datastage-check: mod $(OBS_BB2_DIR)
 	FACTORIO_BIN="$(FACTORIO_BIN)" test/check-datastage.py
 
 clean:

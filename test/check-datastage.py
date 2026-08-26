@@ -48,11 +48,14 @@ TWO GOLDEN ARMS, AND THE SECOND ONE IS THE HALF THAT COULD ROT SILENTLY.
 
   base        this mod alone. The legacy stub IS defined (nobody else owns
               `balancer-part`), so data-final-fixes emits three prototypes.
-  incumbent   this mod plus test/mods/belt-balancer-2, staged under an
-              incumbent's own name. It owns `balancer-part`, so the stub branch
-              takes its OTHER arm and emits nothing at all -- which is the
-              "leave it alone while it is installed" half of the migration,
-              and a one-armed gate would never have looked at it.
+  incumbent   this mod plus the `mig` suite's Belt Balancer stand-in, staged
+              under an incumbent's own name. It owns `balancer-part`, so the
+              stub branch takes its OTHER arm and emits nothing at all -- which
+              is the "leave it alone while it is installed" half of the
+              migration, and a one-armed gate would never have looked at it.
+              Because the hash covers the WHOLE dump, this arm is also a
+              byte-level statement about the stand-in's own prototypes, which
+              is what carried them through their port to Go (`staged_mod`).
 
 A GOLDEN IS PER ENGINE AND PER MOD SET, and says so in the file: the dump
 contains every prototype every mod defined, base's own bundled data included, so
@@ -165,6 +168,37 @@ ARMS = {
     "base": [],
     "incumbent": [INCUMBENT],
 }
+
+
+def staged_mod(name: str) -> Path:
+    """Where a staged mod's source directory is, which moved in phase 6.
+
+    THE STAND-IN IS A COMPILED PACKAGE NOW, not a directory of hand-written Lua
+    (agents/estate-port.md, phase 6), so it lives under dist/obs/<name>_<version>
+    and has to be BUILT before this gate can stage it. `make datastage-check`
+    names that ONE package as a prerequisite rather than all twelve observers,
+    and running this script by hand against a tree that has never built it is
+    what the error below is for.
+
+    The version is globbed for the reason run.sh's `copy_testmod` globs it: it is
+    the stand-in's own and has nothing to do with this mod's.
+
+    WHY THIS ARM CARES AT ALL, given that what it is testing is OUR stub branch
+    taking its other arm: the golden hashes the WHOLE dump, incumbent prototypes
+    included. So this arm's hash is also a byte-level statement about the
+    stand-in itself -- which is what made it the sharpest gate the port of the
+    stand-in had, and what makes a stale dist/obs an error rather than a
+    fallback to something that would silently hash differently.
+    """
+    hits = sorted((ROOT / "dist" / "obs").glob(f"{name}_*"))
+    if hits:
+        return hits[0]
+    legacy = ROOT / "test" / "mods" / name
+    if legacy.is_dir():
+        return legacy
+    sys.exit(f"no package under dist/obs for {name}, and no test/mods/{name}.\n"
+             f"The stand-in is a compiled data module since phase 6 of the estate "
+             f"port; build it with `make observers`.")
 
 # ---------------------------------------------------------------------------
 # THE VARIANT ARMS: one per non-default value of each cost setting.
@@ -370,13 +404,13 @@ def build_fixture(series: str, out: Path) -> Path:
     A WHOLE FACTORIO MOD, COMPILED FROM GO, and the reason it is built rather
     than committed is in FIXTURE_SRC's own go.mod.
 
-    THE INERT CONTROL GUEST IS A WORKAROUND AND IS LABELLED AS ONE. `fklua mod`
-    takes the control module as its one positional argument and answers
-    `fklua mod: no input module` without it, so a data-stage-only mod cannot be
-    packaged -- FKLUA-GAPS.md item 25. The `inert` package is an empty `main`
-    that exports no hook, which the packager itself reports as "the mod will load
-    and then never be called again". That is exactly the wanted behaviour and
-    exactly what the gap costs.
+    IT HAS NO CONTROL STAGE, which is what this fixture always wanted and could
+    not have. `fklua mod` used to take the control module as its one positional
+    argument, so a data-stage-only mod could not be packaged at all
+    (FKLUA-GAPS.md item 26) and this fixture carried an inert empty `main` --
+    about 113 KB of generated Lua that was `require`d and never called -- to get
+    round it. The control module is optional when the mod has a data one now, so
+    the workaround is deleted and the package is what it says: prototypes.
     """
     fklua = os.environ.get("FKLUA", str(ROOT.parent / "FkLua" / "bin" / "fklua"))
     if not os.access(fklua, os.X_OK):
@@ -386,11 +420,14 @@ def build_fixture(series: str, out: Path) -> Path:
         sys.exit("tinygo is not on PATH; the speed arm builds its fixture from Go")
 
     flags = ["-target=wasm-unknown", "-scheduler=none", "-gc=leaking", "-opt=2"]
-    for pkg, name in (("./datastage", "data.wasm"), ("./inert", "inert.wasm")):
-        subprocess.run(["tinygo", "build", *flags, "-o", str(out / name), pkg],
-                       cwd=FIXTURE_SRC, check=True)
+    subprocess.run(["tinygo", "build", *flags, "-o", str(out / "data.wasm"),
+                    "./datastage"], cwd=FIXTURE_SRC, check=True)
     subprocess.run(
-        [fklua, "mod", str(out / "inert.wasm"), "--persist=none",
+        # No positional module and no --persist: both describe a control guest
+        # and there is none. --persist, --gc and --fuel are REFUSED here rather
+        # than ignored, which is why the flag went rather than being left to be
+        # harmless.
+        [fklua, "mod",
          "--data-module", str(out / "data.wasm"),
          "--name", FIXTURE_NAME, "--version", FIXTURE_VERSION,
          "--title", "BBB fast-belt fixture", "--author", "BetterBeltBalancer",
@@ -402,11 +439,12 @@ def build_fixture(series: str, out: Path) -> Path:
         # is the whole point: `fklua mod` reads the manifest in its working
         # directory for every identity it was not given a flag for. Run from the
         # repository root it would package the fixture with THIS MOD's asset
-        # tree merged in (`data = "mod-data"` is the default for --include) and
-        # with `gc = "collected"`, which the inert guest does not export a
-        # collector for -- measured, and it is a packaging error rather than a
-        # silent one. A directory with no manifest is a fixture built from its
-        # flags alone.
+        # tree merged in (`data = "mod-data"` is the default for --include), so
+        # the fixture would carry this mod's graphics, locale and changelog. A
+        # directory with no manifest is a fixture built from its flags alone.
+        # (The manifest's `gc = "collected"` is harmless here either way: a
+        # data-only package refuses the typed --gc flag and ignores the key,
+        # because both describe a control guest and there is none.)
         cwd=str(out), check=True, capture_output=True, text=True)
     return out / f"{FIXTURE_NAME}_{FIXTURE_VERSION}"
 
@@ -422,18 +460,23 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
         shutil.copytree(mod_dir, mods / mod_dir.name)
         stamped = stamp_engine(mods / mod_dir.name / "info.json", series)
 
-        staged = [ROOT / "test" / "mods" / e for e in ARMS.get(arm, [])]
-        staged += list(extras or [])
-        for extra in staged:
-            shutil.copytree(extra, mods / extra.name)
-            stamped |= stamp_engine(mods / extra.name / "info.json", series)
+        # An ARMS entry is a MOD NAME and is staged under it; an `extras` entry is
+        # a built package already named the way its builder named it. The two are
+        # spelled separately because the stand-in's directory under dist/obs
+        # carries a version suffix and this arm's whole point is that Factorio
+        # sees the incumbent under its own name.
+        staged = [(staged_mod(e), e) for e in ARMS.get(arm, [])]
+        staged += [(e, e.name) for e in (extras or [])]
+        for extra, dest in staged:
+            shutil.copytree(extra, mods / dest)
+            stamped |= stamp_engine(mods / dest / "info.json", series)
         if stamped:
             print(f"  note {arm}: a staged manifest was re-stamped for {series}; "
                   f"this is the cross-series path, not the shipping one")
 
         mod_name = json.loads((mods / mod_dir.name / "info.json").read_text())["name"]
-        extra_names = [json.loads((mods / e.name / "info.json").read_text())["name"]
-                       for e in staged]
+        extra_names = [json.loads((mods / dest / "info.json").read_text())["name"]
+                       for _, dest in staged]
         entries = [{"name": "base", "enabled": True}]
         entries += [{"name": k, "enabled": v} for k, v in sorted(DLC.items())]
         entries += [{"name": mod_name, "enabled": True}]

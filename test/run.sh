@@ -464,10 +464,20 @@ JSON
 # requires a mod directory to be named for the mod it holds, so the copy is
 # staged under the target name.
 #
+# IT IS A PACKAGE WITH NO CONTROL STAGE, one of the two in this repository
+# (agents/estate-port.md, phase 6), so it comes through `copy_testmod` like every
+# other staged mod: from here it is one more directory under dist/obs with an
+# info.json in it. What it does not have is a control.lua, and the only thing in
+# this file that asks a staged mod for one is `stage_fixture` -- which stages the
+# mig21 fixtures' own observers and never either stand-in. Its `name` rewrite
+# lands on a generated info.json for the same reason it landed on the
+# hand-written one: `fklua mod` emits `  "name": "..."`, two-space indented, and
+# the substitutions are anchored on exactly that.
+#
 # mig_standin <workdir> <mod-name> <version>
 mig_standin() {
   local work="$1" name="$2" version="$3"
-  cp -R "$ROOT/test/mods/belt-balancer-2" "$work/mods/$name"
+  copy_testmod belt-balancer-2 "$work/mods/$name"
   perl -pi -e '
     s/^(\s*)"name":\s*"[^"]*"/$1"name": "'"$name"'"/;
     s/^(\s*)"version":\s*"[^"]*"/$1"version": "'"$version"'"/;
@@ -484,8 +494,8 @@ mig_standin() {
 # stage_mig <workdir> <extra-mod-name> <standin-version-or-empty> <bbb-in-phase-one>
 #
 # A non-empty version means the extra mod is an INCUMBENT STAND-IN, staged under
-# that name by mig_standin. An empty one means it is a real directory under
-# test/mods (bbb-mig-foreign, the stranger).
+# that name by mig_standin. An empty one means it is a mod staged under its own
+# name (bbb-mig-foreign, the stranger), which is `copy_testmod` unadorned.
 stage_mig() {
   local work="$1" extra="$2" ver="$3" bbb="$4"
   rm -rf "$work"
@@ -597,6 +607,14 @@ stage_fixture() {
   stamp_engine "$work/mods/$testmod" "$work/mods/bbb-mig21-observer"
 
   # The prototypes, and nothing else. See above.
+  #
+  # THIS OVERWRITE ONLY EVER LANDS ON A MOD THAT HAS A CONTROL STAGE, and since
+  # phase 6 of the estate port that is worth saying out loud: two packages in
+  # this repository have none (the `mig` suite's stand-in and its stranger), and
+  # writing a control.lua into one of those would ADD a stage rather than
+  # neutralize one -- an inert comment file, harmless but a lie about the mod.
+  # It cannot happen: `$testmod` here is only ever a mig21 fixture's own
+  # observer, which is a full package.
   cat > "$work/mods/$testmod/control.lua" <<'LUA'
 -- Neutralized by test/run.sh for the mig21 suite: this mod is staged for its
 -- DATA STAGE only, because the fixture world is full of its prototypes and

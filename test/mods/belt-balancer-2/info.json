@@ -1,9 +1,0 @@
-{
-  "name": "belt-balancer-2",
-  "version": "2.0.9",
-  "title": "Belt Balancer 2 (harness stand-in)",
-  "author": "BetterBeltBalancer",
-  "factorio_version": "2.1",
-  "description": "A DATA-STAGE-ONLY stand-in for Belt Balancer 2, for the mig suite. It defines the prototypes the real mod defines, under the real mod's own name and version, and nothing else: no runtime, no balancing, no art of theirs.",
-  "dependencies": ["base >= 2.1.0"]
-}

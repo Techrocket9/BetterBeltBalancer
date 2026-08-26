@@ -6,9 +6,9 @@ Items are numbered in the order they were found; FkLua's own notes refer to thes
 
 | status | items |
 | --- | --- |
-| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 27 |
+| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28 |
 | Closed, no change needed | 17 (a budget rather than a defect) |
-| Open | 18, 26 |
+| Open | 18 |
 
 ## 1. `fklua mod` could not carry the data stage
 
@@ -120,15 +120,17 @@ The acceptance gate is `factorio --dump-data`, which runs the settings and data 
 
 One limit found by porting a real mod, and it is not in the ABI. A data stage is straight-line table building through small helpers, which is what LLVM inlines most eagerly: at `-opt=2` all six of this mod's data-stage sections folded into one wasm function, which lowered to one Lua function of 28,139 lines, and Lua 5.2 refused to compile it (`control structure too long near 'trap_unreachable'`) because a jump offset lives in an 18-bit field. Marking the section functions `//go:noinline` restores the source's own boundaries, one Go function to one Lua function, and the largest fell to 3,414 lines with the emitted module 27% smaller as well. The cost is one call per section on a path that runs once per game load. The message names neither the cause nor a file, so a guest author meeting it has nothing to go on; an emitter that split an over-long function, or a packaging check on emitted function length, would turn it into something actionable.
 
-## 26. `fklua mod` cannot package a mod that has only a data stage
+## 26. `fklua mod` could not package a mod that has only a data stage
 
 `fklua mod` takes the control module as its one positional argument and answers `fklua mod: no input module` without it, so a mod whose whole content is prototypes has no way to be packaged. A data-stage-only mod is an ordinary shape: most of the mod portal adds items, recipes and entities and no behaviour at all, and item 25's own design point is that the data stage is now a separate module from the control one.
 
 Found while building a test fixture for this mod's belt-speed derivation. The derivation reads every belt-connectable prototype in the game and gives the hidden network the fastest speed among them, and no mod set that can be installed here has a belt faster than the network's own floor, so proving it derives anything at all requires a mod that adds one. That mod needs a data stage and nothing else.
 
-The workaround is a control module that is an empty `main` with no exported hook, packaged alongside the real data module. It works, and `fklua mod` reports it accurately ("This guest exports no event hook, so the mod will load and then never be called again"), at a cost of about 113 KB of generated Lua that is `require`d and never called. It is confined to [`test/fixtures/fastbelt`](test/fixtures/fastbelt) and nothing about it reaches the shipped mod.
+The workaround was a control module that is an empty `main` with no exported hook, packaged alongside the real data module. It worked, and `fklua mod` reported it accurately ("This guest exports no event hook, so the mod will load and then never be called again"), at a cost of about 113 KB of generated Lua that is `require`d and never called. It was confined to [`test/fixtures/fastbelt`](test/fixtures/fastbelt) and nothing about it reached the shipped mod.
 
-What would close it: accept `--data-module` with no positional module and write `info.json` plus the stage files alone, generating no `control.lua`. The stage-file generation is already gated on which hooks the wasm exports, so the machinery to emit a package with no control stage is present; what is missing is a way to ask for one.
+Fixed upstream in the shape asked for: the control module is optional when the mod has a data one, so `fklua mod --data-module DATA.wasm` with no positional argument writes `info.json`, `fk_abi.lua`, `fk_data.lua`, `fk_data_module.lua` and one file per stage hook, and no `control.lua`, `fk_module.lua` or `fk_api_gen.lua` at all. `fk_abi.lua` stays because `fk_data.lua` requires it for the codec. `--persist`, `--gc` and `--fuel` are refused there rather than ignored, because each describes how a control guest is compiled and there is none -- and the refusal is on the typed flag alone, so a project whose manifest carries a `gc` key can still package a data-only mod from the command line, which is what this repository does.
+
+The two mods that closed it are the test estate's third-party half: the `mig` suite's Belt Balancer stand-in, which owns `balancer-part` while it is installed, and the stranger who owns the same name and must never be converted. Both were hand-written Lua data stages with no control stage in either version, so they are the shape this item describes rather than a shape adapted to it. The equivalence gate was the sharpest one available: `test/check-datastage.py`'s incumbent arm hashes Factorio's own `--dump-data` output for the whole prototype table with the stand-in's prototypes in it, and the hash did not move. Neither did any of the `mig` suite's 819 tagged log lines across sixteen logs. The `fastbelt` fixture keeps its empty `main` for now -- it is one directory, it is green, and moving it is a separate change to a gate that is not otherwise being touched.
 
 ## 27. A guest could not read a profiler, because Factorio's global functions were not bound
 

@@ -4,18 +4,19 @@
 mod got there in two rounds -- `fklua mod` has always generated the control
 stage, and the 2026-08-25 round replaced ten hand-written data-stage files with a
 second compiled guest ([`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 25). What is left
-is the TEST ESTATE, and after phase 4 it is **1,827 committed lines** of it:
-626 across four files under `test/mods`, 462 in the interactive checklist's
-staging mod, 739 in the `bench/` harness's setup mod. Lua that nothing in
-`make check` can reach, that no toolchain type-checks, and that only a Factorio
-run can execute at all. It was 8,524 over twenty-four files when the pilot
-started, and none of what is left is a SUITE.
+is the TEST ESTATE, and after phase 6 it is **1,217 committed lines** of it: 478
+in `bbb-flip-test`, which waits for a Factorio 2.0 binary, and 739 in the
+`bench/` harness's setup mod. Lua that nothing in `make check` can reach, that no
+toolchain type-checks, and that only a Factorio run can execute at all. It was
+8,524 over twenty-four files when the pilot started, and none of what is left is a
+SUITE.
 
 This file is the programme for removing it, and the record of what each phase
 measured. The pilot is `m1` and `sedge`, phase 2 is `mar`, `mig21` and `qual`,
-phase 3 is `mix`, `plat` and `mig`, and phase 4 is `m2`, `m3` and `edge` -- the
-three biggest -- all done 2026-08-25. **Every suite in the estate is a Go
-observer now.**
+phase 3 is `mix`, `plat` and `mig`, phase 4 is `m2`, `m3` and `edge` -- the three
+biggest -- phase 5 is the interactive staging mod and phase 6 the two
+data-stage-only stand-ins, all done 2026-08-25. **Every suite in the estate is a
+Go observer now, and so is every mod either of them stages.**
 
 ---
 
@@ -65,6 +66,11 @@ guest/go/obs/sedgedata/  package main -- sedge's DATA STAGE, a second module
 guest/go/obs/mar/        phase 2, and its data stage in obs/mardata/
 guest/go/obs/mig21/      phase 2 -- no data stage, and no fk_on_init either
 guest/go/obs/qual/       phase 2, and its data stage in obs/qualdata/
+guest/go/obs/bb2data/    phase 6 -- a DATA STAGE WITH NO OBSERVER above it, and
+guest/go/obs/foreigndata/  the same. Not observers: the mig suite's third-party
+                         half, packaged with no control module at all
+test/obs-data/           the estate's non-Lua asset trees, one directory per mod,
+                         carried by `fklua mod --include`. Two locale files
 ```
 
 **Inside the mod's own Go module (`guest/go`), not a module of their own.** That
@@ -1288,9 +1294,259 @@ and never ticks.
   and note that these two stand-ins would then be the first packages in the
   repository with no control stage at all -- which `stage_fixture`'s
   `control.lua` overwrite, and `copy_testmod` itself, have never had to face.
+  (**It landed and was preferred**; `copy_testmod` needed nothing, and
+  `stage_fixture` is documented as unreachable from either stand-in rather than
+  guarded. Phase 6 below.)
 - **`copy_testmod` handles a non-0.1.0 version and a bare-name destination
   without any change to the runner**, which phase 5 is the proof of.
 - **`fkapi.TableSize` is STILL unused**, five phases in.
+
+---
+
+## Phase 6: the two data-stage-only stand-ins -- done 2026-08-25
+
+148 lines of Lua deleted across two mods, and **the first packages in this
+repository with no control stage at all**. The estate is **1,217 lines over four
+files**, from 8,524 over twenty-four when the pilot started: `bench/mods/*` (739,
+phase 7) and `bbb-flip-test` (478, the 2.0 session). Nothing else is left.
+
+`guest/go/obs/bb2data` is the `mig` suite's Belt Balancer stand-in and
+`guest/go/obs/foreigndata` is the stranger who owns its prototype name. What
+makes them different from the twelve observers above them:
+
+- **They are not observers.** They observe nothing, drive nothing and log
+  nothing. Each is a `fk_data` export and a `main() {}`, and the whole of what
+  they are is prototypes -- which is exactly the shape
+  [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 26 was open for.
+- **`fklua mod` takes NO control positional for them.** Each package is
+  `info.json`, `fk_abi.lua`, `fk_data.lua`, `fk_data_module.lua`, `data.lua` and
+  a locale file: six files, no `control.lua`, no `fk_module.lua`, no
+  `fk_api_gen.lua`. `fk_abi.lua` stays because `fk_data.lua` requires it for the
+  codec.
+- **`--persist`, `--gc` and `--api` are gone from their flag set.** The first two
+  are REFUSED rather than ignored, because each describes how a control guest is
+  compiled and there is none; `--api` goes for a plainer reason, which is that a
+  package with no member table has no description to pick. `OBS_DATA_ONLY` is
+  what is left, and it is identity alone.
+- **They are the estate's first `--include`.** A Factorio locale is `.cfg` and no
+  data-stage API can emit one, so `test/obs-data/<mod>/` holds each mod's tree
+  and `--include` merges its CONTENTS into the package -- the observers' form of
+  the `data = "mod-data"` the shipped mod's manifest carries. See
+  [`test/obs-data/README.md`](../test/obs-data/README.md).
+
+### The masks, proved by self-diff before a line was ported
+
+Phase 4's method, and the goldens here are somebody else's: these two have no
+suite, so what had to be captured is `test/run.sh mig`'s whole log set -- sixteen
+logs across seven legs and two name probes, the legs' two phases running under
+DIFFERENT MOD SETS. Two runs of the unmodified tree, back to back into the same
+tmp path so that no path mask is needed, normalised on the three established
+masks and diffed against each other: **identical across all 819 tagged lines**,
+with the only differences anywhere being the run's start timestamp, the free-disk
+figure, and the benchmark's own `Performed N updates` / `avg, min, max`
+millisecond lines. So those three masks are the only nondeterminism in this log
+set, and any diff after the port is a port defect.
+
+### The golden diff, which is empty
+
+**All 819 `[BBB]` and `[BBB-MIG]` lines across the sixteen logs are
+byte-identical, in order**, and so is every number `test/assert-mig.py` prints in
+every leg: 31 parts from 3 surfaces into 9 clusters, 2 forces, 85.0 of 170.0
+health, quality uncommon, 50 held with `place_result` flipped, the witness's 48
+copper at four samples, `sok2` at 2.000x and `sok4` at 3.997x, the refusal
+multiset `[2, 2, 2, 2, 2, 3, 4]`, and `clusters=9 parts=31 nets=2 drift=0
+unbuilt=0 refused=7`.
+
+What is left over is **four categories, and one of them is new to this phase**:
+
+| difference | what it is |
+|---|---|
+| the run's start timestamp, and the free-disk figure | wall clock; both moved between the two goldens too |
+| the benchmark's ms figures | the same |
+| `Checksum of belt-balancer-2` (and of `belt-balancer`, `-3`, `-performance`, and of `bbb-mig-foreign`) | the mod's files are different files. That IS the port -- and it is the SAME value under all four incumbent names, which is `mig_standin` staging one package four ways |
+| the save's own size, and the benchmark's `checksum:` | **new here, and measured rather than inferred** -- see below |
+
+**A save records the checksum of every mod that made it, and the state checksum
+covers it.** `4087984835` is the ported stand-in's mod checksum, and it is present
+as a little-endian `uint32` at offset 76 of the save's own `level-init.dat`. That
+is why the map grew by one to five bytes (zlib noise on a four-byte change) in the
+five legs that have a stand-in installed at `--create`, and why the benchmark's
+`checksum:` moved in the six legs that have one installed at `--benchmark`.
+**`mig4` is the control on both halves**: it is the one leg with no stand-in in
+either phase, and its map is byte-identical at 951,901 with its state checksum
+unmoved at 20,235,449. `mig5` is the other half of the same control -- no stand-in
+at create, so its map does not move; one at benchmark, so its checksum does.
+
+This retires the attribution earlier phases gave that row. Phases 1 to 4 read the
+state checksum as "Factorio's state checksum covers every mod's `storage`, and an
+observer's `storage` is a guest heap now", which cannot be what moved it here:
+neither stand-in has a control stage in EITHER version, so neither has ever had a
+`storage` at all. There is no `Loading script.dat` row in this diff for the same
+reason.
+
+### The gate that came for free, and it is the sharpest one this phase had
+
+**`test/check-datastage.py`'s `incumbent` arm hashes Factorio's own `--dump-data`
+of the WHOLE prototype table, with the stand-in's prototypes in it -- and the hash
+did not move.** `4ffb0e3b68f149d8` before the port and after it. That is a
+byte-level equivalence proof of the entity, the item, the recipe and the
+technology, taken by the engine rather than by anything in this repository, and it
+is a stronger statement than any log line could make: a log diff says the
+migration behaved the same, and this says the prototypes ARE the same.
+
+It needed one change to reach: the arm staged `test/mods/belt-balancer-2` by path,
+and the stand-in is a built package now. `staged_mod` resolves it out of
+`dist/obs` with the same glob `run.sh`'s `copy_testmod` uses, and
+`make datastage-check` names that ONE package as a prerequisite rather than all
+fourteen observers.
+
+### The other workaround that went with it, and it was not on the list
+
+**`test/fixtures/fastbelt/inert` is deleted.** It was the workaround item 26
+described -- an empty `main` compiled to about 113 KB of Lua that was `require`d
+and never called -- and the ledger's own preamble says every workaround in it is
+since deleted. The fixture packages data-only now (`--data-module` alone, no
+positional, no `--persist`) and the speed arm is green: `all four hidden
+prototypes at 0.5, from an underground belt`. It was Go rather than Lua, so it
+does not move the estate's line count; it moves the ledger's honesty.
+
+### The red proof: a prototype field is load-bearing to a conversion assertion
+
+Drop ONE field from the ported stand-in's entity -- `max_health = 170` -- and
+rebuild. Base's default for a `simple-entity-with-force` turns out to be **10**,
+so the `fid` rig's damage-to-85 clamps there, and **three assertions fire on the
+first conversion leg with `run.sh` exiting 1**:
+
+```
+  the fidelity part was at 10.0 of 10.0 in phase one: it was never damaged, so
+  an equality across the swap is vacuous
+  the damaged part is at 170.0 health at phase=t1 and was at 10.0 before the
+  swap: legacyConvertOne reads the health off the old entity and writes it onto
+  the new one, and a part silently repaired to full is a building this mod was
+  not asked to touch
+  ...and the same at phase=final
+```
+
+The first line is the one with teeth, and it is the suite's own anti-vacuity
+guard: a part that was never damaged sits at `max_health`, and an equality across
+the swap is then satisfied by a guest that copies nothing. One field of a
+third-party mod's prototype, reproduced in Go, is what makes the fidelity half of
+this whole feature a measurement.
+
+### `fklua api check --from 2.1.16 --to 2.0.77`
+
+| guest | surface | verdict |
+|---|---|---|
+| `obs-bb2data.wasm` | 0 members, 0 events, 0 concepts | **clean**, 0 findings, exit 0 |
+| `obs-foreigndata.wasm` | 0 members, 0 events, 0 concepts | **clean**, 0 findings, exit 0 |
+
+The empty surface is the expected answer and is recorded rather than assumed,
+exactly as phase 5 recorded it for `obs-iactdata`: a data guest imports fkdata and
+never fkapi, so it has no runtime API surface to break. Both stay STAMPED for the
+running engine.
+
+**And the generated `info.json` files are field-for-field identical to the
+hand-written ones they replace** -- name, version, title, author,
+`factorio_version`, description and dependencies. The one textual difference is
+that the JSON writer escapes `>` inside the dependency string, which
+`stamp_engine`'s clamp already matched both spellings of before this phase existed
+(*"`>` survives as a literal in a hand-written manifest and as > in one a JSON
+writer produced, so both forms are matched"*), and which `mig_standin`'s two
+anchored rewrites do not touch at all.
+
+### What it cost
+
+| | Lua | Go |
+|---|--:|--:|
+| `belt-balancer-2` source | 94 + 9 lines | 211 lines + a shared 102-line value kit |
+| `belt-balancer-2` staged | 3 files, ~10 KB | 6 files, **707 KB** |
+| `bbb-mig-foreign` source | 54 + 11 lines | 102 lines |
+| `bbb-mig-foreign` staged | 3 files, ~9 KB | 6 files, **475 KB** |
+
+**These are the two cheapest packages in the estate to build**: 0.68 s for both
+from a warm cache against about 1.8 s per observer, because a data guest is 63 to
+76 KB of wasm where an observer is a megabyte of one. `make observers` builds and
+packages all FOURTEEN from clean in **32 s** (phase 4 recorded 56 s for eleven, on
+a colder Go cache).
+
+The `mig` suite is **36.8 s** against the goldens' 36.1 -- half a megabyte of
+`fk_data_module.lua` being PARSED once per Factorio load, and nothing a tick does.
+The whole estate is **2m38s** collected and **2m45s** leaking, against 2m33s and
+2m45s after phase 4.
+
+### The `mar` slopes, unmoved
+
+The gate phase 2 added. This phase touches no observer and no harness, so it is a
+control rather than a risk -- and it is recorded because a shared package gaining
+a file is the shape that has moved it before:
+
+| leg | B/primitive | | leg | B/primitive |
+|---|--:|---|---|--:|
+| A | 1,280 | | E | 560 |
+| B | 352 | | G | 3,736 |
+| C | 1,209 | | F | 2,080 |
+| D | 32 | | linear memory | **3.92 MiB** |
+
+Byte-identical to phase 4's, which is byte-identical to the record this repository
+has carried since the single-edge port, with the calibration at 1,136 B and 0.0%
+spread.
+
+### Deviations, all recorded rather than hidden
+
+- **The two stand-ins do NOT share a prototype constructor**, and they define
+  almost the same thing: the item is identical and the entity differs by one
+  field. A constructor with a `resistances bool` on it would model the stranger
+  as a VARIANT of the incumbent, which is precisely the reading the whole negative
+  exists to refuse -- the runtime decision cannot be taken from the prototype, and
+  the code should not suggest otherwise. What IS shared is the value kit, which is
+  about Go and not about Factorio.
+- **`obsdata` gained the prototype-table shorthands, copied from the shipped
+  guest's `guest/go/data/value.go` rather than shared with it.** `guest/go/data`
+  is `package main` -- it has to be, an `//go:wasmexport fk_data` lives in it --
+  so nothing can import it. A third package both imported would couple the mod's
+  own data stage to the test estate's, which is exactly what `GUEST_SRC`
+  excluding `guest/go/obs` exists to prevent.
+- **Each `main` forwards the shorthands through one-line functions** rather than
+  package-level `var f = obsdata.F`. A function VALUE is an indirect call TinyGo
+  has no obligation to devirtualize; a one-line function is inlined away, and the
+  prototype tables read like the prototypes they are.
+- **`logistics`' research unit is read ONCE as a map and there is deliberately no
+  fallback.** Three separate deep `Get`s would be three host calls to answer one
+  question and could not tell a 2.0 trigger technology from a unit missing a
+  field. The shipped guest reads it the same way and then falls back to vanilla's
+  own cost; this must not, because a stand-in more robust than the mod it stands
+  in for would be modelling something false. Where `logistics` has no unit the
+  leaves are absent, `data:extend` refuses the technology by name and the load
+  stops -- the severity the Lua's own unguarded `attempt to index a nil value`
+  had, delivered by Factorio's own validator.
+- **The Lua's `util` require is gone and there was no hazard in it.** Both
+  stand-ins wrote `local util = require("util")` before calling
+  `util.empty_sprite()`, so unlike the shipped guest's legacy stub -- which called
+  it as an undeclared global and worked by load-order accident -- there was
+  nothing here to kill. `obsdata.EmptySprite()` is the same four fields written
+  out, for the same reason: `util` is a Lua library and a data guest has no Lua.
+
+### What phase 7 inherits
+
+- **The estate's remaining Lua is 1,217 lines over four files**: `bench/mods/`
+  (722 + 17) and `bbb-flip-test` (458 + 20), which waits for a 2.0 binary. Phase 7
+  is the last one this machine can do.
+- **`bench/` is MEASUREMENT INFRASTRUCTURE and its gate is not a golden log.**
+  Every published performance figure in this repository was measured with that
+  setup mod, so the port owes a COMPARABILITY gate the suites never needed: the
+  same matrix cell, INTERLEAVED in one session, the Lua setup mod and the Go one
+  against the same `dist/`, with the no-mod control in the same session, and
+  `scriptUpdate` medians and item throughput compared BEFORE any baseline row is
+  written. Session drift on this machine is 25-35%, which is why interleaving is
+  the method and why `bench/README.md` documents it.
+- **`bench/` needs Factorio exclusivity.** `test/run.sh` is safe beside another
+  instance (private write-data dirs); the bench harness is not, and a second
+  instance invalidates the cells rather than failing them.
+- **A data-only package is an ordinary thing to reach for now.**
+  `bbb-bench-setup` has a `config.lua` and a `control.lua`, so it needs both
+  halves -- but the two stand-ins and the `fastbelt` fixture are three worked
+  examples of the data half on its own.
+- **`fkapi.TableSize` is STILL unused**, six phases in.
 
 ## The phases
 
@@ -1304,7 +1560,7 @@ this file recording what it measured and what it deviated on.
 | **3 (done)** | `mix`, `plat`, `mig` | `plat` needs Space Age surfaces and `helpers.create_profiler`; `mix` needs infinity-chest filter rotation over 48 item names; `mig` is the only suite whose two phases run under different mod sets, and its observer is the one that reports a census |
 | **4 (done)** | `m2`, `m3`, `edge` | the big ones. `m3` carries an LCG and 600 ticks of randomised churn; `edge` counts every item on two surfaces inside one tick. These are where the harness will earn or fail to earn its keep |
 | **5 (done)** | the interactive staging mod | not a suite -- the world a HUMAN walks, and where the mod portal's demo scenes live. `iact` gated it already, so this phase had a headless check from the start; it is also the first consumer of `fkapi.RemoteCall`, and the only observer with a player event handler |
-| **6** | `test/mods/belt-balancer-2`, `test/mods/bbb-mig-foreign` | data-stage-only stand-ins, and **blocked on [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 26**: `fklua mod` cannot package a mod with no control module. The `test/fixtures/fastbelt` workaround (an inert empty `main`) works and costs ~113 KB of generated Lua that is required and never called; whether to spend that on two stand-ins or wait for the gap is a phase-6 decision |
+| **6 (done)** | `test/mods/belt-balancer-2`, `test/mods/bbb-mig-foreign` | data-stage-only stand-ins, and the first packages here with NO CONTROL STAGE. It was blocked on [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 26 and the fix landed: `fklua mod --data-module` with no positional. The `test/fixtures/fastbelt` workaround it would have needed is deleted rather than spent. These two have no suite of their own, so the goldens are `mig`'s whole log set |
 | **7** | `bench/mods/*` | LAST, and alone. Every published performance figure in this repository was measured with those setup mods, so the port has to carry a comparability gate the suites do not need: the same matrix cell, INTERLEAVED in one session, old and new setup mods against the same `dist/`, with the no-mod control in the same session. Session drift on this machine is 25-35% |
 | **8** | `mig21`'s observer again, in RUST | the parity exercise. One observer written twice against one ABI is the strongest statement this repository can make about FkLua's second backend, and `mig21` is the right one: no `--create` phase, so the whole thing is one load and one set of assertions |
 
