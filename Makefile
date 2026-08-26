@@ -335,9 +335,12 @@ OBS_SEDGE_DIR := $(OBS_DIST)/bbb-sedge-test_0.1.0
 OBS_MAR_DIR   := $(OBS_DIST)/bbb-marathon-test_0.1.0
 OBS_MIG21_DIR := $(OBS_DIST)/bbb-mig21-observer_0.1.0
 OBS_QUAL_DIR  := $(OBS_DIST)/bbb-qual-test_0.1.0
+OBS_MIX_DIR   := $(OBS_DIST)/bbb-mix-test_0.1.0
+OBS_PLAT_DIR  := $(OBS_DIST)/bbb-plat-test_0.1.0
+OBS_MIG_DIR   := $(OBS_DIST)/bbb-mig-test_0.1.0
 
 observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR) $(OBS_MAR_DIR) $(OBS_MIG21_DIR) \
-           $(OBS_QUAL_DIR)
+           $(OBS_QUAL_DIR) $(OBS_MIX_DIR) $(OBS_PLAT_DIR) $(OBS_MIG_DIR)
 
 $(OBS_M1_DIR): $(DIST)/obs-m1.wasm
 	@mkdir -p $(OBS_DIST)
@@ -413,6 +416,62 @@ $(OBS_QUAL_DIR): $(DIST)/obs-qual.wasm $(DIST)/obs-qualdata.wasm
 	  --title "BBB quality verification" \
 	  --description "Builds balancers whose parts are UNCOMMON quality and drives every path where the guest asks the world for a part by name. Asserts nothing itself." \
 	  --dependency "base >= 2.0.0" --dependency "quality" \
+	  -o .
+
+$(OBS_MIX_DIR): $(DIST)/obs-mix.wasm $(DIST)/obs-mixdata.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-mix.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-mixdata.wasm) \
+	  --name bbb-mix-test --version 0.1.0 \
+	  --title "BBB mixed-item verification" \
+	  --description "Runs several distinct item types through one balancer -- two pure belts, a sushi belt, and enough kinds at once to overflow the carry pool -- and reports every count per item name. Asserts nothing itself." \
+	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
+	  -o .
+
+# THE ONLY SPACE AGE OBSERVER, and `space-age` in its dependency list is the
+# reason it is the only one: without it the DLC's own prototype tree is not
+# guaranteed loaded when this mod's data stage runs, and `bbbt-stackloader`'s
+# `max_belt_stack_size` is refused at load outright without the `space_travel`
+# feature flag the DLC brings.
+$(OBS_PLAT_DIR): $(DIST)/obs-plat.wasm $(DIST)/obs-platdata.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-plat.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-platdata.wasm) \
+	  --name bbb-plat-test --version 0.1.0 \
+	  --title "BBB space-platform verification" \
+	  --description "Builds a balancer on a SPACE PLATFORM surface and reports what its outputs received. Asserts nothing itself." \
+	  --dependency "base >= 2.0.0" --dependency "space-age" \
+	  --dependency "better-belt-balancer" \
+	  -o .
+
+# THE OBSERVER WITH SIX OPTIONAL DEPENDENCIES AND NOT ONE REQUIRED ONE BEYOND
+# base, and every one of the six is load-bearing rather than tidy.
+#
+# This mod is present in BOTH phases of every leg and BETTER BELT BALANCER IS
+# NOT -- that is the shape of the suite. A hard dependency on it would refuse the
+# load in the phase where the incumbent owns `balancer-part`, which is exactly
+# the phase `fk_on_init` runs in. And an OPTIONAL dependency is not a no-op: it
+# is what puts this mod AFTER whichever of them is installed in Factorio's load
+# order, so `prototypes.entity["balancer-part"]` resolves to whoever really owns
+# the name rather than to a race. `--dependency` REPLACES the manifest's list
+# rather than adding to it, so this list is the whole of it.
+$(OBS_MIG_DIR): $(DIST)/obs-mig.wasm $(DIST)/obs-migdata.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-mig.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-migdata.wasm) \
+	  --name bbb-mig-test --version 0.1.0 \
+	  --title "BBB migration verification" \
+	  --description "Builds Belt Balancer 2 shaped balancers in phase one and reports, in phase two, what survived the swap and what the adopted balancers deliver. Asserts nothing itself." \
+	  --dependency "base >= 2.1.0" \
+	  --dependency "(?) better-belt-balancer" \
+	  --dependency "(?) belt-balancer" \
+	  --dependency "(?) belt-balancer-2" \
+	  --dependency "(?) belt-balancer-3" \
+	  --dependency "(?) belt-balancer-performance" \
+	  --dependency "(?) bbb-mig-foreign" \
 	  -o .
 
 # --- housekeeping ------------------------------------------------------------

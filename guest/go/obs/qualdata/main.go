@@ -14,28 +14,19 @@
 // entities at this stage -- so it imports fkdata and never fkapi, and packaging
 // refuses one that does otherwise.
 //
-// THE NAME IS WRITTEN DOWN HERE AND IN obs/qual, and the duplication is forced:
-// the two modules cannot share a package, because this one may not import fkapi
-// and that one may not import fkdata.
+// THE NAME AND THE SPEED LIVE IN obs/protos, which imports nothing at all --
+// which is what lets both this module and obs/qual have them. The five calls that
+// clone the loader live in obs/obsdata, which every data stage in the estate
+// shares. See agents/estate-port.md, phase 3.
 package main
 
-import "github.com/Techrocket9/fklua/guest/go/fkdata"
-
-// express is `express-transport-belt`'s speed. Written out rather than read:
-// base's own value, and a loader that silently followed a modded belt would
-// change what the yardstick means.
-const express = 0.09375
+import (
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/obsdata"
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/protos"
+)
 
 //go:wasmexport fk_data
 //go:noinline
-func onData() {
-	fkdata.Clone("loader-1x1", "loader-1x1", "bbbqual-loader")
-	fkdata.Set(fkdata.Num(express), "loader-1x1", "bbbqual-loader", "speed")
-	// Nil DELETES the key rather than writing false: these three have to be
-	// ABSENT, not present and empty.
-	fkdata.Set(fkdata.Nil(), "loader-1x1", "bbbqual-loader", "minable")
-	fkdata.Set(fkdata.Nil(), "loader-1x1", "bbbqual-loader", "next_upgrade")
-	fkdata.Set(fkdata.Nil(), "loader-1x1", "bbbqual-loader", "fast_replaceable_group")
-}
+func onData() { obsdata.ExpressLoader(protos.QualLoader) }
 
 func main() {}

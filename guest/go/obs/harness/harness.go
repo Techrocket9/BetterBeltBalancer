@@ -668,3 +668,562 @@ func Run(steps []Step, tick uint64) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// prototypes
+// ---------------------------------------------------------------------------
+
+// ItemProtoExists, EntityProtoExists and QualityProtoExists answer whether the
+// running game has a prototype of that name.
+//
+// TWO HOST CALLS AND NO ALLOCATION EACH, which is the shipped guest's own idiom
+// (guest/go/legacy.go's legacyStubPresent): `prototypes.item` is a
+// LuaCustomTable, so the RAW handle plus its index operator is a POINT query,
+// where the materialising attribute would build a Go slice of every item
+// prototype in the game -- thousands, with a string each -- to answer a yes/no
+// question. A missing key is Lua's nil, which arrives as TagNil rather than as
+// an error.
+//
+// TWO SUITES NEED THEM AND FOR OPPOSITE REASONS. `mix` and `plat` check their
+// item lists at init so that a renamed prototype fails the CREATE log with the
+// name in it, rather than leaving a rig that quietly carries fewer kinds than it
+// claims -- which for `mix`'s overflow rig would be a rig that never overflows
+// and passes vacuously. `mig` guards every lookup with one, because
+// `find_entities_filtered{name = ...}` RAISES for a name the game does not have
+// and that suite runs in a phase where `bbb-balancer-part` is not a prototype at
+// all.
+func ItemProtoExists(name string) bool {
+	raw, err := fkapi.Prototypes.ItemRaw()
+	if err != nil {
+		return false
+	}
+	return customTableHas(raw, name)
+}
+
+func EntityProtoExists(name string) bool {
+	raw, err := fkapi.Prototypes.EntityRaw()
+	if err != nil {
+		return false
+	}
+	return customTableHas(raw, name)
+}
+
+func QualityProtoExists(name string) bool {
+	_, ok := QualityProto(name)
+	return ok
+}
+
+// QualityProto is the LuaQualityPrototype of that name.
+//
+// IT IS A HANDLE AND NOT A STRING, and that is a deviation from the Lua worth
+// knowing about. `InfinityInventoryFilter.quality` takes a QualityID, which the
+// description spells `string or LuaQualityPrototype`, and the Lua sent the
+// string; the generated struct field is a `*Object`, so a guest sends the
+// prototype. The two are the same value to the engine, it is the reading the
+// shipped guest already takes for the same union (guest/go/legacy.go passes the
+// handle rather than copying a name into the guest heap), and it costs the one
+// point query this function is.
+func QualityProto(name string) (fkapi.Object, bool) {
+	raw, err := fkapi.Prototypes.QualityRaw()
+	if err != nil {
+		return fkapi.Object{}, false
+	}
+	v, err := fkapi.LuaCustomTable{Object: raw}.Get(fkapi.OfString(name))
+	if err != nil || v.Tag != fkapi.TagObject {
+		return fkapi.Object{}, false
+	}
+	return v.Object, true
+}
+
+func customTableHas(raw fkapi.Object, name string) bool {
+	v, err := fkapi.LuaCustomTable{Object: raw}.Get(fkapi.OfString(name))
+	if err != nil {
+		return false
+	}
+	return v.Tag == fkapi.TagObject
+}
+
+// ---------------------------------------------------------------------------
+// forces and surfaces
+// ---------------------------------------------------------------------------
+
+// CreateForce is `game.create_force`, and a failure is Fatal: every rig the
+// caller is about to build belongs to it.
+func CreateForce(name string) fkapi.LuaForce {
+	o, err := fkapi.Game.CreateForce(name)
+	if err != nil {
+		fatalCall("could not create force " + name)
+		return fkapi.LuaForce{}
+	}
+	return fkapi.LuaForce{Object: o}
+}
+
+// SurfacesByIndex is every surface in the game, in INDEX order.
+//
+// SORTED RATHER THAN LEFT TO THE WALK, and `mig` is what needs it: it reports a
+// per-surface census into a line an assertion reads, and `game.surfaces` is a
+// Lua hash whose iteration order is not a promise. It is the same habit
+// `collectSurfaces` follows in the shipped guest, and there for a much harder
+// reason -- surface order decides node ids, which decide slots, which is a
+// desync.
+//
+// An insertion sort, for the reason SortStrings is one: a big save has a dozen
+// surfaces and `sort` is a package a guest otherwise never links.
+func SurfacesByIndex() []fkapi.LuaSurface {
+	pairs, err := fkapi.Game.Surfaces()
+	if err != nil {
+		fatalCall("reading game.surfaces")
+		return nil
+	}
+	out := make([]fkapi.LuaSurface, 0, len(pairs))
+	idx := make([]uint32, 0, len(pairs))
+	for _, p := range pairs {
+		s := fkapi.LuaSurface{Object: p.Val}
+		n, err := s.Index()
+		if err != nil {
+			continue
+		}
+		j := len(out)
+		out = append(out, s)
+		idx = append(idx, n)
+		for j > 0 && idx[j-1] > idx[j] {
+			idx[j-1], idx[j] = idx[j], idx[j-1]
+			out[j-1], out[j] = out[j], out[j-1]
+			j--
+		}
+	}
+	return out
+}
+
+// ---------------------------------------------------------------------------
+// infinity chests
+// ---------------------------------------------------------------------------
+
+// InfinityFilter sets an infinity chest's ONE filter, optionally at a quality.
+//
+// One filter and not a list, because that is what every source in the estate
+// wants and because of a measurement: the `mix` suite's `probe` band is an
+// infinity chest carrying SIX filters at once and it delivers ONE KIND -- a
+// loader draws from the first stack it finds and the chest tops that same stack
+// straight back up. A sushi belt is made by ROTATING a single filter instead.
+// MultiFilter below is that probe, kept precisely so the paragraph stays a
+// measurement.
+func InfinityFilter(o fkapi.Object, item, quality string, count uint32) {
+	index := uint32(1)
+	mode := "at-least"
+	f := fkapi.InfinityInventoryFilter{
+		Index: &index,
+		Name:  fkapi.OfString(item),
+		Count: &count,
+		Mode:  &mode,
+	}
+	if quality != "" {
+		q, ok := QualityProto(quality)
+		if !ok {
+			Fatal("no quality prototype", quality)
+			return
+		}
+		f.Quality = &q
+	}
+	if err := (fkapi.LuaEntity{Object: o}).SetInfinityContainerFilters(
+		[]fkapi.InfinityInventoryFilter{f}); err != nil {
+		fatalCall("setting an infinity filter to " + item)
+	}
+}
+
+// MultiFilter sets EVERY name as a filter at once. Only the `mix` suite's
+// `probe` band uses it, and what it is for is the measurement above.
+func MultiFilter(o fkapi.Object, items []string, count uint32) {
+	mode := "at-least"
+	fs := make([]fkapi.InfinityInventoryFilter, 0, len(items))
+	for i, name := range items {
+		index := uint32(i + 1)
+		c := count
+		fs = append(fs, fkapi.InfinityInventoryFilter{
+			Index: &index,
+			Name:  fkapi.OfString(name),
+			Count: &c,
+			Mode:  &mode,
+		})
+	}
+	if err := (fkapi.LuaEntity{Object: o}).SetInfinityContainerFilters(fs); err != nil {
+		fatalCall("setting a multi-filter chest")
+	}
+}
+
+// RemoveUnfiltered turns on an infinity chest's `remove_unfiltered_items`, which
+// is what makes a rotating filter a SUSHI source rather than a mixed one: the
+// previous band's kind is voided rather than left in the chest for the loader to
+// go on preferring.
+func RemoveUnfiltered(o fkapi.Object, on bool) {
+	if err := (fkapi.LuaEntity{Object: o}).SetRemoveUnfilteredItems(on); err != nil {
+		fatalCall("setting remove_unfiltered_items")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// counting items
+// ---------------------------------------------------------------------------
+
+// Tally is a per-key item count that keeps INSERTION ORDER.
+//
+// A SLICE AND A LINEAR SCAN RATHER THAN A MAP, and the reason is the estate's
+// oldest rule read one level out: the counts are emitted into log lines an
+// assertion script compares against literals, so the ORDER has to be a
+// property of the program rather than of a hash. The suites sort before they
+// emit -- `Names` does it -- so a map would in fact be safe here; a slice is the
+// shape whose determinism needs no argument, and forty-eight kinds is a scan
+// nobody can measure.
+type Tally struct {
+	keys   []string
+	counts []int64
+}
+
+// Add adds n to key, which may be negative: `mix` subtracts an infinity chest's
+// contents back out of a count it has already taken.
+func (t *Tally) Add(key string, n int64) {
+	for i, k := range t.keys {
+		if k == key {
+			t.counts[i] += n
+			return
+		}
+	}
+	t.keys = append(t.keys, key)
+	t.counts = append(t.counts, n)
+}
+
+// Get is the count under key, 0 for a key never added.
+func (t *Tally) Get(key string) int64 {
+	for i, k := range t.keys {
+		if k == key {
+			return t.counts[i]
+		}
+	}
+	return 0
+}
+
+// Names is every key whose count is NON-ZERO, sorted.
+//
+// Non-zero rather than every key, because that is what the Lua did: a name whose
+// pluses and minuses cancelled -- an item that was only ever inside an infinity
+// chest -- is not a kind that is present, and emitting a `count=0` line for it
+// would put a line in the log the golden does not have.
+func (t *Tally) Names() []string {
+	out := make([]string, 0, len(t.keys))
+	for i, k := range t.keys {
+		if t.counts[i] != 0 {
+			out = append(out, k)
+		}
+	}
+	SortStrings(out)
+	return out
+}
+
+// Total is the sum of every non-zero count.
+func (t *Tally) Total() int64 {
+	var n int64
+	for _, c := range t.counts {
+		if c != 0 {
+			n += c
+		}
+	}
+	return n
+}
+
+// Reset empties the tally, keeping the capacity.
+func (t *Tally) Reset() { t.keys, t.counts = t.keys[:0], t.counts[:0] }
+
+// EachLine calls fn with every transport line of one entity.
+//
+// THE err != nil ARM IS THE ESTATE'S pcall AND NOT AN ERROR PATH. Asking a chest
+// for its transport lines RAISES in Factorio, so the Lua wrapped
+// `get_max_transport_line_index` in a pcall and read a failure as "no lines" --
+// which is what a sweep over every entity in a box needs, because most of them
+// are not belts. A generated binding hands the same refusal back as a Status.
+func EachLine(o fkapi.Object, fn func(line fkapi.LuaTransportLine)) {
+	e := fkapi.LuaEntity{Object: o}
+	n, err := e.GetMaxTransportLineIndex()
+	if err != nil {
+		return
+	}
+	for i := uint32(1); i <= n; i++ {
+		l, err := e.GetTransportLine(i)
+		if err != nil {
+			continue
+		}
+		fn(fkapi.LuaTransportLine{Object: l})
+	}
+}
+
+// ChestContents is one entity's CHEST inventory, per (name, quality), or nil for
+// an entity that has none.
+func ChestContents(o fkapi.Object) []fkapi.ItemWithQualityCount {
+	inv, err := (fkapi.LuaControl{Object: o}).GetInventory(fkapi.DefinesInventoryChest())
+	if err != nil || inv == nil {
+		return nil
+	}
+	c, err := (fkapi.LuaInventory{Object: *inv}).GetContents()
+	if err != nil {
+		return nil
+	}
+	return c
+}
+
+// GroundStack is what an `item-entity` is holding: its name, its count, and
+// whether there was anything to read.
+//
+// `valid_for_read` is asked FIRST and separately, exactly as the Lua did: an
+// item entity whose stack is empty answers false, and reading `name` off it
+// raises.
+func GroundStack(o fkapi.Object) (string, int64, bool) {
+	st, err := (fkapi.LuaEntity{Object: o}).Stack()
+	if err != nil {
+		return "", 0, false
+	}
+	s := fkapi.LuaItemStack{Object: st}
+	if ok, err := s.ValidForRead(); err != nil || !ok {
+		return "", 0, false
+	}
+	name, err := s.Name()
+	if err != nil {
+		return "", 0, false
+	}
+	n, err := s.Count()
+	if err != nil {
+		return "", 0, false
+	}
+	return name, int64(n), true
+}
+
+// EntityType is one entity's `type`, empty when it cannot be read. It is the
+// filter every count in the estate applies by hand: an `item-entity` is counted
+// through its stack and everything else through its lines and its inventory,
+// and an `infinity-container` is not a conserved quantity and is counted out.
+func EntityType(o fkapi.Object) string {
+	t, err := (fkapi.LuaEntity{Object: o}).Type()
+	if err != nil {
+		return ""
+	}
+	return t
+}
+
+// SpaceLocationProto is the LuaSpaceLocationPrototype of that name.
+//
+// A HANDLE AND NOT A STRING, the same deviation QualityProto records and for the
+// same reason: `LuaForce.create_space_platform`'s `planet` takes a
+// SpaceLocationID, which the description spells `string or
+// LuaSpaceLocationPrototype`, and the generated struct field is an `Object`.
+func SpaceLocationProto(name string) (fkapi.Object, bool) {
+	raw, err := fkapi.Prototypes.SpaceLocationRaw()
+	if err != nil {
+		return fkapi.Object{}, false
+	}
+	v, err := fkapi.LuaCustomTable{Object: raw}.Get(fkapi.OfString(name))
+	if err != nil || v.Tag != fkapi.TagObject {
+		return fkapi.Object{}, false
+	}
+	return v.Object, true
+}
+
+// PaveBox lays one tile name over an INCLUSIVE tile box.
+//
+// It is Flat.Make's own pave with the surface handed in, for the one caller that
+// pavés a surface it did not create: `plat` lays space-platform foundation over
+// a platform Factorio made for it. The four flags are the Lua's
+// `set_tiles(tiles, true, false, false, false)` -- correct the edges, and touch
+// neither entities nor decoratives nor raise an event.
+func PaveBox(s fkapi.LuaSurface, x0, y0, x1, y1 int, tile string) {
+	tiles := make([]fkapi.Tile, 0, (x1-x0+1)*(y1-y0+1))
+	for x := x0; x <= x1; x++ {
+		for y := y0; y <= y1; y++ {
+			tiles = append(tiles, fkapi.Tile{
+				Position: fkapi.TilePosition{X: int32(x), Y: int32(y)},
+				Name:     tile,
+			})
+		}
+	}
+	correct, off := true, false
+	noEntities := fkapi.OfBool(false)
+	if err := s.SetTiles(tiles, &correct, &noEntities, &off, &off, nil, nil); err != nil {
+		fatalCall("paving with " + tile)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// timing
+// ---------------------------------------------------------------------------
+
+// Profiler is `helpers.create_profiler`, and reading one is the whole reason
+// fkapi has a binding for Factorio's GLOBAL log().
+//
+// A LuaProfiler HAS NO ACCESSOR RETURNING ITS DURATION -- its complete member
+// set is add, divide, reset, restart, stop, object_name, object_name_is and
+// valid, and not one of them returns the number. The engine renders it only when
+// the profiler is an ELEMENT OF A LocalisedString, so `log{"", "took ", p}` is
+// the whole idiom, and a guest that cannot call the global log cannot time
+// anything and read the answer. Three suites publish timings by regexing exactly
+// that line out of factorio-current.log.
+//
+// VERIFIED AGAINST THE GOLDEN BEFORE ANYTHING WAS BUILT ON IT (phase 3): what
+// lands in the log is `... Duration: 0.507333ms`, the same shape and the same
+// unit the Lua produced. The one thing that differs is Factorio's own note of
+// WHERE the log() was called from -- `=[C]:...` rather than
+// `@__mod__/control.lua:N:` -- because this is a host call fk_abi.lua makes
+// through pcall where fk.Log is a wasm import the generated control.lua answers
+// with a Lua log(). Nothing reads that prefix; see agents/estate-port.md.
+type Profiler struct{ o fkapi.Object }
+
+// StartProfiler creates a RUNNING profiler. `helpers.create_profiler(stopped)`
+// defaults to started, which is what every call site in the estate wants.
+func StartProfiler() Profiler {
+	o, err := fkapi.Helpers.CreateProfiler(nil)
+	if err != nil {
+		fatalCall("helpers.create_profiler")
+		return Profiler{}
+	}
+	return Profiler{o: o}
+}
+
+// Stop stops the clock. Nothing reads the duration until Log does.
+func (p Profiler) Stop() {
+	if err := (fkapi.LuaProfiler{Object: p.o}).Stop(); err != nil {
+		fatalCall("stopping a profiler")
+	}
+}
+
+// Log writes `<text>Duration: N ms`, where text carries its own tag and its own
+// trailing space exactly as the Lua's second array element did.
+//
+// The empty first element is LocalisedString's "concatenate the rest" form.
+func (p Profiler) Log(text string) {
+	if err := fkapi.Log(fkapi.OfArray(
+		fkapi.OfString(""), fkapi.OfString(text), fkapi.OfObject(p.o),
+	)); err != nil {
+		fatalCall("logging a profiler")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// counting one named item, and finding by force
+// ---------------------------------------------------------------------------
+
+// EntitiesOfForce is every entity on a whole surface belonging to one force.
+//
+// NO AREA, which is what the `mig` suite needs and what makes it different from
+// EntitiesIn: that suite counts its witness item over EVERY surface, including
+// the hidden one this mod's compiler works on -- and that surface does not exist
+// at all in the phase where the incumbent is installed, which is exactly why the
+// count has to be written this way rather than against a named pair of boxes.
+func EntitiesOfForce(s fkapi.LuaSurface, force string) []fkapi.Object {
+	f := fkapi.OfString(force)
+	found, err := s.FindEntitiesFiltered(fkapi.EntitySearchFilters{Force: &f})
+	if err != nil {
+		return nil
+	}
+	return found
+}
+
+// CountNamedOn is how many entities of one prototype name stand on one surface,
+// optionally of one force.
+//
+// GUARDED ON THE PROTOTYPE BY THE CALLER, and that is not tidiness:
+// `find_entities_filtered{name = ...}` RAISES for a name the game does not have,
+// and `mig` runs in a phase where `bbb-balancer-part` is not a prototype at all.
+func CountNamedOn(s fkapi.LuaSurface, name, force string) int {
+	n := fkapi.OfString(name)
+	f := fkapi.EntitySearchFilters{Name: &n}
+	if force != "" {
+		v := fkapi.OfString(force)
+		f.Force = &v
+	}
+	found, err := s.FindEntitiesFiltered(f)
+	if err != nil {
+		return 0
+	}
+	return len(found)
+}
+
+// ItemCountIn is how many of one named item an entity holds across its transport
+// lines and its chest inventory. The `pcall` arm is EachLine's.
+func ItemCountIn(o fkapi.Object, item string) int64 {
+	v := fkapi.OfString(item)
+	var total int64
+	EachLine(o, func(l fkapi.LuaTransportLine) {
+		if c, err := l.GetItemCount(&v); err == nil {
+			total += int64(c)
+		}
+	})
+	inv, err := (fkapi.LuaControl{Object: o}).GetInventory(fkapi.DefinesInventoryChest())
+	if err == nil && inv != nil {
+		if c, err := (fkapi.LuaInventory{Object: *inv}).GetItemCount(&v); err == nil {
+			total += int64(c)
+		}
+	}
+	return total
+}
+
+// InsertInto is `chest.insert{name = ..., count = ...}` and returns how many the
+// engine took.
+func InsertInto(o fkapi.Object, name string, count uint32) uint32 {
+	n, err := (fkapi.LuaControl{Object: o}).Insert(fkapi.OfMap(
+		fkapi.KeyValue{Key: fkapi.OfString("name"), Val: fkapi.OfString(name)},
+		fkapi.KeyValue{Key: fkapi.OfString("count"), Val: fkapi.OfNumber(float64(count))},
+	))
+	if err != nil {
+		fatalCall("inserting " + name)
+		return 0
+	}
+	return n
+}
+
+// Researched is `force.technologies[name].researched`, as a THREE-VALUED answer:
+// researched, present-but-not, or ABSENT.
+//
+// The third is the one that matters and it is why this does not return a plain
+// bool. `mig` reports a technology's state as `true`, `false` or `absent`, and
+// the difference between the last two is the whole of what says an incumbent's
+// technology tree went with it.
+//
+// A LuaCustomTable point query, so a force with a thousand technologies costs
+// two host calls rather than a Go slice of all of them.
+func Researched(force fkapi.Object, name string) (done, present bool) {
+	raw, err := (fkapi.LuaForce{Object: force}).TechnologiesRaw()
+	if err != nil {
+		return false, false
+	}
+	v, err := fkapi.LuaCustomTable{Object: raw}.Get(fkapi.OfString(name))
+	if err != nil || v.Tag != fkapi.TagObject {
+		return false, false
+	}
+	r, err := (fkapi.LuaTechnology{Object: v.Object}).Researched()
+	if err != nil {
+		return false, true
+	}
+	return r, true
+}
+
+// ItemPlaceResult is the entity name an item prototype places, empty when it
+// places nothing.
+//
+// It is `mig`'s sharpest line: a stack of a removed mod's item survives only
+// because a stub prototype kept the name alive, and `place_result` is what makes
+// a surviving stack USEFUL rather than merely present.
+func ItemPlaceResult(item string) string {
+	raw, err := fkapi.Prototypes.ItemRaw()
+	if err != nil {
+		return ""
+	}
+	v, err := fkapi.LuaCustomTable{Object: raw}.Get(fkapi.OfString(item))
+	if err != nil || v.Tag != fkapi.TagObject {
+		return ""
+	}
+	pr, err := (fkapi.LuaItemPrototype{Object: v.Object}).PlaceResult()
+	if err != nil || pr == nil {
+		return ""
+	}
+	n, err := (fkapi.LuaEntityPrototype{Object: *pr}).Name()
+	if err != nil {
+		return ""
+	}
+	return n
+}

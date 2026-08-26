@@ -4,16 +4,16 @@
 mod got there in two rounds -- `fklua mod` has always generated the control
 stage, and the 2026-08-25 round replaced ten hand-written data-stage files with a
 second compiled guest ([`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 25). What is left
-is the TEST ESTATE, and after phase 2 it is **7,357 committed lines** of it:
-6,156 across sixteen files under `test/mods`, 462 in the interactive checklist's
+is the TEST ESTATE, and after phase 3 it is **5,263 committed lines** of it:
+4,062 across ten files under `test/mods`, 462 in the interactive checklist's
 staging mod, 739 in the `bench/` harness's setup mod. Lua that nothing in
 `make check` can reach, that no toolchain type-checks, and that only a Factorio
 run can execute at all. It was 8,524 over twenty-four files when the pilot
 started.
 
 This file is the programme for removing it, and the record of what each phase
-measured. The pilot is `m1` and `sedge` and phase 2 is `mar`, `mig21` and
-`qual`, all done 2026-08-25.
+measured. The pilot is `m1` and `sedge`, phase 2 is `mar`, `mig21` and `qual`,
+and phase 3 is `mix`, `plat` and `mig`, all done 2026-08-25.
 
 ---
 
@@ -498,6 +498,284 @@ pilot set for putting something in the shared package:
 
 ---
 
+## Phase 3: `mix`, `plat`, `mig` -- done 2026-08-25
+
+2,121 lines of Lua deleted across three mods; the estate is **5,263 lines over
+fourteen files**, from 8,524 over twenty-four when the pilot started. All three
+suites are byte-identical to their goldens and the whole estate is green in both
+`-gc` arms.
+
+This is the phase that consumed the LAST piece of FkLua surface the port was
+waiting on -- `fkapi.Log(Value)`, the bound global `log()` -- and the phase that
+made the shared-constants package five-of-five, which phase 2 deliberately
+deferred.
+
+### THE PROFILER, verified before anything was built on it
+
+The pilot and phase 2 both left the same note: `fkapi.Log(Value)` is untried,
+`plat` is the first consumer, and it should be checked against a golden line
+before anything rests on it. So the first thing this phase did after taking its
+goldens was build a THROWAWAY observer with nothing in it but the idiom, package
+it, and run one `--create`:
+
+```
+Script =[C]:4294967295: [BBB-SPIKE] timing audit only, nothing pending Duration: 0.507333ms
+```
+
+against the golden's
+
+```
+Script @__bbb-plat-test__/control.lua:690: [BBB-STK] timing audit only, nothing pending Duration: 14.646167ms
+```
+
+**IT WORKS, and the shape is exact**: same text, same `Duration: N ms` rendering,
+same unit, same position in the log. `fkapi.Log(fkapi.OfArray(fkapi.OfString(""),
+fkapi.OfString(tag), fkapi.OfObject(prof)))` is the whole of it, and the empty
+leading element is LocalisedString's "concatenate the rest" form. The ledger item
+is [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) 27.
+
+**One thing differs and it is not the duration: the `Script <origin>:` prefix.**
+`fk.Log` is a wasm IMPORT the generated `control.lua` answers with a Lua `log()`
+call, so Factorio attributes it to that file; `fkapi.Log` is a HOST CALL that
+`fk_abi.lua` makes through `pcall`, so Factorio attributes it to the C boundary
+and writes `=[C]:4294967295:` (which is `-1` as unsigned -- "no line" -- and is
+therefore a constant rather than a wall clock). Both are the engine's own note of
+where a `log()` was called from; nothing anywhere reads it, and phases 1 and 2
+already masked the part of it that moved for exactly this reason.
+
+### The golden diff, which is empty
+
+Phase 1's two masks, ONE WIDENED and ONE ADDED, and every one justified:
+
+| masked | why |
+|---|---|
+| the elapsed-seconds column Factorio stamps on every line | wall clock, phase 1's |
+| the whole `Script <origin>:` attribution, not just its line number | phases 1 and 2 masked `control.lua:N:` -> `control.lua:`; the profiler's line comes from the C boundary instead, so the mask has to cover the origin rather than only the digit in it. It is the same fact being hidden and the same reason: nothing reads it |
+| the digits of `Duration: N ms` | the profiler's own measured duration, which is a wall clock by definition. THE TEXT AROUND IT IS NOT MASKED, which is what makes the tag, the label and the rendering itself part of the diff |
+
+**Every one of the 1,290 tagged lines across twenty logs is byte-identical, in
+order.** `mig` alone is sixteen of those logs, because its seven legs run two
+phases each under DIFFERENT MOD SETS and its two name probes run one:
+
+| log | tagged lines | | log | tagged lines |
+|---|--:|---|---|--:|
+| `mix` create + run | 75 + **347** | | `mig4` create + run | 104 + 35 |
+| `plat` create + run | 92 + 74 | | `mig5` create + run | 104 + 32 |
+| `mig1` create + run | 12 + 104 | | `mig6` create + run | 12 + 36 |
+| `mig2` create + run | 21 + 92 | | `mig7` create + run | 20 + 92 |
+| `mig3` create + run | 21 + 92 | | `migp1`, `migp2` create | 21 + 21 |
+
+What is left over is the pilot's own categories and nothing else: the run
+timestamp and the free-disk figure; `Checksum for script
+__<observer>__/control.lua`, which IS the port; `Checksum of <observer>`, because
+all three have a data stage now; `Loading script.dat`, where the observer's guest
+heap is in the save where a Lua mod's `storage` tables were (`mix` 250,755 ->
+799,188 B, `plat` 265,197 -> 663,553, `mig1` 1,761 -> 539,940); and the
+benchmark's own `checksum:` and ms figures, Factorio's state checksum covering
+every mod's `storage`.
+
+**`Checksum of better-belt-balancer` is 3503679581 and `Checksum for script
+__better-belt-balancer__/control.lua` is 2133551073 in the golden AND in the
+ported run**, in every log that has them. The mod under test did not move.
+
+### The red proof: a LocalisedString whose first element is not empty
+
+A NEW FAMILY, and it found a hole in the runner on the way.
+
+`log{"", "tag ", p}` renders the profiler. `log{"tag ", p}` does not: the first
+element of a LocalisedString is a KEY, so the engine looks up `"[BBB-STK] timing
+full recompile (audit-forced) "` in the locale, does not find it, and writes
+`Unknown key: "..."` instead of the sentence. It is exactly the mistake somebody
+transcribing this idiom makes, and dropping that one element is a one-token edit.
+
+**Injected, the first run came back GREEN.** All five timing lines rendered as
+`Unknown key`, `assert-plat.py` passed every assertion it has, and `run.sh`
+exited 0 -- because that script does not read the timing lines (they are
+informational; only `assert-m2.py` parses a `Duration:`), and `Unknown key` was
+grepped in the CREATE log and not in the benchmark's. The golden diff caught it,
+five lines, but nothing in the estate's own gate did.
+
+So `test/run.sh` greps for `Unknown key` in the run phase now, in both places
+that read a `run.log` -- the benchmark and `mig21`'s fixture load -- matching
+what the create phase has done since the estate had a locale file. Verified safe
+first: the term appears in no log of any suite in either arm, only in a comment
+inside this mod's own locale file. With the gate closed, the same injection
+fails by name:
+
+```
+script error during benchmark; see .../plat/run.log
+65: Script =[C]:4294967295: Unknown key: "[BBB-STK] timing audit only, nothing pending "
+...five lines...
+RUNSH EXIT=1
+```
+
+That is the phase's red proof and also its one runner change: a broken
+LocalisedString in ANY suite's run phase is now a failed run rather than a line
+nobody reads.
+
+### `fklua api check --from 2.1.16 --to 2.0.77`, and the FIRST IMPACTED OBSERVER
+
+| guest | surface | verdict |
+|---|---|---|
+| `obs-mix.wasm` | 25 members, 1 event, 12 concepts | **clean**, 0 findings, exit 0 |
+| `obs-mig.wasm` | 42 members, 1 event, 12 concepts | **clean**, 0 findings, exit 0 |
+| `obs-plat.wasm` | 42 members, 1 event, 13 concepts | **impacted**, 1 finding, exit 1 |
+
+The charter's rule says an impacted observer may not be stamped and needs its own
+answer, so here is `plat`'s. The finding:
+
+```
+LuaSpacePlatform::apply_starter_pack   breaking   parameter "silent" removed
+```
+
+**It is real and this call site is unaffected, and that is checkable rather than
+arguable.** `silent` is optional, this observer passes it ABSENT, and
+`fk_abi.lua`'s `M.call` trims the argument list to the last argument actually
+PRESENT before invoking -- read out of the packaged ABI rather than quoted:
+
+```lua
+local n = #m.sig.args
+while n > 0 do
+  local f = m.sig.args[n]
+  if f.has == nil or io_.ld8(argp + f.has) ~= 0 then break end
+  n = n - 1
+end
+```
+
+With `silent` absent, `n` falls to 0 and the call reaches the engine as
+`apply_starter_pack()`, which is the whole of 2.0.77's signature. What would
+break is an observer that PASSED it, and none does. So `plat` stays stamped, and
+the tripwire is the check itself: the day this observer sends `silent`, the
+verdict is still `impacted` and the answer has to be a different one.
+
+It is also worth recording that the check EARNED ITS PLACE here. Two phases of
+clean verdicts made it look like a formality; one finding out of 766 breaking
+changes, landing on the one observer that touches DLC surface, is what it is for.
+
+### The shared constants package, and the retrofit
+
+Phase 2 deferred this with a reason: "a shared package that three of five data
+stages use is worse than none. Build it when phase 3 makes it five of five."
+Phase 3 brings three more loaders, so it is SIX of six and the package is built.
+
+**`guest/go/obs/protos` imports NOTHING** -- not fkapi, not fkdata, not the
+standard library -- and that is the whole trick. A control guest may not import
+fkdata and a data guest may not import fkapi, so no package holding either can be
+shared between the two halves of one suite; a package with no imports at all can.
+It holds `BaseLoader`, `ExpressSpeed`, one loader name per suite, and the
+stacking loader's name and size.
+
+**`guest/go/obs/obsdata` is the second half and it imports fkdata**, which every
+data stage may. `ExpressLoader(name)` is the five `fkdata` calls all six data
+stages made identically. The three phase-1 and phase-2 data stages were
+retrofitted onto both packages in the same commit, which took them from 53, 56
+and 41 lines to 26, 29 and 24; the three observers lost their duplicated `loader`
+constants the same way.
+
+### What it cost
+
+| | Lua | Go |
+|---|--:|--:|
+| `bbb-mix-test` source | 609 + 21 lines / 28,743 B | 692 + 25 lines |
+| `bbb-mix-test` staged | 3 files, ~28 KB | 8 files, **1.06 MB** |
+| `bbb-plat-test` source | 724 + 24 lines / 34,102 B | 1,080 + 46 lines |
+| `bbb-plat-test` staged | 3 files, ~34 KB | 8 files, **1.37 MB** |
+| `bbb-mig-test` source | 693 + 23 lines / 30,106 B | 784 + 26 lines |
+| `bbb-mig-test` staged | 3 files, ~30 KB | 8 files, **1.20 MB** |
+
+**The packages are twice the pilot's half-megabyte**, and the reason is worth
+knowing before phase 4 sizes anything: these three observers call 25 to 42
+members where `m1` called 12, and the member table plus the ABI shapes each one
+needs is most of what a packaged observer weighs. It is still paid by a headless
+run that parses it once and never by anything a player installs.
+
+`make observers` builds and packages all EIGHT from clean in **17.9 s** (phase 1
+recorded 4.1 s for two, phase 2 13.3 s for five), which is the number to watch:
+touching the shared harness relinks every observer that imports it, and phase 3
+added two more shared packages below it.
+
+The whole estate is **2m0.6s** in the collected arm and 2m11.2s leaking, against
+2m2s and 2m19s after phase 2 -- three suites' worth of extra `fk_module.lua`
+being parsed, and not anything a tick does.
+
+### The `mar` slopes, unmoved
+
+The gate phase 2 added, and phase 3 has to clear it for a different reason: this
+phase touched `guest/go/obs/mardata` and `guest/go/obs/mar` in the retrofit, so
+the marathon observer is not the same file it was.
+
+| leg | B/primitive | | leg | B/primitive |
+|---|--:|---|---|--:|
+| A | 1,280 | | E | 560 |
+| B | 352 | | G | 3,736 |
+| C | 1,209 | | F | 2,080 |
+| D | 32 | | linear memory | **3.92 MiB** |
+
+...byte-identical to phase 2's, which is byte-identical to the record this
+repository has carried since the single-edge port. A constants package that
+changed a number would move one of these.
+
+### Deviations, all recorded rather than hidden
+
+- **A quality and a planet cross as HANDLES, not strings.**
+  `InfinityInventoryFilter.quality` takes a QualityID, which the description
+  spells `string or LuaQualityPrototype`, and
+  `LuaForce.create_space_platform`'s `planet` takes a SpaceLocationID the same
+  way; the Lua sent the string and the generated struct fields are `*Object` and
+  `Object`, so the observers resolve the prototype through a LuaCustomTable point
+  query and send that. It is the same value to the engine, it is the reading the
+  SHIPPED guest already takes for the same union (`guest/go/legacy.go` passes a
+  quality handle rather than copying a name into the guest heap), and it costs
+  one point query. `harness.QualityProto` and `harness.SpaceLocationProto`.
+- **`harness.Tally` is a slice and a linear scan where the Lua used a table.**
+  Both are safe -- every emitter here sorts before it writes -- and a slice is
+  the shape whose determinism needs no argument. Forty-eight kinds is a scan
+  nobody can measure. The same choice is made for `plat`'s stack-size histogram,
+  which is kept in ascending key order by an insertion sort rather than by
+  `table.sort` over `pairs`.
+- **`harness.Line.F1` rounds half-away-from-zero where C's `printf` rounds
+  half-to-even**, and the difference is unreachable in the one place it is used:
+  `mig`'s fidelity rig reports a health that was SET to an integer and a
+  `max_health` that comes off a prototype as one, so every value is exact at one
+  decimal. Anything that starts logging a real measurement should re-read that
+  comment first.
+- **A sushi source is re-found on its TILE every rotation** where the Lua kept
+  the chest handle in `storage`. It is the estate's own no-entity-references
+  habit and it costs one point query per source per four ticks; `Object.Retain`
+  would work and is deliberately not reached for.
+- **`checkItems` cannot abort.** The Lua called `error()`, which aborts `on_init`
+  outright; a guest has no way to unwind, so a missing prototype writes
+  `[BBB-OBS] error:` naming every one of them and returns, and `run.sh`'s
+  `guest_gate` fails the run. That is the harness's standing answer and phases 1
+  and 2 took it too; it is repeated here because `mix` and `plat` are the two
+  suites where the anti-vacuity check is the whole point of the line.
+
+### What phase 4 inherits
+
+- **`fkapi.Log(Value)` is proved and `harness.Profiler` wraps it.** `m2` is the
+  second consumer and its `[BBB-M2] timing ... Duration: N ms` line IS parsed --
+  `assert-m2.py` carries `re.compile(r"\\[BBB-M2\\] timing (.+?) Duration:
+  ([\\d.]+)ms")`, which is the regex `plat`'s equivalent does not have. So `m2`'s
+  red proof can be the one the charter originally wanted for `plat`: perturb the
+  label and watch the parse fail.
+- **`fkapi.TableSize` is STILL unused.** Three phases in, every `#` and
+  `table_size` in the estate has become an ordinary Go slice length. Phase 4
+  should expect the same rather than looking for a use.
+- **The package-time jump-span check has still not fired.** `plat`'s
+  `buildStacking` is the largest `fk_on_init` in the estate so far -- five bands,
+  two loaders, a force and a platform -- and it is comfortably inside. `edge`'s
+  fifteen clusters over 198 parts remains the first place likely to meet it, and
+  the remedy is one `//go:noinline` per rig-building section.
+- **`harness` is 1,229 + 130 lines now** and carries prototype point queries, a
+  per-name tally, per-line contents, ground stacks, force and surface lookups,
+  infinity-chest filters, item counts, technology reads and the profiler. `m2`,
+  `m3` and `edge` are the suites the harness was built for; if it earns its keep
+  anywhere it is there.
+- **One runner change to know about**: `Unknown key` now fails a run phase. A
+  suite that legitimately logs one would have to say so.
+
+---
+
 ## The phases
 
 Each phase is: goldens, port, the six gates, `git rm` the Lua, and a section in
@@ -507,7 +785,7 @@ this file recording what it measured and what it deviated on.
 |---|---|---|
 | **1 (done)** | `m1`, `sedge` | the harness, the build recipe, the staging seam. `sedge` brings the first observer DATA STAGE |
 | **2 (done)** | `mar`, `mig21`'s observer, `qual` | the first observers with real per-tick STATE and arithmetic. `mar` reads the mod's `[BBB] heap` probe and drives 680 world operations from a schedule; `mig21` brings the first `fk_on_configuration_changed` and the first observer whose PACKAGING is load-bearing. **`flip` was in this phase and is DEFERRED** -- see below |
-| **3** | `mix`, `plat`, `mig` | `plat` needs Space Age surfaces and `helpers.create_profiler`; `mix` needs infinity-chest filter rotation over 48 item names; `mig` is the only suite whose two phases run under different mod sets, and its observer is the one that reports a census |
+| **3 (done)** | `mix`, `plat`, `mig` | `plat` needs Space Age surfaces and `helpers.create_profiler`; `mix` needs infinity-chest filter rotation over 48 item names; `mig` is the only suite whose two phases run under different mod sets, and its observer is the one that reports a census |
 | **4** | `m2`, `m3`, `edge` | the big ones. `m3` carries an LCG and 600 ticks of randomised churn; `edge` counts every item on two surfaces inside one tick. These are where the harness will earn or fail to earn its keep |
 | **5** | `test/interactive/bbb-interactive-setup` | not a suite -- the world a HUMAN walks, and where the mod portal's demo scenes live. `iact` gates it, so the port has a headless check already |
 | **6** | `test/mods/belt-balancer-2`, `test/mods/bbb-mig-foreign` | data-stage-only stand-ins, and **blocked on [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 26**: `fklua mod` cannot package a mod with no control module. The `test/fixtures/fastbelt` workaround (an inert empty `main`) works and costs ~113 KB of generated Lua that is required and never called; whether to spend that on two stand-ins or wait for the gap is a phase-6 decision |

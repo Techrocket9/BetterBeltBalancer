@@ -82,17 +82,13 @@ package main
 import (
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/harness"
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/protos"
 	"github.com/Techrocket9/fklua/guest/go/fk"
 )
 
 const (
-	part = "bbb-balancer-part"
-	belt = "express-transport-belt"
-	// loader is this observer's own data stage's prototype (obs/mardata), and
-	// the name is written down in both places for the reason sedge's is: the
-	// data guest imports fkdata and this one imports fkapi, so no package can be
-	// shared between them without dragging one import into the other's module.
-	loader   = "bbbt-loader"
+	part     = "bbb-balancer-part"
+	belt     = "express-transport-belt"
 	flowItem = "iron-plate"
 	surfName = "bbb-mar"
 
@@ -168,7 +164,7 @@ func infinityChest(s fkapi.LuaSurface, x, y int) {
 // between them move during a leg.
 func sourceInf(s fkapi.LuaSurface, y int) {
 	infinityChest(s, -6, y)
-	put(s, loader, -5, y, &east, "output")
+	put(s, protos.MarLoader, -5, y, &east, "output")
 }
 
 // sourceFinite is what makes leg F's count a CONSERVATION statement rather than
@@ -187,11 +183,11 @@ func sourceFinite(s fkapi.LuaSurface, y, count int) {
 	)); err != nil {
 		harness.Fatal("stocking the finite source", fk.LastError())
 	}
-	put(s, loader, -5, y, &east, "output")
+	put(s, protos.MarLoader, -5, y, &east, "output")
 }
 
 func sink(s fkapi.LuaSurface, y int) {
-	put(s, loader, 4, y, &east, "input")
+	put(s, protos.MarLoader, 4, y, &east, "input")
 	harness.Place(s, harness.Piece{Name: "steel-chest", X: 5, Y: y})
 }
 
@@ -547,12 +543,12 @@ func onInit() {
 	}
 	for r := 0; r <= 3; r++ {
 		infinityChest(s, -4, bigY+r)
-		put(s, loader, -3, bigY+r, &east, "output")
+		put(s, protos.MarLoader, -3, bigY+r, &east, "output")
 		for x := -2; x <= -1; x++ {
 			put(s, belt, x, bigY+r, &east, "")
 		}
 		put(s, belt, 4, bigY+r, &east, "")
-		put(s, loader, 5, bigY+r, &east, "input")
+		put(s, protos.MarLoader, 5, bigY+r, &east, "input")
 		harness.Place(s, harness.Piece{Name: "steel-chest", X: 6, Y: bigY + r})
 	}
 

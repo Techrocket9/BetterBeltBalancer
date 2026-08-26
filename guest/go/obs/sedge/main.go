@@ -52,13 +52,13 @@ package main
 import (
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/harness"
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/protos"
 	"github.com/Techrocket9/fklua/guest/go/fk"
 )
 
 const (
 	part     = "bbb-balancer-part"
 	belt     = "express-transport-belt"
-	loader   = "bbbs-loader"
 	flowItem = "iron-plate"
 	surfName = "bbb-sedge"
 )
@@ -153,13 +153,13 @@ func source(s fkapi.LuaSurface, x, y int) {
 		}}); err != nil {
 		harness.Fatal("setting the infinity filter", fk.LastError())
 	}
-	put(s, loader, x+1, y, &east, "output")
+	put(s, protos.SedgeLoader, x+1, y, &east, "output")
 }
 
 // sink is a loader facing east into a steel chest, and the chest's tile is what
 // the registry remembers.
 func sink(s fkapi.LuaSurface, x, y int) harness.XY {
-	put(s, loader, x, y, &east, "input")
+	put(s, protos.SedgeLoader, x, y, &east, "input")
 	harness.Place(s, harness.Piece{Name: "steel-chest", X: x + 1, Y: y})
 	return harness.XY{X: x + 1, Y: y}
 }

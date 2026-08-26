@@ -96,6 +96,31 @@ func (l *Line) I(v int64) *Line {
 	return l.U(uint64(v))
 }
 
+// F1 appends a number to ONE decimal place, which is Lua's `%.1f` and therefore
+// what the assertion scripts read.
+//
+// IT EXISTS FOR EXACTLY ONE THING: the `mig` suite's fidelity rig reports a
+// part's health and max_health that way (`value=85.0 max=170.0`), and those two
+// numbers are the whole of what says the conversion carried a wound across a mod
+// swap. Nothing else in the estate logs a float.
+//
+// Rounding is half-away-from-zero where C's printf is half-to-even, and the
+// difference is unreachable here: a health is set to an integer and a
+// max_health comes off a prototype as one, so every value this ever sees is
+// exact at one decimal. Anything that starts logging a real measurement should
+// re-read this line first.
+func (l *Line) F1(v float64) *Line {
+	neg := v < 0
+	if neg {
+		v = -v
+		l.S("-")
+	}
+	// Scale, round, and split rather than divide back: the integer part of a
+	// large float is not recoverable through float arithmetic without drift.
+	scaled := uint64(v*10 + 0.5)
+	return l.U(scaled / 10).S(".").U(scaled % 10)
+}
+
 // End hands the buffer to the host as a string that borrows it.
 //
 // `unsafe.String` rather than a conversion, which would copy. `buf` is inside a

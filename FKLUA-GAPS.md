@@ -6,7 +6,7 @@ Items are numbered in the order they were found; FkLua's own notes refer to thes
 
 | status | items |
 | --- | --- |
-| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25 |
+| Fixed upstream | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 27 |
 | Closed, no change needed | 17 (a budget rather than a defect) |
 | Open | 18, 26 |
 
@@ -129,6 +129,16 @@ Found while building a test fixture for this mod's belt-speed derivation. The de
 The workaround is a control module that is an empty `main` with no exported hook, packaged alongside the real data module. It works, and `fklua mod` reports it accurately ("This guest exports no event hook, so the mod will load and then never be called again"), at a cost of about 113 KB of generated Lua that is `require`d and never called. It is confined to [`test/fixtures/fastbelt`](test/fixtures/fastbelt) and nothing about it reaches the shipped mod.
 
 What would close it: accept `--data-module` with no positional module and write `info.json` plus the stage files alone, generating no `control.lua`. The stage-file generation is already gated on which hooks the wasm exports, so the machinery to emit a package with no control stage is present; what is missing is a way to ask for one.
+
+## 27. A guest could not read a profiler, because Factorio's global functions were not bound
+
+`helpers.create_profiler` is how everything in this repository that publishes a timing figure measures one, and a guest could not read what it measured. `LuaProfiler`'s complete member set is `add`, `divide`, `reset`, `restart`, `stop`, `object_name`, `object_name_is` and `valid`: not one of them returns a duration. The engine renders the number in exactly one place, when the profiler is an ELEMENT of a `LocalisedString` handed to the global `log()` -- `log{"", "took ", p}` -- and the plain-string logging import a guest already had takes a string, not a localised one. So a guest could time a thing and never find out the answer.
+
+The blocker was structural rather than a missing entry. `log`, `localised_print` and `table_size` are functions on NO CLASS, and every member kind the ABI had took a receiver handle and resolved it before dispatching; the census recorded the shape as `global_functions_bound: 0 of 3`, a written-down zero with nothing that could raise it. Three suites in this mod's test estate publish recompile and audit timings by regexing that rendered line out of `factorio-current.log`, so all three were unportable to a Go observer for as long as the zero stood.
+
+Fixed upstream as a member kind of its own. GFUNC resolves the function out of the lazily-read global environment and dispatches it with no receiver at all -- its branch runs BEFORE the handle is resolved, because there is nothing to resolve, and the generated binding passes zero for an operand nothing reads. A missing global degrades exactly as a removed class member does, and the call is wrapped in the same `pcall` every other kind is, so a Lua error crossing the wasm frame reports as a call failure rather than taking the mod down. The Go binding is package-level rather than a method: `fkapi.Log(value)`, `fkapi.TableSize(value)`.
+
+Verified here against a golden log before anything was built on it, which is what the port's own rules ask of a first consumer. `fkapi.Log(fkapi.OfArray(fkapi.OfString(""), fkapi.OfString("tag "), fkapi.OfObject(prof)))` renders `tag Duration: 0.507333ms` -- the same shape, the same unit and the same position in the log as the Lua it replaces. One thing differs and it is the engine's own note of WHERE the call came from: a host call is made through `pcall` inside the ABI, so Factorio attributes it to the C boundary (`=[C]:...`) where the plain-string import is answered by a Lua `log()` in the generated control stage and is attributed to that file. Nothing reads that prefix.
 
 ## Smaller notes
 

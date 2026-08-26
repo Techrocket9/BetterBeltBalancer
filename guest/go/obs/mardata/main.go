@@ -16,38 +16,19 @@
 // `--persist=none` whatever the control guest uses, because it runs once and
 // dies with the Lua state that built it.
 //
-// THE NAME IS WRITTEN DOWN HERE AND IN obs/mar, and the duplication is forced:
-// the two modules cannot share a package, because this one may not import fkapi
-// and that one may not import fkdata.
+// THE NAME AND THE SPEED LIVE IN obs/protos, which imports nothing at all --
+// which is what lets both this module and obs/mar have them. The five calls that
+// clone the loader live in obs/obsdata, which every data stage in the estate
+// shares. See agents/estate-port.md, phase 3.
 package main
 
-import "github.com/Techrocket9/fklua/guest/go/fkdata"
-
-// express is `express-transport-belt`'s speed, which is what makes the source
-// loader keep up with the belt the rigs are measured against. Written out rather
-// than read: base's own value, and a loader that silently followed a modded belt
-// would change what the yardstick means.
-const express = 0.09375
+import (
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/obsdata"
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/protos"
+)
 
 //go:wasmexport fk_data
 //go:noinline
-func onData() {
-	// `Clone` is the engine's own deep copy, made on the guest's instruction, and
-	// it registers the copy under the new name immediately -- so what follows
-	// patches the copy rather than building one. Under a clone the untouched
-	// leaves are literally the bytes base shipped, which is the fidelity a
-	// Get-then-Extend could not promise.
-	//
-	// `loader-1x1` is both the prototype TYPE and base's own prototype NAME.
-	fkdata.Clone("loader-1x1", "loader-1x1", "bbbt-loader")
-	fkdata.Set(fkdata.Num(express), "loader-1x1", "bbbt-loader", "speed")
-	// Nil DELETES the key rather than writing false, which is what stripping a
-	// cloned prototype needs: these three have to be ABSENT, not present and
-	// empty. Nothing places this by hand, nothing mines it and nothing upgrades
-	// into or out of it.
-	fkdata.Set(fkdata.Nil(), "loader-1x1", "bbbt-loader", "minable")
-	fkdata.Set(fkdata.Nil(), "loader-1x1", "bbbt-loader", "next_upgrade")
-	fkdata.Set(fkdata.Nil(), "loader-1x1", "bbbt-loader", "fast_replaceable_group")
-}
+func onData() { obsdata.ExpressLoader(protos.MarLoader) }
 
 func main() {}

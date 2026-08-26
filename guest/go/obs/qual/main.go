@@ -54,16 +54,13 @@ package main
 import (
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/harness"
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/protos"
 	"github.com/Techrocket9/fklua/guest/go/fk"
 )
 
 const (
-	part = "bbb-balancer-part"
-	belt = "express-transport-belt"
-	// loader is this observer's own data stage's prototype (obs/qualdata); the
-	// name is written down in both places because the two modules cannot share a
-	// package.
-	loader   = "bbbqual-loader"
+	part     = "bbb-balancer-part"
+	belt     = "express-transport-belt"
 	flowItem = "iron-plate"
 	surfName = "bbb-qual"
 
@@ -147,13 +144,13 @@ func source(s fkapi.LuaSurface, x, y int) {
 		}}); err != nil {
 		harness.Fatal("setting the infinity filter", fk.LastError())
 	}
-	put(s, loader, x+1, y, &east, "output")
+	put(s, protos.QualLoader, x+1, y, &east, "output")
 }
 
 // sink is a loader facing east into a steel chest, and the chest's tile is what
 // the registry remembers.
 func sink(s fkapi.LuaSurface, x, y int) harness.XY {
-	put(s, loader, x, y, &east, "input")
+	put(s, protos.QualLoader, x, y, &east, "input")
 	harness.Place(s, harness.Piece{Name: "steel-chest", X: x + 1, Y: y})
 	return harness.XY{X: x + 1, Y: y}
 }
@@ -403,7 +400,7 @@ func onInit() {
 		}
 	}
 	put(s, belt, 0, qlimY-2, &north, "")
-	put(s, loader, 0, qlimY-3, &north, "input")
+	put(s, protos.QualLoader, 0, qlimY-3, &north, "input")
 	harness.Place(s, harness.Piece{Name: "steel-chest", X: 0, Y: qlimY - 4})
 	register("qlim", harness.XY{X: 0, Y: qlimY - 4})
 	reportQuality("qlim", 0, qlimY)

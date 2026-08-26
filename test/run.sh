@@ -630,9 +630,10 @@ load_fixture() {
     echo "the fixture load failed; see $work/run.log" >&2
     tail -40 "$work/run.log" >&2; exit 1
   fi
-  if grep -qE "stack traceback|Error while running" "$work/run.log"; then
+  # `Unknown key` for the same reason the benchmark phase greps for it below.
+  if grep -qE "stack traceback|Error while running|Unknown key" "$work/run.log"; then
     echo "script error during the fixture load; see $work/run.log" >&2
-    grep -nE "Error|traceback" "$work/run.log" | head >&2; exit 1
+    grep -nE "Error|traceback|Unknown key" "$work/run.log" | head >&2; exit 1
   fi
   guest_gate "$work/run.log"
 }
@@ -729,9 +730,18 @@ run() {
         >"$work/run.log" 2>&1; then
     echo "benchmark failed; see $work/run.log" >&2; tail -40 "$work/run.log" >&2; exit 1
   fi
-  if grep -qE "stack traceback|Error while running" "$work/run.log"; then
+  # `Unknown key` IS AN ERROR HERE AND IT IS NOT PARANOIA. The create phase has
+  # grepped for it since the estate had a locale file; the BENCHMARK phase did
+  # not, and phase 3 of the estate port found the hole with a real injection.
+  # A LocalisedString whose first element is not "" is a KEY the engine looks up
+  # and cannot find, and it renders as this instead of as the sentence -- which
+  # is exactly what a `plat` timing line does if the empty leading element is
+  # dropped from `log{"", "tag ", profiler}`. The run went green over five of
+  # them: the assertion script does not read those lines, and nothing else was
+  # looking. See agents/estate-port.md, phase 3's red proof.
+  if grep -qE "stack traceback|Error while running|Unknown key" "$work/run.log"; then
     echo "script error during benchmark; see $work/run.log" >&2
-    grep -nE "Error|traceback" "$work/run.log" | head >&2; exit 1
+    grep -nE "Error|traceback|Unknown key" "$work/run.log" | head >&2; exit 1
   fi
   guest_gate "$work/create.log" "$work/run.log"
 }

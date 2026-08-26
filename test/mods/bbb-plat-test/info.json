@@ -1,9 +1,0 @@
-{
-  "name": "bbb-plat-test",
-  "version": "0.1.0",
-  "title": "BBB space-platform verification",
-  "author": "BetterBeltBalancer",
-  "factorio_version": "2.1",
-  "description": "Builds a balancer on a SPACE PLATFORM surface and reports what its outputs received. Asserts nothing itself.",
-  "dependencies": ["base >= 2.0.0", "space-age", "better-belt-balancer"]
-}
