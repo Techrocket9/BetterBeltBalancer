@@ -122,7 +122,6 @@ import json
 import os
 import re
 import shutil
-import struct
 import subprocess
 import sys
 import tempfile
@@ -341,61 +340,20 @@ def normalised_sha(path: Path, out: Path | None) -> str:
     return hashlib.sha256(blob).hexdigest()
 
 
-def write_mod_settings(path: Path, version: str, startup: dict) -> None:
-    """Factorio's own mod-settings.dat, written from scratch.
+# THE mod-settings.dat WRITER LIVES IN tools/ NOW, because it grew a second
+# caller with a different question.
+#
+# `bench/run.sh` configures the bench harness's setup mod through startup
+# settings since that mod became a compiled guest -- a Go guest cannot require
+# the `config.lua` the harness used to rewrite -- so the PropertyTree writer is
+# shared rather than transcribed. Its header carries the format and the
+# round-trip that verified it; what is imported here is the same function this
+# file used to define, with one optional argument added that this caller does
+# not pass.
+sys.path.insert(0, str(ROOT / "tools"))
+from importlib import import_module as _import_module
 
-    THE ONLY WAY TO ASK A SETTINGS STAGE A QUESTION FROM OUTSIDE. A startup
-    setting is read by the data stage out of `settings.startup`, and what fills
-    that table is this file -- there is no command-line flag for it and no Lua
-    this repository is allowed to write.
-
-    The format is a `PropertyTree`, and it is stable and documented: eight bytes
-    of version (four little-endian uint16), one bool byte, then one node. A node
-    is a type byte, an "any-type" byte, and a payload -- 1 bool, 2 double,
-    3 string, 4 list, 5 dictionary. A string is an empty-flag byte and then a
-    space-optimised length (one byte, or 255 followed by a uint32). A dictionary
-    is a uint32 count and then that many key-string / node pairs.
-
-    VERIFIED BY ROUND-TRIPPING THE ENGINE'S OWN FILE before it was used to write
-    one: the mod-settings.dat in this machine's Factorio mods directory parses
-    to exactly the three-key dictionary above, consuming every byte. That is a
-    stronger check than agreeing with a wiki page, and mod-settings-dump.json
-    from the run is what says the engine agreed with the writer.
-    """
-    def s(text: str) -> bytes:
-        raw = text.encode()
-        if not raw:
-            return b"\x01"                       # the empty-string flag
-        if len(raw) < 255:
-            return b"\x00" + bytes([len(raw)]) + raw
-        return b"\x00\xff" + struct.pack("<I", len(raw)) + raw
-
-    def node(v) -> bytes:
-        if v is None:
-            return b"\x00\x00"
-        if isinstance(v, bool):
-            return b"\x01\x00" + (b"\x01" if v else b"\x00")
-        if isinstance(v, (int, float)):
-            return b"\x02\x00" + struct.pack("<d", float(v))
-        if isinstance(v, str):
-            return b"\x03\x00" + s(v)
-        if isinstance(v, dict):
-            out = b"\x05\x00" + struct.pack("<I", len(v))
-            for k, x in v.items():
-                out += s(k) + node(x)
-            return out
-        raise TypeError(f"no PropertyTree encoding for {type(v).__name__}")
-
-    maj, minor, patch = (int(x) for x in version.split(".")[:3])
-    tree = {
-        # Every setting is wrapped in a one-key `{value = ...}` table, which is
-        # what the engine's own file holds and what `settings.startup[name]`
-        # unwraps. All three sections must be present even when empty.
-        "startup": {k: {"value": v} for k, v in startup.items()},
-        "runtime-global": {},
-        "runtime-per-user": {},
-    }
-    path.write_bytes(struct.pack("<HHHH", maj, minor, patch, 0) + b"\x00" + node(tree))
+write_mod_settings = _import_module("mod-settings").write_mod_settings
 
 
 def build_fixture(series: str, out: Path) -> Path:
