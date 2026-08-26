@@ -49,6 +49,26 @@ const (
 	MixLoader   = "bbbt-loader"
 	PlatLoader  = "bbbt-loader"
 	MigLoader   = "bbbmig-loader"
+	M2Loader    = "bbbt-loader"
+	M3Loader    = "bbbt-loader"
+	EdgeLoader  = "bbbt-loader"
+)
+
+// M2LaneSplitter is the `m2` suite's `lsio` rig, and it is the one prototype in
+// the estate that is a clone of THIS MOD'S OWN rather than of base's.
+//
+// Base ships the `lane-splitter` TYPE and not one buildable entity of it -- the
+// type exists for Space Age's turbo lane splitter, and there is nothing in
+// data.raw to place. Cloning the mod's own hidden one rather than writing a
+// lane splitter from scratch is the point: it is a real prototype a real
+// Factorio validated, so what `lsio` exercises is the engine's type and
+// classifySide's reading of it, not a prototype the harness invented and might
+// have got wrong. The observer depends on `better-belt-balancer`, so its data
+// stage has already run by the time this clone is made.
+const (
+	M2LaneSplitter   = "bbbt-lane-splitter"
+	BBBLaneSplitter  = "bbb-lane-splitter"
+	LaneSplitterType = "lane-splitter"
 )
 
 // PlatStackLoader is the `plat` suite's second loader, and the only prototype in

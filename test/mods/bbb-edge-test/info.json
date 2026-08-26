@@ -1,9 +1,0 @@
-{
-  "name": "bbb-edge-test",
-  "version": "0.1.0",
-  "title": "BBB edges: every edit that lands MID-OPERATION",
-  "author": "BetterBeltBalancer",
-  "factorio_version": "2.1",
-  "description": "Drives the edits that arrive while a network is full and moving: a hundred add-part/remove-part cycles on a saturated balancer, a merge and its undo across two full networks, a same-tick place-and-remove, two forces editing in one tick and then being merged, two identical scrambled pastes whose compile order must match, and an output belt, an input belt and an output-belt removal on three saturated 4x4s. Counts every item on both surfaces across every one of them, and how many of them are lying on the ground. Asserts nothing itself.",
-  "dependencies": ["base >= 2.0.0", "better-belt-balancer"]
-}

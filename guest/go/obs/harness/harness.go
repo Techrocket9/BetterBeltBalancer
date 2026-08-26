@@ -276,12 +276,28 @@ func (f Flat) Make() fkapi.LuaSurface {
 // Surface looks a surface up by name. Fatal if it is not there: every caller is
 // about to build on it.
 func Surface(name string) fkapi.LuaSurface {
+	s, ok := SurfaceIfAny(name)
+	if !ok {
+		fatalCall("no surface " + name)
+	}
+	return s
+}
+
+// SurfaceIfAny is Surface for a surface that may legitimately not exist.
+//
+// It is the estate's `game.surfaces[name]` read against a nil, and the surface
+// it is always asked about is `bbb-hidden` -- which the mod under test creates
+// LAZILY, on the first compile, and which two suites then go on to delete out
+// from under it on purpose. A count that has to include the hidden side has to
+// cope with there being no hidden side yet; `m2`'s conservation check reads
+// `if hid then` for exactly that reason, and `m3` deletes it and watches the
+// mod build another.
+func SurfaceIfAny(name string) (fkapi.LuaSurface, bool) {
 	o, err := fkapi.Game.GetSurface(fkapi.OfString(name))
 	if err != nil || o == nil {
-		fatalCall("no surface " + name)
-		return fkapi.LuaSurface{}
+		return fkapi.LuaSurface{}, false
 	}
-	return fkapi.LuaSurface{Object: *o}
+	return fkapi.LuaSurface{Object: *o}, true
 }
 
 // Tick is the current game tick, for a report line that carries one.
@@ -303,6 +319,23 @@ type Piece struct {
 	Name string
 	X, Y int
 
+	// Pos overrides the tile centre with a raw map position, for the one thing
+	// in the estate that is not 1x1.
+	//
+	// `m2`'s `spio` rig feeds two rows through ONE vanilla express splitter, and
+	// a splitter is two tiles wide: facing east it straddles the boundary
+	// BETWEEN its two rows, so its y is an integer where every other piece's is
+	// an integer-plus-a-half, and its x is the centre of the single column it
+	// stands in. The estate's Lua called this `put_at` and wrote the position
+	// out; there is no tile that names it.
+	//
+	// One suite uses this, which is below the bar for a helper of its own -- and
+	// the alternative is not a smaller surface, it is a second copy of the
+	// argument table below in an observer that should be holding rigs and log
+	// lines. When Pos is set, X and Y are used only to NAME the piece in a
+	// Fatal.
+	Pos *fkapi.MapPosition
+
 	// Dir is `defines.direction.*`, absent when nil. A pointer rather than a
 	// value because north is 0 and "facing north" is not the same statement as
 	// "no direction given".
@@ -311,6 +344,14 @@ type Piece struct {
 	// Type is a linked belt's or a loader's end type, "input" or "output".
 	// Empty means the key is not sent.
 	Type string
+
+	// InnerName is what an `entity-ghost` is a ghost OF, absent when empty.
+	//
+	// A ghost is not the thing it depicts, which is the whole of what `m3`'s
+	// ghost phase is about: the build event carries an entity whose `name` is
+	// "entity-ghost", so the mod under test's registry must not grow when one is
+	// placed, and must grow when it is revived.
+	InnerName string
 
 	// Force defaults to PlayerForce.
 	Force string
@@ -368,6 +409,9 @@ func place(s fkapi.LuaSurface, p Piece) (fkapi.Object, bool) {
 		force = PlayerForce
 	}
 	pos := Center(p.X, p.Y)
+	if p.Pos != nil {
+		pos = *p.Pos
+	}
 	kv := make([]fkapi.KeyValue, 0, 8)
 	kv = append(kv,
 		fkapi.KeyValue{Key: fkapi.OfString("name"), Val: fkapi.OfString(p.Name)},
@@ -382,6 +426,10 @@ func place(s fkapi.LuaSurface, p Piece) (fkapi.Object, bool) {
 	if p.Type != "" {
 		kv = append(kv, fkapi.KeyValue{Key: fkapi.OfString("type"),
 			Val: fkapi.OfString(p.Type)})
+	}
+	if p.InnerName != "" {
+		kv = append(kv, fkapi.KeyValue{Key: fkapi.OfString("inner_name"),
+			Val: fkapi.OfString(p.InnerName)})
 	}
 	if p.Quality != "" {
 		kv = append(kv, fkapi.KeyValue{Key: fkapi.OfString("quality"),
@@ -510,6 +558,24 @@ func EntitiesIn(s fkapi.LuaSurface, box fkapi.BoundingBox, name string) []fkapi.
 	found, err := s.FindEntitiesFiltered(f)
 	if err != nil {
 		fatalCall("sweeping a box")
+		return nil
+	}
+	return found
+}
+
+// EntitiesInOfType is every entity in a box of one `type`.
+//
+// A SEPARATE FUNCTION FROM EntitiesIn RATHER THAN A WIDER ONE, because the two
+// are asked in the same breath and mean different things: the estate's
+// item-conservation counts sweep a box TWICE -- once filtered to `item-entity`
+// for what is lying on the ground, and once unfiltered for what is standing in
+// transport lines and inventories -- and a single call with both keys would be
+// neither. `m2`'s loss check and `edge`'s whole-world count are both that pair.
+func EntitiesInOfType(s fkapi.LuaSurface, box fkapi.BoundingBox, typ string) []fkapi.Object {
+	t := fkapi.OfString(typ)
+	found, err := s.FindEntitiesFiltered(fkapi.EntitySearchFilters{Area: &box, Type: &t})
+	if err != nil {
+		fatalCall("sweeping a box for " + typ)
 		return nil
 	}
 	return found
@@ -1007,6 +1073,25 @@ func EntityType(o fkapi.Object) string {
 	return t
 }
 
+// EntityTypeIs asks whether one entity's `type` is a given string WITHOUT
+// bringing the string across.
+//
+// IT IS EntityType's ANSWER WITHOUT EntityType's ALLOCATION, and on a sweep that
+// is the whole cost. `Type()` returns a Go string, which means `getStr` COPIES
+// the host's bytes into the guest heap -- the arena underneath them is released
+// when the call returns, so it has to. That is nothing on a handful of entities
+// and it is the dominant term in `edge`, which asks the question of every entity
+// on two whole surfaces after each of a hundred churn cycles: roughly nine
+// hundred thousand short-lived strings that `-gc=leaking` never gives back.
+//
+// `type_is` compares on the HOST and returns a bool, so nothing crosses but the
+// answer. It is the same reading the shipped guest already takes for the same
+// reason -- guest/go/carry.go uses `name_is` over `name` and its header says why.
+func EntityTypeIs(o fkapi.Object, want string) bool {
+	ok, err := (fkapi.LuaEntity{Object: o}).TypeIs(want)
+	return err == nil && ok
+}
+
 // SpaceLocationProto is the LuaSpaceLocationPrototype of that name.
 //
 // A HANDLE AND NOT A STRING, the same deviation QualityProto records and for the
@@ -1083,6 +1168,34 @@ func StartProfiler() Profiler {
 	}
 	return Profiler{o: o}
 }
+
+// Retain makes a profiler survive past the dispatch that created it, and
+// Release gives the handle back.
+//
+// THIS IS THE ONE PLACE IN THE ESTATE THAT NEEDS A HANDLE ACROSS A TICK, and it
+// needs one by construction rather than by convenience. Everything else here
+// re-finds an entity on the tile it was built on, which is the shipped guest's
+// own rule and costs a point query; a profiler is not on a tile and has no
+// identity to re-find it by. `m2` times a recompile ACROSS THE TICK BOUNDARY --
+// the mod under test batches, so the belt is destroyed in one tick and the
+// network rebuilt when the deferred queue drains in the next, and a window that
+// closed inside the first tick would measure a registry update and nothing at
+// all of the compile. So the clock has to start in one dispatch and stop in
+// another.
+//
+// A handle that is not retained is VALID ONLY DURING ITS OWN DISPATCH, and the
+// failure is loud rather than silent: the port's first run came back with five
+// `[BBB-OBS] error: stopping a profiler` lines, one for each of `m2`'s five
+// tick-crossing windows, and none at all for the three that open and close
+// inside one tick. The Lua kept its profiler in an upvalue and never had to
+// think about it.
+//
+// Release is paired on every path: timedEnd releases whether or not it logs.
+func (p Profiler) Retain() Profiler { return Profiler{o: p.o.Retain()} }
+
+// Release hands a retained handle back. It is a no-op on a handle that was
+// never retained, so a caller that pairs it unconditionally is correct.
+func (p Profiler) Release() { p.o.Release() }
 
 // Stop stops the clock. Nothing reads the duration until Log does.
 func (p Profiler) Stop() {

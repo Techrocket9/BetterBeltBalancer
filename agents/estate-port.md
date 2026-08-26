@@ -4,16 +4,18 @@
 mod got there in two rounds -- `fklua mod` has always generated the control
 stage, and the 2026-08-25 round replaced ten hand-written data-stage files with a
 second compiled guest ([`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 25). What is left
-is the TEST ESTATE, and after phase 3 it is **5,263 committed lines** of it:
-4,062 across ten files under `test/mods`, 462 in the interactive checklist's
+is the TEST ESTATE, and after phase 4 it is **1,827 committed lines** of it:
+626 across four files under `test/mods`, 462 in the interactive checklist's
 staging mod, 739 in the `bench/` harness's setup mod. Lua that nothing in
 `make check` can reach, that no toolchain type-checks, and that only a Factorio
 run can execute at all. It was 8,524 over twenty-four files when the pilot
-started.
+started, and none of what is left is a SUITE.
 
 This file is the programme for removing it, and the record of what each phase
 measured. The pilot is `m1` and `sedge`, phase 2 is `mar`, `mig21` and `qual`,
-and phase 3 is `mix`, `plat` and `mig`, all done 2026-08-25.
+phase 3 is `mix`, `plat` and `mig`, and phase 4 is `m2`, `m3` and `edge` -- the
+three biggest -- all done 2026-08-25. **Every suite in the estate is a Go
+observer now.**
 
 ---
 
@@ -776,6 +778,294 @@ changed a number would move one of these.
 
 ---
 
+---
+
+## Phase 4: `m2`, `m3`, `edge` -- done 2026-08-25
+
+3,350 lines of Lua deleted across three mods -- the three biggest in the estate --
+and what is left of it is **1,827 lines over eight files**: the interactive
+staging mod, the bench harness's setup mod, and the three data-stage-only
+stand-ins phases 5 and 6 own. From 8,524 over twenty-four when the pilot started.
+
+All three suites are byte-identical to their goldens, the whole estate is green
+in both `-gc` arms, and the `mar` slopes are unmoved.
+
+### The masks stopped being an argument and became a measurement
+
+Phases 1 to 3 justified each mask in prose. This phase took the goldens TWICE --
+two runs of the unmodified tree, back to back -- and diffed them against each
+other first. Under exactly the three established masks the two golden runs are
+**identical across all 4,220 tagged lines**, which says those three are the only
+nondeterministic things in these logs and that any diff after the port is a port
+defect rather than a candidate for a fourth mask. It costs one extra run per
+phase and it is worth doing again.
+
+| masked | why |
+|---|---|
+| the elapsed-seconds column | wall clock |
+| the whole `Script <origin>:` attribution | phase 3's, widened for the profiler's C-boundary origin |
+| the digits of `Duration: N ms` | the profiler's own measured duration. THE TEXT AROUND IT IS NOT MASKED |
+
+**Every one of the 4,220 tagged lines is byte-identical, in order**, and so is
+every number the three assertion scripts print:
+
+| log | tagged lines | | log | tagged lines |
+|---|--:|---|---|--:|
+| `m2` create + run | 364 + 89 | | `edge` create + run | 438 + **2,714** |
+| `m3` create + run | 158 + 457 | | | |
+
+What is left over is the pilot's own categories and nothing else: the run
+timestamp and the free-disk figure; `Checksum for script
+__<observer>__/control.lua`, which IS the port; `Checksum of <observer>`, all
+three having a data stage now; and `Loading script.dat`, where the observer's
+guest heap is in the save where a Lua mod's `storage` tables were (`m2` 343,071
+-> 2,073,601 B, `m3` 273,941 -> 1,308,951, `edge` 528,280 -> 2,480,592). The mod
+under test is unmoved in every log.
+
+`Checksum of bbb-m3-test` and `Checksum of bbb-edge-test` come out EQUAL, which
+is not a coincidence to be explained away: both data stages are now the same four
+calls into `obsdata.ExpressLoader`, so they are the same bytes.
+
+### The LCG, and why the obvious transcription is wrong from the first value
+
+`m3`'s churn carries its own generator in the save, because the schedule has to be
+identical on every run for the assertions to mean anything:
+
+```lua
+storage.seed = (storage.seed * 1103515245 + 12345) % 2147483648
+```
+
+That reads as a textbook 31-bit LCG and IS NOT ONE. Factorio's Lua is
+doubles-only; the product of a 31-bit seed and 1103515245 reaches 2.4e18; a double
+carries 53 bits of mantissa, about 9e15. **The low nine bits of every product are
+rounded away before the modulus sees them**, and every seed this generator
+produces is a multiple of 512. A Go transcription in `uint64` computes the
+arithmetic EXACTLY, which is a different generator.
+
+Checked rather than reasoned about, against `../FkLua/bin/lua52f` -- the
+doubles-only Lua 5.2.1 this repository keeps for exactly this kind of question --
+over 300 churn steps and 600 `rnd` calls:
+
+| candidate | against the real Lua |
+|---|---|
+| `uint64`, the textbook LCG | **differs at the very first value** and never re-converges |
+| `float64`, mirroring Lua's own arithmetic | **identical, value for value, all 600** |
+
+So `rnd` is written in floating point: the multiply and the add are separate
+double operations, with an explicit `float64()` conversion between them to forbid
+Go contracting them into a fused multiply-add that would be MORE accurate and
+therefore wrong (wasm has no FMA instruction, so this is belt and braces -- but
+the belt is free); and the modulus is `a - floor(a/b)*b`, which is how Lua 5.2's
+C source defines `%` for numbers rather than `fmod`.
+
+### The red proofs, and what they say about where the teeth are
+
+**`m2`: the profiler label -- and the hole it found first.** The charter chartered
+this one because `assert-m2.py` is the only script in the estate that PARSES a
+`Duration:` line. Perturbing one label to `teardown+rebuild(complete)` came back
+**GREEN**: the script read the timings only to PRINT them, so a drifted label
+printed a different word and passed, and a suite that stopped emitting the lines
+altogether would have printed nothing and passed too. That is phase 3's `Unknown
+key` finding again one level out -- a check that skips is a check that passed,
+applied to a whole block. `WANT_TIMINGS` closes it, and with it closed the same
+injection fails by name:
+
+```
+  the profiler published 8 timing line(s) and these 2 were not among them:
+  'sat4 teardown+rebuild(full)', 'sat8 teardown+rebuild(full)'. A label is what
+  says WHICH window was measured, and a recompile figure is only meaningful
+  against the `idle tick pair` control it is subtracted from
+```
+
+The labels are load-bearing rather than decorative: every recompile figure in
+CLAUDE.md is one of these windows minus the `idle tick pair` control, and a run
+that mislabelled one would publish a number attributed to the wrong measurement.
+
+**`m3`: the LCG, and the golden diff earning its place as a first-class gate.**
+Swapping the float64 generator for the textbook `uint64` one -- the transcription
+anybody would write -- and running the suite:
+
+| | ported (== golden) | textbook `uint64` |
+|---|--:|--:|
+| `[BBB] stats audit` | compiles=127 skipped=34 builds=89 teardowns=71 creates=921 | 139 / 34 / 101 / 83 / **1001** |
+| final counters | 141 / 48 / 89 / 75 / 921 | 153 / 48 / 101 / 87 / **1001** |
+| `stress recovered` | 15,856 | **15,848** |
+| tagged run-log lines differing | 0 of 457 | **425 of 457** |
+| `assert-m3.py` | passed | **passed** |
+
+A completely different churn -- a different row and a different action at every
+one of a hundred steps -- and the suite's own assertions cannot see it. They are
+not supposed to: CLAUDE.md tracks those counters as measurements of the GUEST that
+legitimately move when its batching changes (288 -> 139 compiles across the
+`fk.defer` round), so pinning them in the assertion script would fail every honest
+guest change. **For a PORT the golden diff is the right instrument, and this is
+the clearest evidence in four phases that it belongs in the gate list rather than
+beside it.**
+
+### `fk.LastError()`, verified -- and the trap next door
+
+`edge` is the estate's first real consumer of the last-error import, and it is the
+sharp case: it asserts the engine's own refusal of
+`script.raise_event(on_player_mined_entity)`, because that refusal is the whole
+reason the miner's-pocket trigger is documented rather than tested. The verdict is
+that it works exactly, golden against ported:
+
+```
+err=on_player_mined_entity (ID 76) (76) can't be raised through script.
+```
+
+byte-identical, including the whitespace collapse the Lua's `tostring(err):gsub`
+applied. [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 28 is the ledger entry.
+
+**What went wrong on the way is not the import and is worth more than it.** The
+first run produced
+
+```
+err=on_player_pipette (ID 114) (114) can't be raised through script.
+```
+
+`fkapi.EventOnPlayerMinedEntity` is 114, and that is FkLua's own dense index over
+the description's event set -- what `fk.subscribe` takes, which the generated
+control stage maps to `defines.events[name]` at load. `script.raise_event` takes
+FACTORIO'S number, 76 here, which is not knowable at build time. Handing it 114 did
+not fail; it proved a different event unraiseable. **`assert-edge.py` passed it**,
+because that assertion checks only `ok=false` -- as it should, since what it is
+guarding is "the day this stops being refused, write the real test". The golden
+diff caught it, one line out of 3,152.
+
+FkLua excludes `defines.events` from its generated define accessors deliberately
+(*"offering a guest both spellings of `on_tick` would be a trap dressed as a
+convenience"*), and `script.get_event_id(name)` is the door it leaves open: the
+NAME travels and the engine resolves the number. No gap; a hazard, and the next
+guest that calls `raise_event` should know it.
+
+### The jump-span check DOES NOT FIRE, and that closes a three-phase note
+
+Every phase since the pilot has recorded the package-time jump-span check as "not
+fired yet, and `edge`'s fifteen clusters over 198 parts is the first place likely
+to meet it". **It does not meet it.** `edge`'s `fk_on_init` packages with no
+`//go:noinline` at all and its five rig-building sections free to be inlined into
+one function. The threshold is 655,355 bytes of jump span, and FkLua's own
+documentation puts the widest span across all of its guests at 248,861; this
+observer is not close. The sections stay separate functions for readability and
+carry no pragma, because a pragma with a reason that is not true is worse than no
+pragma. **The note can be retired: nothing in this estate is going to reach it.**
+
+### The one performance finding, and the hypothesis it killed
+
+`edge`'s benchmark phase went 18 s to 42 s and its worst tick to 725 ms, with the
+observer's own guest heap crossing a rung:
+
+```
+fklua: this guest's linear memory is now 16 MiB...
+```
+
+Benign by the charter's own rule -- an observer runs for seconds in a world that
+is thrown away -- and still forty seconds of somebody's afternoon on the estate's
+longest suite. The first hypothesis was the `[]Object` a sweep allocates per call,
+and `FindEntitiesFilteredInto` exists for exactly that. **It was worth nothing**:
+buffered, the rung was still crossed and the run was 41.9 s against 42.2.
+
+The whole term was `EntityType`. It returns a Go string, so `getStr` COPIES the
+host's bytes into the guest heap -- it has to, the arena under them is released
+when the call returns -- and `edge` asks it of every entity on two whole surfaces
+after each of a hundred churn cycles and at every one of its sixty-odd samples:
+roughly nine hundred thousand short-lived strings that `-gc=leaking` never gives
+back. `type_is` compares on the host and returns a bool. Measured alone, with the
+buffers reverted:
+
+| | rungs crossed | worst tick |
+|---|--:|--:|
+| `EntityType` | 1 (16 MiB) | 725 ms |
+| `EntityTypeIs` | **0** | 350 ms |
+
+So `harness.EntityTypeIs` ships and `harness.EntitiesInto` was DELETED rather than
+kept behind a comment claiming a win it did not produce. It is the same reading
+the shipped guest already takes for the same reason (`carry.go` uses `name_is`
+over `name`, and its header says why).
+
+**What did not move is the wall clock**, and that is the honest residual: 40 s
+against the Lua's 18 s. It is the boundary, not the heap -- a sweep asks three or
+four host calls of every entity it visits, at the ~12.6 us this repository has
+measured for years, where Lua's own call into C++ is nearly free. Nothing about
+the port can remove it and no number this suite asserts is affected by it.
+
+### The other things this phase found
+
+- **A profiler that spans a tick boundary needs `Object.Retain`.** `m2` times a
+  recompile ACROSS the tick boundary by construction -- the mod batches, so the
+  belt is destroyed in one tick and the network rebuilt when the deferred queue
+  drains in the next -- and a handle that is not retained is valid only inside its
+  own dispatch. The failure is loud rather than silent: five `[BBB-OBS] error:
+  stopping a profiler` lines, exactly one per tick-crossing window, and none for
+  the three that open and close inside one tick. The Lua kept its profiler in an
+  upvalue and never had to think about it. `harness.Profiler.Retain`/`Release`,
+  and it is the first use of the retain space in the estate.
+- **`m2` needed a raw-position placement** for `spio`'s two-tile splitter, which
+  straddles the boundary between its rows. `harness.Piece.Pos`.
+- **`m3` needed `InnerName`** for a ghost, which is what a blueprint produces in a
+  real game and is deliberately NOT a part.
+
+### What it cost
+
+| | Lua | Go |
+|---|--:|--:|
+| `bbb-m2-test` source | 879 + 48 lines / 39 KB | 1,086 + 47 lines |
+| `bbb-m2-test` staged | 3 files, ~41 KB | 8 files, **1.0 MB** |
+| `bbb-m3-test` source | 839 + 19 lines / 35 KB | 1,105 + 24 lines |
+| `bbb-m3-test` staged | 3 files, ~36 KB | 8 files, **1.4 MB** |
+| `bbb-edge-test` source | 1,632 + 18 lines / 78 KB | 1,711 + 24 lines |
+| `bbb-edge-test` staged | 3 files, ~79 KB | 8 files, **1.6 MB** |
+
+`harness` is 1,342 + 130 lines. `make observers` builds and packages all ELEVEN in
+**56 s** from clean (phase 3 recorded 17.9 s for eight), and the three new
+observers are the three largest in it.
+
+The whole estate is **2m33s** in the collected arm and **2m45s** leaking, against
+2m0.6s and 2m11.2s after phase 3 -- almost all of it `edge`'s boundary cost above.
+
+`fklua api check --from 2.1.16 --to 2.0.77`:
+
+| guest | surface | verdict |
+|---|---|---|
+| `obs-m2.wasm` | 25 members, 1 event, 12 concepts | **clean**, 0 findings, exit 0 |
+| `obs-m3.wasm` | **48 members**, 1 event, 12 concepts | **clean**, 0 findings, exit 0 |
+| `obs-edge.wasm` | 39 members, 1 event, 11 concepts | **clean**, 0 findings, exit 0 |
+
+`m3` is the widest surface any observer has -- blueprints, clones, ghosts, robots,
+surface deletion and rendering -- and it comes back clean, so all three stay
+STAMPED for the running engine rather than gated against it.
+
+### The `mar` slopes, unmoved
+
+The gate phase 2 added, and this phase touched `harness` in three places:
+
+| leg | B/primitive | | leg | B/primitive |
+|---|--:|---|---|--:|
+| A | 1,280 | | E | 560 |
+| B | 352 | | G | 3,736 |
+| C | 1,209 | | F | 2,080 |
+| D | 32 | | linear memory | **3.92 MiB** |
+
+Byte-identical to phase 3's, which is byte-identical to the record this repository
+has carried since the single-edge port.
+
+### What phase 5 inherits
+
+- **The estate's remaining Lua is 1,827 lines over eight files**, and none of it
+  is a suite: `test/interactive/bbb-interactive-setup` (phase 5),
+  `bench/mods/*` (phase 7), and the two data-stage-only stand-ins plus
+  `bbb-flip-test` that phases 6 and the 2.0 session own.
+- **`test/interactive` is gated by `iact`**, which is a `--create` and an assertion
+  script, so phase 5 has a headless check already -- but its README checklist
+  quotes TILE COORDINATES and file paths, and the port moves the file. Re-derive
+  them from the Go rather than copying them across.
+- **Take the goldens twice.** The A/B of two unmodified runs is what turns the
+  mask list from an argument into a measurement, and it is cheap.
+- **`fkapi.TableSize` is STILL unused**, four phases in. Every `#` and
+  `table_size` in the estate has become an ordinary Go slice length.
+- **The jump-span note is retired** (above). Nothing here will reach it.
+
 ## The phases
 
 Each phase is: goldens, port, the six gates, `git rm` the Lua, and a section in
@@ -786,7 +1076,7 @@ this file recording what it measured and what it deviated on.
 | **1 (done)** | `m1`, `sedge` | the harness, the build recipe, the staging seam. `sedge` brings the first observer DATA STAGE |
 | **2 (done)** | `mar`, `mig21`'s observer, `qual` | the first observers with real per-tick STATE and arithmetic. `mar` reads the mod's `[BBB] heap` probe and drives 680 world operations from a schedule; `mig21` brings the first `fk_on_configuration_changed` and the first observer whose PACKAGING is load-bearing. **`flip` was in this phase and is DEFERRED** -- see below |
 | **3 (done)** | `mix`, `plat`, `mig` | `plat` needs Space Age surfaces and `helpers.create_profiler`; `mix` needs infinity-chest filter rotation over 48 item names; `mig` is the only suite whose two phases run under different mod sets, and its observer is the one that reports a census |
-| **4** | `m2`, `m3`, `edge` | the big ones. `m3` carries an LCG and 600 ticks of randomised churn; `edge` counts every item on two surfaces inside one tick. These are where the harness will earn or fail to earn its keep |
+| **4 (done)** | `m2`, `m3`, `edge` | the big ones. `m3` carries an LCG and 600 ticks of randomised churn; `edge` counts every item on two surfaces inside one tick. These are where the harness will earn or fail to earn its keep |
 | **5** | `test/interactive/bbb-interactive-setup` | not a suite -- the world a HUMAN walks, and where the mod portal's demo scenes live. `iact` gates it, so the port has a headless check already |
 | **6** | `test/mods/belt-balancer-2`, `test/mods/bbb-mig-foreign` | data-stage-only stand-ins, and **blocked on [`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 26**: `fklua mod` cannot package a mod with no control module. The `test/fixtures/fastbelt` workaround (an inert empty `main`) works and costs ~113 KB of generated Lua that is required and never called; whether to spend that on two stand-ins or wait for the gap is a phase-6 decision |
 | **7** | `bench/mods/*` | LAST, and alone. Every published performance figure in this repository was measured with those setup mods, so the port has to carry a comparability gate the suites do not need: the same matrix cell, INTERLEAVED in one session, old and new setup mods against the same `dist/`, with the no-mod control in the same session. Session drift on this machine is 25-35% |

@@ -37,13 +37,31 @@ T0, T1 = 1800, 3540
 
 # What the rigs BUILD, written down here rather than read off the guest's own
 # summary. Twenty-one clusters, two columns of parts per row -- see the layout
-# block at the top of test/mods/bbb-m2-test/control.lua.
+# block at the top of guest/go/obs/m2/main.go.
 #
 # It is a statement about the SAVE and not about the compiler, which is the
 # whole reason it is a constant: a rig that quietly lost a row, or that was
 # rebuilt one column wide in the old multi-edge idiom, moves this number, and
 # nothing the guest reports about itself could say so.
 WANT_CLUSTERS, WANT_PARTS = 21, 156
+
+# Every profiler window this suite is supposed to publish, by its LABEL.
+#
+# See the timing block at the bottom of this file for why these are asserted
+# rather than merely printed. Written down here for the same reason
+# WANT_CLUSTERS is: it is a statement about what the observer is supposed to
+# MEASURE, and nothing the observer reports about itself could say that one of
+# these went missing.
+WANT_TIMINGS = [
+    "raw 32 create_entity on the hidden surface",
+    "raw find_entities_filtered (N hits)",
+    "idle tick pair, nothing pending",
+    "sat4 teardown+rebuild(-1 input)",
+    "sat4 teardown+rebuild(full)",
+    "sat8 teardown+rebuild(-1 input)",
+    "sat8 teardown+rebuild(full)",
+    "loss recompile (audit-forced, whole-save re-classification)",
+]
 
 # rig -> (live outputs, what the total should be in units of one saturated belt,
 #         how much spread between live outputs is allowed)
@@ -456,12 +474,41 @@ def main():
                     "%s part(s) carrying more than one belt"
                     % (len(refusals), refusals[0].group(1), refusals[0].group(2)))
 
+    # --- the timing block, which is an ASSERTION and not only a report --------
+    #
+    # IT WAS ONLY A REPORT UNTIL 2026-08-25, AND THAT WAS A HOLE OF EXACTLY THE
+    # SHAPE THIS ESTATE KEEPS RECORDING. `if times:` printed whatever it found
+    # and asserted nothing, so a label that drifted printed a different word and
+    # passed -- and a suite that stopped emitting the lines ALTOGETHER printed
+    # nothing at all and passed, which is "a check that skips is a check that
+    # passed" applied to a whole block. Found by the estate port's phase-4 red
+    # proof: renaming one profiler label to `teardown+rebuild(complete)` was
+    # meant to fail this script by name, and the run came back green.
+    #
+    # The labels are load-bearing rather than decorative. Each one names WHICH
+    # window was measured, and the two `teardown+rebuild` pairs are only
+    # interpretable against `idle tick pair, nothing pending` -- the control that
+    # is SUBTRACTED from them. A run that lost the control, or that mislabelled
+    # one of the four windows, would publish a number attributed to the wrong
+    # measurement, and every recompile figure in CLAUDE.md was taken this way.
+    #
+    # The hit count in the `find_entities_filtered` label is normalised out: it
+    # is what the sweep found, which is a measurement rather than a name.
     times = [(m.group(1), float(m.group(2)))
              for m in (TIMING.search(l) for l in lines) if m]
     if times:
         print("\ncompile cost, wall clock (helpers.create_profiler):")
         for what, ms in times:
             print("  %-52s %8.3f ms" % (what, ms))
+
+    seen = {re.sub(r"\(\d+ hits\)", "(N hits)", what) for what, _ in times}
+    missing = [w for w in WANT_TIMINGS if w not in seen]
+    if missing:
+        fail.append("the profiler published %d timing line(s) and these %d were "
+                    "not among them: %s. A label is what says WHICH window was "
+                    "measured, and a recompile figure is only meaningful against "
+                    "the `idle tick pair` control it is subtracted from"
+                    % (len(times), len(missing), ", ".join(repr(m) for m in missing)))
 
     if fail:
         print("\nM2 NETWORK ASSERTIONS FAILED:")

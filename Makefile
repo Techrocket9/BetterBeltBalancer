@@ -338,9 +338,13 @@ OBS_QUAL_DIR  := $(OBS_DIST)/bbb-qual-test_0.1.0
 OBS_MIX_DIR   := $(OBS_DIST)/bbb-mix-test_0.1.0
 OBS_PLAT_DIR  := $(OBS_DIST)/bbb-plat-test_0.1.0
 OBS_MIG_DIR   := $(OBS_DIST)/bbb-mig-test_0.1.0
+OBS_M2_DIR    := $(OBS_DIST)/bbb-m2-test_0.1.0
+OBS_M3_DIR    := $(OBS_DIST)/bbb-m3-test_0.1.0
+OBS_EDGE_DIR  := $(OBS_DIST)/bbb-edge-test_0.1.0
 
 observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR) $(OBS_MAR_DIR) $(OBS_MIG21_DIR) \
-           $(OBS_QUAL_DIR) $(OBS_MIX_DIR) $(OBS_PLAT_DIR) $(OBS_MIG_DIR)
+           $(OBS_QUAL_DIR) $(OBS_MIX_DIR) $(OBS_PLAT_DIR) $(OBS_MIG_DIR) \
+           $(OBS_M2_DIR) $(OBS_M3_DIR) $(OBS_EDGE_DIR)
 
 $(OBS_M1_DIR): $(DIST)/obs-m1.wasm
 	@mkdir -p $(OBS_DIST)
@@ -472,6 +476,45 @@ $(OBS_MIG_DIR): $(DIST)/obs-mig.wasm $(DIST)/obs-migdata.wasm
 	  --dependency "(?) belt-balancer-3" \
 	  --dependency "(?) belt-balancer-performance" \
 	  --dependency "(?) bbb-mig-foreign" \
+	  -o .
+
+# THE BIG THREE. Every one of them declares `better-belt-balancer` outright, and
+# for `m2` that is a TIMING surface rather than an identity: its recompile
+# profiler opens in the tick that mutates and closes in the tick that flushes,
+# which is only a measurement of the recompile if the mod's own deferred flush
+# has already run when the observer's tick handler is entered. The dependency is
+# what fixes the load order, which fixes the handler order.
+$(OBS_M2_DIR): $(DIST)/obs-m2.wasm $(DIST)/obs-m2data.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-m2.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-m2data.wasm) \
+	  --name bbb-m2-test --version 0.1.0 \
+	  --title "BBB M2 network verification" \
+	  --description "Builds saturated, starved, blocked, asymmetric and cross-surface balancer rigs and reports what each output actually received. Asserts nothing itself." \
+	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
+	  -o .
+
+$(OBS_M3_DIR): $(DIST)/obs-m3.wasm $(DIST)/obs-m3data.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-m3.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-m3data.wasm) \
+	  --name bbb-m3-test --version 0.1.0 \
+	  --title "BBB M3 lifecycle verification" \
+	  --description "Drives every 2.0 lifecycle path that can change what the compiler compiled from -- blueprints, ghosts, robots, clones, surface deletion, rotation, silent script destruction, part death, two forces, and 600 ticks of randomised churn -- and reports what happened. Asserts nothing itself." \
+	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
+	  -o .
+
+$(OBS_EDGE_DIR): $(DIST)/obs-edge.wasm $(DIST)/obs-edgedata.wasm
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-edge.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-edgedata.wasm) \
+	  --name bbb-edge-test --version 0.1.0 \
+	  --title "BBB edges: every edit that lands MID-OPERATION" \
+	  --description "Drives the edits that arrive while a network is full and moving: a hundred add-part/remove-part cycles on a saturated balancer, a merge and its undo across two full networks, a same-tick place-and-remove, two forces editing in one tick and then being merged, two identical scrambled pastes whose compile order must match, and an output belt, an input belt and an output-belt removal on three saturated 4x4s. Counts every item on both surfaces across every one of them, and how many of them are lying on the ground. Asserts nothing itself." \
+	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
 	  -o .
 
 # --- housekeeping ------------------------------------------------------------
