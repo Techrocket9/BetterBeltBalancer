@@ -560,7 +560,10 @@ def main() -> int:
 
     if args.capture:
         book.setdefault(version_full, {}).update(got)
-        book[version_full]["_note"] = 'Captured from the hand-written Lua data stage before the Go port, re-verified against the Go data guest after it, and re-captured for 0.3.1, whose two startup cost settings are the only difference: the mod-settings dump moved from {} to those two prototypes and the data-raw dump did not move at all. Per engine and per mod set: the dump carries every prototype every mod defined. Only the DEFAULT settings are hashed; the variant and speed arms assert values.'
+        # setdefault, not assignment: an engine's note is its own provenance
+        # story, often hand-corrected after the capture -- a recapture must not
+        # overwrite it with a generic one.
+        book[version_full].setdefault("_note", 'Captured by --capture; read the dump before trusting a fresh line. Per engine and per mod set: the dump carries every prototype every mod defined. Only the DEFAULT settings are hashed; the variant and speed arms assert values.')
         GOLDENS.write_text(json.dumps(book, indent=2, sort_keys=True) + "\n")
         for a in arms:
             print(f"  {a:<10} data-raw {got[a]['data_raw_sha256'][:16]}  "
@@ -573,17 +576,26 @@ def main() -> int:
         return 0
 
     want = book.get(version_full)
+    bad = False
     if want is None:
-        print(f"SKIP: no golden for Factorio {version_full}. A dump is a function "
-              f"of the engine and the mod set, so a hash from another engine "
-              f"would fail for a mod that is perfectly fine.")
+        # A MISSING GOLDEN IS A FAILURE, NOT A SKIP. The hashed arms are this
+        # gate's primary instrument, and a run that measured nothing must not
+        # exit 0 -- that is this repository's own "a check that skips is a
+        # check that passed", met in the gate that was written to answer a
+        # question no suite can ask. The variant and speed arms still run
+        # below (they need no golden), so the report stays one report; the
+        # exit code says the engine's golden is owed.
+        bad = True
+        want = {}
+        print(f"FAIL: no golden for Factorio {version_full}. A dump is a "
+              f"function of the engine and the mod set, so a hash from another "
+              f"engine would fail for a mod that is perfectly fine. Read the "
+              f"dump, then capture this engine's own:")
+        print(f"      make mod && test/check-datastage.py --capture")
         print(f"      Recorded engines: {', '.join(sorted(k for k in book)) or '(none)'}")
         if series == "2.0":
             print()
             print(DEFERRED_OTHER_FLAVOUR)
-        return 0
-
-    bad = False
     for a in arms:
         w, g = want.get(a), got[a]
         if w is None:
