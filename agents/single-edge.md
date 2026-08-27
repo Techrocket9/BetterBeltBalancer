@@ -395,6 +395,30 @@ path still moves the version, which is fk_migrate's front door). Plan:
   in the data stage is what makes one tree correct on both engines — so the
   branch diff is the manifest and the generated bindings, nothing
   hand-written.
+
+  **RECUT AT 0.2.1 ON 2026-08-26**, from master plus one commit as before, and
+  the stack is now FOUR files rather than three: `fklua.toml` (the series, the
+  base dependency, the api pin and the version), `fklua.lock`,
+  `guest/go/fkapi/fkapi.go` and `mod-data/changelog.txt`, whose top section has
+  to be the manifest's version because `check-changelog` says so. The api
+  description is the same file the 0.2.0 recut hashed (`api_sha256`
+  `594b4ec9...`) and the GENERATOR has moved six rounds, so `bindings_sha256`
+  is a new value over an unmoved input; 4262 members at this pin against
+  trunk's 4859.
+
+  **AND THE 0.2.0 RECUT PREDATED A COMPILED TEST ESTATE, WHICH THIS ONE DOES
+  NOT.** `make check` on the recut now type-checks fourteen observers against
+  2.0.77 bindings, and exactly one call in the estate has a generated signature
+  that differs between the pins: `LuaSpacePlatform::apply_starter_pack` gained
+  an optional `silent` after 2.0.77, and an absent optional is still a
+  PARAMETER in Go, so `obs/plat`'s one call site could not be written to satisfy
+  both descriptions. `fklua api check` had reported that member since phase 3
+  of the estate port and the answer recorded there is about the WIRE (`M.call`
+  trims an absent trailing optional, so the call reaches either engine as
+  `apply_starter_pack()`) — true, and not the whole story. The fix is a
+  two-line build-tagged shim in `guest/go/obs/plat`, with the tag DERIVED from
+  `MOD_SERIES` so it cannot be set independently of the pin that generated the
+  bindings, and both files sit on both branches: nothing hand-written differs.
 - **FkLua ask to record in FKLUA-GAPS.md**: `fklua mod` reads identity only
   from `fklua.toml` and takes no flags, so per-target packaging from one
   checkout needs either a manifest override flag or the branch dance above.
@@ -409,7 +433,8 @@ The bulk of the labor, and it splits by which binary can run it:
 | ~~every suite's rigs rebuilt single-edge~~ **ALL THIRTEEN DONE 2026-08-24** | 2.1 | the geometry doubles; every calibrated number in CLAUDE.md's tables gets re-recorded. The suites' assertions themselves mostly survive — what changes is the worlds their `on_init` builds. Confirmed by all four tranches: **not one assertion in `m2`, `upg`, `plat`, `qual`, `m3` or `edge` had to be weakened**, every rate and every port count is the number it was, and `plat`'s whole stacking leg came back identical to the item. See "Implementation status — phase 4" for the two rigs that needed a redesign rather than a re-lay, "phase 5" for the one assertion that had to be retired rather than re-recorded, "phase 6" for the four `edge` rigs whose GESTURE the rule changed, and **"phase 7" for `mig`, the one suite whose rigs were deliberately NOT re-laid**: they are somebody else's world, so re-laying them would have been re-laying the thing under test |
 | new `sedge` legs: second belt refused (build, rotation, robot), handed back negative, merge-spare via the bridge-tile path, feedback-gate once | 2.1 | the `lim`/`brdg` idiom verbatim |
 | migration suite: fixture 2.0 saves loaded under 2.1 | 2.1 + fixtures | **the fixtures exist and are committed**: `test/fixtures-2.0/` carries the m2, edge, m3 and qual saves from the last 2.0.77 suite run (2026-08-22), preserved 2026-08-24 minutes ahead of anything overwriting `test/tmp` — they cannot be regenerated without a 2.0 binary. Covers: the load survives with per-tile pruning (S2 probe 1's numbers graduate into assertions), the rebuild tears down the remnants, hidden items recovered and spilled conserved, GPS summary logged, audit stable after |
-| ~~setting-flip suite (ON→OFF sweep, OFF→ON recompile)~~ **DONE 2026-08-24, as the `flip` suite** | **2.0.77 only** | multi-edge cannot be enabled on 2.1 at all. What it found is that the ON→OFF arm is a VETO rather than a sweep, and that the shipped veto spilled every standing multi-edge network on the way. Phase 9 |
+| ~~setting-flip suite (ON→OFF sweep, OFF→ON recompile)~~ **DONE 2026-08-24, as the `flip` suite** | **2.0.77 only** | multi-edge cannot be enabled on 2.1 at all. What it found is that the ON→OFF arm is a VETO rather than a sweep, and that the shipped veto spilled every standing multi-edge network on the way. Phase 9. **Its observer was the last hand-written Lua in the repository and is a compiled Go guest since 2026-08-26** — phase 9 of the estate port, which had to wait for this binary for the same reason this row does |
+| ~~the 2.0-flavour dump golden~~ **DONE 2026-08-26** | **2.0.77 only** | `guest/go/engine` keys on the RUNNING engine, so a 2.1 binary produces the 2.1 flavour whatever the manifest says. Captured for both mod sets on the recut, and it pins the three things the version branch turns ON that no 2.1 dump can carry: `not_colliding_with_itself`, the `bbb-can-stack` marker, and a mod-settings dump with THREE settings rather than two |
 | bench re-baselines | 2.1 | the per-balancer marginal cost changes (2× parts per rig); RESULTS.md numbers are a new session against new controls anyway |
 
 ## Spike S2 — the two gating probes are DONE (2026-08-24), four remain

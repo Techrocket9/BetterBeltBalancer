@@ -1,14 +1,19 @@
 # The test estate, in Go
 
-**There is to be no hand-written Lua in this repository, anywhere.** The shipped
-mod got there in two rounds -- `fklua mod` has always generated the control
-stage, and the 2026-08-25 round replaced ten hand-written data-stage files with a
-second compiled guest ([`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 25). What is left
-is the TEST ESTATE, and after phase 7 it is **478 committed lines** of it, all of
-them in `bbb-flip-test`, which waits for a Factorio 2.0 binary. Lua that nothing in `make check` can reach, that no
-toolchain type-checks, and that only a Factorio run can execute at all. It was
-8,524 over twenty-four files when the pilot started, and none of what is left is a
-SUITE.
+**There is to be no hand-written Lua in this repository, anywhere. SINCE
+2026-08-26 THERE IS NONE.** The shipped mod got there in two rounds -- `fklua
+mod` has always generated the control stage, and the 2026-08-25 round replaced
+ten hand-written data-stage files with a second compiled guest
+([`FKLUA-GAPS.md`](../FKLUA-GAPS.md) item 25). The TEST ESTATE followed in nine
+phases: **8,524 lines over twenty-four files when the pilot started, and zero**.
+`test/mods/` does not exist. Lua that nothing in `make check` could reach, that
+no toolchain type-checked, and that only a Factorio run could execute at all is
+gone from this repository entirely.
+
+**Phase 9 is what finished it**, and it is the one that waited for a BINARY
+rather than for a phase: `flip` drives a setting Factorio 2.1 does not define, so
+its suite SKIPS there and a phase's first gate is a golden log. A 2.0.77 was
+installed on 2026-08-26 and the phase ran the ordinary way.
 
 **THE ESTATE IS FOURTEEN GO OBSERVERS AND ONE TOOLCHAIN.** It was mixed for one
 day: phase 8 re-ported `mig21` to RUST as a parity exercise and the arm was
@@ -24,8 +29,9 @@ measured. The pilot is `m1` and `sedge`, phase 2 is `mar`, `mig21` and `qual`,
 phase 3 is `mix`, `plat` and `mig`, phase 4 is `m2`, `m3` and `edge` -- the three
 biggest -- phase 5 is the interactive staging mod, phase 6 the two
 data-stage-only stand-ins, phase 7 the `bench/` harness's setup mod and phase 8
-the RUST re-port of `mig21`, all done 2026-08-25. **Every suite in the estate is a
-compiled observer now, and so is every mod either of them stages.**
+the RUST re-port of `mig21`, all done 2026-08-25 -- and **phase 9 is `flip`, done
+2026-08-26 on a Factorio 2.0 binary, which ENDS THE PROGRAMME**. Every suite in
+the estate is a compiled observer, and so is every mod any of them stages.
 
 ---
 
@@ -1611,6 +1617,17 @@ to it -- so `run.sh` skips the pass on 2.1 with the reason printed rather than
 crashing Factorio once per cell. `BENCH_VPROF_FORCE=1` is how a future engine
 gets re-tested.
 
+> **RE-TESTED ON FACTORIO 2.0.77, 2026-08-26, AND IT WORKS THERE.** The row above
+> says "this engine" and the sentence was owed a control on the other one. One
+> no-mod cell (`--mod none --scenario control-idle -n 5 --ticks 1200`,
+> `BENCH_VPROF_TICKS=600`): the pass ran to completion, exit 0, no SIGSEGV, and
+> every column came back -- **whole 176.59 us, belts 50.90, entities 1.83, script
+> 10.13** over the steady-state half. So the defect is **2.1.16's alone**, the
+> skip in `run.sh` is keyed on exactly the engine that has it, and the per-system
+> breakdown and the per-tick `wholeUpdate` column are both obtainable on the
+> release/2.0 arm. Nothing else was run and `results.tsv` was restored to its
+> pre-probe bytes: this was an engine question, not a measurement of any mod.
+
 **The consequence is that the gate rests on `avg_ms`, throughput and balance**,
 which is the right place for it: `avg_ms` is uninstrumented and is exactly where
 a per-tick guest dispatch shows up, and throughput and balance are deterministic
@@ -2280,9 +2297,10 @@ working: a run that had passed there would have been a run that never rebuilt.
 
 ### What this phase leaves owed
 
-- **`bbb-flip-test`, 478 lines over two files**, unmoved and unmovable here. It
+- ~~**`bbb-flip-test`, 478 lines over two files**, unmoved and unmovable here. It
   goes to the `release/2.0` session with the grandfather write, both arms of the
-  flip handler and `sweepStackedInterfaces`.
+  flip handler and `sweepStackedInterfaces`.~~ **CLOSED the same week: phase 9,
+  2026-08-26, on the 2.0 binary that session brought.**
 - **The build-graph hazard above**, which is estate-wide and unfixed.
 - **`harness.place`'s ~1.8 KB per entity placed**, still the largest number the
   programme has left on the table.
@@ -2430,7 +2448,7 @@ this file recording what it measured and what it deviated on.
 | phase | suites | what is new about it |
 |---|---|---|
 | **1 (done)** | `m1`, `sedge` | the harness, the build recipe, the staging seam. `sedge` brings the first observer DATA STAGE |
-| **2 (done)** | `mar`, `mig21`'s observer, `qual` | the first observers with real per-tick STATE and arithmetic. `mar` reads the mod's `[BBB] heap` probe and drives 680 world operations from a schedule; `mig21` brings the first `fk_on_configuration_changed` and the first observer whose PACKAGING is load-bearing. **`flip` was in this phase and is DEFERRED** -- see below |
+| **2 (done)** | `mar`, `mig21`'s observer, `qual` | the first observers with real per-tick STATE and arithmetic. `mar` reads the mod's `[BBB] heap` probe and drives 680 world operations from a schedule; `mig21` brings the first `fk_on_configuration_changed` and the first observer whose PACKAGING is load-bearing. **`flip` was in this phase, was DEFERRED for want of a 2.0 binary, and landed as phase 9** |
 | **3 (done)** | `mix`, `plat`, `mig` | `plat` needs Space Age surfaces and `helpers.create_profiler`; `mix` needs infinity-chest filter rotation over 48 item names; `mig` is the only suite whose two phases run under different mod sets, and its observer is the one that reports a census |
 | **4 (done)** | `m2`, `m3`, `edge` | the big ones. `m3` carries an LCG and 600 ticks of randomised churn; `edge` counts every item on two surfaces inside one tick. These are where the harness will earn or fail to earn its keep |
 | **5 (done)** | the interactive staging mod | not a suite -- the world a HUMAN walks, and where the mod portal's demo scenes live. `iact` gated it already, so this phase had a headless check from the start; it is also the first consumer of `fkapi.RemoteCall`, and the only observer with a player event handler |
@@ -2438,29 +2456,154 @@ this file recording what it measured and what it deviated on.
 | **7 (done)** | `bench/mods/*` | LAST, and alone. Every published performance figure in this repository was measured with those setup mods, so the port has to carry a comparability gate the suites do not need: the same matrix cell, INTERLEAVED in one session, old and new setup mods against the same `dist/`, with the no-mod control in the same session. Session drift on this machine is 25-35% |
 | **8 (done, and REVERTED 2026-08-26)** | `mig21`'s observer again, in RUST | the parity exercise, and it CLOSES the on-engine programme. One observer written twice against one ABI is the strongest statement this repository can make about FkLua's second backend, and `mig21` was the right one: no `--create` phase, so the whole thing is one load and one set of assertions. **51 lines, both fixtures, byte-identical, no mask.** The Rust observer was staged for one day; the arm was reverted and the estate is fourteen Go observers, with the measurement banked and continuous Rust coverage delegated to fklua-ports. See the reversion section |
 
-### What waits for a 2.0 binary
+| **9 (done)** | `flip` | the one that waited for a BINARY rather than for a phase. It could not be ported on a 2.1 machine at all, for the reason below, and porting it takes the count of hand-written Lua files in this repository to ZERO |
 
-**`flip` cannot be ported on this machine and it is not a scheduling
-preference.** The suite drives `bbb-multi-edge-parts`, which
-`guest/go/data/settings.go` defines on 2.0.x and never on 2.1.x, so on trunk's
-own engine `test/run.sh` prints a SKIP rather than running it -- and **THE FIRST
-GATE OF EVERY PHASE IS A GOLDEN LOG.** There is no run here that can produce one,
-so a ported `flip` would be a transcription nothing had ever executed, sitting in
-the tree looking green because the suite it belongs to skips. That is the exact
-shape of "a check that skips is a check that passed", which this repository
-already has a section about.
+### `flip` waited for a 2.0 binary, and this is why
 
-So it moves to the `release/2.0` session, with the other things owed there: the
-grandfather write actually landing, both arms of the flip handler, and
-`sweepStackedInterfaces` against a standing multi-edge world.
+**It was not a scheduling preference.** The suite drives
+`bbb-multi-edge-parts`, which `guest/go/data/settings.go` defines on 2.0.x and
+never on 2.1.x, so on trunk's own engine `test/run.sh` prints a SKIP rather than
+running it -- and **THE FIRST GATE OF EVERY PHASE IS A GOLDEN LOG.** There was no
+run on the porting machine that could produce one, so a ported `flip` would have
+been a transcription nothing had ever executed, sitting in the tree looking green
+because the suite it belongs to skips. That is the exact shape of "a check that
+skips is a check that passed", which this repository already has a section about.
 
-**And it carries one thing no other observer needs.** `flip` drives the setting
-through `remote.call('better-belt-balancer', 'set-multi-edge-parts', ...)`,
-because Factorio refuses `settings.global[k] = v` from anybody but the mod that
-DEFINED the setting. That is an OUTBOUND `remote.call` -- bound in fkapi as
-`RemoteCall`, and **used by no observer in the estate so far**. Whoever ports it
-should treat that call the way phase 3 is told to treat `fkapi.Log(Value)`:
-verify it against a golden line before building anything on it.
+A Factorio 2.0.77 was installed on 2026-08-26 and the phase ran the ordinary way.
+
+---
+
+## Phase 9: `flip` -- done 2026-08-26, and it ends the programme
+
+**THE LAST HAND-WRITTEN LUA IN THIS REPOSITORY IS GONE.** 478 lines over three
+files (`control.lua` 458, `data.lua` 20, `info.json`), from 8,524 lines over
+twenty-four files when the port began. `test/mods/` no longer exists.
+
+### The goldens, and the masks proved by self-diff first
+
+Taken TWICE on the unmodified tree, which is phase 4's rule, and self-diffed
+before anything was ported. Under the two established masks -- the elapsed-
+seconds column and `control.lua:N:` -- the WHOLE self-diff of both logs is:
+
+| difference | what it is |
+|---|---|
+| the run's start timestamp | wall clock |
+| the free-disk figure in `Write data path` | the disk |
+| `Performed 3200 updates in ... ms` and its `avg`/`min`/`max` | wall clock |
+
+and nothing else. So the mask list is a MEASUREMENT here as it was in phase 4,
+and any later difference is a port defect rather than a candidate for a third
+mask.
+
+**132 tagged lines**: 29 in the create log, 103 in the benchmark log,
+`[FLIP]` and `[BBB]` together.
+
+### The golden diff, which is empty
+
+**All 132 byte-identical, in order**, and the assertion script's own console
+output is identical line for line as well -- every rate, every audit tuple, every
+ping and the whole veto table. What is left over in the whole-log diff is the
+pilot's own categories and not one of them is behaviour:
+
+| difference | what it is |
+|---|---|
+| the timestamp and the free-disk figure | wall clock, from the self-diff above |
+| `Checksum for script __bbb-flip-test__/control.lua` 3759071583 -> 342564618 | the observer's control stage is a different file. That IS the port |
+| `Checksum of bbb-flip-test` 3546441625 -> 2972107546 | its data stage is a different file too |
+| `Loading script.dat: 264,767 -> 470,309` and the map zip 840,120 -> 854,321 | the observer's guest heap is in the save now, where its Lua `storage` tables were. The map zip carries `script.dat`, so it follows |
+| the benchmark's ms figures and `checksum: 2135439222 -> 1407265760` | Factorio's state checksum covers every mod's `storage`, and an observer's `storage` is a guest heap now |
+
+**`Checksum of better-belt-balancer` (3797227128) and `Checksum for script
+__better-belt-balancer__/control.lua` (4114890704) are identical in every log**,
+in both phases, which is the same statement the member-table hash makes from the
+other end: the mod under test did not move.
+
+### `fkapi.RemoteCall`, and the one deviation the port made
+
+The charter told this phase to treat `RemoteCall` the way phase 3 was told to
+treat `fkapi.Log(Value)` -- verify it against a golden line first. **That debt
+was already paid**: phase 5 became its first consumer and spiked it against a
+real engine before the interactive staging mod rested on it, so this phase
+inherited a verified call and the golden diff is the confirmation.
+
+**One deviation, and it is a strengthening rather than a transcription.** The Lua
+called `remote.call` BARE, with no guard at all. That call RAISES on a missing
+interface or method, which inside an `on_tick` handler aborts the schedule --
+so a mod that had not opened the door would have taken the suite down mid-run
+instead of reaching the assertion that says the door was shut.
+`fkapi.RemoteCall` returns a Status, so the port reads it and reports
+`accepted=false`. On a healthy run the line is identical; on a broken one it is
+the difference between a failure that names the cause and a stack trace.
+
+### The red proof
+
+`world tag=` renamed to `world tagno=` in the one line that carries it. `run.sh`
+exit **1**, and the failure names the missing sample by phase:
+
+    FAIL: no world sample for tag=pre-veto
+
+That is the `mig` review gate's own discipline arriving where it belongs -- the
+script asserts the PRESENCE of each world sample before it compares any of them,
+and its own header says the first cut of this file gated those comparisons on
+`fails` and printed three failures with the ground total never once compared.
+Reverted, and the suite is green again with output identical to the ported run.
+
+**One observation, not fixed here**: the presence check is
+`all(check(t in world, ...) for t in veto_tags)`, and `all()` over a GENERATOR
+short-circuits -- so if several world samples were missing only the first is
+named. The run still fails, loudly and by name; what is lost is three more lines
+of diagnosis. A list comprehension would report all four.
+
+### `fklua api check --from 2.1.16 --to 2.0.77`
+
+| guest | surface | verdict |
+|---|---|---|
+| `obs-flip.wasm` | 32 members, 1 event, 3 defines, 13 named types | **clean**, 0 findings, exit 0 |
+
+834 breaking changes in the gap touch nothing on that surface, so `flip`'s
+observer stays STAMPED like the other thirteen. It is the widest define surface
+of any observer (three, where most read one or two) and it touches
+`LuaSettings`, `LuaCustomTable` and `LuaForce.IsChunkCharted` -- all of them old.
+
+### Three calls that are this suite's own, and each is somebody else's already
+
+Nothing about this port needed a mechanism the estate did not have.
+
+| what | where it came from |
+|---|---|
+| the `settings.global` read | `guest/go/sedge.go`'s `settingMultiEdge`: the raw `LuaCustomTable` handle plus one index read, two host calls, against a whole-dictionary attribute that would materialise every runtime setting in the game |
+| the chart tripwire | `mig21`'s `chartState`, from the other engine, down to the nauvis-origin control in the same line |
+| the loader | `obs/obsdata.ExpressLoader` under a `protos.FlipLoader` constant, the tenth data stage to use it |
+
+The one thing written fresh is `floorDiv32`, and it is four lines: Go's `/`
+truncates towards zero and a chunk index has to floor. Every tile this suite asks
+about is non-negative, so the arm is never taken here -- it exists so that moving
+a band cannot make it a latent wrong answer.
+
+### What the port found, and it is in the runner rather than the observer
+
+`copy_testmod`'s fallback to `test/mods/<name>/` is **deleted**. It existed to
+know which half a suite was in while the port ran, and there is no other half:
+a directory that does not exist is not a safety net. What replaces it is an error
+that names the stale-package hazard **phase 8 found and no message carried** --
+an observer's packaged directory does not depend on the Makefile recipe that
+produced it, so an identity-only change with no source change beside it
+re-packages nothing and the next run stages the stale copy.
+
+`test/check-datastage.py` lost the same fallback, and two comments that pointed
+at `test/mods/` paths now point at what replaced them.
+
+### What it cost
+
+The mod did not move: `dist/bbb.wasm`, `fk_module.lua` and the packaged
+`fk_api_gen.lua` are the bytes the previous commit left, and no member, define,
+event or prototype was added. What is new is two wasm modules and a package:
+`obs-flip.wasm`, `obs-flipdata.wasm` and `bbb-flip-test_0.1.0` at 678,285 bytes
+of Lua.
+
+The estate is **fourteen Go observers, one interactive staging mod, two
+data-stage-only stand-ins and one bench setup mod**, and not one line of Lua
+anywhere in the repository that a person wrote.
 
 ### What later phases inherit that the pilot did not need
 

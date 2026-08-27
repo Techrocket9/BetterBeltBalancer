@@ -43,6 +43,8 @@ The balancer mod is not stamped. `--mod bbb` is built from this repository again
 
 `--benchmark-verbose` **crashes Factorio 2.1.16**: it emits the first tick row and then takes a SIGSEGV inside the engine's own benchmark loop, with any counter list, on any save. Measured on a vanilla no-mod save as the control, so it is the engine's defect and not a mod's. The crash also leaves a reporter process holding the run's write-directory lock, which would fail the next cell of a matrix on something unrelated to it.
 
+**It works on Factorio 2.0.77**, which is what makes the sentence above a statement about one engine rather than about this harness. Re-checked there on a no-mod control cell: the pass ran to completion and every column came back, `whole 176.59us belts 50.90us entities 1.83us script 10.13us` over the steady-state half of 600 ticks. So the breakdown is available on the 2.0 arm and not on 2.1, and the columns being empty in a row says which engine measured it.
+
 So on 2.1 the pass is skipped with the reason printed, and `whole_us`, `belts_us`, `entity_us` and `script_us` are empty in the row. `BENCH_VPROF_FORCE=1` runs it anyway, which is how a future engine gets re-tested. Where the pass does run, it averages `wholeUpdate`, `transportLinesUpdate`, `entityUpdate` and `scriptUpdate` over the steady-state second half.
 
 ## The rig
