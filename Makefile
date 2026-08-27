@@ -366,6 +366,23 @@ $(DIST)/obs-%.wasm: $(OBS_SRC) guest/go/fkapi/fkapi.go Makefile
 OBS_COMMON := --persist=$(PERSIST) --gc=leaking --api=$(MOD_API) \
               --factorio-version $(MOD_SERIES) --author BetterBeltBalancer
 
+# THE BASE DEPENDENCY FOR THE ONE PACKAGE THAT IS INSTALLED BY HAND, derived
+# from the series rather than typed.
+#
+# Every other observer's `base >= X.Y.Z` is rescued by `test/run.sh`, whose
+# `stamp_engine` CLAMPS a dependency naming a series newer than the running
+# engine down to it -- so a suite mod written `base >= 2.1.0` is staged as
+# `base >= 2.0.0` on the 2.0 arm and loads. `interactive-install` copies its
+# package straight into the user's mods directory and goes through no such
+# thing, so on the release/2.0 recut a hard-coded `base >= 2.1.0` is a mod
+# Factorio 2.0 REFUSES AT THE LOADER -- on the one arm that recut exists for.
+# Found the first time that package was installed from the recut; the suites
+# could not see it, because the copy they check is the clamped one.
+#
+# `2.1.0`/`2.0.0` and not `$(MOD_SERIES).0` spelled out, so that the two arms
+# are readable here rather than assembled.
+OBS_BASE_DEP := $(if $(filter 2.0,$(MOD_SERIES)),base >= 2.0.0,base >= 2.1.0)
+
 # A DATA-STAGE-ONLY package takes NEITHER of those two flags, and they are
 # refused rather than ignored: each describes how a CONTROL guest is compiled,
 # and there is none. --api goes too, for a plainer reason -- it picks the
@@ -628,7 +645,7 @@ $(OBS_IACT_DIR): $(DIST)/obs-iact.wasm $(DIST)/obs-iactdata.wasm Makefile
 	  --name bbb-interactive-setup --version 0.2.0 \
 	  --title "BBB interactive checklist rigs" \
 	  --description "Pre-stages the five player-gesture rigs the headless suites cannot drive (the miner's pocket, the belt at the edge, the 65th belt, the over-limit bridge, fast replace both ways) and the five mod-portal demo scenes, beside spawn on a fresh world. Every rig is built to Factorio 2.1's one-belt-per-part rule. Enable together with better-belt-balancer, start a new world, follow test/interactive/README.md, then disable." \
-	  --dependency "base >= 2.1.0" --dependency "better-belt-balancer" \
+	  --dependency "$(OBS_BASE_DEP)" --dependency "better-belt-balancer" \
 	  -o .
 
 # THE TWO DATA-STAGE-ONLY PACKAGES, WHICH ARE NOT OBSERVERS AND HAVE NO CONTROL
