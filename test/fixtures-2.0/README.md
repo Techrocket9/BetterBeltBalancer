@@ -44,7 +44,7 @@ recovered and put on the ground beside each one.
 `test/run.sh`'s `stage_fixture` does all of this; the list is here for anyone
 reproducing it outside the suite.
 
-- The matching test mod from `test/mods/` has to be staged too, for its DATA
+- The matching observer package from `dist/obs/` has to be staged too, for its DATA
   STAGE: these worlds are full of its loaders and lane splitters, and Factorio
   deletes every entity whose prototype went with a removed mod, at load, before
   any script runs.

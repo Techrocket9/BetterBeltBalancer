@@ -1,9 +1,0 @@
-{
-  "name": "bbb-flip-test",
-  "version": "0.1.0",
-  "title": "BBB multi-edge setting flip verification",
-  "author": "BetterBeltBalancer",
-  "factorio_version": "2.0",
-  "description": "Drives `bbb-multi-edge-parts` -- the runtime-global setting that exists on Factorio 2.0 only -- through every transition it has: refused at the false default, flipped ON so the refused clusters compile, a multi-edge balancer built while it is on, flipped OFF with those balancers standing and full (which the mod VETOES), and flipped OFF again once nothing multi-edge is left (which sticks). Asserts nothing itself.",
-  "dependencies": ["base >= 2.0.0", "better-belt-balancer"]
-}

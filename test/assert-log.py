@@ -2,7 +2,7 @@
 """Assert the M1 cluster registry from Factorio's own log.
 
 The guest logs one `[BBB] state clusters=N parts=N sizes=...` line after every
-event that changed the registry, and test/mods/bbb-m1-test marks each phase with
+event that changed the registry, and guest/go/obs/m1 marks each phase with
 `[BBB-TEST] phase=N`. This walks the log in order and checks the state at the
 end of each phase against what the pattern the test built must produce.
 

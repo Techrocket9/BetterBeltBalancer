@@ -192,10 +192,7 @@ def staged_mod(name: str) -> Path:
     hits = sorted((ROOT / "dist" / "obs").glob(f"{name}_*"))
     if hits:
         return hits[0]
-    legacy = ROOT / "test" / "mods" / name
-    if legacy.is_dir():
-        return legacy
-    sys.exit(f"no package under dist/obs for {name}, and no test/mods/{name}.\n"
+    sys.exit(f"no package under dist/obs for {name}.\n"
              f"The stand-in is a compiled data module since phase 6 of the estate "
              f"port; build it with `make observers`.")
 

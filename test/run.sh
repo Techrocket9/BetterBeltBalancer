@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless verification. Thirteen suites, all real Factorio runs, not models:
+# Headless verification. Fourteen suites, all real Factorio runs, not models:
 #
 #   M1  do balancer parts merge and split correctly?
 #   M2  does the compiled hidden network actually balance?
@@ -138,7 +138,7 @@ MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
 # fields carry it and both have to move together:
 #
 #   factorio_version   set to the running series, always. A staged mod is a
-#                      throwaway copy in $TMP; nothing here edits test/mods.
+#                      throwaway copy in $TMP; nothing here edits dist/obs.
 #   base >= X.Y.Z      CLAMPED DOWN when it names a series newer than this
 #                      engine, and otherwise left exactly alone. Clamping only
 #                      downward is what makes this a no-op on the newer engine
@@ -265,17 +265,18 @@ INI
 
 # copy_testmod <test-mod-name> <destination-directory>
 #
-# THE ESTATE IS BEING PORTED FROM HAND-WRITTEN LUA TO COMPILED GO OBSERVERS, ONE
-# PHASE AT A TIME (agents/estate-port.md), and this is the one place that has to
-# know which half a suite is in.
+# THE ESTATE IS ENTIRELY COMPILED GO OBSERVERS AND THERE IS NO test/mods/
+# ANY MORE. This helper existed to know which half a suite was in while the port
+# ran, one phase at a time (agents/estate-port.md); `flip` was the last suite and
+# it landed with the 2.0 binary that could finally run it, so the Lua half of the
+# question is gone and the fallback that answered it is deleted rather than left
+# standing over a directory that does not exist.
 #
-# A PORTED suite's observer is a PACKAGED MOD that `make observers` writes into
+# An observer is a PACKAGED MOD that `make observers` writes into
 # dist/obs/<name>_<version>/: a generated control.lua, fk_module.lua, info.json,
-# and for `sedge` a data stage as well. An unported one is still a directory of
-# hand-written Lua under test/mods/<name>/. Both are staged identically from here
-# on -- copied to $work/mods/<name> and stamped for the running engine -- so
-# nothing else in this file has to care, and porting a suite is a Makefile
-# recipe plus a deletion rather than an edit here.
+# and for the ten suites that bring one a data stage as well. It is copied to
+# $work/mods/<name> and stamped for the running engine, so nothing else in this
+# file has to care what language it was written in.
 #
 # The version is GLOBBED rather than known, because it is the observer's own and
 # has nothing to do with this mod's. There is exactly one package per name: the
@@ -284,9 +285,9 @@ INI
 #
 # The destination is the BARE NAME, not name_version. That is what this estate
 # has always staged, Factorio accepts it, and it keeps every
-# `$work/mods/$testmod` path below working whichever half the suite is in --
-# including the mig21 suite's control.lua overwrite, which neutralizes a ported
-# observer exactly as well as a Lua one.
+# `$work/mods/$testmod` path below working -- including the mig21 suite's
+# control.lua overwrite, which neutralizes a guest observer as well as it ever
+# neutralized a Lua one.
 copy_testmod() {
   local name="$1" dest="$2" d
   for d in "$ROOT/dist/obs/${name}_"*/; do
@@ -294,11 +295,11 @@ copy_testmod() {
     cp -R "$d" "$dest"
     return
   done
-  [ -d "$ROOT/test/mods/$name" ] || {
-    echo "no observer package under dist/obs for $name, and no test/mods/$name." >&2
-    echo "A ported suite needs \`make observers\`; \`make test\` does that for you." >&2
-    exit 1; }
-  cp -R "$ROOT/test/mods/$name" "$dest"
+  echo "no observer package under dist/obs for $name." >&2
+  echo "Every observer is compiled: run \`make observers\`, which \`make test\` does" >&2
+  echo "for you. If the package is stale after an identity-only change, remove" >&2
+  echo "dist/obs/${name}_* first -- a package does not depend on the recipe." >&2
+  exit 1
 }
 
 # stage <workdir> <test-mod-name> [space-age] [quality]

@@ -379,6 +379,7 @@ OBS_SEDGE_DIR := $(OBS_DIST)/bbb-sedge-test_0.1.0
 OBS_MAR_DIR   := $(OBS_DIST)/bbb-marathon-test_0.1.0
 OBS_MIG21_DIR := $(OBS_DIST)/bbb-mig21-observer_0.1.0
 OBS_QUAL_DIR  := $(OBS_DIST)/bbb-qual-test_0.1.0
+OBS_FLIP_DIR  := $(OBS_DIST)/bbb-flip-test_0.1.0
 OBS_MIX_DIR   := $(OBS_DIST)/bbb-mix-test_0.1.0
 OBS_PLAT_DIR  := $(OBS_DIST)/bbb-plat-test_0.1.0
 OBS_MIG_DIR   := $(OBS_DIST)/bbb-mig-test_0.1.0
@@ -406,6 +407,7 @@ OBS_BENCH_DIR   := $(OBS_DIST)/bbb-bench-setup_0.1.0
 
 observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR) $(OBS_MAR_DIR) $(OBS_MIG21_DIR) \
            $(OBS_QUAL_DIR) $(OBS_MIX_DIR) $(OBS_PLAT_DIR) $(OBS_MIG_DIR) \
+           $(OBS_FLIP_DIR) \
            $(OBS_M2_DIR) $(OBS_M3_DIR) $(OBS_EDGE_DIR) $(OBS_IACT_DIR) \
            $(OBS_BB2_DIR) $(OBS_FOREIGN_DIR) $(OBS_BENCH_DIR)
 
@@ -494,6 +496,24 @@ $(OBS_QUAL_DIR): $(DIST)/obs-qual.wasm $(DIST)/obs-qualdata.wasm Makefile
 	  --title "BBB quality verification" \
 	  --description "Builds balancers whose parts are UNCOMMON quality and drives every path where the guest asks the world for a part by name. Asserts nothing itself." \
 	  --dependency "base >= 2.0.0" --dependency "quality" \
+	  -o .
+
+# THE LAST SUITE IN THE ESTATE TO BE PORTED, and the one that had to wait for a
+# binary rather than for a phase. `bbb-multi-edge-parts` is defined on 2.0.x and
+# never on 2.1.x, so `test/run.sh` prints a SKIP for this suite on trunk's own
+# engine -- and a phase's FIRST gate is a golden log, which there was no run here
+# to take one from until a 2.0 Factorio was installed. Its recipe is `qual`'s
+# with its own names; nothing about the port needed a mechanism the other
+# thirteen did not already have.
+$(OBS_FLIP_DIR): $(DIST)/obs-flip.wasm $(DIST)/obs-flipdata.wasm Makefile
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-flip.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-flipdata.wasm) \
+	  --name bbb-flip-test --version 0.1.0 \
+	  --title "BBB multi-edge setting flip verification" \
+	  --description "Drives \`bbb-multi-edge-parts\` -- the runtime-global setting that exists on Factorio 2.0 only -- through every transition it has: refused at the false default, flipped ON so the refused clusters compile, a multi-edge balancer built while it is on, flipped OFF with those balancers standing and full (which the mod VETOES), and flipped OFF again once nothing multi-edge is left (which sticks). Asserts nothing itself." \
+	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
 	  -o .
 
 $(OBS_MIX_DIR): $(DIST)/obs-mix.wasm $(DIST)/obs-mixdata.wasm Makefile
