@@ -1485,6 +1485,17 @@ def main():
                      "reload decided nothing again")
     elif leg == "fgone":
         report(fail, "the stranger was uninstalled and its balancers became ours")
+    elif ENGINE == "2.0":
+        # THE SENTENCE HAS TO INVERT WITH THE OUTCOME, and it did not until a 2.0
+        # binary was here to say it out loud. On this engine the grandfather pass
+        # writes the setting back on a flush after the conversion and every one of
+        # the incumbent's balancers RUNS -- the audit says `refused=0` and the
+        # incumbent-idiom rigs deliver 3.997x and 2.996x -- so the 2.1 wording is
+        # false in its second clause. This suite has met a success message that
+        # was false in its own second clause once before (the two name probes,
+        # 2026-08-20), and the answer is the same one: say what this engine did.
+        report(fail, "the incumbent's balancers were adopted, and on this engine "
+                     "the grandfather pass keeps every one of them running")
     else:
         report(fail, "the incumbent's balancers were adopted: the ones laid one "
                      "belt per part balance, and the rest are refused")
