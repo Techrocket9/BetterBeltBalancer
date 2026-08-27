@@ -760,7 +760,7 @@ func fkFree(p uint32) {
 }
 
 // The API pin stamp: these bindings' ids were assigned over Factorio
-// 2.1.16's description, and fklua mod reads this export name to prove the
+// 2.1.17's description, and fklua mod reads this export name to prove the
 // member table it packages was generated over that same description. Ids
 // are dense sorted indices per version, so a table from any other one
 // answers this guest's calls with different members.
@@ -769,7 +769,7 @@ func fkFree(p uint32) {
 // references it, and -opt=2 followed by wasm-opt deletes whatever is only
 // defined. The NAME carries the version because a wasm result cannot.
 //
-//go:wasmexport fk_api_pin_2_1_16
+//go:wasmexport fk_api_pin_2_1_17
 func fkAPIPin() {}
 
 // Factorio's three GLOBAL FUNCTIONS, which belong to no class and are

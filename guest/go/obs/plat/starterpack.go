@@ -5,7 +5,7 @@
 // build tag.
 //
 // `LuaSpacePlatform::apply_starter_pack` gained an OPTIONAL `silent` parameter
-// between 2.0.77 and 2.1.16. `fklua api check --from 2.1.16 --to 2.0.77` has
+// between 2.0.77 and 2.1.x. `fklua api check` against the 2.0.77 arm has
 // reported it against this observer since phase 3 of the estate port, and the
 // answer recorded there is about the WIRE: the parameter is optional, this
 // observer passes it absent, and `fk_abi.lua`'s `M.call` trims the argument list
@@ -13,7 +13,7 @@
 // `apply_starter_pack()`. That is still true and it is not the whole story.
 //
 // The GO SIGNATURE is generated per pin, and an absent optional is still a
-// parameter: 2.1.16 emits `ApplyStarterPack(silent *bool)` and 2.0.77 emits
+// parameter: every 2.1.x pin emits `ApplyStarterPack(silent *bool)` and 2.0.77 emits
 // `ApplyStarterPack()`. One source cannot call both, so `sp.ApplyStarterPack(nil)`
 // is a compile error on the release/2.0 recut -- found by `make check` the first
 // time that recut was cut with a COMPILED estate under it, the 0.2.0 arm having
