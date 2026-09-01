@@ -216,6 +216,14 @@ func init() {
 	// the handler is about to write down. See lifecycle.go.
 	fkapi.Subscribe(fkapi.EventOnForcesMerged)
 
+	// ... and a force being CREATED is the one moment the hidden surface can
+	// fall back into somebody's remote-view surface list: visibility is per
+	// force, the default is visible, and hideFromAllForces has already run for
+	// every force that existed when the surface appeared. A force creation is
+	// rarer than a merge and the handler is one integer compare when the
+	// surface does not exist yet. See lifecycle.go, onForceCreated.
+	fkapi.Subscribe(fkapi.EventOnForceCreated)
+
 	// THE ONE SETTING THIS MOD HAS, and the only subscription here that cannot
 	// fire on the engine trunk targets: `bbb-multi-edge-parts` is defined by the
 	// settings stage on Factorio 2.0.x and never on 2.1.x, so on 2.1 this is a
@@ -441,6 +449,9 @@ func onEventBody(id, ptr uint32) {
 		if di, err := (fkapi.LuaForce{Object: ev.Destination}).Index(); err == nil {
 			onForcesMerged(ev.SourceIndex, di)
 		}
+		return
+	case fkapi.EventOnForceCreated:
+		onForceCreated(fkapi.ReadOnForceCreated(ptr).Force)
 		return
 	case fkapi.EventOnRuntimeModSettingChanged:
 		// EVERY MOD'S SETTINGS ARRIVE HERE -- the event takes no filter -- so the

@@ -57,6 +57,8 @@ CLONE_KILL = re.compile(r"\[BBB\] destroyed a cloned network entity")
 DROPPED = re.compile(r"\[BBB\] deleted: surface (\d+) gave up (\d+) parts in (\d+) clusters")
 HIDDEN_ALERT = re.compile(r"\[BBB\] alert: the hidden surface \S+ is being deleted")
 HIDDEN_BACK = re.compile(r"\[BBB\] hidden surface recreated; (\d+) clusters rebuilt")
+SURFHIDDEN = re.compile(
+    r"\[BBB-M3\] surface-hidden tag=(\w+) force=(\S+) hidden=(true|false)")
 FROM_WORLD = re.compile(r"\[BBB\] rebuilt from world: (\d+) surfaces, (\d+) parts, (\d+) clusters")
 
 T0, T1 = 540, 1500
@@ -283,6 +285,39 @@ def main():
     if m:
         print("  surfaces: a balancer's surface deleted cleanly; the hidden surface "
               "deleted, recreated and %s clusters rebuilt" % m.group(1))
+
+    # ----------------------------------------------- the hidden surface HIDES
+    # Surface visibility is a PER-FORCE flag whose default is VISIBLE, and an
+    # unhidden bbb-hidden sits in Space Age's remote-view surface list (issue
+    # #1, the mod's first field report). The observer reads
+    # `LuaForce::get_surface_hidden` back for every force at three moments, and
+    # every line must say hidden=true. Three tags, three of the mod's paths:
+    #
+    #   initial    the surface CREATED, inside on_init's audit flush, with all
+    #              four forces already standing -- hide-at-creation;
+    #   recreated  the surface built AGAIN after its deletion at tick 450 --
+    #              the lazy-recreation path must hide too;
+    #   late       a force created at tick 500, AFTER the surface existed, so
+    #              no hide-at-creation can have covered it. That one is the
+    #              mod's on_force_created handler or nothing.
+    vis = {}
+    for m in all_of(SURFHIDDEN, run):
+        vis.setdefault(m.group(1), {})[m.group(2)] = m.group(3) == "true"
+    for tag, must in (("initial", "bbb-other"), ("recreated", "bbb-other"),
+                      ("late", "bbb-late")):
+        forces = vis.get(tag, {})
+        need(must in forces,
+             "the %s surface-hidden probe never reported force %s -- the probe "
+             "did not run, or the force was never created" % (tag, must))
+        exposed = sorted(n for n, h in forces.items() if not h)
+        need(not exposed,
+             "the hidden surface is VISIBLE to force(s) %s at tag=%s -- it would "
+             "appear in their remote-view surface list" % (", ".join(exposed), tag))
+    if all(vis.get(t) for t in ("initial", "recreated", "late")):
+        print("  the hidden surface is withheld from every force's surface lists: "
+              "%d/%d/%d forces at creation / after recreation / with a force "
+              "created late" % (len(vis["initial"]), len(vis["recreated"]),
+                                len(vis["late"])))
 
     # ------------------------------------------------------------------ audits
     # Four now, not two: two are the audits under test (the re-validation after a

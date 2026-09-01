@@ -498,6 +498,42 @@ func chartState(tag string) {
 	}
 }
 
+// hiddenState logs, per force, whether the mod's hidden surface is withheld
+// from that force's surface lists -- what keeps it out of Space Age's remote
+// view (issue #1). Visibility is a per-force flag defaulting to VISIBLE, and
+// these fixtures are the one unfakeable specimen of the unfixed state: both
+// were saved by a guest that predates the fix, so at `cfg` -- before the mod's
+// migration has run -- every force must read hidden=false, which is what
+// proves the probe can see the state the fix repairs. At `final` the fresh
+// heap's rebuild has run and every force must read hidden=true. The judgement
+// is assert-mig21.py's; the before/after pair is what makes it non-vacuous.
+func hiddenState(tag string) {
+	hs, err := fkapi.Game.GetSurface(fkapi.OfString(hiddenSurface))
+	if err != nil || hs == nil {
+		out.Open("surface-hidden tag=").S(tag).S(" surface=absent").End()
+		return
+	}
+	forces, err := fkapi.Game.Forces()
+	if err != nil {
+		harness.Fatal("reading game.forces", fk.LastError())
+		return
+	}
+	for _, fe := range forces {
+		f := fkapi.LuaForce{Object: fe.Val}
+		index, err := f.Index()
+		if err != nil {
+			continue
+		}
+		hid, err := f.GetSurfaceHidden(*hs)
+		if err != nil {
+			harness.Fatal("get_surface_hidden", fk.LastError())
+			return
+		}
+		out.Open("surface-hidden tag=").S(tag).S(" force=").U(uint64(index)).
+			S(" hidden=").B(hid).End()
+	}
+}
+
 // ---------------------------------------------------------------------------
 
 func init() { fkapi.Subscribe(fkapi.EventOnTick) }
@@ -511,6 +547,7 @@ func onConfigurationChanged() {
 	seedAll()
 	sample("cfg")
 	chartState("cfg")
+	hiddenState("cfg")
 }
 
 //go:wasmexport fk_on_event
@@ -534,6 +571,7 @@ func onEvent(id, ptr uint32) {
 		// be a STABLE state, not one that oscillates between teardown and rebuild.
 		sample("final")
 		chartState("final")
+		hiddenState("final")
 		audit("final")
 	}
 }

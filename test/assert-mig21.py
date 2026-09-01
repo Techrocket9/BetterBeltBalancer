@@ -223,6 +223,46 @@ def report(engine="2.1"):
 
 
 
+SURFHIDDEN = re.compile(
+    r"\[MIG21\] surface-hidden tag=(\w+) force=(\d+) hidden=(true|false)")
+
+
+def check_surface_hidden(text, want):
+    """THE REMOTE-VIEW FIX, asserted the same way on both engines (issue #1).
+
+    Surface visibility is a PER-FORCE flag defaulting to visible, so an
+    unhidden bbb-hidden sits in Space Age's remote-view surface list. These
+    fixtures are the one unfakeable specimen of the unfixed state: both were
+    saved by a guest that predates the fix, so at `cfg` -- before the mod's
+    migration has run -- every force must read hidden=FALSE, which is the
+    anti-vacuity half (a probe that cannot see the broken state proves nothing
+    about the fixed one). At `final` the fresh heap's rebuild has hidden it for
+    every force. Identical on both arms, because hiding is about who can SEE
+    the surface and not about what stands on it."""
+    seen = {}
+    for m in SURFHIDDEN.finditer(text):
+        seen.setdefault(m.group(1), {})[int(m.group(2))] = m.group(3) == "true"
+    for tag in ("cfg", "final"):
+        check(tag in seen, f"no surface-hidden readback for tag={tag}")
+    cfg, fin = seen.get("cfg", {}), seen.get("final", {})
+    for force in want["forces"]:
+        check(force in cfg and force in fin,
+              f"force {force} owns balancers in this fixture and was never asked "
+              "about the hidden surface")
+    prehidden = sorted(f for f, h in cfg.items() if h)
+    check(not prehidden,
+          f"the hidden surface already reads hidden for force(s) {prehidden} "
+          "BEFORE the mod's migration ran. This fixture predates the fix, so a "
+          "pre-hidden surface means the probe is not measuring what it claims")
+    exposed = sorted(f for f, h in fin.items() if not h)
+    check(not exposed,
+          f"the hidden surface is VISIBLE to force(s) {exposed} after the "
+          "rebuild -- it would appear in their remote-view surface list")
+    if cfg and fin and not prehidden and not exposed:
+        print(f"  the hidden surface: visible to all {len(cfg)} forces before the "
+              f"mod ran (the unfixed save), withheld from all {len(fin)} after")
+
+
 def check_chart_wall(text, tags):
     """THE CHART TRIPWIRE, asserted the same way on both engines.
 
@@ -471,6 +511,8 @@ def grandfather_arm(text, want):
               "and nothing refused")
     check(len(set(audits)) == 1, "the audits disagree with each other")
 
+    check_surface_hidden(text, want)
+
     report("2.0")
 
 
@@ -698,6 +740,8 @@ def main():
     check(len(set(audits)) == 1,
           "the audits disagree with each other. A refused cluster is supposed to be "
           "a stable state, not one that oscillates between teardown and rebuild")
+
+    check_surface_hidden(text, want)
 
     report()
 
