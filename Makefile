@@ -223,6 +223,45 @@ $(DATA_WASM): $(DATA_GUEST_SRC)
 
 # --- mod ---------------------------------------------------------------------
 
+# THE PRUNING TRIPWIRE, and it is the one check in this build that fires on a
+# line nobody would otherwise read.
+#
+# `fklua mod` ships only the members, events and defines this guest can be PROVEN
+# to name, and it proves them by scanning for compile-time constants feeding the
+# host imports. An id it cannot prove is not an error: it ships EVERYTHING, which
+# is bigger and never broken, and says so on ONE line of a report a few hundred
+# long. That is exactly how FKLUA-GAPS.md item 30 shipped for a day -- an inlining
+# decision put eleven event ids out of the scan's reach, `fk_api_gen.lua` went
+# 23,332 -> 73,101 B parsed on every game load, and the build stayed green.
+#
+# All three give-up lines share one fragment, so one grep covers members, events
+# and defines. It runs on the OUTPUT rather than on the package because the
+# package is correct either way -- what is lost is size, not behaviour.
+#
+# The exit code has to survive: `fklua mod | tee` would report tee's, so the
+# report goes to a file, is echoed back whole, and both tests are made after it.
+PRUNE_LOG    := $(DIST)/.fklua-mod.log
+PRUNE_GIVEUP := was not a compile-time constant
+
+# $(call fklua_mod,<extra flags>)
+define fklua_mod
+	@mkdir -p $(DIST)
+	@echo "$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) $(1)"
+	@$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) $(1) > $(PRUNE_LOG) 2>&1; \
+	  st=$$?; cat $(PRUNE_LOG); exit $$st
+	@if grep -q '$(PRUNE_GIVEUP)' $(PRUNE_LOG); then \
+	  echo ""; \
+	  echo "make: the API table was NOT pruned -- see the line above."; \
+	  echo "      An id reached a host import as something other than a compile-time"; \
+	  echo "      constant, so this package carries every descriptor of the pin instead"; \
+	  echo "      of the few this guest names: tens of kilobytes of Lua in the download"; \
+	  echo "      and parsed on every game load, for no behavioural difference."; \
+	  echo "      A lost prune is a build failure here rather than a report."; \
+	  echo "      FKLUA-GAPS.md item 30."; \
+	  exit 1; \
+	fi
+endef
+
 # One step. Identity, dependencies and the mod-data/ tree all come out of
 # fklua.toml; the only flag is the persistence mode, which is a build decision
 # rather than an identity.
@@ -233,7 +272,7 @@ $(DATA_WASM): $(DATA_GUEST_SRC)
 # `defines.direction` values went when `gen-bindings` started emitting an
 # accessor per define. See CLAUDE.md, "The layout check is gone".
 mod: $(WASM) $(DATA_WASM) $(DATA_SRC) fklua.toml
-	$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) -o $(DIST)
+	$(call fklua_mod,-o $(DIST))
 	python3 test/check-sprites.py $(MOD_DIR)
 	python3 test/check-changelog.py $(MOD_DIR)/changelog.txt $(MOD_VERSION)
 	@echo "mod ready: $(MOD_DIR)"
@@ -257,7 +296,7 @@ $(PERSIST_STAMP):
 	@mkdir -p $(DIST) && rm -f $(DIST)/.persist-* $(MOD_DIR).zip && touch $@
 
 $(MOD_DIR).zip: $(WASM) $(DATA_WASM) $(DATA_SRC) fklua.toml $(PERSIST_STAMP) $(GC_STAMP)
-	$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) --zip -o $(DIST)
+	$(call fklua_mod,--zip -o $(DIST))
 	@ls -l $(MOD_DIR).zip
 
 # The 47-variant sprite sheet and the icon, both computed rather than drawn.

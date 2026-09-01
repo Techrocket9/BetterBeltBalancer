@@ -89,6 +89,11 @@ func hostRemoteCall(callp, retp uint32) uint32
 // ships only the event descriptors a guest actually subscribes to; an id it
 // cannot prove constant makes it ship all of them, which is a bigger mod rather
 // than a broken one.
+//
+// //go:inline for the pruning reason every wrapper in this family carries one --
+// see SubscribeFiltered, which is where that argument is written out.
+//
+//go:inline
 func Subscribe(event uint32) Status { return Status(hostSubscribe(event, 0, 0, 0, 0)) }
 
 // SubscribeNamed subscribes to an event addressed by NAME rather than by
@@ -116,6 +121,11 @@ func Subscribe(event uint32) Status { return Status(hostSubscribe(event, 0, 0, 0
 // subscribe time. It comes back as a status here and as one line in the log
 // naming the engine's own words; the mod keeps running, because a typo in a
 // keybind name is not worth a mod that will not load.
+//
+// //go:inline for the pruning reason every wrapper in this family carries one --
+// see SubscribeFiltered.
+//
+//go:inline
 func SubscribeNamed(event uint32, name string) Status {
 	p, n := namePtr(name)
 	return Status(hostSubscribe(event, 0, 0, p, n))
@@ -131,6 +141,11 @@ func SubscribeNamed(event uint32, name string) Status {
 // custom input has none -- so the combination would be a binding that exists and
 // always fails, which is this project's "a skipped member is skipped, never
 // faked" pointed at a wrapper.
+//
+// //go:inline for the pruning reason every wrapper in this family carries one --
+// see SubscribeFiltered.
+//
+//go:inline
 func SubscribeNamedMasked(event, skip uint32, name string) Status {
 	p, n := namePtr(name)
 	return Status(hostSubscribe(event, 0, skip, p, n))
@@ -139,11 +154,21 @@ func SubscribeNamedMasked(event, skip uint32, name string) Status {
 // namePtr is the (pointer, length) a named subscription sends.
 //
 // A RAW PAIR rather than a tier-2 string, which is fk_log's shape and not the
-// filter's. It allocates nothing and writes no dyn, which keeps both wrappers
-// small enough that TinyGo keeps inlining them -- and the event id therefore
-// keeps arriving at the import as a compile-time constant, which is what prunes
-// the packaged event table. A wrapper that grew until it stopped being inlined
-// is R6, measured downstream at 85 KB of Lua per load.
+// filter's. It allocates nothing and writes no dyn, which keeps both named
+// wrappers small -- and a small wrapper is a wrapper the toolchain is likelier
+// to inline, which is what keeps the event id arriving at the import as a
+// compile-time constant and therefore what prunes the packaged event table.
+//
+// SMALL IS NOT THE GUARANTEE, THOUGH, AND THIS COMMENT USED TO SAY IT WAS.
+// Whether a call is inlined is LLVM's cost heuristic's decision, taken per call
+// site against the whole module, so it can change its mind because something
+// ELSE grew -- the collector's own weight, or how much of init was folded in
+// before these were weighed. It did: see SubscribeFiltered, where the same
+// wrapper family stopped inlining under -gc=custom and shipped every descriptor
+// there is. Every entry point in the family carries //go:inline now, and the
+// standing evidence is a gate over BOTH -gc arms rather than a sentence here.
+// A wrapper that grew until it stopped being inlined is R6, measured downstream
+// at 85 KB of Lua per load.
 //
 // The host reads the bytes inside the call, which is the standing rule for a
 // (pointer, length) a guest hands over: nothing may buffer one.
@@ -175,6 +200,11 @@ func namePtr(name string) (uint32, uint32) {
 //
 // The LAYOUT DOES NOT MOVE. Fields keep the offsets they were compiled at; only
 // their contents go away.
+//
+// //go:inline for the pruning reason every wrapper in this family carries one --
+// see SubscribeFiltered.
+//
+//go:inline
 func SubscribeMasked(event, skip uint32) Status {
 	return Status(hostSubscribe(event, 0, skip, 0, 0))
 }
@@ -227,6 +257,44 @@ func SubscribeMasked(event, skip uint32) Status {
 // only merge that cannot silently stop delivering an event somebody asked for.
 // An event that takes no filters at all is logged and subscribed unfiltered
 // rather than failing the mod's load.
+//
+// # //go:inline IS LOAD-BEARING AND IT IS ABOUT MOD SIZE, NOT SPEED
+//
+// fklua mod ships only the event descriptors it can PROVE a guest subscribes
+// to, by scanning the wasm for an i32.const reaching fk.subscribe's first
+// operand, and the scan is INTRAPROCEDURAL and all-or-nothing: if this wrapper
+// survives as a real function, the id reaches the import as local.get $0, the
+// scan gives up, and every descriptor there is ships.
+//
+// So the function that has to DISAPPEAR is the one the guest called -- the
+// constant lives at the guest's call site and nowhere else. That is why the
+// hint is on all six public entry points rather than on whichever one is
+// biggest: marking only a callee moves its body up into a caller that is still
+// a real function taking the id in a parameter, which is measured (//go:inline
+// on SubscribeFilteredMasked alone leaves the scan red; on SubscribeFiltered
+// alone it goes green).
+//
+// A HINT, NOT A DIRECTIVE, and the asymmetry with the Rust arm is worth
+// knowing: TinyGo lowers //go:inline to LLVM's inlinehint, which the inliner
+// weighs and may decline, where Rust's #[inline(always)] on the same six
+// wrappers lowers to alwaysinline and is obeyed. The standing evidence here
+// is therefore the gate rather than the pragma --
+// TestTheEventIdSurvivesTheGeneratedSubscribeWrapper, which builds BOTH -gc
+// arms, because they do not agree about inlining and an arm nobody builds is an
+// arm nobody is gating.
+//
+// Filed by BetterBeltBalancer (item 30), and it is R6's shape one toolchain
+// over. Without the hint, whether the id survives is LLVM's cost heuristic's
+// decision taken per call site: measured on this repo's own examples/api under
+// -gc=custom -opt=2, four filtered subscriptions sharing one mixed filter list
+// were enough for this wrapper to stop being inlined, so the packaged mod went
+// from "7 events subscribed, of 219" to "all 219 events -- an event id was not
+// a compile-time constant" and fk_api_gen.lua from 8,425 bytes to 60,118. The
+// -gc=leaking arm of the same source inlined it and proved all seven, which is
+// how it stayed hidden. A guest crosses that line by GROWING rather than by
+// changing anything.
+//
+//go:inline
 func SubscribeFiltered(event uint32, filters ...Value) Status {
 	return SubscribeFilteredMasked(event, 0, filters...)
 }
@@ -234,15 +302,28 @@ func SubscribeFiltered(event uint32, filters ...Value) Status {
 // SubscribeFilteredMasked is SubscribeFiltered and SubscribeMasked at once:
 // the engine drops the events this guest does not want, and the host does not
 // encode the fields it will not read from the ones that survive.
+//
+// //go:inline for the pruning reason its siblings carry -- see
+// SubscribeFiltered. This one is exported, so a guest may name it directly and
+// it needs the hint on its own account.
+//
+//go:inline
 func SubscribeFilteredMasked(event, skip uint32, filters ...Value) Status {
 	if len(filters) == 0 {
 		return Status(hostSubscribe(event, 0, skip, 0, 0))
 	}
 	mark := allocMark()
-	defer allocRelease(mark)
 	b := (*[dynW]byte)(block(dynW))
 	writeDyn(&b[0], OfArray(filters...))
-	return Status(hostSubscribe(event, ptr(&b[0]), skip, 0, 0))
+	st := Status(hostSubscribe(event, ptr(&b[0]), skip, 0, 0))
+	// RELEASED PLAINLY RATHER THAN BY defer, and the difference is inlining
+	// cost. There is no early exit between the mark and the host call, and a
+	// panic on this target traps the guest rather than unwinding out of it (see
+	// agents/guests.md), so a defer here can only ever run on the one path the
+	// statement below already covers -- while the machinery it lowers to was
+	// most of what this wrapper cost the inliner to swallow.
+	allocRelease(mark)
+	return st
 }
 
 // NameFilter builds the commonest event filter there is: only these prototype
