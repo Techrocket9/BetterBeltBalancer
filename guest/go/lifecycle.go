@@ -316,6 +316,26 @@ func hiddenSurfaceGone() {
 // conservative answer is the affordable one.
 // ---------------------------------------------------------------------------
 
+// onForceCreated withholds the hidden surface from a force born after that
+// surface existed. Every OTHER force was covered when the surface was created
+// or recovered (hideFromAllForces, compile.go); the default for a new force is
+// VISIBLE, so without this a force created mid-save meets bbb-hidden in its
+// remote-view surface list -- issue #1's report, one force later.
+//
+// Deliberately NOT hiddenSurface(): that call CREATES the surface, and a save
+// with no balancer in it should not gain one because somebody made a force.
+// hiddenIdx is authoritative by the time any handler runs -- ensureRegistry
+// precedes every dispatch, and collectSurfaces sets it -- so a zero really
+// does mean "no hidden surface exists" and the handler is one integer compare.
+func onForceCreated(force fkapi.Object) {
+	if hiddenIdx == 0 {
+		return
+	}
+	if s, ok := surfaceByIndex(hiddenIdx); ok {
+		_ = (fkapi.LuaForce{Object: force}).SetSurfaceHidden(s.Object, true)
+	}
+}
+
 // onForcesMerged re-derives the clusters after two forces became one.
 //
 // The order is the whole content of the function, and it is the same order
@@ -542,6 +562,24 @@ func rebuildFromWorld() {
 	rebuildingFromWorld = true
 
 	collectSurfaces()
+
+	// A SAVE BUILT BEFORE THE HIDDEN SURFACE LEARNED TO HIDE (issue #1: it sat
+	// in Space Age's remote-view surface list). hiddenSurface() repairs the
+	// paths that DISCOVER the surface; this repairs the path that already knows
+	// where it is -- collectSurfaces set hiddenIdx above without going through
+	// hiddenSurface() at all, and every later call takes the fast path. Once
+	// per fresh heap, which is exactly the load that delivers a fixed build to
+	// an old save, and the object is already in hand from the walk. A world
+	// write during the rebuild is fine -- the rule is that the rebuild never
+	// SPEAKS (see refuseAdmit); restyle() below writes the world too.
+	if hiddenIdx != 0 {
+		for i := range rfwSurfIdx {
+			if rfwSurfIdx[i] == hiddenIdx {
+				hideFromAllForces(fkapi.LuaSurface{Object: rfwSurfObj[i]})
+				break
+			}
+		}
+	}
 
 	surfaces, found := uint32(0), uint32(0)
 	for i := range rfwSurfIdx {

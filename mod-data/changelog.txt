@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.2
+Date: 2026-08-31
+  Bugfixes:
+    - The mod's internal surface no longer appears in the remote view or in any other surface list. It is hidden from every force when it is created, an existing save is repaired on its first load with this version, and a force created later in a game is covered as well. Thanks to CodeW0lf for the report.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.1
 Date: 2026-08-25
   Features:

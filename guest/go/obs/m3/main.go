@@ -86,6 +86,7 @@ import (
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/harness"
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/protos"
+	"github.com/Techrocket9/fklua/guest/go/fk"
 )
 
 var out = harness.Line{Tag: "[BBB-M3] "}
@@ -104,6 +105,7 @@ const (
 
 	pitch      = 14
 	otherForce = "bbb-other"
+	lateForce  = "bbb-late"
 
 	stressStock = 2000
 
@@ -900,6 +902,50 @@ func phaseAudit() {
 	auditMarker(4)
 }
 
+// hiddenVis logs, per force, whether the compiler's hidden surface is withheld
+// from that force's surface lists -- which is what keeps it out of Space Age's
+// remote view (issue #1). Visibility is a PER-FORCE flag whose default is
+// visible, so this is a raw readback of `LuaForce::get_surface_hidden` and the
+// judgement lives in assert-m3.py: every line must say hidden=true.
+//
+// Three tags, three of the mod's paths: `initial` is the surface CREATED (the
+// audit flush inside on_init built every network, with all four forces already
+// standing); `recreated` is the surface built again after phaseDeleteHidden
+// took it down; `late` includes a force created AFTER the surface existed,
+// which no hide-at-creation could have covered -- that one is the
+// on_force_created handler or nothing.
+func hiddenVis(tag string) {
+	hs, ok := harness.SurfaceIfAny(hidden)
+	if !ok {
+		out.Open("surface-hidden tag=").S(tag).S(" surface=absent").End()
+		return
+	}
+	forces, err := fkapi.Game.Forces()
+	if err != nil {
+		harness.Fatal("reading game.forces", fk.LastError())
+		return
+	}
+	for i := range forces {
+		f := fkapi.LuaForce{Object: forces[i].Val}
+		name, err := f.Name()
+		if err != nil {
+			continue
+		}
+		hid, err := f.GetSurfaceHidden(hs.Object)
+		if err != nil {
+			harness.Fatal("get_surface_hidden for "+name, fk.LastError())
+			return
+		}
+		out.Open("surface-hidden tag=").S(tag).S(" force=").S(name).
+			S(" hidden=").B(hid).End()
+	}
+}
+
+func phaseHiddenInitial()   { hiddenVis("initial") }
+func phaseHiddenRecreated() { hiddenVis("recreated") }
+func phaseLateForce()       { harness.CreateForce(lateForce) }
+func phaseHiddenLate()      { hiddenVis("late") }
+
 // M5: the I/O arrows must not leak.
 //
 // Every visible interface the compiler places carries exactly one rendering
@@ -969,6 +1015,7 @@ func report(tick uint64) {
 var portPlaced bool
 
 var schedule = []harness.Step{
+	{Tick: 24, Do: phaseHiddenInitial},
 	{Tick: 30, Do: phaseBlueprintCapture},
 	{Tick: 60, Do: phaseGhostRevive},
 	{Tick: 90, Do: phaseInstantPaste},
@@ -986,7 +1033,15 @@ var schedule = []harness.Step{
 	{Tick: 390, Do: phaseBeltDied},
 	{Tick: 420, Do: phaseDeleteSurface},
 	{Tick: 450, Do: phaseDeleteHidden},
+	// The hidden surface came back on the flush after its deletion; 468 leaves
+	// room for that and stays clear of phaseBotsCheck. The late force goes in at
+	// 500 -- AFTER the recreated surface, so the only thing that can hide it
+	// from that force is the mod's on_force_created handler -- and is read back
+	// at 510, comfortably before the stress churn opens at 546.
+	{Tick: 468, Do: phaseHiddenRecreated},
 	{Tick: 480, Do: phaseBotsCheck},
+	{Tick: 500, Do: phaseLateForce},
+	{Tick: 510, Do: phaseHiddenLate},
 	{Tick: 540, Do: func() { report(540) }},
 	{Tick: 546, Do: phaseStressStart},
 	{Tick: 1200, Do: phaseStressEnd},

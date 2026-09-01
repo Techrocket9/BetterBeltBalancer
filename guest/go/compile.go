@@ -101,6 +101,39 @@ func surfaceByIndex(i uint32) (fkapi.LuaSurface, bool) {
 	return fkapi.LuaSurface{Object: *o}, true
 }
 
+// hideFromAllForces withholds the hidden surface from every force's surface
+// lists -- Space Age's remote view above all, which is where a player first
+// meets a surface they were never meant to see (the mod's first field report,
+// github.com/Techrocket9/BetterBeltBalancer issue #1).
+//
+// PER FORCE, because that is the only mechanism the engine has: visibility is
+// `LuaForce::set_surface_hidden`, there is no surface-level flag at all
+// (checked against both pinned runtime APIs, 2.0.77 and 2.1.17), and the
+// default for a new force is VISIBLE. So this runs wherever the guest first
+// puts its hands on the surface -- both discovery paths of hiddenSurface(),
+// and rebuildFromWorld's walk for a save that predates the fix -- and
+// onForceCreated covers a force born after all of those. Setting is idempotent
+// and one call per force; reading first to avoid a redundant write would
+// double the calls to save the engine a no-op.
+//
+// Never on a per-compile path: the fast path through hiddenSurface() returns
+// before reaching this, so a session pays it once, at discovery.
+func hideFromAllForces(s fkapi.LuaSurface) {
+	forces, err := fkapi.Game.Forces()
+	if err != nil {
+		return
+	}
+	for i := range forces {
+		_ = (fkapi.LuaForce{Object: forces[i].Val}).SetSurfaceHidden(s.Object, true)
+	}
+	if verboseLog {
+		logStart("hidden surface withheld from the surface lists of ")
+		logU(uint32(len(forces)))
+		logS(" forces")
+		logEnd()
+	}
+}
+
 // hiddenSurface returns the one global hidden surface, creating it on first
 // use.
 //
@@ -132,6 +165,10 @@ func hiddenSurface() (fkapi.LuaSurface, bool) {
 		s := fkapi.LuaSurface{Object: *o}
 		if i, err := s.Index(); err == nil {
 			hiddenIdx = i
+			// A surface this heap did not know about is one whose visibility
+			// this heap has not vouched for. Once per recovery, so the repair
+			// is free where nothing needed repairing and cheap where it did.
+			hideFromAllForces(s)
 			return s, true
 		}
 	}
@@ -142,6 +179,7 @@ func hiddenSurface() (fkapi.LuaSurface, bool) {
 	}
 	s := fkapi.LuaSurface{Object: o}
 	_ = s.SetGenerateWithLabTiles(true)
+	hideFromAllForces(s)
 	i, err := s.Index()
 	if err != nil {
 		logError("hidden surface has no index")
