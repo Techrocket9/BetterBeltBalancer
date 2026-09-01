@@ -1,7 +1,7 @@
 # What this mod is. These become info.json.
 [mod]
 name = "better-belt-balancer"
-version = "0.3.2"
+version = "0.2.2"
 title = "Better Belt Balancer"
 author = "Techrocket9"
 description = "Belt balancers that click together into arbitrary shapes. Highly performant; megabase-ready (UPS hit is ~equal to vanilla hand-crafted belt balancers)."
@@ -12,7 +12,7 @@ description = "Belt balancers that click together into arbitrary shapes. Highly 
 # engine-version guard in guest/go/engine is what makes one tree correct
 # on both engines. See agents/single-edge.md, "Packaging: one tree, two
 # releases".
-factorio_version = "2.1"
+factorio_version = "2.0"
 # The mod's ASSETS -- graphics, locale, changelog, thumbnail, and since the
 # data-stage purge NOTHING ELSE. `fklua mod` generates the control stage and
 # rm -rf's its output directory first, so nothing hand-written can live there;
@@ -26,14 +26,14 @@ factorio_version = "2.1"
 # package time rather than picking a winner.
 data = "mod-data"
 # info.json's dependencies, verbatim. The data stage extends base prototypes.
-dependencies = ["base >= 2.1.0"]
+dependencies = ["base >= 2.0.0"]
 
 # The API version the generated bindings come from.
 # PINNED: `fklua gen-bindings --check` fails if the tree drifts from it,
 # and `fklua api check --to <newer>` says whether an upgrade would break
 # anything this mod actually calls.
 [fklua]
-api = "2.1.17"
+api = "2.0.77"
 # GO ALONE, and this repository is PURE GO: the shipped guest, the data guest
 # and all fourteen test observers are the one language.
 #

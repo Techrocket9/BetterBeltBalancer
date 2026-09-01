@@ -1,8 +1,25 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.2
+Date: 2026-08-31
+  Bugfixes:
+    - The mod's internal surface no longer appears in the remote view or in any other surface list. It is hidden from every force when it is created, an existing save is repaired on its first load with this version, and a force created later in a game is covered as well. Thanks to CodeW0lf for the report.
+  Info:
+    - The Factorio 2.0 release, carrying the same fix 0.3.2 brings to Factorio 2.1.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.2
 Date: 2026-08-31
   Bugfixes:
     - The mod's internal surface no longer appears in the remote view or in any other surface list. It is hidden from every force when it is created, an existing save is repaired on its first load with this version, and a force created later in a game is covered as well. Thanks to CodeW0lf for the report.
+---------------------------------------------------------------------------------------------------
+Version: 0.2.1
+Date: 2026-08-26
+  Features:
+    - A startup setting for what a balancer part costs to craft: the default recipe, a cheaper one, fast or express belts, or a splitter of either tier. If an option names an item your mods do not have, the nearest thing they do have is used instead, so it is safe in an overhaul pack.
+    - A startup setting for which research unlocks the balancer: Logistics, Logistics 2 or Logistics 3. The cost is read from that technology, so it follows whatever your mods charge for it, and the balancer moves to sit beside it in the technology tree.
+  Changes:
+    - The hidden belts inside a balancer now run at the speed of the fastest belt any installed mod adds, instead of a fixed speed a little above express. Modded belts faster than that are no longer throttled on their way through a balancer. Nothing changes in a vanilla or Space Age game, where the fastest belt is still slower than the balancer's own.
+  Info:
+    - The Factorio 2.0 release, carrying the same three changes 0.3.1 brings to Factorio 2.1. The map setting for multiple belts per balancer part, described under 0.2.0, exists on this version of Factorio only and none of the settings above affect it.
 ---------------------------------------------------------------------------------------------------
 Version: 0.3.1
 Date: 2026-08-25
