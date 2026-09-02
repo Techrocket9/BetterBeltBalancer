@@ -1,0 +1,202 @@
+package tune
+
+import (
+	"sort"
+
+	fkrecipes "github.com/Techrocket9/fkrecipes/go"
+)
+
+// THE FIXTURE GAME, and it is the whole reason the plan is checkable at all.
+//
+// [fkrecipes.World] is the eleven questions the planner is allowed to ask about
+// the game outside its own plan, and the emit layer answers them out of
+// data.raw. A host test answers them out of this, which is what lets `go test`
+// say what the data stage will emit with no Factorio in the room and no wasm
+// toolchain: the fields of every prototype, the ingredient every ladder picks
+// in a game that is missing something, and the refusal a probe produces.
+//
+// EVERY ANSWER IS A LIST RATHER THAN A MAP, and `TechNames` sorts a copy. The
+// World contract says that method returns SORTED names and the library's cycle
+// walk rests on it; a Go map's iteration order is randomised per run, so a
+// fixture built on one would make a determinism claim it could not keep.
+//
+// THE FIXTURE IS DELIBERATELY UNGENEROUS. It answers absent for everything it
+// was not told about, so a test that forgot to stock an ingredient sees the
+// ladder step past it rather than a convenient yes.
+type fixtureWorld struct {
+	modName string
+
+	// The names this game has, by family. `entities` is what `PlaceResult` is
+	// probed against and `items` what every ingredient is.
+	items    []string
+	entities []string
+	recipes  []string
+
+	// The technologies, with the unit each one carries. A technology with a
+	// nil unit is present and unit-less, which is the research_trigger shape
+	// the ladder has to step past.
+	techs []fixtureTech
+
+	// The startup settings this game answers with. A name that is not here is
+	// UNREADABLE, which the planner degrades to the declared default plus a
+	// log line -- so a test that means to drive a dropdown must stock it.
+	startup map[string]string
+}
+
+type fixtureTech struct {
+	name    string
+	prereqs []string
+	unit    *fkrecipes.Value
+	trigger bool
+	// maxLevel is a technology's level cap, which lives on the TECHNOLOGY and
+	// not in its unit. None of this mod's sources carries one; the field is
+	// here so a test can prove that, rather than so it can be assumed.
+	maxLevel *fkrecipes.Value
+}
+
+func (w fixtureWorld) ModName() string { return w.modName }
+
+func (w fixtureWorld) StartupSetting(name string) (fkrecipes.Value, bool) {
+	v, ok := w.startup[name]
+	if !ok {
+		return fkrecipes.Nil(), false
+	}
+	return fkrecipes.Str(v), true
+}
+
+// TechNames is SORTED, which the World contract demands and the cycle walk's
+// determinism rests on. A copy, because the caller is handed the slice.
+func (w fixtureWorld) TechNames() []string {
+	out := make([]string, 0, len(w.techs))
+	for _, t := range w.techs {
+		out = append(out, t.name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (w fixtureWorld) TechPrereqs(name string) []string {
+	if t, ok := w.tech(name); ok {
+		return t.prereqs
+	}
+	return nil
+}
+
+func (w fixtureWorld) TechUnit(name string) (fkrecipes.Value, bool) {
+	if t, ok := w.tech(name); ok && t.unit != nil {
+		return *t.unit, true
+	}
+	return fkrecipes.Nil(), false
+}
+
+func (w fixtureWorld) TechMaxLevel(name string) (fkrecipes.Value, bool) {
+	if t, ok := w.tech(name); ok && t.maxLevel != nil {
+		return *t.maxLevel, true
+	}
+	return fkrecipes.Nil(), false
+}
+
+func (w fixtureWorld) TechHasResearchTrigger(name string) bool {
+	t, ok := w.tech(name)
+	return ok && t.trigger
+}
+
+func (w fixtureWorld) TechExists(name string) bool {
+	_, ok := w.tech(name)
+	return ok
+}
+
+func (w fixtureWorld) ItemExists(name string) bool   { return has(w.items, name) }
+func (w fixtureWorld) EntityExists(name string) bool { return has(w.entities, name) }
+func (w fixtureWorld) RecipeExists(name string) bool { return has(w.recipes, name) }
+
+func (w fixtureWorld) tech(name string) (fixtureTech, bool) {
+	for _, t := range w.techs {
+		if t.name == name {
+			return t, true
+		}
+	}
+	return fixtureTech{}, false
+}
+
+func has(list []string, name string) bool {
+	for _, n := range list {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+// unitOf is the shape Factorio's own technology unit has: a dictionary of
+// count, time and the SHORT TUPLE ingredient form. The library copies whatever
+// it reads VERBATIM, so a fixture that wrote the long dict form would be
+// checking a copy of something no engine produces.
+func unitOf(count, seconds float64, pack string, amount float64) *fkrecipes.Value {
+	v := fkrecipes.Obj(
+		fkrecipes.Pair("count", fkrecipes.Num(count)),
+		fkrecipes.Pair("time", fkrecipes.Num(seconds)),
+		fkrecipes.Pair("ingredients", fkrecipes.Arr(
+			fkrecipes.Arr(fkrecipes.Str(pack), fkrecipes.Num(amount)))),
+	)
+	return &v
+}
+
+// everythingWorld is a game that has every name any ladder in this package can
+// reach, the three logistics technologies with DISTINCT units, the balancer
+// part entity, and both dropdowns answering their defaults.
+//
+// THE THREE UNITS DIFFER ON PURPOSE. What `CostBy` promises is that the unit
+// comes from the source the setting names, and three identical units would be
+// satisfied by a planner that always copied the first.
+func everythingWorld() fixtureWorld {
+	return fixtureWorld{
+		modName:  ModName,
+		items:    append(ladderVocabulary(), "automation-science-pack", "logistic-science-pack"),
+		entities: []string{PartName},
+		techs: []fixtureTech{
+			{name: TechLogistics, unit: unitOf(20, 15, "automation-science-pack", 1)},
+			{name: TechLogistics2, prereqs: []string{TechLogistics},
+				unit: unitOf(200, 30, "logistic-science-pack", 1)},
+			{name: TechLogistics3, prereqs: []string{TechLogistics2},
+				unit: unitOf(300, 15, "logistic-science-pack", 2)},
+		},
+		startup: map[string]string{
+			SettingRecipeCost: RecipeDefault(),
+			SettingTechCost:   TechDefault(),
+		},
+	}
+}
+
+// withStartup is the one-variable-at-a-time driver: the everything game with
+// one dropdown answering something else.
+func (w fixtureWorld) withStartup(name, value string) fixtureWorld {
+	next := map[string]string{}
+	for k, v := range w.startup {
+		next[k] = v
+	}
+	next[name] = value
+	w.startup = next
+	return w
+}
+
+// withItems replaces the game's whole item vocabulary, which is how a modpack
+// that is missing something is expressed here.
+func (w fixtureWorld) withItems(items ...string) fixtureWorld {
+	w.items = items
+	return w
+}
+
+// withTechs replaces the game's whole technology set.
+func (w fixtureWorld) withTechs(techs ...fixtureTech) fixtureWorld {
+	w.techs = techs
+	return w
+}
+
+// withoutEntities is the game where this mod's own entity has not been defined
+// yet, which is what a `fk_data` hook that ran EmitData before entity() would
+// hand the planner.
+func (w fixtureWorld) withoutEntities() fixtureWorld {
+	w.entities = nil
+	return w
+}

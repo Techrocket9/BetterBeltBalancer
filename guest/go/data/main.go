@@ -69,6 +69,7 @@ package main
 
 import (
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/engine"
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/tune"
 	"github.com/Techrocket9/fklua/guest/go/fkdata"
 )
 
@@ -101,9 +102,22 @@ import (
 // message names neither the cause nor the file, so it is written down here.
 // ---------------------------------------------------------------------------
 
+// THE TWO HOOKS THAT ROUTE INTO FkRecipes NAME THE HALF THEY RUN, and that is
+// not a style choice: `Emit` reads the stage and dispatches at RUN TIME, so a
+// guest that calls it links both planners whatever its plan declares. Round one
+// measured the unreachable one as a 21,047-line Lua function carried in every
+// player's download (agents/fkrecipes-migration.md). `EmitSettings` and
+// `EmitData` let the linker drop the other half, and each raises if it is
+// called from the wrong stage, so a misroute is a sentence naming the hook.
+//
 //go:noinline
 //go:wasmexport fk_settings
-func onSettings() { settings() }
+func onSettings() {
+	// The two cost dropdowns. The hand-rolled runtime-global bool follows in
+	// settings(), which is where the argument for it being hand-rolled is.
+	tune.Plan().EmitSettings()
+	settings()
+}
 
 //go:wasmexport fk_data
 //go:noinline
@@ -117,7 +131,24 @@ func onData() {
 	entity()
 	hidden()
 	sprites()
-	item()
+
+	// THE ITEM, THE RECIPE AND THE TECHNOLOGY, planned by FkRecipes out of
+	// guest/go/tune.
+	//
+	// IT RUNS AFTER entity() AND THAT IS A REQUIREMENT RATHER THAN THE OLD
+	// FILE ORDER SURVIVING. The item's `place_result` names the balancer part
+	// entity, and the library PRESENCE PROBES every name it emits: an item
+	// naming an entity the game does not have is the engine's own assignID
+	// abort, so the plan refuses first, by name. entity() is what puts that
+	// entity in data.raw, and `fkrecipes: the item bbb-balancer-part names a
+	// place_result bbb-balancer-part that does not exist` is what a reordering
+	// would produce.
+	tune.Plan().EmitData()
+
+	// Still hand-rolled: the recipe and the technology are coupled through the
+	// library's `enabled` field, which it emits as "no technology in this plan
+	// unlocks me", so the two can only cross together. They do in the next
+	// commit; until then they are here and the item is not.
 	recipe()
 	technology()
 }

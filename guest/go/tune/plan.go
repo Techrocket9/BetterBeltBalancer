@@ -4,12 +4,14 @@ import (
 	fkrecipes "github.com/Techrocket9/fkrecipes/go"
 )
 
-// THE SETTINGS PLAN, and it is the whole of what this mod hands to FkRecipes.
+// THE PLAN, and it is the whole of what this mod hands to FkRecipes.
 //
 // FkRecipes is the shared data-stage library: a consumer declares what it wants
 // in pure Go, the library plans it into an ordered stream of ops, and the emit
 // layer executes that stream against fkdata. This mod's two startup dropdowns
-// are declared here and nowhere else since 2026-09-01.
+// have been declared here and nowhere else since 2026-09-01; its item, its
+// recipe and its technology joined them in round two, and everything else this
+// mod emits at a data stage is still hand-rolled in guest/go/data.
 //
 // ---------------------------------------------------------------------------
 // WHY THE `Legacy` CONSTRUCTORS, WHICH IS THE ONE DECISION IN THIS FILE
@@ -35,60 +37,52 @@ import (
 // a save whose player had chosen `belt-express` still reads `belt-express`.
 //
 // ---------------------------------------------------------------------------
-// WHY THE PLAN HOLDS SETTINGS ONLY, AND THE PROTOTYPES DID NOT MOVE
+// WHY THE PROTOTYPES ARE HERE TOO, SINCE ROUND TWO
 // ---------------------------------------------------------------------------
 //
-// The obvious next step is to declare the item, the recipe and the technology
-// through the library too, and it was tried and MEASURED before it was declined
-// (agents/fkrecipes-migration.md carries the run). Three things stopped it, and
-// the first is fatal on its own:
+// Round one declared the settings alone and MEASURED the prototypes out
+// (agents/fkrecipes-migration.md carries that run). Three things stopped them,
+// and the library has answered all three:
 //
-//	Every item, recipe and technology name the library emits carries the mod
-//	prefix, and there are no Legacy constructors for prototypes. `bbb-balancer-
-//	part` would become `better-belt-balancer-bbb-balancer-part`, and the entity
-//	this repo hand-rolls names the item in `minable.result` -- so the load dies
-//	on the engine's own `Error in assignID: item with name 'bbb-balancer-part'
-//	does not exist. Source: bbb-balancer-part (simple-entity-with-force).`
+//	Every item, recipe and technology name it emitted carried the mod prefix,
+//	so `bbb-balancer-part` became `better-belt-balancer-bbb-balancer-part` and
+//	the hand-rolled entity's `minable.result` named an item that no longer
+//	existed -- a load failure, seen. [fkrecipes.Lib.LegacyItem],
+//	[fkrecipes.Lib.LegacyRecipe] and [fkrecipes.Lib.LegacyTechnology] cross a
+//	shipped name VERBATIM, which is the same argument the Legacy settings make
+//	and a wider blast radius: a prototype name is held by blueprints, logistic
+//	requests, crafting queues and other mods' patches.
 //
-//	`ItemSpec`, `RecipeSpec` and `TechSpec` carry no `order` slot, so the item's
-//	and the recipe's `c[splitter]-y[bbb-balancer]` and the technology's `a-b-bbb`
-//	would be dropped -- which moves this mod's row in every crafting menu and in
-//	Factoriopedia.
+//	`ItemSpec`, `RecipeSpec` and `TechSpec` carried no `order`, so this mod's
+//	`c[splitter]-y[bbb-balancer]` and `a-b-bbb` were dropped. All three carry
+//	one now.
 //
-//	`ItemSpec` carries no `place_result`, which is the one field that makes the
-//	item place the entity at all.
+//	`ItemSpec` carried no `place_result`, which is the one field that makes
+//	this mod's item place anything at all. It carries one now, and it is
+//	PRESENCE PROBED against the entity types -- which is what fixes the order
+//	of guest/go/data/main.go's `fk_data` hook: `entity()` defines
+//	`bbb-balancer-part` and `EmitData` runs after it, or the probe refuses the
+//	plan by name.
 //
-// So guest/go/data/recipe.go and technology.go stay hand-rolled, this package's
-// [RecipePlan], [TechLadder] and [Resolve] stay the resolver behind them, and
-// what crossed is the settings stage alone. Their own headers are the long form
-// of what they do; this note is only about why they did not move.
+// So the item, the recipe and the technology are declared here, and
+// guest/go/data/item.go, recipe.go and technology.go are gone. What is left in
+// this package is the LADDERS -- [RecipePlan] and [TechLadder] -- which are the
+// data the two dropdown-driven choices are built from, and the transcriptions
+// that keep the default honest.
 //
 // ---------------------------------------------------------------------------
-// EMIT IS ROUTED INTO fk_settings AND NOWHERE ELSE
+// TWO HOOKS, AND EACH NAMES THE HALF IT RUNS
 // ---------------------------------------------------------------------------
 //
-// `Emit` dispatches on the running stage: at the settings stage it plans
-// settings, at any data-family stage it plans everything else. This plan
-// declares no item, recipe or technology, so a data-family route would plan an
-// empty stream and emit nothing -- work for no result, at a stage whose cost is
-// paid by every player on every load. guest/go/data/settings.go is therefore
-// the only caller, and data.go and data-final-fixes.go do not mention this
-// package at all.
+// `Emit` reads the running stage and dispatches, which means a guest that
+// calls it links BOTH planners: round one measured `PlanData` as a 21,047-line
+// Lua function in a module whose plan could never reach it. [fkrecipes.Lib.EmitSettings]
+// and [fkrecipes.Lib.EmitData] name the half, so the linker can drop the other
+// -- and each raises if it is routed from the wrong stage, so a misroute is a
+// sentence naming the hook rather than a probe failure later.
 //
-// THE PRICE OF ROUTING ONLY ONE HOOK IS THAT A PROTOTYPE DECLARED HERE WOULD BE
-// SILENTLY DROPPED -- compiled into the shipped data module, paid for on every
-// load, and emitted by nothing -- and no gate downstream can see that: the
-// golden hashes cannot, because a prototype that is never emitted is not in the
-// dump. [TestThePlanDeclaresNothingNoHookEmits] is the invariant that keeps this
-// decision honest, and a pass that adds a prototype here has to route a
-// data-family hook into Emit as well or fail it.
-//
-// ONE MEASURED CONSEQUENCE, WRITTEN DOWN BECAUSE IT LOOKS LIKE A DEFECT AND IS
-// NOT: `PlanData` is LINKED INTO THE MODULE ANYWAY. The dispatch is a run-time
-// branch on the stage name rather than a compile-time one, so TinyGo cannot
-// prove the data half unreachable from an `Emit` call site and keeps it. It is
-// the single largest function in the packaged data module and it never runs.
-// The numbers are in CLAUDE.md, "The settings are declared through FkRecipes".
+// guest/go/data/main.go therefore calls `EmitSettings` from `fk_settings` and
+// `EmitData` from `fk_data`, and nothing calls `Emit`.
 //
 // ---------------------------------------------------------------------------
 // WHY A FUNCTION RATHER THAN A PACKAGE-LEVEL VALUE
@@ -108,12 +102,69 @@ func Plan() *fkrecipes.Lib {
 	// choice made here: FkRecipes emits `setting_type = "startup"` for every
 	// setting it declares, because what this library exists to decide are
 	// prototypes and a prototype is built before a map exists. The one setting
-	// of this mod's that is runtime-global is hand-rolled beside the Emit call
-	// for exactly that reason.
+	// of this mod's that is runtime-global is hand-rolled in
+	// guest/go/data/settings.go for exactly that reason.
 	lib.LegacyDropdownSettingNeedingLocale(
 		SettingRecipeCost, RecipeDefault(), RecipeOptions(), "a")
 	lib.LegacyDropdownSettingNeedingLocale(
 		SettingTechCost, TechDefault(), TechOptions(), "b")
 
+	// THE ITEM, and every field of it is transcribed from what shipped.
+	//
+	// `StackSize` is written out rather than left to the library's own default
+	// of 50, which happens to be the same number: this mod's 50 is a decision
+	// its dump golden pins, and a library default is a decision somebody else
+	// may revisit. The two agreeing today is not a reason to stop saying which
+	// one is ours.
+	//
+	// `PlaceResult` is the field round one could not have and the reason the
+	// item could not move: this item exists only to build the balancer part,
+	// and one that places nothing is not this mod's item. The library PRESENCE
+	// PROBES it against the entity types, so `entity()` has to have run before
+	// `EmitData` does -- see the header, and guest/go/data/main.go's `fk_data`.
+	lib.LegacyItem(PartName, fkrecipes.ItemSpec{
+		Icon:        PartIcon,
+		IconSize:    64,
+		StackSize:   50,
+		Subgroup:    "belt",
+		Order:       PartOrder,
+		PlaceResult: PartName,
+	})
+
 	return lib
 }
+
+// The names and the two sort keys three files have to agree about: this plan,
+// which emits them, and guest/go/data's entity.go and legacy.go, which name the
+// item from an entity and the entity from an item.
+//
+// WRITTEN DOWN ONCE BECAUSE A MISMATCH IS A LOAD FAILURE AND NOT A WARNING.
+// The engine's answer to an entity whose `minable.result` names an item nobody
+// defined is `Error in assignID: item with name '...' does not exist`, with
+// this mod's name on it, before a prototype of anybody else's is read -- which
+// is exactly what round one measured when the library prefixed these names.
+// They live in this package rather than in the data guest because the plan is
+// the thing that emits them and this package is the one a host `go test` can
+// reach.
+const (
+	// PartName is the item, the recipe and the entity, which all three share.
+	// One string, because `place_result`, `minable.result` and
+	// `placeable_by.item` are the three fields that bind them into one machine.
+	PartName = "bbb-balancer-part"
+
+	// TechName is the technology that unlocks the recipe.
+	TechName = "bbb-balancer"
+
+	// PartIcon is the icon every player-facing prototype of this mod uses. A
+	// stale path here is a defect only the GRAPHICAL client sees -- headless
+	// Factorio never opens a sprite file -- which is why test/check-sprites.py
+	// walks the packaged mod for exactly this class.
+	PartIcon = "__better-belt-balancer__/graphics/icons/balancer-part.png"
+
+	// PartOrder puts the item and the recipe next to the splitters, which is
+	// where a player looks for this.
+	PartOrder = "c[splitter]-y[bbb-balancer]"
+
+	// TechOrder is the technology's place in the research screen.
+	TechOrder = "a-b-bbb"
+)

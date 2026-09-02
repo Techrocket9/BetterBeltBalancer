@@ -10,7 +10,8 @@ import (
 //
 // ---------------------------------------------------------------------------
 // THE TWO COST SETTINGS ARE DECLARED THROUGH FkRecipes SINCE 2026-09-01, and
-// this stage's whole part in them is the `Emit` call below.
+// this file's whole part in them is that main.go's `fk_settings` hook calls
+// `tune.Plan().EmitSettings()` before it calls this function.
 //
 // FkRecipes is the shared data-stage library. The declarations are
 // `guest/go/tune`'s [tune.Plan] -- two `LegacyDropdownSettingNeedingLocale`
@@ -21,10 +22,11 @@ import (
 // set, and it did not: what this stage emits is byte-identical to what it
 // emitted when the two prototypes were built by hand here.
 //
-// EMIT RUNS AT fk_settings ALONE. It dispatches on the stage, so a second route
-// from a data-family hook would plan the library's other half; this plan
-// declares nothing there, so that would be work for no result on every load.
-// data.go and data-final-fixes.go do not mention the library at all.
+// EACH HOOK NAMES THE HALF IT RUNS. `EmitSettings` comes from `fk_settings` and
+// `EmitData` from `fk_data`; nothing calls the dispatching `Emit`, because it
+// reads the stage at run time and therefore links both planners. main.go's
+// header is the long form. `fk_data_final_fixes` does not mention the library
+// at all.
 //
 // STILL STARTUP, AND STILL FORCED. A recipe and a technology are PROTOTYPES,
 // built once at the data stage before a map exists, so what they cost has to be
@@ -48,10 +50,10 @@ import (
 // no dump and no suite can see, because a value with no `[string-mod-setting]`
 // entry renders as `Unknown key: ...` in the menu and loads perfectly.
 //
-// WHAT A PLANNING REFUSAL WOULD DO HERE, because `Emit` routes every one of them
-// through `fkdata.Raise` and a raise at the settings stage is a mod that does not
-// load. Against this mod's constants exactly ONE is reachable, and it is not
-// about this mod's settings at all: `fkrecipes: the mod name is empty, so
+// WHAT A PLANNING REFUSAL WOULD DO HERE, because `EmitSettings` routes every one
+// of them through `fkdata.Raise` and a raise at the settings stage is a mod that
+// does not load. Against this mod's constants exactly ONE is reachable, and it
+// is not about this mod's settings at all: `fkrecipes: the mod name is empty, so
 // nothing can be prefixed; package with an fklua that wires ModName`, which
 // fires when `fkdata.ModName()` returns empty because the stage file was written
 // by an fklua older than that argument. Both settings here are LEGACY and need
@@ -66,14 +68,14 @@ import (
 // declares none, and a nil World or a zero `Lib` id cannot happen because the
 // emit layer builds the first and `tune.Plan` builds the second with `New`.
 //
-// THE PROTOTYPE HALF DID NOT MOVE AND THAT WAS MEASURED RATHER THAN ASSUMED.
-// The item, the recipe and the technology are still built by hand in item.go,
-// recipe.go and technology.go, and guest/go/tune is still the resolver behind
-// them. Every name FkRecipes emits for a prototype carries the mod prefix and
-// there is no Legacy constructor for one, so `bbb-balancer-part` would become
-// `better-belt-balancer-bbb-balancer-part` and entity.go's `minable.result`
-// would name an item that no longer exists -- a hard load failure, seen. Its
-// specs also carry no `order` and no `place_result`. tune/plan.go's header is
+// THE PROTOTYPE HALF FOLLOWED IN ROUND TWO. The item, the recipe and the
+// technology are the same plan's, emitted from `fk_data`, and item.go, recipe.go
+// and technology.go are gone. What round one measured out was the prefix -- every
+// prototype name the library emitted carried the mod's own, so
+// `bbb-balancer-part` became `better-belt-balancer-bbb-balancer-part` and
+// entity.go's `minable.result` named an item that no longer existed -- plus two
+// missing spec fields. The Legacy prototype constructors, `Order` and
+// `PlaceResult` are the library's answers to all three. tune/plan.go's header is
 // the long form and agents/fkrecipes-migration.md is the run.
 // ---------------------------------------------------------------------------
 //
@@ -146,11 +148,9 @@ import (
 //
 //go:noinline
 func settings() {
-	// The two cost dropdowns, planned and emitted by FkRecipes. See the header:
-	// this is the only stage routed into Emit, and the plan it runs declares
-	// these two settings and nothing else.
-	tune.Plan().Emit()
-
+	// The two cost dropdowns are already out: main.go's fk_settings hook calls
+	// `EmitSettings` before this function. What is left here is the one setting
+	// FkRecipes has no verb for.
 	if !canStack() {
 		return
 	}

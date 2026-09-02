@@ -175,7 +175,21 @@ GUEST_SRC := $(shell find guest/go -name '*.go' -not -path '*/fkapi/*' -not -pat
 # where the sprite sheet's cell count comes from, and `tune` is what the two
 # cost settings and the belt-speed derivation decide -- none of them is copied
 # here, which is the whole reason the two guests are one Go module.
-DATA_GUEST_SRC := $(shell find guest/go/data guest/go/engine guest/go/skin guest/go/tune -name '*.go' -not -name '*_test.go') guest/go/go.mod
+#
+# AND FkRecipes' OWN SOURCES, because it is consumed from a WORKING TREE. The
+# library declares this mod's settings and prototypes and is resolved by a
+# directory `replace` in guest/go/go.mod, so an edit next door changes what this
+# module links and moves nothing make can see -- and the dump gate would then be
+# hashing a package built against yesterday's library while reporting on today's.
+# Measured: the round-two baseline's `make datastage-check` was green over a
+# dist/bbbdata.wasm `make mod` had declined to rebuild.
+#
+# FkLua's guest/go is NOT tracked here and that is left as it is rather than
+# widened: the same hazard exists for it, its own pin moves through
+# `fklua.lock` and `gen-bindings --check`, and one dependency at a time is one
+# change at a time.
+FKRECIPES_SRC := $(shell find ../FkRecipes/go -name '*.go' -not -name '*_test.go' -not -path '*/examples/*' 2>/dev/null)
+DATA_GUEST_SRC := $(shell find guest/go/data guest/go/engine guest/go/skin guest/go/tune -name '*.go' -not -name '*_test.go') guest/go/go.mod $(FKRECIPES_SRC)
 DATA_SRC  := $(shell find mod-data -type f)
 
 .PHONY: all guest mod zip install test check datastage-check clean graphics observers bench-setup
@@ -825,15 +839,15 @@ check:
 	@# cannot reach. `go vet` over ./data type-checks it under the wasm build
 	@# tags without asking TinyGo for a wasm module.
 	@#
-	@# -tags tinygo.wasm is REQUIRED and is not a preference. FkRecipes' emit
-	@# layer -- the half that touches fkdata, and therefore `Emit` itself -- sits
-	@# behind `//go:build tinygo.wasm`, which is a tag TinyGo's wasm-unknown
-	@# target sets and the standard toolchain does not. Without it this vet
-	@# cannot see the method the settings stage calls and fails on an undefined
-	@# `Emit`; fkdata itself vets under the tag as well, so the flag costs
-	@# nothing else. It is on THIS line alone: no observer and no fixture
-	@# imports the library.
-	cd guest/go && GOOS=wasip1 GOARCH=wasm go vet -tags tinygo.wasm ./data/
+	@# NO -tags tinygo.wasm ANY MORE, and its removal is a measurement rather
+	@# than a tidy-up. FkRecipes' emit layer sits behind `//go:build
+	@# tinygo.wasm` -- a //go:wasmimport is rejected off-target -- so for round
+	@# one this vet could not see `Emit` at all and failed on an undefined
+	@# method in the one gate that exists to catch compile errors. The library
+	@# ships HOST STUBS for the three emit entry points now (go/guest_host.go,
+	@# which panic naming the cause), so the ordinary toolchain type-checks the
+	@# data guest exactly as it type-checks everything else here.
+	cd guest/go && GOOS=wasip1 GOARCH=wasm go vet ./data/
 	@# The TEST OBSERVERS, for the same reason: they are `main` packages full of
 	@# //go:wasmexport that no `go test` can reach, and the harness under them is
 	@# what fourteen suites will share. gofmt below already covers them, because

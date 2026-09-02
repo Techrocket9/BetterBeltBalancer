@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/skin"
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/tune"
 	"github.com/Techrocket9/fklua/guest/go/fkdata"
 )
 
@@ -11,8 +12,13 @@ import (
 // headless Factorio never opens a sprite file, which is how one survived every
 // suite and then refused to load in a real game. `test/check-sprites.py` walks
 // the packaged mod for exactly this class.
+//
+// THE ICON IS [tune.PartIcon] RATHER THAN A SECOND SPELLING OF THE SAME PATH.
+// The item and the technology that carry it are FkRecipes declarations in that
+// package now, and the entity and the legacy stub here carry it too; one
+// constant is what stops a re-theme moving four prototypes and leaving a fifth.
 const (
-	partIcon     = "__better-belt-balancer__/graphics/icons/balancer-part.png"
+	partIcon     = tune.PartIcon
 	partVariants = "__better-belt-balancer__/graphics/entity/balancer-part-variants.png"
 )
 
@@ -39,7 +45,7 @@ const (
 func entity() {
 	fkdata.Extend(obj(
 		f("type", str("simple-entity-with-force")),
-		f("name", str("bbb-balancer-part")),
+		f("name", str(tune.PartName)),
 		f("icon", str(partIcon)),
 		f("icon_size", num(64)),
 
@@ -50,8 +56,15 @@ func entity() {
 		// or it is not available later.
 		f("flags", strs("placeable-neutral", "player-creation", "get-by-unit-number")),
 
-		f("minable", obj(f("mining_time", num(0.1)), f("result", str("bbb-balancer-part")))),
-		f("placeable_by", obj(f("item", str("bbb-balancer-part")), f("count", num(1)))),
+		// THE TWO FIELDS THAT BIND THIS ENTITY TO THE ITEM FkRecipes EMITS, and
+		// the reason [tune.PartName] is one constant rather than four literals:
+		// an entity whose `minable.result` names an item nobody defined is the
+		// engine's own `Error in assignID` abort with this mod's name on it,
+		// before a prototype of anybody else's is read. That is exactly what
+		// round one of the migration measured when the library prefixed the
+		// item's name (agents/fkrecipes-migration.md).
+		f("minable", obj(f("mining_time", num(0.1)), f("result", str(tune.PartName)))),
+		f("placeable_by", obj(f("item", str(tune.PartName)), f("count", num(1)))),
 
 		// FAST REPLACE, and it is the one line that makes a part behave like the
 		// machine it is. `"transport-belt"` is base's own group for every belt,

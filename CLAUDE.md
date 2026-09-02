@@ -223,7 +223,12 @@ guest/go/data/           THE DATA GUEST: this mod's SETTINGS and DATA stages, an
                          nothing here wants one and a hook that is not exported
                          gets no file. main.go is the hooks, value.go the
                          prototype-table shorthands, and one file per prototype
-                         family beside them. It may NOT import fkapi and
+                         family beside them -- MINUS item.go, which is gone
+                         since round two of the FkRecipes migration: the item is
+                         a `LegacyItem` declaration in guest/go/tune's plan and
+                         main.go's fk_data hook calls `EmitData` after entity(),
+                         because the item's `place_result` names that entity and
+                         the library PRESENCE PROBES it. It may NOT import fkapi and
                          `fklua mod` refuses a data module that does: there is
                          no game, no script and no runtime API at these stages.
                          Read "The shipped mod holds no Lua" before touching it,
@@ -253,19 +258,23 @@ guest/go/tune/           WHAT THE DATA STAGE DECIDES that is not fixed: the
                          argument: an ingredient naming a prototype nobody
                          defined is a HARD LOAD FAILURE with this mod's name on
                          it, in somebody's overhaul pack.
-                         plan.go is THE FkRecipes SETTINGS PLAN, and since
+                         plan.go is THE FkRecipes PLAN, and since
                          2026-09-01 it is where this mod's two startup dropdowns
                          are declared: two `LegacyDropdownSettingNeedingLocale`
                          calls, which is the constructor that carries a shipped
                          mod's own names and order strings across VERBATIM,
                          because Factorio keys mod-settings.dat by name and has
-                         no rename mechanism. The RECIPE AND TECHNOLOGY LADDERS
-                         STAY HERE and the prototypes stay hand-rolled in
-                         guest/go/data: the library prefixes every prototype
-                         name it emits, has no `order` slot and no
-                         `place_result`, and a prefixed item is a HARD LOAD
-                         FAILURE against the hand-rolled entity's
-                         `minable.result` -- measured, not feared
+                         no rename mechanism. SINCE ROUND TWO IT DECLARES THE
+                         ITEM TOO, through `LegacyItem`, which is the same
+                         argument with a wider blast radius: a prototype name is
+                         held by blueprints, logistic requests, crafting queues
+                         and this mod's own hand-rolled entity, whose
+                         `minable.result` a prefixed item killed the load on --
+                         measured, not feared. plan.go also carries the NAMES
+                         AND THE TWO SORT KEYS three files have to agree about
+                         (PartName, TechName, PartIcon, PartOrder, TechOrder),
+                         so entity.go and legacy.go name one constant rather
+                         than four literals
                          ("The settings are declared through FkRecipes").
                          It also carries the two checks nothing else in
                          this repo could make. The LOCALE one is FkRecipes'
@@ -630,23 +639,23 @@ Both packages from clean, 2026-08-25, shipped config (`--persist=packed --gc=col
 | **the floor dropped** from 0.25 to 0.125 in `tune.SpeedFloor` | three unit-test failures, and **BOTH golden `data_raw_sha256` arms move** -- the four hidden prototypes come out at 0.125, half the speed the whole estate was measured on. The SPEED arm stays green, correctly: 0.5 beats either floor. That division is the point -- the goldens are the no-change proof and the speed arm is the change proof |
 | **the vanilla default drifted** (iron-plate 4 -> 3) | `TestVanillaIsTodaysRecipe` names both lists, BOTH golden `data_raw_sha256` arms move, and the `recipe-vanilla` gate arm prints the drifted list against the expected one. Three independent detectors for the one change that would invalidate every recorded number in this repository |
 
-### The settings are declared through FkRecipes since 2026-09-01, and the prototypes are not
+### The settings are declared through FkRecipes since 2026-09-01, and the item followed in round two
 
-**The two startup dropdowns moved onto [FkRecipes](https://github.com/Techrocket9/FkRecipes), the shared data-stage library, and the item, the recipe and the technology did not.** The split is not a staging decision: the prototype half was written, run and REFUSED BY THE ENGINE, and the settings half is byte-identical through a gate that would have caught a single moved field. `guest/go/tune/plan.go` is the plan and its header is the long form; [`agents/fkrecipes-migration.md`](agents/fkrecipes-migration.md) is the run and the graded friction list.
+**The two startup dropdowns moved onto [FkRecipes](https://github.com/Techrocket9/FkRecipes), the shared data-stage library, in round one; the item followed in round two and `guest/go/data/item.go` is deleted.** Neither half is a staging decision. Round one's prototype arm was written, run and REFUSED BY THE ENGINE, and it is recorded below as the measurement it was; round two moved on a library that had answered every one of the three refusals by name. `guest/go/tune/plan.go` is the plan and its header is the long form; [`agents/fkrecipes-migration.md`](agents/fkrecipes-migration.md) is both runs and the graded friction list.
 
 **What migrated is two calls.** `lib.LegacyDropdownSettingNeedingLocale(SettingRecipeCost, RecipeDefault(), RecipeOptions(), "a")` and the same for `SettingTechCost` at `"b"`, and `guest/go/data/settings.go`'s whole part in them is `tune.Plan().Emit()`. **`Legacy` is forced rather than preferred**: Factorio persists a player's startup choices in `mod-settings.dat` keyed by the setting's NAME and has no rename mechanism, so a prefixed `better-belt-balancer-bbb-recipe-cost` would be a NEW setting and every player who had chosen a value would silently get the default. The order strings are this mod's own for the same reason -- a generated order is two letters from declaration order, and `order` is a field in the settings dump.
 
-**EMIT IS ROUTED INTO fk_settings ALONE.** `Emit` dispatches on the running stage, and this plan declares nothing for a data stage, so a second route would plan an empty stream on every load. `data.go` and `data-final-fixes.go` do not mention the library.
+**EACH HOOK NAMES THE HALF IT RUNS SINCE ROUND TWO.** `Emit` reads the running stage and dispatches at RUN TIME, so a guest that calls it links both planners whatever its plan declares -- which is where round one's 21,047-line unreachable function came from. `guest/go/data/main.go` calls `EmitSettings` from `fk_settings` and `EmitData` from `fk_data`, nothing calls `Emit`, and each of the two raises if it is routed from the wrong stage. `fk_data_final_fixes` does not mention the library.
 
-**What did NOT migrate, and the reason is measured.** Three things stop the prototype half and the first is fatal on its own:
+**What round one measured out, and what answered it.** Three things stopped the prototype half then and the first was fatal on its own; all three are library surface now:
 
-| | |
+| round one measured | round two has |
 |---|---|
-| **every prototype name carries the mod prefix**, and there is no Legacy constructor for one | `bbb-balancer-part` becomes `better-belt-balancer-bbb-balancer-part`, and `entity.go`'s `minable.result` then names an item nobody defined: `Error in assignID: item with name 'bbb-balancer-part' does not exist. Source: bbb-balancer-part (simple-entity-with-force).`, `--dump-data exited 1` |
-| **`ItemSpec`, `RecipeSpec` and `TechSpec` carry no `order`** | the item's and the recipe's `c[splitter]-y[bbb-balancer]` and the technology's `a-b-bbb` are DROPPED, which moves this mod's row in every crafting menu and in Factoriopedia. Measured on the arm that repointed the entity to make the load complete: `data_raw_sha256` moves on both mod sets, and the three order fields are what moved |
-| **`ItemSpec` carries no `place_result`** | the one field that makes the item place the entity |
+| **every prototype name carried the mod prefix**, with no Legacy constructor for one: `bbb-balancer-part` became `better-belt-balancer-bbb-balancer-part` and `entity.go`'s `minable.result` then named an item nobody defined -- `Error in assignID: item with name 'bbb-balancer-part' does not exist. Source: bbb-balancer-part (simple-entity-with-force).`, `--dump-data exited 1` | `LegacyItem`, `LegacyRecipe` and `LegacyTechnology`, which emit a shipped name VERBATIM. The argument is the Legacy settings' with a wider blast radius: a prototype name is held by blueprints, logistic requests, crafting queues and other mods' patches, and no single dump says whether anything is holding one |
+| **`ItemSpec`, `RecipeSpec` and `TechSpec` carried no `order`**, so the item's and the recipe's `c[splitter]-y[bbb-balancer]` and the technology's `a-b-bbb` were DROPPED -- which moves this mod's row in every crafting menu and in Factoriopedia | an `Order` field on all three |
+| **`ItemSpec` carried no `place_result`**, the one field that makes the item place the entity | `PlaceResult`, PRESENCE PROBED against the entity types. That probe is what fixes the order of the `fk_data` hook: `entity()` first, `EmitData` after it, or the plan is refused by name |
 
-So `guest/go/data/recipe.go`, `technology.go` and `item.go` are untouched, `tune`'s `RecipePlan`, `TechLadder` and `Resolve` are still the resolver behind them, and NOTHING in `tune` was deleted.
+So `guest/go/data/item.go` is deleted and the item is one `LegacyItem` call. `guest/go/data/recipe.go` and `technology.go` are still hand-rolled at this point, for a reason that is neither of the three above: the library emits a recipe's `enabled` as "no technology in THIS PLAN unlocks me", so a recipe declared while its technology is still hand-rolled comes out `enabled = true` and moves the data hash. The two can only cross together, and they do in the next commit.
 
 **THE ACCEPTANCE CRITERION WAS BOTH GOLDEN HASHES NOT MOVING, AND THEY DID NOT.** `make datastage-check`, Factorio 2.0.77, eleven arms green: `base data_raw_sha256 f4fbcaa603abc93b`, `base mod_settings_sha256 196275f867f7f8b5`, `incumbent data_raw_sha256 e7001bf98d6c6771`, `incumbent mod_settings_sha256 196275f867f7f8b5`, plus all eight variant arms and the speed arm. **The 2.1.16 and 2.1.17 golden rows are NOT RUN**: the installed binary is 2.0.77 and the packaged mod is pinned 2.1, so a golden whose engine does not match the binary is a SKIP by construction and `make test` refuses at its engine gate for the same reason.
 
@@ -683,7 +692,9 @@ It is a LOAD-TIME cost and nothing else: the control guest did not move a byte, 
 
 **The go.mod facts, because two of them look wrong and are not.** `github.com/Techrocket9/fklua/guest/go` moved **v0.0.0 -> v0.2.0**: FkRecipes requires that tag through the real channel and minimal version selection takes the maximum, so the number is not a choice made here and the `replace` still resolves it onto `../../../FkLua/guest/go`. The FkRecipes `replace` is **DEV-ONLY** and marked so: there is no remote and no tag, and `v0.1.0` is the tag its README names as its eventual Go one. **There is no `go.sum` and none is created**, which is what a directory replace means. `go mod tidy` DELETES an unimported require, so the dependency and its first import have to land in one edit.
 
-**And `make check`'s data-guest vet line carries `-tags tinygo.wasm` now.** FkRecipes' emit layer -- `Emit` itself -- is behind `//go:build tinygo.wasm`, a tag TinyGo's wasm-unknown target sets and the standard toolchain does not, so without it the vet fails on `....Emit undefined (type *fkrecipes.Lib has no field or method Emit)`. It is on that one line: no observer and no fixture imports the library.
+**And `make check`'s data-guest vet line carried `-tags tinygo.wasm` in round one and does not any more.** FkRecipes' emit layer -- `Emit` itself -- is behind `//go:build tinygo.wasm`, a tag TinyGo's wasm-unknown target sets and the standard toolchain does not, so without it the vet failed on `....Emit undefined (type *fkrecipes.Lib has no field or method Emit)` in the one gate that exists to catch compile errors. The library ships HOST STUBS for `Emit`, `EmitSettings` and `EmitData` now (`go/guest_host.go`, which panic naming the cause), so the ordinary toolchain type-checks the data guest exactly as it type-checks everything else here and the flag is gone.
+
+**AND THE MAKEFILE TRACKS FkRecipes' OWN SOURCES SINCE ROUND TWO, because it is consumed from a WORKING TREE.** `DATA_GUEST_SRC` listed this repository's files alone, so an edit next door changed what the data guest links and moved nothing `make` could see. Measured: round two's baseline `make datastage-check` came back green over a `dist/bbbdata.wasm` that `make mod` had declined to rebuild against a library six commits newer. FkLua's `guest/go` is deliberately NOT tracked the same way: the hazard is the same, its pin moves through `fklua.lock` and `gen-bindings --check`, and one dependency at a time is one change at a time.
 
 ### Red-proven five times, and the five catch five different things
 
@@ -742,18 +753,18 @@ make test     # headless verification, FOURTEEN suites, and the DEFAULT is all
               # --create; and flip drives `bbb-multi-edge-parts` through all
               # four of its transitions, which only Factorio 2.0 has)
 make check    # the SIX pure packages' unit tests (plan, skin, carry, tune,
-              # edgemode, engine) -- ./tune is where the settings PLAN is pinned
-              # field by field on the host, and where the locale file is checked
-              # by FkRecipes' own `CheckLocaleWith` plus BBB's three extra
-              # assertions (a description on both cost settings, a name on the
-              # hand-rolled bool, and the grandfather message quoting a menu
-              # label that exists); `go vet` over the data guest, which is the
-              # one package no `go test` can reach (//go:wasmimport is rejected
-              # outside GOARCH=wasm) -- and THAT vet line alone carries
-              # `-tags tinygo.wasm`, because FkRecipes' emit layer is behind
-              # `//go:build tinygo.wasm` and without the tag the standard
-              # toolchain cannot see `Emit` at all; bindings and lock current;
-              # gofmt
+              # edgemode, engine) -- ./tune is where BOTH FkRecipes PLANS are
+              # pinned field by field on the host, the settings one against a
+              # one-method Named stub and the data one against a fixture World,
+              # and where the locale file is checked by FkRecipes' own
+              # `CheckLocaleWith` plus BBB's three extra assertions (a
+              # description on both cost settings, a name on the hand-rolled
+              # bool, and the grandfather message quoting a menu label that
+              # exists); `go vet` over the data guest, which is the one package
+              # no `go test` can reach (//go:wasmimport is rejected outside
+              # GOARCH=wasm) -- and it needs NO build tag since round two, the
+              # library shipping host stubs for its three emit entry points;
+              # bindings and lock current; gofmt
 make datastage-check
               # THE DATA STAGE'S OWN GATE, and deliberately not part of
               # `make test`: Factorio's `--dump-data` runs the settings and data
@@ -2628,7 +2639,7 @@ Design fixed 2026-07-31: **compile, don't interpret** -- balancer clusters compi
 | **...and on Factorio 2.0 the mode is a setting, which the mod defends rather than obeys** | Multi-edge survives there behind `bbb-multi-edge-parts`, default off, and turning it OFF while multi-edge balancers are standing is **VETOED**: the setting goes straight back on and the player is told what to rebuild, with a ping per balancer -- and the map is CHARTED around each one, because a ping at uncharted ground opens on black. It was a SWEEP until 2026-08-24 -- tear them down and spill -- which could never stick (the condition that makes a sweep find something is the condition that makes the grandfather write the setting back) and which put a full balancer's contents on the floor on the way. Measured either side of the fix: ground `0 -> 88 -> 64` against `0 -> 0 -> 0`, and the networks' own contents `120 -> 24 -> 76` against `120` throughout. The `flip` suite drives all four transitions, on the only engine that has them |
 | **A 2.0 multi-edge save opened on 2.1 stops honestly, and says where the items went** | The engine has already deleted all but one belt-connectable per tile before any script runs, silently, so the guest wakes into crippled machines. It tears every remnant down -- the one place a refusal demolishes anything, because a stacked linked belt in a 2.1 world is an engine risk rather than a degraded balancer -- recovers what they were holding exactly, spills all of it, refuses every cluster and tells each owning force once with a clickable ping per balancer. Measured on both committed fixtures: 2,320 and 6,540 items recovered and spilled to the item, 0 put back, 0 of the compiler's entities left standing, the player's 77 and 95 parts untouched, and the audit stable at `nets=0 drift=0 unbuilt=0 refused=N`. On Factorio 2.0 the same scan reaches the other outcome: the balancers are kept working, the mod writes its own setting to say so, and the force is warned once. "A save built to the other rule" and [`agents/single-edge.md`](agents/single-edge.md) |
 | **...and the TEST ESTATE has followed the mod out of Lua** | An observer mod builds a world, drives it on a schedule and reports what it sees; fourteen of them were `control.lua` files. **EVERY SUITE THAT CAN BE PORTED IS A COMPILED GUEST since 2026-08-25** -- the pilot's `m1` and `sedge`, then `mar`, `mig21`, `qual`, then `mix`, `plat`, `mig`, and in phase 4 the three biggest, `m2`, `m3` and `edge` -- sharing one harness package and the mod's own generated bindings under `guest/go/obs`. **Phase 5 took the INTERACTIVE STAGING MOD**, which was never a suite: the world a human walks and the mod portal's demo scenes are staged by a compiled guest now, and `make interactive-install` installs the very package `iact` gates. **Phase 6 took the two DATA-STAGE-ONLY STAND-INS**, the first packages here with no control stage at all, and **PHASE 7 THE `bench/` HARNESS'S SETUP MOD**, which is the last one this machine can do. **PHASE 9 TOOK `flip` ON 2026-08-26**, on a Factorio 2.0 binary, which is the one thing the programme was ever blocked on: its suite SKIPS on 2.1 and a phase's first gate is a golden log. The estate is **0 lines of hand-written Lua from 8,524**, and so is the repository. Every one of their log lines came back byte-identical against goldens taken before the port -- 320 in phase 1, 10,519 in phase 2, 1,290 in phase 3, 4,220 in phase 4, 498 in phase 5 and 819 in phase 6, in order, with only a timestamp, a source attribution and a profiler's own measured milliseconds masked; a red proof per phase says the assertion surface is really exercised; and the mod's own heap slopes and member table have not moved by a byte through any of it. **Phase 7's gate is not a golden log but a COMPARABILITY run**, because `bench/` is measurement infrastructure: the same cells, both setup mods, interleaved in one session, with throughput identical to the item in every one and the marginal cost per balancer agreeing to 0.002 µs. **Phase 8 wrote `mig21`'s observer a SECOND time, in Rust, and that arm was reverted 2026-08-26**: the estate is FOURTEEN GO OBSERVERS and this repository has one toolchain -- see "Pure Go"; `agents/estate-port.md` |
-| **The settings are declared through FkRecipes** | The two startup dropdowns are two `LegacyDropdownSettingNeedingLocale` calls in `guest/go/tune/plan.go` since 2026-09-01, and the settings stage's whole part in them is one `Emit`. Legacy because Factorio keys `mod-settings.dat` by NAME with no rename mechanism, so a prefixed name would discard every player's saved choice; the acceptance criterion was `mod_settings_sha256` not moving on either mod set, and it did not. **The PROTOTYPES stayed hand-rolled and that was measured rather than preferred**: the library prefixes every prototype name, carries no `order` and no `place_result`, and a prefixed item kills the load on the hand-rolled entity's `minable.result`. "The settings are declared through FkRecipes" |
+| **The settings and the item are declared through FkRecipes** | The two startup dropdowns are two `LegacyDropdownSettingNeedingLocale` calls in `guest/go/tune/plan.go` since 2026-09-01, and the item is a `LegacyItem` call beside them since round two; `guest/go/data/item.go` is deleted. Legacy because Factorio keys `mod-settings.dat` by NAME and a save keys a prototype by name, neither with a rename mechanism, so a prefixed name discards every player's saved choice or blueprint. The acceptance criterion was BOTH golden hashes not moving on either mod set, and neither did. **The recipe and the technology are still hand-rolled at this point** and for a reason that is not the prefix: the library emits `enabled` as "no technology in this plan unlocks me", so the two can only cross together. "The settings are declared through FkRecipes" |
 | **It is not shipped** | No mod-portal release, and no play-testing beyond the suites and one guided pass. Licensed MIT (`LICENSE`, 2026-08-15) |
 
 Final verification, from `make clean`, **2026-08-02**, Factorio 2.0.77, in the SHIPPED configuration (`--persist=packed --gc=collected`): `make check` green; `test/run.sh` green on all seven suites (M1 6+3 phases, M2 8 rigs, M3 12 rigs, `upg` plus M2's whole assertion set again, `plat`, `mar`'s slope legs and `edge`'s hundred-cycle churn) — **and green again on all seven in the `GC=leaking` arm**, which is the bar every pass that touches the mode decision keeps. Re-run from clean in both arms after the item-placement policy ("A recompile is not a removal"), again in the shipped arm after the prototype-visual pass ("The tan streak"), and **again in BOTH arms after the belt-stacking pass** ("Stacked belts come back stacked") — the `mar` slopes came back identical to the byte in the leaking arm, which is the measurement that says the gate really is closed for base-only play. **Green in both arms again after the miner's-pocket correction** ("The shrink was the whole feature"), which added two legs to the `edge` suite rather than changing a number in any other one: `player_index` is zero on every removal a headless run can produce, so the fix is invisible to the suites and what they gained is the measurement of what it redirects. **Green on all seven in the shipped arm again after the beneficiary's force check** ("A claim is a Region"); every suite number is byte-identical for the same reason, and the evidence that pass added is a `go test` — the first failing test this repo has ever been able to write for the miner's pocket. **And green in both arms again after the second field report** ("A mine beside a machine is a mine of that machine"), which is the last change this file records. That one DID move the suite numbers, because it added a rig rather than only a call site: the `edge` baseline is twelve clusters over thirty-one parts, and its new `bmin` leg reproduces the report at **128 items on the ground** — the same 128 on the pre-fix guest, which is what makes it a tripwire on the quantity rather than on the fix. **The `mar` slopes came back identical to the byte in the leaking arm** — 1,216 / 352 / 1,180 / 32 / 736 / 3,736 / 1,712 B per primitive and 3.92 MiB of linear memory — which is the measurement that says a claim recorded on the guest's hottest path costs nothing where no player mines. n=200 k=4 express saturated **0.7565 ms/tick against the control's 0.5940** (median of 5 interleaved reps; the earlier 0.4510/0.4760 pair is a different session and not comparable), 1,740,000 items at balance 1.001, zero `[BBB]` lines in the benchmark window.

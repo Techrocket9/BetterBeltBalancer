@@ -32,24 +32,17 @@ import (
 // order the rows appear in the settings menu, it is in the dump, and it is a
 // player-visible property of this mod.
 
-// planWorld is the least World that [fkrecipes.Lib.PlanSettings] can be asked
-// anything through: it wants ModName and nothing else, so every other method
-// answers emptily and is never called. The library's own header says so, and a
-// stub that lied convincingly about technologies would be modelling a stage
-// this plan never reaches.
+// planWorld is the least thing [fkrecipes.Lib.PlanSettings] can be asked
+// anything through: ONE METHOD.
+//
+// It used to be nine stubs that were never called, because the settings planner
+// took the whole eleven-method World for the sake of its mod name. The library
+// splits [fkrecipes.Named] out now and PlanSettings takes that, so a consumer
+// holding their settings plan up to the light implements what it actually asks
+// and nothing else. The data half's fixture is world_test.go.
 type planWorld struct{}
 
 func (planWorld) ModName() string { return ModName }
-
-func (planWorld) StartupSetting(string) (fkrecipes.Value, bool) { return fkrecipes.Nil(), false }
-func (planWorld) TechNames() []string                           { return nil }
-func (planWorld) TechPrereqs(string) []string                   { return nil }
-func (planWorld) TechUnit(string) (fkrecipes.Value, bool)       { return fkrecipes.Nil(), false }
-func (planWorld) TechMaxLevel(string) (fkrecipes.Value, bool)   { return fkrecipes.Nil(), false }
-func (planWorld) TechHasResearchTrigger(string) bool            { return false }
-func (planWorld) TechExists(string) bool                        { return false }
-func (planWorld) ItemExists(string) bool                        { return false }
-func (planWorld) RecipeExists(string) bool                      { return false }
 
 // wantSetting is one expected prototype: every field, transcribed.
 type wantSetting struct {
@@ -145,34 +138,6 @@ func TestEverySettingPrototypeIsTheOneThatShipped(t *testing.T) {
 	}
 }
 
-// TestThePlanDeclaresNothingNoHookEmits is what keeps the routing decision
-// honest, and it is the one assertion here that is about a stage this mod does
-// not run.
-//
-// FkRecipes' `Emit` contract is to route fk_settings AND one data-family hook
-// into it. This mod routes fk_settings ALONE, deliberately (tune/plan.go's
-// header says why), and the price of that choice is that a prototype declared
-// in the plan would be SILENTLY DROPPED: it would compile into the shipped data
-// module, cost its bytes on every load, and never be emitted by anything.
-//
-// Nothing else can see it. `go test ./tune/` passes, because no other test
-// looks at the data half; both golden hashes pass, because a prototype that is
-// never emitted is not in the dump. So the invariant has to be stated here:
-// while only fk_settings routes into Emit, the plan's data half is empty.
-//
-// A future pass that adds a prototype to the plan must ALSO route a data-family
-// hook into Emit, and this failing is what says so.
-func TestThePlanDeclaresNothingNoHookEmits(t *testing.T) {
-	ops, err := Plan().PlanData(planWorld{})
-	if err != nil {
-		t.Fatalf("PlanData refused: %v", err)
-	}
-	if len(ops) != 0 {
-		t.Errorf("the plan declares %d data-stage op(s) and only fk_settings "+
-			"routes into Emit, so none of them is ever emitted", len(ops))
-	}
-}
-
 // TestNoEmittedNameCarriesTheGeneratedPrefix is the whole point of the Legacy
 // constructors, stated as an assertion.
 //
@@ -181,19 +146,30 @@ func TestThePlanDeclaresNothingNoHookEmits(t *testing.T) {
 // name with no rename mechanism, so every player who had chosen a value would
 // silently get the default. The failure that would catch it downstream is a
 // moved golden hash, which says a hash moved and not what it means.
+//
+// AND IT COVERS THE PROTOTYPES TOO SINCE ROUND TWO, where the argument is the
+// same one with a wider blast radius. A prototype name is held by blueprints,
+// logistic requests, crafting queues, other mods' compatibility patches and
+// this mod's own hand-rolled entity, and the engine's answer to a dangling one
+// is not a warning but `Error in assignID: item with name '...' does not
+// exist`. Round one measured exactly that when the library prefixed them.
 func TestNoEmittedNameCarriesTheGeneratedPrefix(t *testing.T) {
 	prefix := ModName + "-"
-	for _, op := range planOps(t) {
+	both := append(planOps(t), dataOps(t, everythingWorld())...)
+	for _, op := range both {
+		if op.Kind != fkrecipes.OpExtend {
+			continue
+		}
 		got := fieldsOf(t, op.Proto)
 		name, ok := got["name"]
 		if !ok || name.Kind != fkrecipes.KindStr {
-			t.Error("a setting prototype has no string `name` field")
+			t.Error("a prototype has no string `name` field")
 			continue
 		}
 		if strings.HasPrefix(name.Str, prefix) {
-			t.Errorf("the setting is emitted as %q: it went through a "+
-				"prefixing constructor, and every player's saved choice under "+
-				"the old name is discarded", name.Str)
+			t.Errorf("a prototype is emitted as %q: it went through a "+
+				"prefixing constructor, and every player's saved choice or "+
+				"blueprint under the old name is discarded", name.Str)
 		}
 	}
 }
