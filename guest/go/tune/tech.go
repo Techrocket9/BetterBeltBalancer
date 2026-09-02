@@ -45,6 +45,12 @@ func TechDefault() string { return TechOptions()[0] }
 // An option this build does not know gets the default's ladder, for the reason
 // [RecipePlan] gives: `allowed_values` is validated by the engine, so an unknown
 // string means a downgrade from a newer build of this mod.
+//
+// WHAT WALKS IT IS FkRecipes' `CostBy` since round two, as one `CostChoice` per
+// option built by [Plan]. This file is the ladder DATA and the option list; the
+// unit copy, the trigger-technology skip and the prerequisite moving with the
+// unit are the library's, and [FallbackUnit] is what applies when no rung of the
+// chosen ladder carries a unit at all.
 func TechLadder(option string) []string {
 	switch option {
 	case TechLogistics3:

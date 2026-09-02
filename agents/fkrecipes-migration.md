@@ -113,6 +113,14 @@ in a game whose `logistics` is present and carries a unit, so the fallback is un
 
 Each injected, observed and restored, with the restored file byte-compared against the copy taken before the injection.
 
+### Commit 3: the resolver the library owns is gone
+
+`tune.Resolve`, `tune.ResolveRecipe` and the `Ingredient` type are deleted, and with them the five tests that pinned what the library now pins: `TestResolveNeverEmitsAnUnprovenName`, `TestResolveWithNoPredicateEmitsNothing`, `TestEveryLadderResolvesInTheWorstWorldThereIs`, `TestNothingAtAllIsAnEmptyRecipeRatherThanAnInventedOne` and `TestTheIdentityPlanIsTheLastResort`. Every one of their properties is asserted in `plandata_test.go` against a fixture World, one layer out, on the code that actually ships.
+
+**What stays, and one of the two is not redundant with anything the library does.** `RecipePlan` and `TechLadder` are the ladder DATA. `RecipeOptions`, `TechOptions` and the two defaults are the option lists whose head IS each default. `FallbackUnit` is the vanilla research cost. `speed.go` is untouched, being no library concern at all. And **`TestEveryLadderTerminates` stays because the library cannot make its claim**: what FkRecipes guarantees is that it emits no name the game lacks, which an EMPTY recipe satisfies vacuously; a ladder ending at something every game with belts in it has is what stops that being the answer. `TestVanillaIsTodaysRecipe` stays too, re-pointed at the plan, so the same transcribed literal is now compared against a different machine.
+
+**No emitted byte moves here and the goldens therefore cannot**, which is the honest shape of this commit: `Resolve` was already unreferenced from the guest after commit 2, so the packaged data module comes out at **3,122,875 bytes of Lua**, the same figure to the byte, and `make datastage-check` is green on all eleven arms with the same four hashes. The gates are run anyway, because "cannot move" is a prediction until it is a measurement.
+
 ## The FkLua baseline
 
 The migration was measured against a freshly rebuilt fklua so that a packaging difference could not be mistaken for a library effect.

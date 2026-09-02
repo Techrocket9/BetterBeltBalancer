@@ -6,82 +6,16 @@ import (
 	"testing"
 )
 
-// everything is the predicate for a vanilla-plus-Space-Age game: every name any
-// ladder in this package can reach exists.
-func everything(string) bool { return true }
-
-// only is a predicate over a fixed set, which is how a modpack that is missing
-// something is expressed here.
-func only(names ...string) func(string) bool {
-	set := map[string]bool{}
-	for _, n := range names {
-		set[n] = true
-	}
-	return func(s string) bool { return set[s] }
-}
-
 // ---------------------------------------------------------------------------
-// (a) RESOLVE CAN NEVER RETURN A NAME THE PREDICATE REJECTED.
+// (a) EVERY LADDER TERMINATES, AND TERMINATES AT THE SAME PLACE.
 //
-// This is the one property the whole ladder design exists to have: an
-// ingredient naming a prototype nobody defined is a HARD LOAD FAILURE with this
-// mod's name on it, inside somebody else's pack. Everything else in this file is
-// a convenience; this is the safety.
-// ---------------------------------------------------------------------------
-
-func TestResolveNeverEmitsAnUnprovenName(t *testing.T) {
-	// Every subset of the vocabulary is too many, so this walks every option
-	// against every ONE-NAME-PRESENT world and every ONE-NAME-MISSING world,
-	// which between them exercise both ends of every ladder.
-	vocab := ladderVocabulary()
-
-	check := func(what string, ing []Ingredient, present func(string) bool) {
-		t.Helper()
-		for _, in := range ing {
-			if !present(in.Name) {
-				t.Errorf("%s emitted %q, which the predicate rejected: "+
-					"that is a load failure in somebody's modpack", what, in.Name)
-			}
-			if in.Amount <= 0 {
-				t.Errorf("%s emitted %q at amount %v", what, in.Name, in.Amount)
-			}
-		}
-	}
-
-	for _, opt := range append(RecipeOptions(), "a-value-from-a-newer-build") {
-		check(opt+" @ everything", mustResolve(t, opt, everything), everything)
-		check(opt+" @ nothing", mustResolve(t, opt, only()), only())
-
-		for _, keep := range vocab {
-			p := only(keep)
-			check(opt+" @ only "+keep, mustResolve(t, opt, p), p)
-
-			missing := map[string]bool{}
-			for _, n := range vocab {
-				missing[n] = n != keep
-			}
-			q := func(s string) bool { return missing[s] }
-			check(opt+" @ all but "+keep, mustResolve(t, opt, q), q)
-		}
-	}
-}
-
-func mustResolve(t *testing.T, opt string, present func(string) bool) []Ingredient {
-	t.Helper()
-	ing, _ := ResolveRecipe(opt, present)
-	return ing
-}
-
-func TestResolveWithNoPredicateEmitsNothing(t *testing.T) {
-	// A caller that forgot the predicate must emit an UNCHECKED recipe over
-	// nobody's dead body: nil means nothing exists.
-	if got := Resolve(RecipePlan(RecipeVanilla), nil); len(got) != 0 {
-		t.Fatalf("a nil predicate resolved to %v; it must resolve to nothing", got)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// (b) EVERY LADDER TERMINATES, AND TERMINATES AT THE SAME PLACE.
+// THE PROPERTY THE WHOLE LADDER DESIGN RESTS ON, and the one this package still
+// owns after round two of the FkRecipes migration handed the WALK to the
+// library. What the library guarantees is that no name it emits is one the game
+// does not have; what nothing outside this file can guarantee is that a ladder
+// ends somewhere a game with belts in it always has, so that the guarantee is
+// not vacuously satisfied by an empty recipe. plandata_test.go asserts the
+// consequence against a fixture World; this asserts the shape.
 // ---------------------------------------------------------------------------
 
 func TestEveryLadderTerminates(t *testing.T) {
@@ -106,60 +40,10 @@ func TestEveryLadderTerminates(t *testing.T) {
 	}
 }
 
-func TestEveryLadderResolvesInTheWorstWorldThereIs(t *testing.T) {
-	// A game whose ONLY item is iron plate. Every option must still produce a
-	// recipe, and every ingredient in it must be iron plate.
-	p := only(FallbackName)
-	for _, opt := range RecipeOptions() {
-		ing, _ := ResolveRecipe(opt, p)
-		if len(ing) == 0 {
-			t.Errorf("%s resolved to nothing in a game that has iron plate", opt)
-		}
-		for _, in := range ing {
-			if in.Name != FallbackName {
-				t.Errorf("%s emitted %q where only %q exists", opt, in.Name, FallbackName)
-			}
-		}
-	}
-}
-
-func TestNothingAtAllIsAnEmptyRecipeRatherThanAnInventedOne(t *testing.T) {
-	// The degenerate pack: no iron plate either. A recipe with no ingredients
-	// is a strange machine and a load that COMPLETES, which is the trade.
-	for _, opt := range RecipeOptions() {
-		if ing, _ := ResolveRecipe(opt, only()); len(ing) != 0 {
-			t.Errorf("%s invented %v in a game with no items at all", opt, ing)
-		}
-	}
-}
-
-func TestTheIdentityPlanIsTheLastResort(t *testing.T) {
-	// `splitter-express` in a pack with belts and plates but no splitter of any
-	// tier falls all the way to its own last rung -- so it never reaches the
-	// vanilla fallback, and `fellBack` must say so.
-	p := only("iron-plate", "iron-gear-wheel", "transport-belt", "steel-plate")
-	ing, fellBack := ResolveRecipe(RecipeSplitterExpress, p)
-	if fellBack {
-		t.Errorf("splitter-express fell back to vanilla; its own ladder still resolves")
-	}
-	want := []Ingredient{{"transport-belt", 1}, {"steel-plate", 2}}
-	if !reflect.DeepEqual(ing, want) {
-		t.Errorf("splitter-express in a splitterless pack = %v, want %v", ing, want)
-	}
-
-	// And the case the fallback IS for: a pack with iron plate and nothing else
-	// resolves every option to iron plate, so nothing falls back either. The
-	// only way to reach the fallback is a plan that resolves to NOTHING while
-	// vanilla resolves to something -- which no plan here can do, because every
-	// ladder ends at the same rung. That is a property worth having and it means
-	// `fellBack` is a tripwire on a future plan rather than a live path today.
-	for _, opt := range RecipeOptions() {
-		if _, fb := ResolveRecipe(opt, only(FallbackName)); fb {
-			t.Errorf("%s fell back where its own ladder terminates", opt)
-		}
-	}
-}
-
+// ladderVocabulary is every name any ladder in this package can reach, which is
+// what stocks the fixture game in world_test.go. Built from the plans so that a
+// rung added there is a rung the fixture has, rather than a rung the fixture
+// silently answers absent for.
 func ladderVocabulary() []string {
 	seen := map[string]bool{}
 	var out []string
@@ -177,7 +61,7 @@ func ladderVocabulary() []string {
 }
 
 // ---------------------------------------------------------------------------
-// (c) THE VANILLA PLAN IS BYTE-EQUAL TO WHAT THIS MOD HAS ALWAYS EMITTED.
+// (b) THE VANILLA PLAN IS BYTE-EQUAL TO WHAT THIS MOD HAS ALWAYS EMITTED.
 //
 // THE TRIPWIRE THAT PROTECTS EVERY RECORDED NUMBER IN THE REPO. Every rate,
 // every heap slope and every dump golden in CLAUDE.md was measured on a save
@@ -190,15 +74,22 @@ func TestVanillaIsTodaysRecipe(t *testing.T) {
 	// A LITERAL COPY of the ingredient list that shipped in 0.3.0's
 	// guest/go/data/recipe.go, written out here so that the comparison is
 	// against a second statement of it rather than against the plan restated.
-	want := []Ingredient{
-		{Name: "iron-plate", Amount: 4},
-		{Name: "iron-gear-wheel", Amount: 2},
-		{Name: "transport-belt", Amount: 2},
+	want := []ingredientPair{
+		{"iron-plate", 4},
+		{"iron-gear-wheel", 2},
+		{"transport-belt", 2},
 	}
-	got, fellBack := ResolveRecipe(RecipeVanilla, everything)
-	if fellBack {
-		t.Fatal("the vanilla plan fell back to itself")
+
+	// THROUGH THE PLAN SINCE ROUND TWO, not through a resolver of this
+	// package's own: `ResolveRecipe` is deleted and what turns a plan into
+	// ingredients is the library. The literal above did not move, which is the
+	// point -- this test compares the SAME statement against a different
+	// machine.
+	protos, logs := extendsOf(t, dataOps(t, everythingWorld()))
+	for _, line := range logs {
+		t.Errorf("the default recipe degraded in a game that has everything: %s", line)
 	}
+	got := ingredientsOf(t, protoOf(t, protos, "recipe", PartName))
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("the DEFAULT recipe moved:\n got  %v\n want %v\n"+
 			"every recorded number in this repo was measured on the want", got, want)

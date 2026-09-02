@@ -18,9 +18,7 @@
 // prototype of theirs is read. That is the entire risk of making the cost
 // configurable: today's recipe names three prototypes base has always had, and
 // every option below names one it might not. So no name reaches `data:extend`
-// unless the caller's predicate has PROVEN it present in data.raw first, and
-// [Resolve] is written so that it cannot: the only strings it can return are
-// ones `present` answered true for.
+// unless something has PROVEN it present in data.raw first.
 //
 // The ladders all terminate at `iron-plate`, which is the cheapest thing any
 // game with belts in it has; and if even that is absent, an ingredient is
@@ -28,13 +26,27 @@
 // change in a game that has no iron at all. A recipe with an unproven one is a
 // mod that does not load.
 //
+// # THIS PACKAGE KEEPS THE LADDERS AND STOPPED WALKING THEM
+//
+// `Resolve` and `ResolveRecipe` walked them here until round two of the
+// FkRecipes migration and are DELETED: what walks them now is the library's
+// `IngredientNamed` ladder, reached through the `IngredientsBy` in [Plan], and
+// its presence probe is `fkdata.DerivedTypes("item")` where this package's
+// caller wrote the item types out by hand. The property is the same one and it
+// is proved one layer out, against a fixture World in plandata_test.go, so the
+// two statements that could have drifted apart are one statement again.
+//
+// What is left is the DATA: [RecipePlan]'s six plans, [TechLadder]'s three, the
+// option lists whose head is each default, [FallbackUnit], and the belt-speed
+// derivation, which is not a library concern at all.
+//
 // # Determinism
 //
-// Everything here is a function of the option string and the predicate. No map
-// is ranged over, nothing is sorted at run time, and the plans are slices in
-// source order -- so two clients running the same mod set emit byte-identical
-// ingredient lists, which is what keeps a prototype checksum from turning a
-// player away at the join.
+// Everything here is a function of the option string. No map is ranged over,
+// nothing is sorted at run time, and the plans are slices in source order -- so
+// two clients running the same mod set emit byte-identical ingredient lists,
+// which is what keeps a prototype checksum from turning a player away at the
+// join.
 package tune
 
 // The two startup settings this package is the fold behind.
@@ -92,13 +104,6 @@ func HandRolledSettings() []string {
 	return []string{SettingMultiEdgeParts}
 }
 
-// Ingredient is one resolved entry of a recipe: a name the predicate proved
-// present, and how many of it.
-type Ingredient struct {
-	Name   string
-	Amount float64
-}
-
 // Item is one entry of a PLAN: a ladder of candidate names, most preferred
 // first, and the amount to ask for.
 //
@@ -114,26 +119,3 @@ type Item struct {
 // FallbackName is the last rung of every ladder in this package, and
 // [TestEveryLadderTerminates] is what keeps it that way.
 const FallbackName = "iron-plate"
-
-// Resolve turns a plan into the ingredients to emit.
-//
-// Each item walks its own ladder and takes the FIRST name `present` answers
-// true for. An item whose whole ladder is absent is dropped. The result is
-// therefore a subset of the names the predicate approved and can never contain
-// anything else -- which is the one property this file exists to have, and
-// [TestResolveNeverEmitsAnUnprovenName] is where it is pinned.
-//
-// A nil `present` is treated as "nothing exists", so a caller that forgot to
-// pass one emits an empty recipe rather than an unchecked one.
-func Resolve(plan []Item, present func(string) bool) []Ingredient {
-	out := make([]Ingredient, 0, len(plan))
-	for _, it := range plan {
-		for _, name := range it.Ladder {
-			if present != nil && present(name) {
-				out = append(out, Ingredient{Name: name, Amount: it.Amount})
-				break
-			}
-		}
-	}
-	return out
-}

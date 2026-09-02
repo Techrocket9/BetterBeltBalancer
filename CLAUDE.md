@@ -254,11 +254,14 @@ guest/go/tune/           WHAT THE DATA STAGE DECIDES that is not fixed: the
                          `express-transport-belt` in it and no mod set this
                          machine can install has that shape, so inside
                          guest/go/data those arms would be branches nothing
-                         could execute. `Resolve` cannot return a name the
-                         caller's predicate rejected, which is the whole safety
-                         argument: an ingredient naming a prototype nobody
-                         defined is a HARD LOAD FAILURE with this mod's name on
-                         it, in somebody's overhaul pack.
+                         could execute. SINCE ROUND TWO IT KEEPS THE LADDERS AND
+                         STOPPED WALKING THEM: `Resolve` and `ResolveRecipe` are
+                         deleted and FkRecipes' own `IngredientNamed` ladder does
+                         it, with the same safety argument one layer out -- an
+                         ingredient naming a prototype nobody defined is a HARD
+                         LOAD FAILURE with this mod's name on it, in somebody's
+                         overhaul pack, so no name reaches data:extend that the
+                         game was not asked about first.
                          plan.go is THE FkRecipes PLAN, and since
                          2026-09-01 it is where this mod's two startup dropdowns
                          are declared: two `LegacyDropdownSettingNeedingLocale`
@@ -586,11 +589,11 @@ Both packages built from clean on 2026-08-25, shipped config (`--persist=packed 
 
 **AN INGREDIENT NAMING A PROTOTYPE NOBODY DEFINED IS A HARD LOAD FAILURE WITH THIS MOD'S NAME ON IT**, in somebody else's overhaul pack, before a prototype of theirs is read. That is the entire risk of the feature and it is measured rather than feared: with the guard removed and a plan pointing at a Space-Age-only belt, a base-only `--dump-data` dies on `Error in assignID: item with name 'turbo-transport-belt' does not exist.`
 
-So every ingredient is a LADDER of candidate names and the first one the game actually has is what is emitted. **`tune.Resolve` walked those ladders until round two and `fkrecipes.IngredientNamed` walks them now**, through one `IngredientChoice` per allowed value; the properties are the same and where they are proved has moved:
+So every ingredient is a LADDER of candidate names and the first one the game actually has is what is emitted. **`tune.Resolve` walked those ladders until round two, when it was deleted, and `fkrecipes.IngredientNamed` walks them now**, through one `IngredientChoice` per allowed value; the properties are the same and where they are proved has moved:
 
 - **No name reaches a prototype unless the game has it.** That is the library's guarantee now, asserted against a fixture World: every option in a game whose only item is `iron-plate` comes out as iron plate, and every option in a game with no ingredients at all comes out with NONE.
-- **Every ladder terminates, and at the same rung**: `iron-plate`, the cheapest thing any game with belts in it has. A game with no iron plate at all gets a recipe with NO ingredients, which is a strange machine and a load that COMPLETES. That is the trade, stated: never break the load, always say so in the log.
-- **The vanilla plan is byte-equal to a literal copy of 0.3.0's ingredient list**, written out a second time in the test rather than restated from the plan.
+- **Every ladder terminates, and at the same rung**: `iron-plate`, the cheapest thing any game with belts in it has. **This is the half `guest/go/tune` still owns and it is not redundant with the one above**: the library guarantees it emits no name the game lacks, which an empty recipe satisfies vacuously, and a ladder that ends somewhere every game with belts has is what stops that being the answer. A game with no iron plate at all gets a recipe with NO ingredients, which is a strange machine and a load that COMPLETES. That is the trade, stated: never break the load, always say so in the log.
+- **The vanilla plan is byte-equal to a literal copy of 0.3.0's ingredient list**, written out a second time in the test rather than restated from the plan -- and DRIVEN THROUGH THE PLAN since round two, so the same literal is compared against a different machine.
 
 **The predicate WAS `itemExists` here and is `fkrecipes`' `ItemExists` now**, and it probes the prototype's `name` LEAF rather than the prototype for the reason this repository measured first: `Get("item", "iron-plate")` marshals a whole prototype across the wasm boundary to answer yes or no; `name` is mandatory on everything in data.raw, so its presence and the prototype's are the same fact and the read is one string. The library reads the item family from `fkdata.DerivedTypes("item")` where this mod wrote the twenty-one types out, which is a strictly better answer to the same question: a modpack is entitled to make an ingredient a `capsule` or a `module`, and a derived list cannot be missing one.
 
@@ -643,6 +646,8 @@ Both packages from clean, 2026-08-25, shipped config (`--persist=packed --gc=col
 | **the existence guard deleted** from `tune.Resolve` (with a plan pointing at a Space-Age-only belt, so a base-only game lacks it) | the unit test names every unproven ingredient in every option, and the `recipe-belt-express` gate arm dies on the ENGINE's own `Error in assignID: item with name 'turbo-transport-belt' does not exist.` -- `--dump-data exited 1`. **With the guard IN PLACE and the same plan the arm is green**, stepping past the missing rung to `express-transport-belt`: that control is what makes this a proof of the guard rather than of the plan |
 | **the floor dropped** from 0.25 to 0.125 in `tune.SpeedFloor` | three unit-test failures, and **BOTH golden `data_raw_sha256` arms move** -- the four hidden prototypes come out at 0.125, half the speed the whole estate was measured on. The SPEED arm stays green, correctly: 0.5 beats either floor. That division is the point -- the goldens are the no-change proof and the speed arm is the change proof |
 | **the vanilla default drifted** (iron-plate 4 -> 3) | `TestVanillaIsTodaysRecipe` names both lists, BOTH golden `data_raw_sha256` arms move, and the `recipe-vanilla` gate arm prints the drifted list against the expected one. Three independent detectors for the one change that would invalidate every recorded number in this repository |
+
+**The first row's `tune.Resolve` is deleted since round two of the FkRecipes migration** and the guard it names is the library's, so that proof is a record of what was measured in 0.3.1 rather than one that can be repeated as written. The other two are unchanged and both were re-run in round two: the default drifting still fires three detectors, and the speed floor is not a library concern at all.
 
 ### The settings are declared through FkRecipes since 2026-09-01, and the prototypes followed in round two
 

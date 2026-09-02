@@ -11,12 +11,17 @@ package tune
 // would be guarded.
 //
 // VANILLA IS THE DEFAULT AND IT IS BYTE-IDENTICAL TO WHAT THIS MOD HAS ALWAYS
-// EMITTED. That is not a hope: [TestVanillaIsTodaysRecipe] compares it against
-// a literal copy of the ingredient list that shipped, and the data-stage dump
-// golden compares the whole prototype table against a hash captured before this
-// setting existed. Every recorded number in CLAUDE.md was measured on a save
-// built from the vanilla plan, so the default moving is the one change here
-// that would invalidate the estate.
+// EMITTED. That is not a hope: [TestVanillaIsTodaysRecipe] drives the plan and
+// compares what it emits against a literal copy of the ingredient list that
+// shipped, and the data-stage dump golden compares the whole prototype table
+// against a hash captured before this setting existed. Every recorded number in
+// CLAUDE.md was measured on a save built from the vanilla plan, so the default
+// moving is the one change here that would invalidate the estate.
+//
+// WHAT THIS FILE IS SINCE ROUND TWO OF THE FkRecipes MIGRATION: the PLANS and
+// nothing else. `ResolveRecipe` walked them against a caller's predicate and is
+// deleted; the library walks them now, as one `IngredientChoice` per option
+// built by [Plan]. See the package doc.
 
 // The allowed values of `bbb-recipe-cost`, in menu order.
 //
@@ -110,32 +115,4 @@ func RecipePlan(option string) []Item {
 		{Ladder: []string{"iron-gear-wheel", FallbackName}, Amount: 2},
 		{Ladder: []string{"transport-belt", FallbackName}, Amount: 2},
 	}
-}
-
-// ResolveRecipe is the whole decision: the chosen plan, resolved against the
-// game, falling back to VANILLA when nothing in the chosen plan survived.
-//
-// "Nothing survived" is the identity case -- an option asked for a machine this
-// pack does not have at all -- and vanilla is the last resort because it is the
-// plan whose every rung is a thing a game with belts in it has. It is resolved
-// through the same predicate, so the last resort cannot emit an unproven name
-// either.
-//
-// The second result says whether the fallback was taken, so the caller can put
-// a line in the log naming the option that could not be honoured. A player who
-// picked `splitter-express` in a pack with no splitters should be able to find
-// out why their recipe is plates and gears.
-func ResolveRecipe(option string, present func(string) bool) (ing []Ingredient, fellBack bool) {
-	ing = Resolve(RecipePlan(option), present)
-	if len(ing) > 0 {
-		return ing, false
-	}
-	if option == RecipeVanilla {
-		// Vanilla resolving to nothing is a game with no iron plate in it. The
-		// recipe comes out with no ingredients, which is a strange machine to
-		// craft and a load that completes; the alternative is naming a
-		// prototype nobody defined, which is not.
-		return ing, false
-	}
-	return Resolve(RecipePlan(RecipeVanilla), present), true
 }
