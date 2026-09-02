@@ -9,31 +9,72 @@ import (
 // engine-gated rule.
 //
 // ---------------------------------------------------------------------------
-// THE TWO COST SETTINGS ARE STARTUP AND THAT IS FORCED, exactly the other way
-// round from the rule setting below.
+// THE TWO COST SETTINGS ARE DECLARED THROUGH FkRecipes SINCE 2026-09-01, and
+// this stage's whole part in them is the `Emit` call below.
 //
-// A recipe and a technology are PROTOTYPES. They are built once, at the data
-// stage, before a map exists -- so what they cost has to be readable there, and
-// `fkdata.StartupSetting` is the only kind that is. A runtime setting would be
-// a dropdown that changes nothing until the game is restarted, which is worse
-// than a restart prompt.
+// FkRecipes is the shared data-stage library. The declarations are
+// `guest/go/tune`'s [tune.Plan] -- two `LegacyDropdownSettingNeedingLocale`
+// calls, which is the constructor that carries a shipped mod's own names and
+// order strings across verbatim, because Factorio keys mod-settings.dat by NAME
+// and has no rename mechanism. The acceptance criterion was
+// `test/check-datastage.py`'s `mod_settings_sha256` not moving on either mod
+// set, and it did not: what this stage emits is byte-identical to what it
+// emitted when the two prototypes were built by hand here.
 //
-// The consequence a player meets: changing either one restarts Factorio, and
-// changing it on an EXISTING save re-costs the recipe under them. That is
-// vanilla's own behaviour for every startup setting in the game and it is what
-// the "(startup)" tab in the menu means.
+// EMIT RUNS AT fk_settings ALONE. It dispatches on the stage, so a second route
+// from a data-family hook would plan the library's other half; this plan
+// declares nothing there, so that would be work for no result on every load.
+// data.go and data-final-fixes.go do not mention the library at all.
+//
+// STILL STARTUP, AND STILL FORCED. A recipe and a technology are PROTOTYPES,
+// built once at the data stage before a map exists, so what they cost has to be
+// readable there and `fkdata.StartupSetting` is the only kind that is. FkRecipes
+// emits `setting_type = "startup"` for every setting it declares for exactly
+// that reason, so the constraint is now the library's rather than this file's.
+// The consequence a player meets is unchanged: changing either one restarts
+// Factorio, and changing it on an EXISTING save re-costs the recipe under them,
+// which is vanilla's behaviour for every startup setting in the game.
 //
 // DEFINED ON BOTH ENGINES, unlike `bbb-multi-edge-parts`. What a balancer part
 // costs means the same thing on 2.0 and on 2.1, so there is no version branch
-// here and the `release/2.0` recut carries these two identically.
+// over them and the `release/2.0` recut carries these two identically.
 //
-// THE ALLOWED VALUES AND THE DEFAULT COME OUT OF ONE PLACE. Factorio validates
-// that `default_value` is a member of `allowed_values` and refuses the mod at
-// load when it is not, so the two must not be two lists; guest/go/tune is the
-// one list, its head is the default, and `go test ./tune/` also checks every
-// value against the locale file -- which is the half no dump and no suite can
-// see, because a value with no `[string-mod-setting]` entry renders as
-// `Unknown key: ...` in the menu and loads perfectly.
+// THE ALLOWED VALUES AND THE DEFAULT STILL COME OUT OF ONE PLACE. Factorio
+// refuses a mod whose `default_value` is not a member of `allowed_values`, by
+// name, at load; guest/go/tune is the one list and its head is the default, and
+// the library takes both from that one call. `go test ./tune/` checks the
+// emitted plan field by field on the host, and checks every value against the
+// LOCALE FILE through the library's own `CheckLocaleWith` -- which is the half
+// no dump and no suite can see, because a value with no `[string-mod-setting]`
+// entry renders as `Unknown key: ...` in the menu and loads perfectly.
+//
+// WHAT A PLANNING REFUSAL WOULD DO HERE, because `Emit` routes every one of them
+// through `fkdata.Raise` and a raise at the settings stage is a mod that does not
+// load. Against this mod's constants exactly ONE is reachable, and it is not
+// about this mod's settings at all: `fkrecipes: the mod name is empty, so
+// nothing can be prefixed; package with an fklua that wires ModName`, which
+// fires when `fkdata.ModName()` returns empty because the stage file was written
+// by an fklua older than that argument. Both settings here are LEGACY and need
+// no prefix, so this mod would fail to load over a name it does not use. It is a
+// BUILD-TIME property rather than a runtime one -- the toolchain is pinned by
+// `fklua.lock` and the dump gate would fail loudly on the next run -- so nothing
+// guards it in code and this paragraph is the record. Every other refusal the
+// library can produce is unreachable by construction: an empty setting name, an
+// empty legacy order, a duplicate emitted name and a default outside its allowed
+// values are all compile-time constants of guest/go/tune (the default IS the head
+// of the option list), the numeric refusals need a numeric setting and this plan
+// declares none, and a nil World or a zero `Lib` id cannot happen because the
+// emit layer builds the first and `tune.Plan` builds the second with `New`.
+//
+// THE PROTOTYPE HALF DID NOT MOVE AND THAT WAS MEASURED RATHER THAN ASSUMED.
+// The item, the recipe and the technology are still built by hand in item.go,
+// recipe.go and technology.go, and guest/go/tune is still the resolver behind
+// them. Every name FkRecipes emits for a prototype carries the mod prefix and
+// there is no Legacy constructor for one, so `bbb-balancer-part` would become
+// `better-belt-balancer-bbb-balancer-part` and entity.go's `minable.result`
+// would name an item that no longer exists -- a hard load failure, seen. Its
+// specs also carry no `order` and no `place_result`. tune/plan.go's header is
+// the long form and agents/fkrecipes-migration.md is the run.
 // ---------------------------------------------------------------------------
 //
 // The engine-gated one:
@@ -105,10 +146,10 @@ import (
 //
 //go:noinline
 func settings() {
-	fkdata.Extend(
-		stringSetting(tune.SettingRecipeCost, tune.RecipeOptions(), "a"),
-		stringSetting(tune.SettingTechCost, tune.TechOptions(), "b"),
-	)
+	// The two cost dropdowns, planned and emitted by FkRecipes. See the header:
+	// this is the only stage routed into Emit, and the plan it runs declares
+	// these two settings and nothing else.
+	tune.Plan().Emit()
 
 	if !canStack() {
 		return
@@ -116,7 +157,7 @@ func settings() {
 
 	fkdata.Extend(obj(
 		f("type", str("bool-setting")),
-		f("name", str("bbb-multi-edge-parts")),
+		f("name", str(tune.SettingMultiEdgeParts)),
 		// Map, not global-per-user: what it controls is the geometry of machines
 		// standing in the save, so it has to be one answer for everybody in a
 		// multiplayer game and it has to travel with the save.
@@ -129,26 +170,4 @@ func settings() {
 		f("default_value", no),
 		f("order", str("a")),
 	))
-}
-
-// stringSetting is one startup dropdown: the allowed values, and the FIRST of
-// them as the default.
-//
-// The default being the head of the list rather than a second argument is what
-// makes "the default is a value the engine will accept" true by construction.
-// Factorio refuses a mod whose `default_value` is not in `allowed_values`, by
-// name, at load -- so the two coming from one slice removes the only way to get
-// that wrong.
-//
-//go:noinline
-func stringSetting(name string, values []string, order string) fkdata.V {
-	return obj(
-		f("type", str("string-setting")),
-		// STARTUP, because what it decides is a prototype. See the header.
-		f("setting_type", str("startup")),
-		f("name", str(name)),
-		f("default_value", str(values[0])),
-		f("allowed_values", strs(values...)),
-		f("order", str(order)),
-	)
 }

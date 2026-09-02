@@ -48,6 +48,8 @@ The collision mask is unchanged: a belt still cannot be laid *through* a balance
 
 Two startup settings decide what a balancer part costs. Both are under Settings > Mod settings > Startup, and both default to what the mod has always shipped, so an existing save is unchanged by the update. Startup settings need a restart of Factorio to take effect.
 
+They are declared through [FkRecipes](https://github.com/Techrocket9/FkRecipes), the shared data-stage library, under the same names, defaults and menu order earlier versions shipped, so a choice you have already made carries over.
+
 **Balancer part recipe** picks the ingredient list:
 
 | Option | Ingredients |
@@ -104,7 +106,7 @@ Nothing happens while the old mod is still installed. Both can sit in a mod list
 
 ## Building
 
-Prerequisites: Go, TinyGo 0.41.1, binaryen (`wasm-opt`, which TinyGo's wasm build shells out to), Python 3 (the sprite check, the test assertion scripts and the art generator), and a checkout of [FkLua](https://github.com/Techrocket9/FkLua) at `../FkLua` with `bin/fklua` built (`FKLUA=/path/to/fklua` overrides). The headless tests and the benchmarks also need a Factorio 2.1 install; set `FACTORIO_BIN` if it is not at the default Steam location on macOS.
+Prerequisites: Go, TinyGo 0.41.1, binaryen (`wasm-opt`, which TinyGo's wasm build shells out to), Python 3 (the sprite check, the test assertion scripts and the art generator), a checkout of [FkLua](https://github.com/Techrocket9/FkLua) at `../FkLua` with `bin/fklua` built (`FKLUA=/path/to/fklua` overrides), and a checkout of [FkRecipes](https://github.com/Techrocket9/FkRecipes) at `../FkRecipes`, the shared data-stage library the mod's startup settings are declared through. FkRecipes is not published yet, so the guest module consumes it through a `replace` pointing at that sibling checkout. The headless tests and the benchmarks also need a Factorio 2.1 install; set `FACTORIO_BIN` if it is not at the default Steam location on macOS.
 
 ```sh
 make zip      # dist/better-belt-balancer_<version>.zip, a complete mod
@@ -124,7 +126,7 @@ make test     # headless verification in a real Factorio
 
 | path | contents |
 | --- | --- |
-| `guest/go/` | the control guest; `data/` is the settings and data stages, `plan/` the network planner, `tune/` what the cost settings and the belt-speed derivation decide, `fkapi/` the generated FkLua bindings |
+| `guest/go/` | the control guest; `data/` is the settings and data stages, `plan/` the network planner, `tune/` what the cost settings and the belt-speed derivation decide plus the FkRecipes settings plan, `fkapi/` the generated FkLua bindings |
 | `mod-data/` | the assets the package carries verbatim: graphics, locale, changelog, thumbnail |
 | [`bench/`](bench/README.md) | the head-to-head benchmark harness, its setup mod and the results |
 | `test/` | the headless suites and their assertion scripts; `fixtures/` holds a small mod, also written in Go, that a data-stage check builds and stages; [`test/interactive/`](test/interactive/README.md) is the checklist for the seven things a headless run cannot check, and the mod that stages both its rigs and the demo scenes |

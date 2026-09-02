@@ -128,9 +128,11 @@ const (
 )
 
 // BenchScenarios is every value BenchScenario may take, and the FIRST of them is
-// the default -- which is `stringSetting`'s rule in the shipped guest's own
-// settings stage, and it is what makes "the default is a value the engine will
-// accept" true by construction rather than by a second list.
+// the default -- which is the rule the shipped guest's own settings stage keeps
+// in guest/go/tune, where `RecipeDefault` and `TechDefault` are the heads of
+// their option lists rather than constants beside them. It is what makes "the
+// default is a value the engine will accept" true by construction rather than
+// by a second list.
 //
 // The four `mega` scenarios build a HETEROGENEOUS population where the four
 // above them build `n` copies of one shape; `bench/README.md` is the table.

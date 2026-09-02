@@ -800,11 +800,16 @@ check:
 	@# SET. A rung falls through only in a game with no `express-transport-belt`
 	@# in it, and no mod set this repository can install has that shape -- so
 	@# inside guest/go/data those arms would be branches nothing could execute.
-	@# It also carries the one check nothing else in this repo could make: every
-	@# allowed value of both cost settings has its own [string-mod-setting]
-	@# locale entry, in BOTH directions. --dump-data does not read locale and no
-	@# suite opens a menu, so a missing entry loads perfectly and renders as
-	@# `Unknown key: ...` in front of the player.
+	@# It also carries the two checks nothing else in this repo could make. The
+	@# first is the LOCALE FILE, which --dump-data does not read and no suite
+	@# opens a menu over, so a missing entry loads perfectly and renders as
+	@# `Unknown key: ...` in front of the player: that is FkRecipes'
+	@# `CheckLocaleWith` run against this mod's own settings plan, in both
+	@# directions, plus three assertions of this mod's own the library
+	@# deliberately does not make. The second is the settings PLAN itself --
+	@# every field of both dropdown prototypes, compared against transcribed
+	@# literals on the host, which is the same six fields per setting that
+	@# `make datastage-check` hashes and a comparison that says WHICH one moved.
 	@#
 	@# ./engine is the fifth and it is there for the SAME reason, one stage
 	@# earlier: it is the data stage's version branch -- can this Factorio put two
@@ -819,7 +824,16 @@ check:
 	@# Both guests have to COMPILE, and the data guest is the one a `go test`
 	@# cannot reach. `go vet` over ./data type-checks it under the wasm build
 	@# tags without asking TinyGo for a wasm module.
-	cd guest/go && GOOS=wasip1 GOARCH=wasm go vet ./data/
+	@#
+	@# -tags tinygo.wasm is REQUIRED and is not a preference. FkRecipes' emit
+	@# layer -- the half that touches fkdata, and therefore `Emit` itself -- sits
+	@# behind `//go:build tinygo.wasm`, which is a tag TinyGo's wasm-unknown
+	@# target sets and the standard toolchain does not. Without it this vet
+	@# cannot see the method the settings stage calls and fails on an undefined
+	@# `Emit`; fkdata itself vets under the tag as well, so the flag costs
+	@# nothing else. It is on THIS line alone: no observer and no fixture
+	@# imports the library.
+	cd guest/go && GOOS=wasip1 GOARCH=wasm go vet -tags tinygo.wasm ./data/
 	@# The TEST OBSERVERS, for the same reason: they are `main` packages full of
 	@# //go:wasmexport that no `go test` can reach, and the harness under them is
 	@# what fourteen suites will share. gofmt below already covers them, because

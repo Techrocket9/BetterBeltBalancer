@@ -41,8 +41,13 @@ func strs(s ...string) fkdata.V { return obsdata.Strs(s...) }
 // choice is one dropdown: the allowed values, and the FIRST of them as the
 // default. Factorio refuses a mod whose `default_value` is not in
 // `allowed_values`, by name, at load -- so the two coming from one slice removes
-// the only way to get that wrong. It is the shipped guest's `stringSetting` with
-// nothing added.
+// the only way to get that wrong.
+//
+// It is the same rule the shipped guest keeps, reached a different way: there
+// the head of the list is `tune.RecipeDefault()`, handed to FkRecipes'
+// `LegacyDropdownSettingNeedingLocale`, and the library builds the prototype.
+// An observer declares no library dependency and builds its own, so this stays
+// a local helper rather than becoming a call into one.
 //
 //go:noinline
 func choice(name string, values []string, order string) fkdata.V {

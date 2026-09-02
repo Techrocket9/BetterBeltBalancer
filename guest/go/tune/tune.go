@@ -42,9 +42,11 @@ package tune
 // NAMED HERE RATHER THAN IN THE DATA GUEST because three things have to agree
 // about them and only one of the three can be compiled: the prototype the
 // settings stage emits, the read at the data stage, and the LOCALE FILE, which
-// is hand-edited text. [TestEveryOptionHasItsLocaleEntry] is what ties the
-// third to the first two, and it can only do that from a package a host
-// toolchain can build.
+// is hand-edited text. Since the settings moved onto FkRecipes the first of the
+// three is [Plan], in this same package, so the names, the defaults, the
+// allowed values and the locale check are all reachable by one `go test`; the
+// check itself is the library's own `CheckLocaleWith`, run from
+// [TestTheLocaleFileSatisfiesThePlan].
 //
 // Both are defined on BOTH ENGINES, unlike `bbb-multi-edge-parts`, which exists
 // on 2.0 alone because there is nothing for it to say on 2.1. A recipe cost
@@ -53,6 +55,42 @@ const (
 	SettingRecipeCost = "bbb-recipe-cost"
 	SettingTechCost   = "bbb-tech-cost"
 )
+
+// SettingMultiEdgeParts is the 2.0-only runtime-global bool, which this package
+// does NOT decide anything about and names for one reason: it is a setting this
+// mod declares OUTSIDE FkRecipes, and the library's locale checker has to be
+// told so.
+//
+// `CheckLocaleWith` polices `[mod-setting-name]` and `[mod-setting-description]`
+// against the complete set of the mod's setting names rather than against the
+// mod prefix, which is the stronger reading and the one that catches a renamed
+// setting's leftover entry. It can only be complete if it is handed what the
+// mod declares elsewhere, and this is the whole of that list. Its own
+// definition is guest/go/data/settings.go, behind the `bbb-can-stack` gate.
+const SettingMultiEdgeParts = "bbb-multi-edge-parts"
+
+// ModName is the name fklua.toml packages this mod under, and it is the prefix
+// FkRecipes derives every generated name from.
+//
+// WRITTEN DOWN HERE BECAUSE A HOST TEST HAS NO fkdata TO ASK. At the stage the
+// library reads it off the World, which reads it off fklua; a `go test` has
+// neither, so the locale check has to be handed one. A wrong value would be a
+// wrong prefix for every key at once, which is loud rather than subtle, and
+// [TestModNameIsTheManifestName] compares it against fklua.toml.
+const ModName = "better-belt-balancer"
+
+// HandRolledSettings is every setting this mod declares outside FkRecipes, for
+// `CheckLocaleWith`.
+//
+// THE LIST SUPPRESSES ORPHANS AND CREATES NO OBLIGATIONS, which is the
+// library's rule and the reason the locale test still makes three assertions of
+// its own: being told a name exists tells the checker nothing about whether it
+// is a dropdown, a bool or a runtime-global, so it never demands an entry for
+// one. What it stops is `bbb-multi-edge-parts`' own `[mod-setting-name]` line
+// being reported as an entry matching no declared setting.
+func HandRolledSettings() []string {
+	return []string{SettingMultiEdgeParts}
+}
 
 // Ingredient is one resolved entry of a recipe: a name the predicate proved
 // present, and how many of it.

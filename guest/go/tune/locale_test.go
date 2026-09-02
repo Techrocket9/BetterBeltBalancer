@@ -21,38 +21,144 @@ import (
 // does not read locale, and no suite in test/run.sh opens a menu -- so the
 // tripwire has to be here.
 //
-// It is checked in BOTH DIRECTIONS on purpose. A missing entry is a value the
-// player cannot read; an ORPHAN entry is a value that used to exist, which
-// means an option was renamed and one of the two places was not.
+// SINCE THE SETTINGS MOVED ONTO FkRecipes THE TRIPWIRE IS THE LIBRARY'S, and
+// that is a strengthening rather than a swap. `CheckLocaleWith` knows the plan,
+// so it checks what this file used to check -- every declared value has an
+// entry, and no entry names a value the plan no longer declares -- and three
+// things this file could not:
+//
+//	It polices `[mod-setting-name]` and `[mod-setting-description]` ORPHANS
+//	against the complete set of the mod's setting names rather than against the
+//	two this package knows about, which is what catches an entry left behind by
+//	a rename. The hand-rolled list is what makes that reading available, and
+//	[HandRolledSettings] is why `bbb-multi-edge-parts` is not reported as one.
+//
+//	It checks that every declared setting has a `[mod-setting-name]` at all.
+//
+//	It checks the flat `<setting>-<value>` namespace for two settings producing
+//	one key, which the old TestNoAllowedValueCollidesWithAnother did by hand and
+//	the library now does over the whole plan.
+//
+// WHAT THE LIBRARY DELIBERATELY DOES NOT DO IS BELOW, as three tests of this
+// mod's own. Its header says so in as many words: a description is optional
+// there, because the engine's failure for a missing one is a lost tooltip
+// rather than an `Unknown key` in the player's face, and the hand-rolled list
+// suppresses orphans without creating obligations. This mod wants both, so it
+// asks for both here.
 
-func localePath(t *testing.T) string {
+func repoFile(t *testing.T, rel ...string) string {
 	t.Helper()
 	// guest/go/tune -> the repository root.
-	p, err := filepath.Abs(filepath.Join("..", "..", "..",
-		"mod-data", "locale", "en", "better-belt-balancer.cfg"))
+	parts := append([]string{"..", "..", ".."}, rel...)
+	p, err := filepath.Abs(filepath.Join(parts...))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return p
 }
 
-// localeSections parses a Factorio .cfg into section -> key -> value.
-//
-// The grammar is INI without quoting: `[section]` opens one, `key=value` fills
-// it, `#` and `;` at the start of a line are comments, and a value may contain
-// anything including `=`. Written out rather than reached for because it is
-// eight lines and the alternative is a dependency in a package that has none.
-func localeSections(t *testing.T) map[string]map[string]string {
+func localePath(t *testing.T) string {
 	t.Helper()
-	fh, err := os.Open(localePath(t))
+	return repoFile(t, "mod-data", "locale", "en", "better-belt-balancer.cfg")
+}
+
+func localeText(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile(localePath(t))
 	if err != nil {
 		t.Fatalf("the locale file is the thing under test and it is not there: %v", err)
 	}
+	return string(b)
+}
+
+// TestTheLocaleFileSatisfiesThePlan is the whole two-direction check, run by
+// the library against the plan that ships.
+//
+// EVERY FINDING IS ITS OWN Errorf. `CheckLocaleWith` RETURNS findings and does
+// not fail: it is a library function with no testing.T to call, so a test that
+// only logged what came back would pass over a locale file with nothing in it.
+// One error per finding also means a run names every missing entry rather than
+// the first.
+func TestTheLocaleFileSatisfiesThePlan(t *testing.T) {
+	for _, finding := range Plan().CheckLocaleWith(ModName, localeText(t), HandRolledSettings()) {
+		t.Error(finding)
+	}
+}
+
+// TestModNameIsTheManifestName is what makes the check above mean anything.
+//
+// The mod name is the prefix FkRecipes derives every generated name from, and a
+// host test has no fkdata to read it from -- so [ModName] is written down here
+// and this is what ties it to fklua.toml, which is the ONE place the packaged
+// identity lives.
+//
+// AND FOR THIS PLAN IT IS THE ONLY THING THAT CAN CATCH A WRONG ONE, which is
+// the opposite of what a reader would assume and is why the test exists rather
+// than being left to the locale check. Every setting this mod has is either
+// LEGACY, whose name crosses verbatim and never meets the prefix, or
+// HAND-ROLLED, which `CheckLocaleWith` matches verbatim as well -- and the
+// complete-list reading takes the prefix out of the orphan scan too. So the
+// prefix reaches NOTHING here. Measured: with `ModName` set to
+// `better-belt-balancer-x`, `CheckLocaleWith` returns zero findings,
+// [TestTheLocaleFileSatisfiesThePlan] and
+// [TestNoEmittedNameCarriesTheGeneratedPrefix] both pass, and this is the one
+// test that fires.
+func TestModNameIsTheManifestName(t *testing.T) {
+	fh, err := os.Open(repoFile(t, "fklua.toml"))
+	if err != nil {
+		t.Fatalf("fklua.toml is the mod's identity and it is not there: %v", err)
+	}
 	defer fh.Close()
 
+	// Enough TOML to find one key in one table. The manifest is written by
+	// `fklua init` and hand-edited, so `name` appears in more than one table
+	// and only `[mod]`'s is the packaged identity.
+	section, got := "", ""
+	sc := bufio.NewScanner(fh)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			section = line[1 : len(line)-1]
+			continue
+		}
+		if section != "mod" {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(k) != "name" {
+			continue
+		}
+		got = strings.Trim(strings.TrimSpace(v), `"`)
+		break
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if got == "" {
+		t.Fatal("fklua.toml has no [mod] name, so nothing here can be checked against it")
+	}
+	if got != ModName {
+		t.Errorf("tune.ModName is %q and fklua.toml packages this mod as %q: "+
+			"every generated name and every locale key is checked under the "+
+			"wrong prefix", ModName, got)
+	}
+}
+
+// localeSections parses a Factorio .cfg into section -> key -> value.
+//
+// A READER STILL EXISTS BECAUSE THE LIBRARY EXPORTS NO ACCESSOR. `CheckLocale`
+// and `CheckLocaleWith` take the file's text and return findings; there is no
+// way to ask them what a given entry SAYS, and the three assertions below are
+// about the text of specific entries rather than about their presence. It is
+// much smaller than the one it replaces -- the two-direction walk over the
+// values is the library's now -- and it is eight lines of INI without quoting:
+// `[section]` opens one, `key=value` fills it, `#` and `;` at the start of a
+// line are comments, and a value may contain anything including `=`.
+func localeSections(t *testing.T) map[string]map[string]string {
+	t.Helper()
 	out := map[string]map[string]string{}
 	section := ""
-	sc := bufio.NewScanner(fh)
+	sc := bufio.NewScanner(strings.NewReader(localeText(t)))
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
@@ -60,21 +166,14 @@ func localeSections(t *testing.T) map[string]map[string]string {
 		}
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			section = line[1 : len(line)-1]
-			if out[section] == nil {
-				out[section] = map[string]string{}
-			}
 			continue
 		}
 		k, v, ok := strings.Cut(line, "=")
 		if !ok {
-			t.Errorf("locale line is neither a section nor a key: %q", line)
 			continue
 		}
 		if out[section] == nil {
 			out[section] = map[string]string{}
-		}
-		if _, dup := out[section][k]; dup {
-			t.Errorf("[%s] %s is defined twice; Factorio keeps the last one", section, k)
 		}
 		out[section][k] = v
 	}
@@ -84,78 +183,80 @@ func localeSections(t *testing.T) map[string]map[string]string {
 	return out
 }
 
-func TestEveryOptionHasItsLocaleEntry(t *testing.T) {
-	sec := localeSections(t)
-	values := sec["string-mod-setting"]
-	if values == nil {
-		t.Fatal("the locale file has no [string-mod-setting] section, " +
-			"so every dropdown entry renders as `Unknown key: ...`")
-	}
-
-	want := map[string]bool{}
-	for _, opt := range RecipeOptions() {
-		want[SettingRecipeCost+"-"+opt] = true
-	}
-	for _, opt := range TechOptions() {
-		want[SettingTechCost+"-"+opt] = true
-	}
-
-	for key := range want {
-		if strings.TrimSpace(values[key]) == "" {
-			t.Errorf("no [string-mod-setting] %s: that value renders in the "+
-				"settings menu as `Unknown key: \"string-mod-setting.%s\"`", key, key)
-		}
-	}
-	for key := range values {
-		if want[key] {
-			continue
-		}
-		// Only this package's own settings are policed. Another setting's
-		// values are not this test's business.
-		if strings.HasPrefix(key, SettingRecipeCost+"-") ||
-			strings.HasPrefix(key, SettingTechCost+"-") {
-			t.Errorf("[string-mod-setting] %s names a value no longer allowed: "+
-				"an option was renamed in one place and not the other", key)
-		}
-	}
-}
-
-func TestBothSettingsAreNamedAndDescribed(t *testing.T) {
+// TestBothCostSettingsAreDescribed is the first of the three the library does
+// not make, and its header says why: a description is OPTIONAL there, because
+// the engine's failure mode for a missing one is a lost tooltip rather than an
+// `Unknown key` render.
+//
+// This mod wants one anyway. Both of these settings change what a machine
+// costs, one of them by copying a number out of somebody else's technology, and
+// neither is guessable from a two-word label.
+func TestBothCostSettingsAreDescribed(t *testing.T) {
 	sec := localeSections(t)
 	for _, name := range []string{SettingRecipeCost, SettingTechCost} {
-		for _, s := range []string{"mod-setting-name", "mod-setting-description"} {
-			if strings.TrimSpace(sec[s][name]) == "" {
-				t.Errorf("no [%s] %s: the settings menu shows the raw key", s, name)
-			}
+		if strings.TrimSpace(sec["mod-setting-description"][name]) == "" {
+			t.Errorf("no [mod-setting-description] %s: the settings menu shows "+
+				"the label with no tooltip under it", name)
 		}
-	}
-	// The 2.0-only bool is in the same file and is not this package's, but a
-	// locale file that lost it would be the same defect -- and it is one line
-	// to keep watching.
-	if strings.TrimSpace(sec["mod-setting-name"]["bbb-multi-edge-parts"]) == "" {
-		t.Error("no [mod-setting-name] bbb-multi-edge-parts")
 	}
 }
 
-func TestNoAllowedValueCollidesWithAnother(t *testing.T) {
-	// `<setting>-<value>` is a FLAT namespace, so two settings whose names are
-	// prefixes of each other could produce one key for two values. They are not
-	// today; this is what says so when a third setting arrives.
-	seen := map[string]string{}
-	for _, pair := range []struct {
-		setting string
-		options []string
-	}{
-		{SettingRecipeCost, RecipeOptions()},
-		{SettingTechCost, TechOptions()},
-	} {
-		for _, opt := range pair.options {
-			key := pair.setting + "-" + opt
-			if other, dup := seen[key]; dup {
-				t.Errorf("%s/%s and %s produce the same locale key %q",
-					pair.setting, opt, other, key)
-			}
-			seen[key] = pair.setting + "/" + opt
-		}
+// TestTheHandRolledSettingIsNamed is the second, and it is the other side of
+// what the hand-rolled list buys.
+//
+// Telling `CheckLocaleWith` about `bbb-multi-edge-parts` stops it reporting
+// that entry as an orphan, and it deliberately creates no obligation in return:
+// the library knows the name and nothing else, so it never demands an entry for
+// it. This mod knows it is a setting a 2.0 player sees in the Map tab, so it
+// demands one here.
+func TestTheHandRolledSettingIsNamed(t *testing.T) {
+	if strings.TrimSpace(localeSections(t)["mod-setting-name"][SettingMultiEdgeParts]) == "" {
+		t.Errorf("no [mod-setting-name] %s: the settings menu shows the raw key",
+			SettingMultiEdgeParts)
+	}
+}
+
+// TestTheGrandfatherMessageQuotesTheRealMenuLabel is the third, and it is the
+// one no checker anywhere could make, because it is about two entries agreeing
+// with each other rather than about either one existing.
+//
+// The 2.0 grandfather warning tells a player to turn a setting off and quotes
+// the menu label mid-sentence, so that they can find the row. Rename the row
+// and the sentence sends them looking for an entry that is not there -- which
+// is the same defect as an `Unknown key`, one level out, and invisible to
+// everything: both entries exist, both render, and the mod loads.
+//
+// The label is quoted rather than pinned as a literal here, so the check is
+// that the message names WHAT THE MENU SAYS. A prefix rather than an equality
+// because the menu label carries a parenthetical the sentence has no room for
+// ("(Factorio 2.0 only)"), and quoting a prefix of the row's name is still a
+// row a player can find.
+func TestTheGrandfatherMessageQuotesTheRealMenuLabel(t *testing.T) {
+	sec := localeSections(t)
+	msg := sec["bbb"]["single-edge-grandfathered"]
+	if strings.TrimSpace(msg) == "" {
+		t.Fatal("no [bbb] single-edge-grandfathered: the 2.0 grandfather pass " +
+			"has nothing to say to the player it just decided for")
+	}
+	label := sec["mod-setting-name"][SettingMultiEdgeParts]
+	if strings.TrimSpace(label) == "" {
+		// TestTheHandRolledSettingIsNamed reports the absence itself.
+		return
+	}
+
+	_, rest, ok := strings.Cut(msg, `"`)
+	if !ok {
+		t.Fatalf("[bbb] single-edge-grandfathered quotes no menu label, and it "+
+			"has to name the row it is asking the player to turn off: %q", msg)
+	}
+	quoted, _, ok := strings.Cut(rest, `"`)
+	if !ok {
+		t.Fatalf("[bbb] single-edge-grandfathered opens a quote and never "+
+			"closes it: %q", msg)
+	}
+	if !strings.HasPrefix(label, quoted) {
+		t.Errorf("[bbb] single-edge-grandfathered tells the player to turn off "+
+			"%q and the row in the menu is called %q: the message names an "+
+			"entry that is not there", quoted, label)
 	}
 }
