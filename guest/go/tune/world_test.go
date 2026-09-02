@@ -41,6 +41,13 @@ type fixtureWorld struct {
 	// UNREADABLE, which the planner degrades to the declared default plus a
 	// log line -- so a test that means to drive a dropdown must stock it.
 	startup map[string]string
+
+	// startupRaw answers a name with a Value of any kind, and it is consulted
+	// FIRST. `startup` can only produce a string, so without this the library's
+	// "present but not a string" arm is a branch no fixture can reach -- and
+	// that arm is not the same as an absent setting: it is what a mod that
+	// redefined this mod's setting as an int would hand the planner.
+	startupRaw map[string]fkrecipes.Value
 }
 
 type fixtureTech struct {
@@ -57,6 +64,9 @@ type fixtureTech struct {
 func (w fixtureWorld) ModName() string { return w.modName }
 
 func (w fixtureWorld) StartupSetting(name string) (fkrecipes.Value, bool) {
+	if v, ok := w.startupRaw[name]; ok {
+		return v, true
+	}
 	v, ok := w.startup[name]
 	if !ok {
 		return fkrecipes.Nil(), false
@@ -132,6 +142,18 @@ func has(list []string, name string) bool {
 // count, time and the SHORT TUPLE ingredient form. The library copies whatever
 // it reads VERBATIM, so a fixture that wrote the long dict form would be
 // checking a copy of something no engine produces.
+// rawUnit lets a fixture technology carry a unit that is PRESENT and is not a
+// dictionary at all -- an array, a string, a number.
+//
+// The library steps past such a rung rather than copying it, on a guard whose
+// own header calls it distinct from the absent-flag one, and neither `unitOf`
+// nor an absent unit can reach it: one always builds a map and the other
+// answers false. A technology whose `unit` is not a table is a real shape (a
+// mod that assigned a string to it, or a value fkdata could not carry across
+// the boundary faithfully), and copying it would be a technology researchable
+// for free.
+func rawUnit(v fkrecipes.Value) *fkrecipes.Value { return &v }
+
 func unitOf(count, seconds float64, pack string, amount float64) *fkrecipes.Value {
 	v := fkrecipes.Obj(
 		fkrecipes.Pair("count", fkrecipes.Num(count)),
@@ -190,6 +212,18 @@ func (w fixtureWorld) withItems(items ...string) fixtureWorld {
 // withTechs replaces the game's whole technology set.
 func (w fixtureWorld) withTechs(techs ...fixtureTech) fixtureWorld {
 	w.techs = techs
+	return w
+}
+
+// withRawStartup makes one setting answer PRESENT with a value of any kind,
+// which is how "the setting is there and is not a string" is expressed here.
+func (w fixtureWorld) withRawStartup(name string, v fkrecipes.Value) fixtureWorld {
+	next := map[string]fkrecipes.Value{}
+	for k, val := range w.startupRaw {
+		next[k] = val
+	}
+	next[name] = v
+	w.startupRaw = next
 	return w
 }
 

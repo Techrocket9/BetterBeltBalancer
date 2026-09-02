@@ -170,14 +170,29 @@ func Plan() *fkrecipes.Lib {
 	// all, which is what stops `prerequisites = {"logistics"}` naming a
 	// technology nobody defined.
 	//
-	// ONE BEHAVIOUR CHANGE, WRITTEN DOWN RATHER THAN DISCOVERED: the library
-	// VALIDATES the fallback's science pack against the game whether or not
-	// the fallback is reached, so a pack with a perfectly good `logistics` and
-	// no `automation-science-pack` in it is refused at plan time where the
-	// hand-rolled version would have loaded. That is a narrower failure than
-	// the one it replaces (a fallback that DID fire in such a pack emitted a
-	// unit naming a missing item, which is the engine's own assignID abort)
-	// and it is not the same one. agents/fkrecipes-migration.md grades it.
+	// TWO BEHAVIOUR CHANGES, WRITTEN DOWN RATHER THAN DISCOVERED, and both are
+	// graded in agents/fkrecipes-migration.md.
+	//
+	// THE FALLBACK'S SCIENCE PACK IS PROBED WHETHER OR NOT THE FALLBACK IS
+	// REACHED, so a pack with a perfectly good `logistics` and no
+	// `automation-science-pack` in it is refused at plan time where the
+	// hand-rolled version loaded and copied logistics' own unit. A migrating
+	// consumer cannot avoid it: a zero UnitSpec is refused for its count, so a
+	// CostBy always carries a fallback and a fallback is always probed. Graded
+	// AWKWARD -- a load that used to succeed and now refuses.
+	//
+	// `max_level` TRAVELS WITH THE UNIT. It lives on the TECHNOLOGY rather than
+	// in the unit, and `CostBy` copies the source's, where the hand-rolled
+	// `researchUnit` read three fields of the unit and nothing else. In a pack
+	// whose chosen source is a multi-level technology this mod's research
+	// becomes multi-level too: the unlock fires at level one and the rest are
+	// no-ops a player pays for. Measured on the engine with `logistics-3` given
+	// a max_level of 3.
+	//
+	// The other direction of the same copy is an IMPROVEMENT and is why neither
+	// is simply worse: a source priced by `count_formula` and no `count` used to
+	// produce a unit with neither and abort the load with this mod's name on it,
+	// and a verbatim copy loads.
 	lib.LegacyTechnology(TechName, fkrecipes.TechSpec{
 		Icon:     PartIcon,
 		IconSize: 64,

@@ -42,9 +42,17 @@ func TechDefault() string { return TechOptions()[0] }
 // no `unit` at all -- should give a player who asked for it the nearest thing
 // the game still has, not a broken load and not a silently vanilla cost.
 //
-// An option this build does not know gets the default's ladder, for the reason
-// [RecipePlan] gives: `allowed_values` is validated by the engine, so an unknown
-// string means a downgrade from a newer build of this mod.
+// THE DEFAULT ARM IS A SHAPE GUARD AND NOT A LIVE FALLBACK, exactly as
+// [RecipePlan]'s is and for the same reason: [Plan] builds one `CostChoice` per
+// allowed value, so an unknown string reaches the library's `sourcesFor` rather
+// than this switch, gets an empty ladder, and lands on [FallbackUnit] with no
+// prerequisite. Measured on the host against the real path:
+//
+//	TECH unit={count=20, time=15, ingredients=[["automation-science-pack", 1]]} prereq present=false
+//
+// What makes it unreachable is the engine RESETTING an unknown value to the
+// default before the data stage runs, silently and with no log line; the
+// quotation and the loud wrong-type case are in [RecipePlan]'s header.
 //
 // WHAT WALKS IT IS FkRecipes' `CostBy` since round two, as one `CostChoice` per
 // option built by [Plan]. This file is the ladder DATA and the option list; the

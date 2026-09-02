@@ -59,11 +59,32 @@ func RecipeDefault() string { return RecipeOptions()[0] }
 // RecipePlan is one option's ingredients, before any of them is checked against
 // data.raw.
 //
-// An option this build does not know falls back to vanilla rather than to
-// nothing. Factorio validates `allowed_values` itself, so an unknown string can
-// only arrive from a mod-settings.dat written by a NEWER build of this mod that
-// was then downgraded -- and the right answer to that is the recipe the mod has
-// always had, not an empty one.
+// # THE DEFAULT ARM IS A SHAPE GUARD AND NOT A LIVE FALLBACK
+//
+// It used to say that an option this build does not know "falls back to vanilla
+// rather than to nothing", and that stopped being true when the library took
+// over the walk. [Plan] builds ONE `IngredientChoice` per allowed value, so an
+// unknown string never reaches this function at all: it reaches the library's
+// own `choiceFor`, which answers nil, and a nil plan is a recipe with NO
+// ingredients and no log line. Measured on the host, driving the real path with
+// the setting answering `not-an-option`:
+//
+//	RECIPE ingredients=[] len=0
+//
+// WHAT MAKES THAT UNREACHABLE IS THE ENGINE, not this switch. Factorio
+// validates `allowed_values` itself, and it does it by RESETTING rather than by
+// refusing: a mod-settings.dat carrying `bbb-recipe-cost = "not-an-option"` is
+// silently put back to the default before the data stage runs, with no log
+// line, so the recipe comes out vanilla. A wrong TYPE is the loud case and is
+// refused outright:
+//
+//	Error StringSetting.cpp:71: Failed to load mod mod setting
+//	(bbb-recipe-cost): Value must be a string in property tree at
+//	ROOT.startup.bbb-recipe-cost.value.
+//
+// So the arm below is what this function answers if it is ever called by
+// something other than [Plan], and [TestAnUnknownOptionIsWhatTheLibraryDoesToday]
+// is what pins the other side of the engine's guard. Neither is a live path.
 func RecipePlan(option string) []Item {
 	switch option {
 	case RecipeCheap:

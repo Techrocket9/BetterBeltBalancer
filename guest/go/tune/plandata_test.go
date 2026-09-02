@@ -258,12 +258,26 @@ func TestEveryRecipeOptionIsTheListTheGateAsserts(t *testing.T) {
 // THE LIBRARY IS THE ONE KEEPING THAT PROMISE NOW. It used to be [Resolve], and
 // the property is the same one -- no name reaches a prototype unless the game
 // has it -- so this is the same assertion asked one layer out.
+//
+// THE LOG STREAM IS PART OF THE ASSERTION AND DISCARDING IT MASKED THE TEST.
+// The library has a fallback of its own: a chosen plan that resolves to NOTHING
+// falls back to the DEFAULT option's plan, with a line saying so. So an option
+// whose ladders did not end at iron plate would drop every ingredient, take
+// vanilla's, and emit three iron plates -- passing every assertion below while
+// measuring the fallback rather than the ladder. Measured: with belt-express's
+// three ladders ending at steel-plate instead, this test passed and only
+// [TestEveryLadderTerminates] fired. A degradation in a game that HAS the last
+// rung is a defect either way, so every line is an error.
 func TestEveryOptionFallsAllTheWayToIronPlate(t *testing.T) {
 	for _, option := range RecipeOptions() {
 		w := everythingWorld().
 			withStartup(SettingRecipeCost, option).
 			withItems(FallbackName, "automation-science-pack")
-		protos, _ := extendsOf(t, dataOps(t, w))
+		protos, logs := extendsOf(t, dataOps(t, w))
+		for _, line := range logs {
+			t.Errorf("%s degraded in a game that has the last rung of every "+
+				"ladder: %s", option, line)
+		}
 		got := ingredientsOf(t, protoOf(t, protos, "recipe", PartName))
 		if len(got) == 0 {
 			t.Errorf("%s resolved to nothing in a game that has iron plate", option)
@@ -309,11 +323,15 @@ func TestAGameWithNoIngredientsIsAnEmptyRecipeRatherThanAnInventedOne(t *testing
 // hand-rolled technology this replaced would have loaded and used logistics'
 // own unit.
 //
-// It is written down rather than worked around: there is no way to declare a
-// CostBy with no fallback (a zero UnitSpec is refused for its count), the
-// failure it replaces is narrower rather than absent (a fallback that DID fire
-// in such a pack emitted a unit naming a missing item, which is the engine's
-// own assignID abort), and the day the library probes lazily this test says so.
+// GRADED AWKWARD, and the grade is the point rather than the pin. The library
+// does exactly what its own documentation says, which is why it is not MISLED;
+// what makes it awkward is that a MIGRATING consumer cannot avoid it. A zero
+// UnitSpec is refused for its count, so a CostBy always carries a fallback, and
+// a fallback is always probed -- there is no way to say "this cost applies only
+// if nothing else does, so ask about its pack only then". The failure it
+// replaces is narrower rather than absent (a fallback that DID fire in such a
+// pack emitted a unit naming a missing item, which is the engine's own assignID
+// abort), and the day the library probes lazily this test says so.
 func TestTheFallbackPackIsProbedEvenWhenUnreachable(t *testing.T) {
 	// `logistics` is present and carries a unit, so the fallback is
 	// unreachable by construction; only the pack is missing.
@@ -472,6 +490,227 @@ func TestNoLogisticsAtAllIsTheFallbackAndNoPrerequisite(t *testing.T) {
 	}
 }
 
+// TestAnUnknownOptionIsWhatTheLibraryDoesToday pins the OTHER SIDE OF THE
+// ENGINE'S GUARD, and it is a recording rather than a requirement.
+//
+// [RecipePlan] and [TechLadder] both carry a default arm for "an option this
+// build does not know", and NO SHIPPED PATH CONSULTS EITHER: [Plan] builds one
+// choice per allowed value, so an unknown string reaches the library's own
+// `choiceFor`/`sourcesFor`, gets nil, and comes out as an empty recipe and a
+// fallback-priced technology with no prerequisite. What makes that unreachable
+// is Factorio, not this package: an unknown value in mod-settings.dat is
+// silently RESET to the default before the data stage runs, measured on the
+// engine, so a player cannot produce this state and neither can the gate.
+//
+// It is pinned anyway because it is the behaviour of the code that ships,
+// behind a guard that belongs to somebody else. If the engine ever stops
+// resetting, or the library ever starts treating a missing choice as the
+// default's, this test is what says the answer moved.
+func TestAnUnknownOptionIsWhatTheLibraryDoesToday(t *testing.T) {
+	const unknown = "not-an-option"
+	w := everythingWorld().
+		withStartup(SettingRecipeCost, unknown).
+		withStartup(SettingTechCost, unknown)
+	protos, logs := extendsOf(t, dataOps(t, w))
+
+	// The recipe: NO INGREDIENTS AND NO LINE SAYING SO. The library's own
+	// default-option fallback is gated on the chosen plan having declared
+	// something, and an unknown value declares nothing, so that arm is skipped.
+	if got := ingredientsOf(t, protoOf(t, protos, "recipe", PartName)); len(got) != 0 {
+		t.Errorf("an unknown recipe option produced %v; the library answers "+
+			"an unknown choice with no plan at all", got)
+	}
+
+	// The technology: the fallback unit, and NO prerequisite.
+	tech := protoOf(t, protos, "technology", TechName)
+	if _, ok := tech["prerequisites"]; ok {
+		t.Errorf("an unknown technology option left prerequisites %s in place",
+			showValue(tech["prerequisites"]))
+	}
+	want := fkrecipes.Obj(
+		fkrecipes.Pair("count", fkrecipes.Num(20)),
+		fkrecipes.Pair("time", fkrecipes.Num(15)),
+		fkrecipes.Pair("ingredients", fkrecipes.Arr(
+			fkrecipes.Arr(fkrecipes.Str("automation-science-pack"), fkrecipes.Num(1)))),
+	)
+	if !reflect.DeepEqual(tech["unit"], want) {
+		t.Errorf("an unknown technology option priced the research %s, want the "+
+			"fallback %s", showValue(tech["unit"]), showValue(want))
+	}
+
+	// EXACTLY ONE LINE, and it is the technology's. The recipe half is silent,
+	// which is the asymmetry worth pinning: a player in this state would have a
+	// balancer part craftable from nothing with nothing in the log about it.
+	wantLine := "fkrecipes: bbb-balancer: no source for the " + unknown +
+		" cost carries a unit, so the fallback cost applies and the technology " +
+		"has no prerequisite"
+	if len(logs) != 1 || logs[0] != wantLine {
+		t.Errorf("the log stream is %v\n want exactly [%q]", logs, wantLine)
+	}
+}
+
+// TestTheCopiedUnitCarriesTheSourceMaxLevel is A BEHAVIOUR CHANGE ON THE
+// RECORD, not a wish.
+//
+// `CostBy` copies the source technology's whole unit AND its `max_level`, which
+// lives on the technology rather than in the unit; the hand-rolled
+// `researchUnit` this replaced read three fields of the unit and nothing else.
+// So in a pack whose chosen source is a multi-level technology, this mod's
+// research becomes multi-level too: the unlock fires at level one and the other
+// levels are no-ops a player pays for. Measured on the engine with a scratch mod
+// setting `logistics-3`'s max_level to 3 -- the hand-rolled stage emitted no
+// max_level and the library emits `"max_level":3`.
+//
+// The counterpart is already covered and is not duplicated here:
+// [TestTheTechnologyIsTheOneThatShipped]'s `checkOnly` names every field the
+// technology may carry, and `max_level` is not among them, so a stock game
+// emitting one fails there.
+func TestTheCopiedUnitCarriesTheSourceMaxLevel(t *testing.T) {
+	base := everythingWorld()
+	l1, _ := base.tech(TechLogistics)
+	l2, _ := base.tech(TechLogistics2)
+	l3, _ := base.tech(TechLogistics3)
+	level := fkrecipes.Num(3)
+	l3.maxLevel = &level
+
+	w := base.withStartup(SettingTechCost, TechLogistics3).withTechs(l1, l2, l3)
+	protos, _ := extendsOf(t, dataOps(t, w))
+	got := protoOf(t, protos, "technology", TechName)
+
+	v, ok := got["max_level"]
+	if !ok {
+		t.Fatal("the source technology carries max_level 3 and the emitted one " +
+			"carries none: the library has stopped copying it, which is better " +
+			"and is not what this mod is written against")
+	}
+	if !reflect.DeepEqual(v, level) {
+		t.Errorf("the emitted max_level is %s and the source's is %s",
+			showValue(v), showValue(level))
+	}
+	// And it travels WITH the unit, from the same source, so the pair is what
+	// is asserted rather than the field alone.
+	if !reflect.DeepEqual(got["unit"], *l3.unit) {
+		t.Errorf("the unit is %s and logistics-3 charges %s",
+			showValue(got["unit"]), showValue(*l3.unit))
+	}
+	checkPrereqs(t, "max-level source", got, TechLogistics3)
+}
+
+// TestACountFormulaUnitSurvivesTheCopy is the IMPROVEMENT round two brought in,
+// measured rather than claimed.
+//
+// The hand-rolled `researchUnit` read `count`, `time` and `ingredients` out of
+// the source's unit and wrote those three. A source priced by `count_formula`
+// -- the multi-level shape, which carries a formula and NO count -- therefore
+// produced a unit with neither, and the engine refused the load with this mod's
+// name on it:
+//
+//	Error while loading technology prototype "bbb-balancer" (technology):
+//	Key "count_formula" not found in property tree at
+//	ROOT.technology.bbb-balancer.unit
+//
+// The library copies the unit VERBATIM, so the same pack loads. Measured on the
+// engine either side: rc=1 before, rc=0 after with `"unit":{"count_formula":"100",...}`.
+func TestACountFormulaUnitSurvivesTheCopy(t *testing.T) {
+	base := everythingWorld()
+	l1, _ := base.tech(TechLogistics)
+	formula := fkrecipes.Obj(
+		fkrecipes.Pair("count_formula", fkrecipes.Str("100")),
+		fkrecipes.Pair("time", fkrecipes.Num(30)),
+		fkrecipes.Pair("ingredients", fkrecipes.Arr(
+			fkrecipes.Arr(fkrecipes.Str("automation-science-pack"), fkrecipes.Num(1)))),
+	)
+	l2 := fixtureTech{name: TechLogistics2, prereqs: []string{TechLogistics}, unit: &formula}
+
+	w := base.withStartup(SettingTechCost, TechLogistics2).withTechs(l1, l2)
+	protos, logs := extendsOf(t, dataOps(t, w))
+	for _, line := range logs {
+		t.Errorf("a count_formula source degraded: %s", line)
+	}
+	got := protoOf(t, protos, "technology", TechName)
+	if !reflect.DeepEqual(got["unit"], formula) {
+		t.Errorf("the emitted unit is %s and the source's is %s",
+			showValue(got["unit"]), showValue(formula))
+	}
+	// THE DEEP COMPARE ABOVE CANNOT FAIL BY MOVING THE FIXTURE, both sides
+	// being the same value, which is right for a verbatim-copy claim and is
+	// also why it is not the whole assertion. These two are TRANSCRIBED, so a
+	// library that went back to naming three fields of the unit fires here:
+	// `count_formula` is the key the old copy dropped, and an invented `count`
+	// beside it is the other half of the same defect.
+	unit := fieldsOf(t, got["unit"])
+	checkStr(t, "the copied unit", unit, "count_formula", "100")
+	if v, ok := unit["count"]; ok {
+		t.Errorf("the copied unit carries a count of %s, which the source does "+
+			"not: a count beside a count_formula is a unit the source never had",
+			showValue(v))
+	}
+	checkPrereqs(t, "count_formula source", got, TechLogistics2)
+}
+
+// TestARungWhoseUnitIsNotADictionaryIsSteppedPast reaches a library guard the
+// fixture could not reach until it could carry a raw unit.
+//
+// The library's ladder walk has TWO distinct tests on a rung: the absent FLAG,
+// and whether what came back is a dictionary this library can copy faithfully.
+// `unitOf` always builds a map and an absent unit answers false, so the second
+// was unexercised. A technology whose `unit` is present and is not a table is a
+// real shape -- a mod that assigned a string to it, or a value fkdata could not
+// carry across the boundary -- and copying it would be a technology researchable
+// for free.
+//
+// THE PREREQUISITE FOLLOWS, which is the half worth asserting: stepping past a
+// rung has to move the tree position as well as the cost, or the research hangs
+// off a technology whose price it is not charging.
+func TestARungWhoseUnitIsNotADictionaryIsSteppedPast(t *testing.T) {
+	base := everythingWorld()
+	l1, _ := base.tech(TechLogistics)
+	l2, _ := base.tech(TechLogistics2)
+	broken := fixtureTech{
+		name:    TechLogistics3,
+		prereqs: []string{TechLogistics2},
+		unit:    rawUnit(fkrecipes.Arr(fkrecipes.Str("not"), fkrecipes.Str("a-unit"))),
+	}
+
+	w := base.withStartup(SettingTechCost, TechLogistics3).withTechs(l1, l2, broken)
+	protos, _ := extendsOf(t, dataOps(t, w))
+	got := protoOf(t, protos, "technology", TechName)
+
+	checkPrereqs(t, "a non-dictionary unit", got, TechLogistics2)
+	if !reflect.DeepEqual(got["unit"], *l2.unit) {
+		t.Errorf("the unit is %s and logistics-2 charges %s",
+			showValue(got["unit"]), showValue(*l2.unit))
+	}
+}
+
+// TestAnUnreadableSettingTakesTheDeclaredDefault is the other guard the fixture
+// could not reach, and it is not the same as an ABSENT setting.
+//
+// A setting that answers PRESENT with something that is not a string is what a
+// mod redefining this mod's setting as an int would hand the planner. The
+// library degrades to the declared default and says so, which is the right
+// answer -- a data stage that refused there would be this mod failing to load
+// over somebody else's edit -- and the line is what makes it visible.
+func TestAnUnreadableSettingTakesTheDeclaredDefault(t *testing.T) {
+	w := everythingWorld().withRawStartup(SettingRecipeCost, fkrecipes.Num(1))
+	protos, logs := extendsOf(t, dataOps(t, w))
+
+	// The DEFAULT recipe, from the declaration rather than from the read.
+	checkIngredients(t, "an unreadable setting", protoOf(t, protos, "recipe", PartName),
+		[]ingredientPair{{"iron-plate", 4}, {"iron-gear-wheel", 2}, {"transport-belt", 2}})
+
+	want := "fkrecipes: the setting " + SettingRecipeCost +
+		" was not readable, so its default applies"
+	found := false
+	for _, line := range logs {
+		found = found || line == want
+	}
+	if !found {
+		t.Errorf("the unreadable setting was not reported; the log stream is %v\n"+
+			" want it to carry %q", logs, want)
+	}
+}
+
 // TestEveryAmountIsAWholeNumber is what plan.go's int64 conversion rests on.
 //
 // [Item.Amount] is a float64 and the library takes an int64, so a plan with a
@@ -574,8 +813,8 @@ func checkPrereqs(t *testing.T, what string, proto map[string]fkrecipes.Value, w
 		return
 	}
 	if len(v.Arr) != 1 || v.Arr[0].Kind != fkrecipes.KindStr || v.Arr[0].Str != want {
-		t.Errorf("%s: the prerequisites are %v and the cost came from %q",
-			what, v, want)
+		t.Errorf("%s: the prerequisites are %s and the cost came from %q",
+			what, showValue(v), want)
 	}
 }
 

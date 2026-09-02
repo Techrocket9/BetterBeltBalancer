@@ -113,11 +113,16 @@ func TestTheDefaultTechnologyIsTodays(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestTechLaddersWalkDown(t *testing.T) {
+	// THE UNKNOWN-OPTION CASE IS GONE FROM HERE, and its deletion is the
+	// finding rather than a tidy-up. It asserted `TechLadder`'s default arm,
+	// which NO SHIPPED PATH CONSULTS: [Plan] builds one CostChoice per allowed
+	// value, so an unknown string reaches the library's own lookup and never
+	// this switch. What the real path does with one is
+	// [TestAnUnknownOptionIsWhatTheLibraryDoesToday].
 	cases := map[string][]string{
-		TechLogistics:                {"logistics"},
-		TechLogistics2:               {"logistics-2", "logistics"},
-		TechLogistics3:               {"logistics-3", "logistics-2", "logistics"},
-		"a-value-from-a-newer-build": {"logistics"},
+		TechLogistics:  {"logistics"},
+		TechLogistics2: {"logistics-2", "logistics"},
+		TechLogistics3: {"logistics-3", "logistics-2", "logistics"},
 	}
 	for opt, want := range cases {
 		if got := TechLadder(opt); !reflect.DeepEqual(got, want) {

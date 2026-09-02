@@ -215,15 +215,57 @@ fkrecipes: the item bbb-balancer-part names a place_result bbb-balancer-part tha
 
 What it means for a consumer whose entity is hand-rolled IN THE SAME HOOK is that the entity must be emitted BEFORE `EmitData` runs, which is a constraint on the order of statements inside somebody's `fk_data`. `docs/migration.md` says "The entity stays hand-rolled beside the `Emit` call"; "before" is the word that would have said it. The cost is small because the failure is loud, and this mod's `main.go` now carries the reason at the call site.
 
-#### The `CostBy` fallback is validated whether or not it is reachable: CLEAN, with a migration-doc ask
+#### The `CostBy` fallback is validated whether or not it is reachable: AWKWARD
 
-`docs/usage.md` says so plainly: "a science pack that does not exist is refused before anything is emitted". Measured here, in a game whose `logistics` is present and carries a unit, so the fallback cannot be reached:
+`docs/usage.md` says so plainly: "a science pack that does not exist is refused before anything is emitted", which is why this is not MISLED. Measured here, in a game whose `logistics` is present and carries a unit, so the fallback cannot be reached:
 
 ```
 fkrecipes: the technology bbb-balancer prices itself in automation-science-pack, which does not exist
 ```
 
-It is the documented behaviour and it is the right one for a field that is the cost of last resort. **For a MIGRATING mod it is a load that used to succeed and now refuses**, which is the one thing `docs/migration.md` exists to warn about, and it warns about names rather than about this. A sentence under `CostBy` in that document would close it. Graded CLEAN because the library does what it says.
+**It is a LOAD THAT USED TO SUCCEED AND NOW REFUSES**, in a real if rare world: an overhaul pack that keeps `logistics` with a unit and has no `automation-science-pack` item. The hand-rolled stage loaded there and copied logistics' own unit; the branch refuses at plan time. That is the one class of change `docs/migration.md` exists to warn about, and it warns about names.
+
+**And a migrating consumer cannot avoid it**, which is what moves the grade off CLEAN: a zero `UnitSpec` is refused for its count, so a `CostBy` always carries a fallback, and a fallback is always probed. There is no way to say "this is the cost of last resort, so ask about its pack only if it is reached".
+
+**The ask, precisely.** Either probe `Fallback`'s packs only when the fallback is REACHED, or accept a pack LADDER in `Pack.Name` the way `IngredientNamed` does for an ingredient, so that an unreachable fallback cannot refuse a load and a reachable one still cannot name something absent. `TestTheFallbackPackIsProbedEvenWhenUnreachable` is the pin and its header carries the grade.
+
+#### `max_level` travels with the copied unit: AWKWARD
+
+`CostBy` copies the source technology's `max_level` beside its unit. It lives on the TECHNOLOGY rather than in the unit, and the hand-rolled `researchUnit` this replaced read three fields of the unit and nothing else, so this is a behaviour change and not a fidelity improvement.
+
+**Measured on the engine**, with a scratch mod setting `data.raw.technology["logistics-3"].max_level = 3` and `bbb-tech-cost = "logistics-3"`: the hand-rolled stage emits `bbb-balancer` with no `max_level`, the branch emits `"max_level":3`. In that pack this mod's research becomes a three-level technology: the unlock fires at level one and the other two are no-ops a player pays for.
+
+It is the library's documented behaviour and it is the right default for `CostOf`, whose whole promise is one named point for cost and position. For a technology that unlocks ONE recipe it is not what the consumer wants, and there is no way to decline it. **The ask**: an opt-out on `TechSpec`, or copying `max_level` only when the source's unit carries a `count_formula`, a fixed-count multi-level source being the odd shape rather than the ordinary one. `TestTheCopiedUnitCarriesTheSourceMaxLevel` is the pin; the stock-game counterpart is already covered by `TestTheTechnologyIsTheOneThatShipped`'s field list.
+
+#### The verbatim unit copy fixed a load this mod used to break: an IMPROVEMENT, recorded
+
+The same copy that brings `max_level` also brings everything else, and the hand-rolled three-field read could not. **Measured on the engine**, with `logistics-2` given `unit.count_formula = "100"` and no `count`:
+
+```
+Error while loading technology prototype "bbb-balancer" (technology): Key "count_formula" not found in property tree at ROOT.technology.bbb-balancer.unit
+```
+
+`rc=1` on the hand-rolled stage; `rc=0` on the branch, with `"unit":{"count_formula":"100",...}`. A multi-level source technology is exactly the shape that produced it, so the two findings above and this one are one library decision seen from three sides. `TestACountFormulaUnitSurvivesTheCopy` pins it, half against the source and half against transcribed literals, because a verbatim-copy claim compared only against its own source cannot fail by moving the source.
+
+#### An unknown stored option reaches the library rather than this mod's default arm: a finding about the comments, and a small library ask
+
+`tune/recipe.go` said an unknown option "falls back to vanilla rather than to nothing" and `tune/tech.go` said it "gets the default's ladder". Neither is true of the library path: `recipeChoices()` and `techChoices()` build one choice per allowed value, so an unknown string reaches `choiceFor`/`sourcesFor`, gets nil, and comes out as a recipe with NO ingredients and no log line, and a technology on the `Fallback` unit with no prerequisite. Measured on the host against the real path:
+
+```
+RECIPE ingredients=[] len=0
+TECH unit={count=20, time=15, ingredients=[["automation-science-pack", 1]]} prereq present=false
+LOG 0: fkrecipes: bbb-balancer: no source for the not-an-option cost carries a unit, so the fallback cost applies and the technology has no prerequisite
+```
+
+**THE ENGINE IS WHAT MAKES IT UNREACHABLE, measured on both packages.** A `mod-settings.dat` carrying `bbb-recipe-cost = "not-an-option"` and `bbb-tech-cost = "not-an-option"` is silently RESET to the defaults by Factorio 2.0.77 before the data stage runs, with no log line, on the branch and on master alike: the recipe comes out vanilla and the unit 20 x 15 automation science after `logistics`. A wrong TYPE is the loud case:
+
+```
+Error StringSetting.cpp:71: Failed to load mod mod setting (bbb-recipe-cost): Value must be a string in property tree at ROOT.startup.bbb-recipe-cost.value.
+```
+
+So both comments are rewritten to say that, the `"a-value-from-a-newer-build"` case is deleted from `TestTechLaddersWalkDown` (it asserted data no shipped path consults), and `TestAnUnknownOptionIsWhatTheLibraryDoesToday` records what the library does behind the engine's guard.
+
+**The library ask is one arm**: `choiceFor` returning nil for a non-default value should take the "the default applies" arm and its log line, the way a plan that resolved to nothing does. Today that arm is skipped, because it is gated on `len(declared) > 0` and an unknown value declares nothing -- so the one state that produces a silently empty recipe is the one state nothing says anything about.
 
 #### `LocaleEntries`: CLEAN, and it closes round one's AWKWARD
 
@@ -536,6 +578,10 @@ Each injected, observed, restored; `git diff --quiet -- mod-data` exit 0 afterwa
 | `make test`, all fourteen suites | **NOT RUN** | The packaged mod targets Factorio 2.1 with api pin 2.1.17 and the installed binary is 2.0.77. `test/run.sh` gates the packaged mod against the binary and refuses it before starting a run |
 | the 2.1.16 and 2.1.17 golden rows of `datastage-check` | **NOT RUN** | The same. A golden whose engine does not match the binary is a SKIP with a message, by design |
 | the `bench/` matrix | **NOT RUN** | Out of scope, and it needs exclusive use of Factorio |
+
+**AND SINCE ROUND TWO THE 2.1 ROWS CARRY A NAMED EXPECTATION, because the copy got wider.** The library copies a source technology's WHOLE unit plus its `max_level` where the hand-rolled code copied `count`, `time` and `ingredients`. On 2.0.77 that is a distinction without a difference and it is verified rather than assumed: base's `logistics` unit is exactly those three fields with no `max_level` (`data/base/prototypes/technology.lua` and the dump agree), and the only unit keys anywhere in the whole 2.0.77 base dump are `count`, `count_formula`, `ingredients` and `time`. `LuaTechnologyPrototype`'s attribute set is identical between the pinned 2.0.77 and 2.1.17 runtime descriptions.
+
+**What could NOT be verified here is base 2.1.17's own logistics prototypes**: there is no prototype-api cache for 2.1.17 under FkLua's api directory and no 2.1 binary on this machine. So: **if the 2.1.17 `data_raw` golden moves on the next 2.1 session, a source-technology field the verbatim copy carries is the first thing to check** -- `logistics` having gained a `max_level`, or a unit key base did not have on 2.0.77 -- before anything is recaptured. A golden recaptured over that would bake somebody else's field into this mod's technology.
 
 The refusal is the designed gate and not a defect. Verbatim, from `test/run.sh m1`:
 
