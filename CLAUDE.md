@@ -269,7 +269,9 @@ guest/go/tune/           WHAT THE DATA STAGE DECIDES that is not fixed: the
                          mod's own names and order strings across VERBATIM,
                          because Factorio keys mod-settings.dat by name and has
                          no rename mechanism. SINCE ROUND TWO IT DECLARES THE
-                         ITEM TOO, through `LegacyItem`, which is the same
+                         ITEM, THE RECIPE AND THE TECHNOLOGY TOO, through
+                         `LegacyItem`, `LegacyRecipe` and `LegacyTechnology`,
+                         which is the same
                          argument with a wider blast radius: a prototype name is
                          held by blueprints, logistic requests, crafting queues
                          and this mod's own hand-rolled entity, whose
@@ -291,9 +293,15 @@ guest/go/tune/           WHAT THE DATA STAGE DECIDES that is not fixed: the
                          rename is caught (measured: the plain `CheckLocale`
                          finds it 0 times and `CheckLocaleWith` once) -- plus
                          three assertions of this mod's own the library
-                         deliberately declines to make. The other is the settings
-                         PLAN, every field of both prototypes against transcribed
-                         literals, on the host with no engine
+                         deliberately declines to make, which read the file
+                         through `fkrecipes.LocaleEntries` since round two, so
+                         the checker and the extra assertions are one reading of
+                         one file rather than two parsers over one grammar. The
+                         other is the PLAN, every field of every prototype it
+                         declares against transcribed literals, on the host with
+                         no engine: the settings against a one-method `Named`
+                         stub and the item, recipe and technology against a
+                         fixture World
 guest/go/engine/         WHICH FACTORIO THIS IS, and the FIFTH pure package. One
                          function: is `mods["base"]` 2.0.x. Both data-stage
                          hooks call it -- the collision flag and the marker on
@@ -691,7 +699,7 @@ Both packages from clean, 2026-09-01, shipped config (`--persist=packed --gc=col
 
 **Both wasm modules the control guest is made of are byte-identical, and that is the shape of the whole change**: nothing outside `guest/go/data/settings.go`, `guest/go/tune` and `go.mod` was touched, and none of it is on a runtime path.
 
-**THE COST IS ONE FUNCTION THAT NEVER RUNS.** `(*fkrecipes.Lib).PlanData` is **21,047 emitted Lua lines**, 29% of the data module, linked in because `Emit` dispatches on the stage at RUN TIME and TinyGo cannot prove the data half unreachable from the call site. Against the 18-bit jump-offset record it is comfortable: the function that once failed the Lua parser with `control structure too long near 'trap_unreachable'` was **28,139** lines, no jump-span advisory fired on this build, and the largest function this mod owns is `main.settings` at **5,335** lines (770 before), with `main.hidden` at 3,402 against 3,413. The data-module map went 58 functions to 85.
+**THE COST IS ONE FUNCTION THAT NEVER RUNS.** `(*fkrecipes.Lib).PlanData` is **21,047 emitted Lua lines**, 29% of the data module, linked in because `Emit` dispatches on the stage at RUN TIME and TinyGo cannot prove the data half unreachable from the call site. Against the 18-bit jump-offset record it is comfortable: the function that once failed the Lua parser with `control structure too long near 'trap_unreachable'` was **28,139** lines, no jump-span advisory fired on this build, and the largest function this mod owns is `main.settings` at **5,335** lines (770 before), with `main.hidden` at 3,402 against 3,413. The data-module map went 58 functions to 85. **That function RUNS since round two and this paragraph is round one's record**; the round-two figures are below.
 
 **AND ABOUT A THIRD OF A TENTH OF A SECOND PER GAME LOAD.** `fk_data_module.lua` is REQUIRED once per stage and there are three of them, so an 82% bigger module is parsed three times. Interleaved `--dump-data` runs, five reps each, the two packages differing in that one file, medians of the engine's own stage timestamps:
 
@@ -703,6 +711,51 @@ Both packages from clean, 2026-09-01, shipped config (`--persist=packed --gc=col
 | settings start to the prototype checksum | 0.297 s | **0.366 s** | +0.069 |
 
 It is a LOAD-TIME cost and nothing else: the control guest did not move a byte, and there is no runtime path here at all. It is also the same shape as the `+150 ms per game load` this file already records for hooking a control guest into the data family, one order of magnitude down.
+
+### What round two cost, and the like-for-like control that makes it readable
+
+**THE COMPARISON THAT MEANS ANYTHING IS AGAINST ROUND ONE'S CODE REBUILT ON TODAY'S LIBRARY**, not against round one's recorded figures. FkRecipes moved six commits between the two rounds and grew every one of the surfaces round two consumes, so a straight before/after would credit round two with the library's growth or blame it for it. So round one's `guest/go/data`, `guest/go/tune` and `Makefile` were checked out **into the real tree, at the real path**, built from `make clean`, measured, and put back. Both builds are Factorio 2.0.77, FkRecipes `b43c2c7`, FkLua `32eb628`, TinyGo 0.41.1, shipped config.
+
+**The path matters and that is measured rather than assumed**: the same round-one code built in a scratch clone under a longer path produces a 1,304,595 B `bbb.wasm` against the real tree's 1,302,885, because TinyGo writes the module path into the debug sections. A size comparison across two directories is not a size comparison.
+
+| | round one, recorded | round one's code, today's library | **round two** | round two vs the control |
+|---|--:|--:|--:|--:|
+| `dist/better-belt-balancer_0.3.2.zip` | 665,986 | 673,731 | **662,803** | **-10,928 B, -1.62%** |
+| `fk_data_module.lua` | 3,216,828 | 3,349,529 | **3,123,134** | **-226,395 B, -6.76%** |
+| `dist/bbbdata.wasm` | 545,651 | 584,688 | **571,382** | -13,306 B, -2.28% |
+| `fk_module.lua` (the control guest) | 3,148,568 | 3,148,568 | **3,148,568** | **byte-identical** |
+| `dist/bbb.wasm` | 1,302,885 | 1,302,885 | **1,302,885** | **byte-identical**, hash `dfeb456a58f88e2d` |
+| members / events / defines | 56 / 24 / 4 | 56 / 24 / 4 | 56 / 24 / 4 | unmoved |
+| data-module functions in the map | 85 | 92 | **84** | |
+
+**Round two SHRINKS the packaged data module**, which is the opposite of what adding two more prototypes to a plan sounds like: `recipe.go`, `technology.go` and `item.go` between them lowered to about 10,000 lines of Lua (`main.recipe` 2,805, `main.technology` 2,025, `main.researchUnit` 1,574, `main.settings` 4,982 against round two's 440, plus `main.item` and the type list), and the library's planner was already there. **The wasm grows against round one's RECORDED figure and shrinks against the control**, which is the same fact twice: +39,037 B of it is the library between the two rounds and round two hands 13,306 back.
+
+**`PlanData` is 23,288 emitted Lua lines, 32.9% of the module, and it is the LIBRARY'S growth rather than this plan's.** Round one's code on the same library is **23,493**, so round two is 205 lines under it; the move from round one's recorded 21,047 is entirely FkRecipes between `b43c2c7` and what round one measured. It is 82.8% of the 28,139-line function that once failed Lua 5.2's parser with `control structure too long near 'trap_unreachable'`, no jump-span advisory fired, and **the consumer still has no remedy**: the `//go:noinline` discipline `guest/go/data/main.go` carries cannot be applied to somebody else's package. It is no longer a function that never runs, which is the one thing round two changed about it.
+
+The ten largest functions in the packaged data module, round two:
+
+| lines | | lines | |
+|--:|---|--:|---|
+| **23,288** | `(*fkrecipes.Lib).PlanData` | 2,831 | `main.legacyStubEntity` |
+| 4,129 | `tune.Plan` | 1,438 | `fkrecipes.fromV` |
+| 3,460 | `main.onSettings` | 1,405 | `main.strip` |
+| 3,402 | `main.hidden` | 1,402 | `(*fkrecipes.Lib).validateUnit` |
+| 2,977 | `main.entity` | 1,390 | `main.insertProbe` |
+
+`PlanSettings` is absent from the map: it inlined into `main.onSettings`, which is what that function's 3,460 lines are. `main.settings` is 440 lines now against round one's 4,982, and `main.onData` is 173.
+
+**STAGE TIMING, and it is the one place round two costs something.** Five interleaved `--dump-data` runs per package, the two differing only in `fk_data_module.lua`, medians of the engine's own stage timestamps:
+
+| stage | round one's code | **round two** | |
+|---|--:|--:|--:|
+| `settings.lua` | 0.069 s | **0.065 s** | -0.004 |
+| `data.lua` | 0.079 s | **0.102 s** | **+0.023** |
+| `data-final-fixes.lua` | 0.177 s | **0.176 s** | -0.001 |
+| settings start to the prototype checksum | 0.435 s | **0.449 s** | **+0.014** |
+
+**The settings stage got cheaper and the data stage pays for the whole plan.** A 6.8% smaller module is parsed three times, which is where the settings saving comes from; against it, `data.lua` now runs `PlanData` for real -- the ingredient and entity presence probes, the cycle walk over every technology in the game, and the emit -- where round one ran three hand-rolled builders and about a dozen probes. **Net, about fourteen milliseconds per game load**, once per load, on a path with no tick in it.
+
+**THERE IS NO HOST-CALL COUNTER AND THE NUMBER IS NOT ESTIMATED HERE.** Neither `fklua mod`'s report nor Factorio's log counts the calls a data stage makes, and `fkdata` keeps no counter, so what the cycle walk costs is visible only as the 23 ms above. The shape is in the library's own source -- `checkCycles` reads `TechNames()` once and `TechPrereqs(name)` once per technology -- and this file does not put a figure on it, because a figure derived from somebody else's source and a technology count is arithmetic rather than a measurement.
 
 **The go.mod facts, because two of them look wrong and are not.** `github.com/Techrocket9/fklua/guest/go` moved **v0.0.0 -> v0.2.0**: FkRecipes requires that tag through the real channel and minimal version selection takes the maximum, so the number is not a choice made here and the `replace` still resolves it onto `../../../FkLua/guest/go`. The FkRecipes `replace` is **DEV-ONLY** and marked so: there is no remote and no tag, and `v0.1.0` is the tag its README names as its eventual Go one. **There is no `go.sum` and none is created**, which is what a directory replace means. `go mod tidy` DELETES an unimported require, so the dependency and its first import have to land in one edit.
 
@@ -4063,7 +4116,7 @@ Two isolated ~0.85 ms ticks at t=600 and t=1200 are **the harness's, not ours**,
 | [`agents/spike-s1.md`](agents/spike-s1.md) | The empirical record behind the edge interfaces: the collision-mask door, linked-belt mechanics, why the lane-splitter stage is not optional |
 | [`agents/docs-style.md`](agents/docs-style.md) | **Read before creating or editing any human-facing document** (`README.md`, `FKLUA-GAPS.md`, the bench and test READMEs). The public-audience house style: what must not appear, the formatting rules, the structure per document type, the licence wording, and the grep check to run before committing |
 | [`agents/single-edge.md`](agents/single-edge.md) | **The Factorio 2.1 port.** Why one belt per balancer part is a rule change rather than an interface redesign, the two questions the capability marker and the runtime setting answer, the refusal semantics, the grandfather pass, what a 2.0 multi-edge save meets on a 2.1 load (the engine prunes the interfaces silently, measured), the packaging plan, the test estate, and the implementation-status section for what phase 1 actually shipped -- with the `sedge` suite's numbers, its red proof and the two places the implementation had to deviate from the design |
-| [`agents/fkrecipes-migration.md`](agents/fkrecipes-migration.md) | **The FkRecipes migration record**, 2026-09-01: what crossed onto the shared data-stage library (the two startup dropdowns, through the Legacy constructors) and what was tried, measured and declined (the item, the recipe and the technology). The prototype arm's engine failure verbatim, the fields the library's specs cannot carry, the packaged cost, and the GRADED FRICTION LIST -- every place consuming FkRecipes was clean, awkward, misleading or blocking, with the exact text, which is what an upstream ask is built from |
+| [`agents/fkrecipes-migration.md`](agents/fkrecipes-migration.md) | **The FkRecipes migration record**, BOTH ROUNDS, 2026-09-01. Round one: what crossed onto the shared data-stage library (the two startup dropdowns, through the Legacy constructors) and what was tried, measured and DECLINED (the item, the recipe and the technology) -- the prototype arm's engine failure verbatim and the fields the specs could not carry. **Round two: all four of round one's asks answered, so the prototypes followed**, with the like-for-like cost control (round one's code rebuilt on today's library, at the same path, because a longer path alone moves the wasm), the stage timings, the one behaviour that got narrower, and a GRADED FRICTION LIST per round -- every place consuming FkRecipes was clean, awkward, misleading or blocking, with the exact text, which is what an upstream ask is built from |
 | [`agents/estate-port.md`](agents/estate-port.md) | **The test estate, in Go.** The programme for removing the last hand-written Lua in the repository: fourteen suites' observer mods, the interactive staging mod, two data-stage-only stand-ins and the bench harness, in NINE phases, ALL DONE: eight on 2026-08-25 and phase 9 (`flip`) on 2026-08-26, on a 2.0 binary. What an observer is and the two shipped-guest rules it does not inherit, the one-module/N-mains layout and the measurement that says an observer cannot bloat the mod, the packaging recipe (a neutral working directory, every identity a flag, `--api` not optional), the `copy_testmod` staging seam, the `[BBB-OBS] error:` gate that replaces Lua's `error()`, the six gates every phase must clear, the harness surface, and a record per phase -- the PILOT (`m1`, `sedge`), phase 2 (`mar`, `mig21`, `qual`), phase 3 (`mix`, `plat`, `mig`), phase 4 (`m2`, `m3`, `edge`) phase 5 (the interactive staging mod, which was never a suite), phase 6 (the two data-stage-only stand-ins, the first packages here with NO CONTROL STAGE), phase 7 (the `bench/` harness's setup mod) and PHASE 8, the RUST re-port of `mig21` that closed the programme: every tagged log line byte-identical in order, a red proof each, the api-check verdicts that turned the stamped-vs-gated asymmetry into a number and produced the first `impacted` observer, phase 3's verification of `fkapi.Log(Value)` against a golden profiler line and phase 5's of `fkapi.RemoteCall` -- both before anything was built on them. **Phase 7's gate is not a golden log**: `bench/` is MEASUREMENT INFRASTRUCTURE, so what it owes is a COMPARABILITY run -- the same cells, both setup mods, interleaved in one session against one dist/ -- and it is where the `--persist=table` decision, the missing `on_nth_tick` binding and two engine findings about Factorio 2.1.16 are written up. **Phase 8's gate is CROSS-LANGUAGE TRANSCRIPT IDENTITY** -- 51 lines over two fixtures, byte-identical, no mask -- and it is where the one-manifest/two-outputs layout decision, the Rust build recipe's two necessary halves, and the red proof that the assertion script passed while the golden diff caught it are written up. **THE RUST ARM IS REVERTED**, 2026-08-26, on the user's decision that continuous Rust coverage for FkLua belongs to the fklua-ports repositories: the parity measurement stands as a completed measurement, phase 8's record is unchanged, and the reversion has a dated section of its own at the end of that file |
 | [`agents/maxports.md`](agents/maxports.md) | The 64-port cap: where it comes from (our slot geometry, not the engine), the three constraints an uncap must clear (size-class slots, heap buffers vs the root-scan gate, the per-edit hitch bound) — and §4, DONE 2026-08-04, what hitting the cap does now, with the before/after measurement and the one shape (a merge into an over-limit cluster) still not covered |
 | [`agents/single-edge.md`](agents/single-edge.md) | **DESIGN, not implemented.** The Factorio 2.1 port: 2.1's fixed collision-mask validation closes the `not_colliding_with_itself` door the edge interfaces stand on (boskid's report and answer, 2026-08-23/24), so the rule becomes one belt per part — the multi-edge setting (runtime-global, 2.0 only, default off, script-grandfathered UP on the first load of a save updating from the first GA release: dirty saves keep multi-edge and are warned once, clean saves land on the new default), the limit.go-style refusal, the migration of multi-edge saves, the interactive/GIF world rework, packaging as two releases from one tree. The two gating S2 probes are MEASURED: a 2.1 load of a 2.0 save silently deletes all but one belt-connectable per tile (no crash, no log line, hidden network intact, crippled delivery), and a fresh single-edge network on 2.1.14 runs at full rate. The 2.0.77 fixture saves are committed under `test/fixtures-2.0/` and cannot be regenerated without a 2.0 binary |

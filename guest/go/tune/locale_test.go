@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	fkrecipes "github.com/Techrocket9/fkrecipes/go"
 )
 
 // A MISSING LOCALE KEY IS A FIELD REPORT WAITING TO HAPPEN, and this repo
@@ -144,41 +146,37 @@ func TestModNameIsTheManifestName(t *testing.T) {
 	}
 }
 
-// localeSections parses a Factorio .cfg into section -> key -> value.
+// localeSections is section -> key -> value, read through the LIBRARY'S OWN
+// PARSER.
 //
-// A READER STILL EXISTS BECAUSE THE LIBRARY EXPORTS NO ACCESSOR. `CheckLocale`
-// and `CheckLocaleWith` take the file's text and return findings; there is no
-// way to ask them what a given entry SAYS, and the three assertions below are
-// about the text of specific entries rather than about their presence. It is
-// much smaller than the one it replaces -- the two-direction walk over the
-// values is the library's now -- and it is eight lines of INI without quoting:
-// `[section]` opens one, `key=value` fills it, `#` and `;` at the start of a
-// line are comments, and a value may contain anything including `=`.
+// THIS FILE CARRIED ITS OWN INI READER UNTIL ROUND TWO, and round one graded
+// that AWKWARD: `CheckLocale` and `CheckLocaleWith` return findings and there
+// was no way to ask what a given entry SAYS, so the three assertions below --
+// which are about the TEXT of specific entries rather than about their presence
+// -- needed a second parser. Two parsers over one grammar is two readings of
+// one file that can disagree, and the disagreement would be silent: the
+// library's checker would pass and this file's assertions would be made against
+// a different reading of the same bytes.
+//
+// [fkrecipes.LocaleEntries] is that parser's output, exported. It returns the
+// entries in FILE ORDER with their sections, and it skips a malformed line
+// exactly as the checker skips it -- so what is asserted below and what
+// `CheckLocaleWith` polices are now the same reading by construction. Parse
+// findings are not reported here and do not need to be:
+// [TestTheLocaleFileSatisfiesThePlan] runs the checker over the same file and
+// reports every one of them.
 func localeSections(t *testing.T) map[string]map[string]string {
 	t.Helper()
 	out := map[string]map[string]string{}
-	section := ""
-	sc := bufio.NewScanner(strings.NewReader(localeText(t)))
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
-			continue
+	for _, e := range fkrecipes.LocaleEntries(localeText(t)) {
+		if out[e.Section] == nil {
+			out[e.Section] = map[string]string{}
 		}
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			section = line[1 : len(line)-1]
-			continue
-		}
-		k, v, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		if out[section] == nil {
-			out[section] = map[string]string{}
-		}
-		out[section][k] = v
+		out[e.Section][e.Key] = e.Value
 	}
-	if err := sc.Err(); err != nil {
-		t.Fatal(err)
+	if len(out) == 0 {
+		t.Fatal("the locale file parsed to nothing at all, so every assertion " +
+			"below would pass over an empty reading")
 	}
 	return out
 }

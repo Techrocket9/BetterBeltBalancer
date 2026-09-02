@@ -6,6 +6,8 @@ The decision was taken on two measurement records made before a shipping line wa
 
 ## What migrated and what stayed, and why
 
+**THIS TABLE IS ROUND ONE'S AND THREE OF ITS ROWS ARE SUPERSEDED.** The item, the recipe and the technology are declarations too since round two; the rows are kept as they were measured, because the refusals they record are what the library's new surface answers.
+
 | what | verdict | why | evidence |
 |---|---|---|---|
 | `bbb-recipe-cost` (startup string dropdown, default `vanilla`, order `a`, six values) | **MIGRATED**, `fkrecipes.LegacyDropdownSettingNeedingLocale` | The Legacy constructors take a full name and an explicit order and emit both verbatim, which is exactly the shape a mod that already shipped needs: Factorio persists startup values in `mod-settings.dat` by name with no rename mechanism | `mod_settings_sha256` unmoved at `196275f867f7f8b5` on both mod sets (exp C); `PlanSettings` against a stub World emits the six fields verbatim (exp E) |
@@ -120,6 +122,120 @@ Each injected, observed and restored, with the restored file byte-compared again
 **What stays, and one of the two is not redundant with anything the library does.** `RecipePlan` and `TechLadder` are the ladder DATA. `RecipeOptions`, `TechOptions` and the two defaults are the option lists whose head IS each default. `FallbackUnit` is the vanilla research cost. `speed.go` is untouched, being no library concern at all. And **`TestEveryLadderTerminates` stays because the library cannot make its claim**: what FkRecipes guarantees is that it emits no name the game lacks, which an EMPTY recipe satisfies vacuously; a ladder ending at something every game with belts in it has is what stops that being the answer. `TestVanillaIsTodaysRecipe` stays too, re-pointed at the plan, so the same transcribed literal is now compared against a different machine.
 
 **No emitted byte moves here and the goldens therefore cannot**, which is the honest shape of this commit: `Resolve` was already unreferenced from the guest after commit 2, so the packaged data module comes out at **3,122,875 bytes of Lua**, the same figure to the byte, and `make datastage-check` is green on all eleven arms with the same four hashes. The gates are run anyway, because "cannot move" is a prediction until it is a measurement.
+
+### Commit 4: one parser over the locale file
+
+`guest/go/tune/locale_test.go` carried a thirty-line INI reader for the three assertions the library deliberately does not make: that both cost settings have non-blank descriptions, that the hand-rolled bool has its own `[mod-setting-name]`, and that the label quoted inside the `[bbb] single-edge-grandfathered` message is a prefix of that bool's menu row. Round one graded the missing accessor AWKWARD; `fkrecipes.LocaleEntries` is it, and the reader is deleted.
+
+**The point is not thirty lines, it is that two parsers over one grammar can disagree silently**: the checker would pass and this mod's own assertions would be made against a different reading of the same bytes. `LocaleEntries` is `CheckLocale`'s own parser's output, exported, skipping a malformed line exactly as the checker skips it, so the two readings are one by construction. `CheckLocaleWith` and the manifest-name test are untouched.
+
+**Red-proven twice**, each injected, observed, restored, with `git diff --quiet -- mod-data` exit 0 afterwards:
+
+| injected | what fired |
+|---|---|
+| the `[mod-setting-description]` line for `bbb-tech-cost` deleted | `locale_test.go:196: no [mod-setting-description] bbb-tech-cost: the settings menu shows the label with no tooltip under it` |
+| the label quoted inside `single-edge-grandfathered` changed to "Multiple belts per part" | `locale_test.go:256: [bbb] single-edge-grandfathered tells the player to turn off "Multiple belts per part" and the row in the menu is called "Allow multiple belts per balancer part (Factorio 2.0 only)": the message names an entry that is not there` |
+
+### What round two cost
+
+**The control is round one's code rebuilt on TODAY's library, at the real path**, because FkRecipes moved six commits between the rounds and grew every surface round two consumes. Round one's `guest/go/data`, `guest/go/tune` and `Makefile` were checked out into the real tree, built from `make clean`, measured and put back. The path is part of the control: the same round-one code built in a scratch clone under a longer path gives a 1,304,595 B `bbb.wasm` against the real tree's 1,302,885, TinyGo writing the module path into the debug sections.
+
+| | round one, recorded | the control | round two | vs the control |
+|---|--:|--:|--:|--:|
+| the zip | 665,986 | 673,731 | **662,803** | **-10,928 B, -1.62%** |
+| `fk_data_module.lua` | 3,216,828 | 3,349,529 | **3,123,134** | **-226,395 B, -6.76%** |
+| `dist/bbbdata.wasm` | 545,651 | 584,688 | **571,382** | -13,306 B, -2.28% |
+| `fk_module.lua` | 3,148,568 | 3,148,568 | **3,148,568** | byte-identical |
+| `dist/bbb.wasm` | 1,302,885 | 1,302,885 | **1,302,885** | byte-identical, `dfeb456a58f88e2d` |
+| members / events / defines | 56 / 24 / 4 | 56 / 24 / 4 | 56 / 24 / 4 | unmoved |
+| data-module functions | 85 | 92 | **84** | |
+
+`PlanData` is **23,288** emitted Lua lines, 32.9% of the module, against the control's **23,493** and round one's recorded 21,047: the growth is the LIBRARY's between the two rounds and round two is 205 lines under the control. It is 82.8% of the way to the 28,139-line function that once failed Lua 5.2's parser, no jump-span advisory fired, and the consumer still has no remedy. What changed about it is that it RUNS now.
+
+`PlanSettings` is absent from the map, inlined into `main.onSettings` (3,460 lines). `tune.Plan` is 4,129, `main.settings` 440 against the control's 4,982, `main.onData` 173.
+
+**Stage timing**, five interleaved `--dump-data` runs per package, medians of the engine's own stage timestamps:
+
+| stage | the control | round two | |
+|---|--:|--:|--:|
+| `settings.lua` | 0.069 s | **0.065 s** | -0.004 |
+| `data.lua` | 0.079 s | **0.102 s** | **+0.023** |
+| `data-final-fixes.lua` | 0.177 s | **0.176 s** | -0.001 |
+| settings start to the prototype checksum | 0.435 s | **0.449 s** | **+0.014** |
+
+The settings stage got cheaper because a 6.8% smaller module is parsed three times; the data stage pays for the whole plan, including the cycle walk over every technology in the game. Net, about fourteen milliseconds per game load, once, on a path with no tick in it.
+
+**No host-call count is given because there is no instrument.** Neither `fklua mod`'s report nor Factorio's log counts what a data stage calls, and `fkdata` keeps no counter, so the walk's cost is visible only as the 23 ms above.
+
+### Round two friction, graded
+
+Same grades as round one: CLEAN worked as documented, AWKWARD worked but cost something, MISLED pointed the wrong way, BLOCKED needed a workaround or could not be done.
+
+**NOTHING IS BLOCKED THIS ROUND, and four of round one's five BLOCKED entries are closed by name.**
+
+#### `World` grew a method and broke the consumer's host stub: AWKWARD
+
+The round-two baseline's `make check` exits 2 on the untouched tree:
+
+```
+tune/plan_test.go:166:30: cannot use planWorld{} (value of struct type planWorld) as fkrecipes.World value in argument to Plan().PlanData: planWorld does not implement fkrecipes.World (missing method EntityExists)
+```
+
+`World` is an EXPORTED INTERFACE a consumer must implement to hold its plan up to the light on the host, so every method added to it is a compile break in every consumer's test tree. That is the ordinary Go cost of an interface a library asks consumers to implement, it is what an unreleased library is for, and the fix here was six lines. It is graded rather than waved through because the same addition after a tag would be a breaking change in a library whose version says otherwise, and because the mitigation is cheap: an embedded `Named` already exists for the settings half, and the same shape (a small required core plus optional probes the library can default) would make the next method additive.
+
+#### `PlanSettings` takes `Named`, one method: CLEAN, and it closes round one's finding
+
+Round one graded "`World` is ten methods and `PlanSettings` asks one of them" AWKWARD, with nine stub methods kept only to satisfy the interface. `planWorld` is one method now. The fix is exactly the one the note asked for.
+
+#### Host stubs for the emit layer: CLEAN, and it closes round one's BLOCKED
+
+`go/guest_host.go` gives `Emit`, `EmitSettings` and `EmitData` host counterparts that panic naming the cause, so `make check`'s data-guest vet dropped `-tags tinygo.wasm`. Round one graded the absence BLOCKED because the failure was a compile error naming a documented method in the one gate that exists to catch compile errors. The header of that file cites this mod's Makefile line by name, which is the ask landing.
+
+#### `EmitSettings` and `EmitData`: CLEAN, and it no longer helps this consumer
+
+The split does what round one asked for: name the half you use and the linker can drop the other. **This mod stopped being the consumer it was written for in the same round**, because a mod with both a settings plan and a data plan links both planners whatever it calls. `PlanData` is 23,288 lines of the packaged module and it RUNS now, which is the honest resolution of round one's "one function that never runs".
+
+#### `LegacyItem`, `LegacyRecipe`, `LegacyTechnology`, `Order`, `PlaceResult`: CLEAN, and they close three BLOCKED entries
+
+Round one's three fatal refusals were the prefix, the missing `order` and the missing `place_result`. All three are library surface now and all three carried this mod's prototypes across with **both golden hashes unmoved and the three prototypes byte-identical to their pre-migration references after `jq -S`**. Nothing had to be worked around and nothing had to be repointed.
+
+#### The recipe and the technology cannot migrate one at a time: AWKWARD
+
+`enabled` is emitted as `!unlocked`, where unlocked means a technology IN THE SAME PLAN lists the recipe in `Unlocks`. `RecipeSpec` has no `Enabled` field, and `Extra` refuses a key the library emits itself, so there is no way to say "enabled = false, the technology that unlocks me is somebody else's problem for one commit". A recipe migrated alone comes out craftable from the first minute and moves the data hash.
+
+The RULE is documented (`docs/usage.md`: "A recipe some technology unlocks is emitted with `enabled = false`... A recipe nothing unlocks is emitted enabled"). What is not is its consequence for `docs/migration.md`'s step 2, which reads "Move the prototypes across with `LegacyItem`, `LegacyRecipe` and `LegacyTechnology`" as though a prototype at a time were available. One sentence saying a recipe and the technology that unlocks it are one step would have saved this round a measurement.
+
+#### `PlaceResult`'s probe constrains the consumer's own hook body, and the docs say "beside": AWKWARD, mild
+
+The probe is documented and correct, and its refusal names the declaration:
+
+```
+fkrecipes: the item bbb-balancer-part names a place_result bbb-balancer-part that does not exist
+```
+
+What it means for a consumer whose entity is hand-rolled IN THE SAME HOOK is that the entity must be emitted BEFORE `EmitData` runs, which is a constraint on the order of statements inside somebody's `fk_data`. `docs/migration.md` says "The entity stays hand-rolled beside the `Emit` call"; "before" is the word that would have said it. The cost is small because the failure is loud, and this mod's `main.go` now carries the reason at the call site.
+
+#### The `CostBy` fallback is validated whether or not it is reachable: CLEAN, with a migration-doc ask
+
+`docs/usage.md` says so plainly: "a science pack that does not exist is refused before anything is emitted". Measured here, in a game whose `logistics` is present and carries a unit, so the fallback cannot be reached:
+
+```
+fkrecipes: the technology bbb-balancer prices itself in automation-science-pack, which does not exist
+```
+
+It is the documented behaviour and it is the right one for a field that is the cost of last resort. **For a MIGRATING mod it is a load that used to succeed and now refuses**, which is the one thing `docs/migration.md` exists to warn about, and it warns about names rather than about this. A sentence under `CostBy` in that document would close it. Graded CLEAN because the library does what it says.
+
+#### `LocaleEntries`: CLEAN, and it closes round one's AWKWARD
+
+Round one asked for a parsed reading a consumer's own assertions could use, and got one. `guest/go/tune/locale_test.go`'s thirty-line INI reader is deleted; the checker and this mod's three extra assertions are one reading of one file now.
+
+#### `Extra` and `ResultNamed` were not needed, which is worth saying
+
+Every field of all three prototypes has a named slot. Nothing went through `Extra` and nothing was left unplaced, so round one's field-by-field DROPPED list is empty this round. `ResultNamed` is not used either: this recipe produces an item the same plan declares, so it takes the handle.
+
+#### Consuming a library from a working tree is a build-graph hazard: not the library's, recorded anyway
+
+`DATA_GUEST_SRC` listed this repository's own files, and FkRecipes resolves through a directory `replace`, so `make mod` did not relink the data guest when the library moved. The round-two baseline's `make datastage-check` was green over a package built against a library six commits older than the one on disk. The Makefile tracks `../FkRecipes/go` now. It is BBB's defect and it is written down here because it is a consequence of the arrangement the library's own README prescribes for an unpublished module, so the next consumer will meet it.
 
 ## The FkLua baseline
 
@@ -434,6 +550,8 @@ written as mandatory and read as nil here.
 **Every verdict in this note therefore rests on the 2.0.77 golden row**, which is the row this repository has always been able to take on this machine and the row `docs/migration.md` names as the acceptance criterion. Two things follow and both are owed to a session with a 2.1 binary: the fourteen suites over a package carrying the library, and the 2.1.16 and 2.1.17 hashed arms. Neither can move the settings prototypes (a settings stage does not branch on the engine for these two, unlike `bbb-multi-edge-parts`), so the expected result is unmoved hashes and unmoved suite numbers, which is exactly the claim that has to be measured rather than assumed.
 
 ## What the library would need for the prototypes to follow
+
+**ALL FOUR OF THESE ARE ANSWERED AND THE PROTOTYPES FOLLOWED, 2026-09-01, round two.** `LegacyItem`, `LegacyRecipe` and `LegacyTechnology` are the first; `Order` on all three specs is the second; `PlaceResult` on `ItemSpec` is the third; `ResultNamed` is the fourth, and it is the one this mod turned out not to need, its recipe producing an item the same plan declares. The list is kept as it was written, because what it asked for is exactly what arrived and that is the useful record.
 
 Asks, not designs. Each one is what would have let experiment D2 keep this mod's `data_raw_sha256` golden, and each is stated as a slot rather than as a mechanism, because the mechanism is FkRecipes' to choose.
 
