@@ -133,7 +133,8 @@ func onData() {
 	sprites()
 
 	// THE ITEM, THE RECIPE AND THE TECHNOLOGY, planned by FkRecipes out of
-	// guest/go/tune.
+	// guest/go/tune. It is the whole of what a player crafts and researches,
+	// and it is three declarations there rather than three files here.
 	//
 	// IT RUNS AFTER entity() AND THAT IS A REQUIREMENT RATHER THAN THE OLD
 	// FILE ORDER SURVIVING. The item's `place_result` names the balancer part
@@ -144,13 +145,6 @@ func onData() {
 	// place_result bbb-balancer-part that does not exist` is what a reordering
 	// would produce.
 	tune.Plan().EmitData()
-
-	// Still hand-rolled: the recipe and the technology are coupled through the
-	// library's `enabled` field, which it emits as "no technology in this plan
-	// unlocks me", so the two can only cross together. They do in the next
-	// commit; until then they are here and the item is not.
-	recipe()
-	technology()
 }
 
 //go:wasmexport fk_data_final_fixes

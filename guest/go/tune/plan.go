@@ -104,9 +104,9 @@ func Plan() *fkrecipes.Lib {
 	// prototypes and a prototype is built before a map exists. The one setting
 	// of this mod's that is runtime-global is hand-rolled in
 	// guest/go/data/settings.go for exactly that reason.
-	lib.LegacyDropdownSettingNeedingLocale(
+	recipeCost := lib.LegacyDropdownSettingNeedingLocale(
 		SettingRecipeCost, RecipeDefault(), RecipeOptions(), "a")
-	lib.LegacyDropdownSettingNeedingLocale(
+	techCost := lib.LegacyDropdownSettingNeedingLocale(
 		SettingTechCost, TechDefault(), TechOptions(), "b")
 
 	// THE ITEM, and every field of it is transcribed from what shipped.
@@ -122,7 +122,7 @@ func Plan() *fkrecipes.Lib {
 	// and one that places nothing is not this mod's item. The library PRESENCE
 	// PROBES it against the entity types, so `entity()` has to have run before
 	// `EmitData` does -- see the header, and guest/go/data/main.go's `fk_data`.
-	lib.LegacyItem(PartName, fkrecipes.ItemSpec{
+	part := lib.LegacyItem(PartName, fkrecipes.ItemSpec{
 		Icon:        PartIcon,
 		IconSize:    64,
 		StackSize:   50,
@@ -131,7 +131,125 @@ func Plan() *fkrecipes.Lib {
 		PlaceResult: PartName,
 	})
 
+	// THE RECIPE, whose ingredients the player chooses.
+	//
+	// `IngredientsBy` is the verb this mod wanted the library for and could
+	// not reach in round one: one plan per dropdown value, every name a
+	// LADDER, and the first rung the game actually has is what is emitted. It
+	// is the same guarantee [RecipePlan]'s ladders were written to have and it
+	// is the library's to keep now -- an ingredient naming a prototype nobody
+	// defined is a HARD LOAD FAILURE with this mod's name on it, in somebody
+	// else's overhaul pack, before a prototype of theirs is read.
+	//
+	// `CraftTime: 1` rather than `CraftTimeFrom`: what a balancer part costs
+	// is a choice of INGREDIENTS here and one second is what shipped. The
+	// library emits it as `energy_required` and omits the field entirely at
+	// zero, so the 1 has to be said.
+	recipe := lib.LegacyRecipe(part, PartName, fkrecipes.RecipeSpec{
+		CraftTime:     1,
+		Order:         PartOrder,
+		IngredientsBy: &fkrecipes.IngredientChoices{Setting: recipeCost, Choices: recipeChoices()},
+	})
+
+	// THE TECHNOLOGY, whose cost the player chooses.
+	//
+	// `CostBy` copies the chosen source's whole unit VERBATIM and makes that
+	// same source the technology's sole prerequisite. THE PREREQUISITE MOVING
+	// WITH THE UNIT is the rule this mod wrote by hand and the reason it is
+	// worth handing over: charging `logistics-3`'s science while still hanging
+	// off `logistics` would put a machine that costs blue science at a place
+	// in the tree a player reaches with red -- researchable long before it is
+	// affordable, and out of order in Factoriopedia.
+	//
+	// THE FALLBACK IS TODAY'S BEHAVIOUR, LITERALLY: base's own logistics unit,
+	// 20 automation science over 15 seconds, which is what this technology has
+	// cost in every save this mod has ever been in. It applies where no source
+	// in the chosen ladder carries a unit -- a pack that removed the logistics
+	// chain, or, far likelier since 2.0, one that turned it into a TRIGGER
+	// technology -- and a technology that falls back has no prerequisite at
+	// all, which is what stops `prerequisites = {"logistics"}` naming a
+	// technology nobody defined.
+	//
+	// ONE BEHAVIOUR CHANGE, WRITTEN DOWN RATHER THAN DISCOVERED: the library
+	// VALIDATES the fallback's science pack against the game whether or not
+	// the fallback is reached, so a pack with a perfectly good `logistics` and
+	// no `automation-science-pack` in it is refused at plan time where the
+	// hand-rolled version would have loaded. That is a narrower failure than
+	// the one it replaces (a fallback that DID fire in such a pack emitted a
+	// unit naming a missing item, which is the engine's own assignID abort)
+	// and it is not the same one. agents/fkrecipes-migration.md grades it.
+	lib.LegacyTechnology(TechName, fkrecipes.TechSpec{
+		Icon:     PartIcon,
+		IconSize: 64,
+		Order:    TechOrder,
+		Unlocks:  []fkrecipes.RecipeRef{recipe},
+		CostBy: &fkrecipes.CostChoices{
+			Setting:  techCost,
+			Choices:  techChoices(),
+			Fallback: FallbackUnit(),
+		},
+	})
+
 	return lib
+}
+
+// recipeChoices turns [RecipePlan] into the library's shape, one choice per
+// allowed value IN MENU ORDER.
+//
+// BUILT FROM THE LADDERS RATHER THAN BESIDE THEM. The library checks a choice
+// list against its dropdown's allowed values and refuses a mismatch by name, so
+// two hand-kept lists would be caught -- but caught at load, by the engine
+// raising, rather than never written. [RecipeOptions] is the one list and
+// [RecipePlan] is the one plan per value, exactly as they were when this
+// package resolved them itself.
+func recipeChoices() []fkrecipes.IngredientChoice {
+	options := RecipeOptions()
+	out := make([]fkrecipes.IngredientChoice, 0, len(options))
+	for _, option := range options {
+		plan := RecipePlan(option)
+		ings := make([]fkrecipes.Ingredient, 0, len(plan))
+		for _, item := range plan {
+			// The amount crosses through int64 because that is the width the
+			// library takes, and every amount in this package is a small whole
+			// number -- 1, 2 or 4. [TestEveryAmountIsAWholeNumber] is what says
+			// so rather than the reader.
+			ings = append(ings, fkrecipes.IngredientNamed(
+				int64(item.Amount), item.Ladder[0], item.Ladder[1:]...))
+		}
+		out = append(out, fkrecipes.IngredientChoice{Value: option, Ingredients: ings})
+	}
+	return out
+}
+
+// techChoices is the same for [TechLadder]: one choice per allowed value, whose
+// sources are that option's ladder, most preferred first.
+func techChoices() []fkrecipes.CostChoice {
+	options := TechOptions()
+	out := make([]fkrecipes.CostChoice, 0, len(options))
+	for _, option := range options {
+		out = append(out, fkrecipes.CostChoice{Value: option, Sources: TechLadder(option)})
+	}
+	return out
+}
+
+// FallbackUnit is what this technology costs in a game whose whole logistics
+// chain is missing or trigger-researched: base's own `logistics` unit, written
+// out.
+//
+// IT IS TODAY'S BEHAVIOUR AND NOT A NEW NUMBER. 20 automation science over 15
+// seconds is what `logistics` has charged since 1.0 and therefore what this
+// technology has cost in every save this mod has ever been in, so a pack that
+// removed the chain gets the vanilla cost rather than a broken load, and
+// nobody who has not removed it can tell the difference.
+//
+// Exported so a test can compare it against the fixture's `logistics` without
+// either of them being derived from the other.
+func FallbackUnit() fkrecipes.UnitSpec {
+	return fkrecipes.UnitSpec{
+		Count:   20,
+		Seconds: 15,
+		Packs:   []fkrecipes.Pack{{Name: "automation-science-pack", Amount: 1}},
+	}
 }
 
 // The names and the two sort keys three files have to agree about: this plan,
