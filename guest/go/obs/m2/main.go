@@ -84,12 +84,31 @@
 //	lsio     2->2 through LANE SPLITTERS against the parts. Base ships the
 //	         `lane-splitter` TYPE and not one buildable entity of it, so the data
 //	         stage clones the mod's own hidden one to have anything to place
-//	pass     the NEGATIVE: a belt line running PAST the cluster's north face,
-//	         perpendicular to it, which must not be classified as an edge and
-//	         must not have anything stolen from it. Under the one-belt rule it
-//	         has teeth it did not have before: both top parts already carry their
-//	         one belt, so a classifier that read the passing line as an edge
+//	pass     a belt line running PAST the cluster's north face, perpendicular to
+//	         it, with a FED REAR on every tile that touches a part. That is the
+//	         branch it pins since the curved exit was classified: a perpendicular
+//	         belt that something else already delivers into is a SIDE-LOAD, which
+//	         this mod declines because a half-lane port backs the butterfly up.
+//	         It must not be an edge and must not have anything stolen from it,
+//	         and under the one-belt rule it has teeth: both top parts already
+//	         carry their one belt, so a classifier that read the line as an edge
 //	         would take them to TWO and the whole cluster would be REFUSED
+//
+// And the CURVE band, which is what a belt across a face does when nothing is
+// behind it:
+//
+//	curve    a 2 -> 2 whose two outputs are CORNER belts -- one turning north off
+//	         an east face, one turning east off a south face. The engine bends a
+//	         belt towards its only perpendicular feeder, so an output interface
+//	         is all it takes; what this rig asks is whether such a port is a
+//	         FULL port, which chest totals alone cannot say. Both of its runs are
+//	         sampled per LANE, because a curve carries both lanes and a side-load
+//	         carries one, and that is the only difference visible from outside
+//	sload    the negative that separates them. A perpendicular belt whose rear is
+//	         fed by a DEAD belt, on the free face of an edgeless part: it must
+//	         never become an output, so its own chest must take EXACTLY ZERO
+//	         while the balancer beside it runs at a full belt. The feeder carries
+//	         nothing, so the only thing that could ever fill that chest is us
 //
 // Plus two measurements that are not rigs:
 //   - a profiler around a forced full recompile of sat4 and sat8
@@ -325,6 +344,10 @@ var rigs = []rigCfg{
 	{name: "lio", outs: 1, build: buildLio},
 	{name: "lsio", outs: 2, build: buildLsio},
 	{name: "pass", outs: 3, build: buildPass},
+
+	// the curve band
+	{name: "curve", outs: 2, build: buildCurve},
+	{name: "sload", outs: 2, build: buildSload},
 }
 
 // The state a rig keeps once it is built. TILES and not entities: everything
@@ -342,11 +365,12 @@ type outSlot struct {
 }
 
 var (
-	built    []rigState // parallel to rigs
-	lossBase int
-	laneBase int
-	rowsA    int
-	rowsB    int
+	built     []rigState // parallel to rigs
+	lossBase  int
+	laneBase  int
+	curveBase int
+	rowsA     int
+	rowsB     int
 )
 
 // layOutBands assigns every rig its base and works out how tall each surface has
@@ -686,13 +710,21 @@ func buildLsio(s fkapi.LuaSurface, base int) []harness.XY {
 	return out
 }
 
-// pass: the NEGATIVE. A working 2->2, plus a belt line running east along row
-// `base` -- directly over the north face of the top part and perpendicular to
-// it. classifySide keys on the belt's direction: from the part's north side
-// `dir` is north and `back` is south, and an EAST-facing belt is neither, so it
-// falls through and is not an edge. That is the incumbent's accepted limitation
-// ("a belt curving away is not an output") met from the other side, and until
-// this rig nothing asserted it.
+// pass: a working 2->2, plus a belt line running east along row `base` --
+// directly over the north faces of the top parts and perpendicular to them.
+//
+// WHICH BRANCH THIS PINS CHANGED WHEN THE CURVED EXIT WAS CLASSIFIED, and the
+// rig did not have to. A perpendicular belt used to fall through classifySide
+// on its direction alone; now it is asked two more questions, and this line
+// answers the first of them: every tile of it that touches a part has the
+// PREVIOUS TILE OF THE SAME LINE behind it, so its rear is fed and it is a
+// SIDE-LOAD rather than a corner. A side-loaded port would deliver half a lane
+// and back the butterfly up, so the mod declines it -- and this rig is what says
+// so, where it used to say only that a perpendicular direction was ignored. The
+// `sload` rig below is the same branch made deliberate and given a chest.
+//
+// The line's own first belt, at (-3, base), is not adjacent to a part, so
+// nothing here depends on what the rule does with the head of a line.
 //
 // The passing line has its own source and its own chest: the balancer must
 // deliver its own two belts exactly, and must not take a single item from a line
@@ -721,6 +753,76 @@ func buildPass(s fkapi.LuaSurface, base int) []harness.XY {
 	beltsX(s, belt, &dirE, -3, 4, base)
 	out[2] = sink(s, 5, base)
 	return out
+}
+
+// curve: a 2 -> 2 whose outputs are CORNER belts.
+//
+// A belt running across a balancer's face used to be nothing at all -- the
+// incumbent's accepted limitation, inherited. It is an output now, because the
+// engine bends a belt towards its only perpendicular feeder and an output
+// interface on the cluster tile is a feeder like any other. So the compiler's
+// whole job here is to CLASSIFY it; the corner is Factorio's.
+//
+//	row base    . . [2,base]->->-> sink        the north exit turns east
+//	row base+1  ->[W][E] [2,base+1]^           part (1,base+1) exits NORTH
+//	row base+2  ->[W][E]  .                    part (1,base+2) exits SOUTH
+//	row base+3   .  [1,base+3]->->-> sink      ... and that one turns east
+//
+// THE TWO EXITS ARE ON DIFFERENT FACES AND THAT IS FORCED RATHER THAN CHOSEN.
+// Two curves stacked on the same column cannot both be accepted: whichever one
+// is upstream stands on the other's REAR tile and feeds it, which is a
+// side-load, so the downstream one is declined. Putting one on the east face and
+// one on the south face also covers both perpendicular readings -- a belt
+// turning off an east face and a belt turning off a south face -- in one rig.
+//
+// Every tile either exit's rule looks at is kept clear by the layout and not by
+// luck: (2,base+2) is the east face of the lower part and stays empty, which is
+// the north exit's rear; (0,base+3) is the south face of the lower-west part and
+// stays empty, which is the east exit's rear; and both far tiles, (3,base+1) and
+// (1,base+4), are outside the rig.
+func buildCurve(s fkapi.LuaSurface, base int) []harness.XY {
+	curveBase = base
+	for i := 1; i <= 2; i++ {
+		put(s, part, 0, base+i, nil, "")
+		put(s, part, 1, base+i, nil, "")
+		sourceE(s, -5, base+i)
+		beltsX(s, belt, &dirE, -3, -1, base+i)
+	}
+	// The north exit off the upper part's east face, turning east one row up.
+	put(s, belt, 2, base+1, &dirN, "")
+	beltsX(s, belt, &dirE, 2, 4, base)
+	// The east exit off the lower part's south face.
+	beltsX(s, belt, &dirE, 1, 4, base+3)
+	return []harness.XY{sink(s, 5, base), sink(s, 5, base+3)}
+}
+
+// sload: the negative the curve band needs, and the branch `pass` covers from
+// the other side.
+//
+// A 1 -> 1 over two parts with a THIRD, edgeless part below it, and a
+// perpendicular belt on that part's free south face whose REAR IS FED by a belt
+// that carries nothing. A fed rear means the belt shares itself between two
+// sources, so a port there would deliver half a lane -- and a half-lane port
+// backs the butterfly up, which is why this mod declines it.
+//
+// IT CANNOT PASS VACUOUSLY. The dead feeder has no source, so the only thing in
+// the world that could ever put an item in that chest is an interface of ours on
+// the edgeless part: zero there is a statement, not an absence. And the
+// balancer's own chest is sampled beside it, so a rig that simply stopped
+// running does not read as a successful decline.
+func buildSload(s fkapi.LuaSurface, base int) []harness.XY {
+	put(s, part, 0, base, nil, "")
+	put(s, part, 1, base, nil, "")
+	put(s, part, 0, base+1, nil, "")
+	sourceE(s, -5, base)
+	beltsX(s, belt, &dirE, -3, -1, base)
+	beltsX(s, belt, &dirE, 2, 4, base)
+
+	// The dead feeder, and then the belt it feeds: laid west to east so the
+	// feeder is already standing when the target arrives.
+	put(s, belt, -1, base+2, &dirE, "")
+	beltsX(s, belt, &dirE, 0, 4, base+2)
+	return []harness.XY{sink(s, 5, base), sink(s, 5, base+2)}
 }
 
 // ---------------------------------------------------------------------------
@@ -863,6 +965,46 @@ func sampleLanes(tick uint64) {
 			}
 		}
 		out.Open("lane t=").U(tick).S(" out=").I(int64(row + 1)).
+			S(" left=").I(l1).S(" right=").I(l2).End()
+	}
+}
+
+// sampleCurveLanes is sampleLanes asked of the two CORNER runs, and it is the
+// only instrument that can tell a curved port from a side-loaded one.
+//
+// Both produce items in the chest and both look like a port from a total. What
+// separates them is where the items are STANDING: a belt whose only feeder is
+// perpendicular curves and carries BOTH lanes, and a belt that is side-loaded
+// onto a straight run gets one. So a decline that had been wrongly accepted --
+// or an accept that turned out to behave like a side-load -- shows up here and
+// in nothing else this suite reads.
+func sampleCurveLanes(tick uint64) {
+	if curveBase == 0 {
+		return
+	}
+	s := harness.Surface(surfA)
+	// The straight tail of each corner run, past the turn: (2..4, base) for the
+	// north exit and (2..4, base+3) for the east one.
+	for run, y := range [2]int{curveBase, curveBase + 3} {
+		var l1, l2 int64
+		for x := 2; x <= 4; x++ {
+			b, ok := harness.FindAt(s, x, y, "", "transport-belt")
+			if !ok {
+				continue
+			}
+			e := fkapi.LuaEntity{Object: b}
+			if line, err := e.GetTransportLine(fkapi.DefinesTransportLineLeftLine()); err == nil {
+				if c, err := (fkapi.LuaTransportLine{Object: line}).GetItemCount(nil); err == nil {
+					l1 += int64(c)
+				}
+			}
+			if line, err := e.GetTransportLine(fkapi.DefinesTransportLineRightLine()); err == nil {
+				if c, err := (fkapi.LuaTransportLine{Object: line}).GetItemCount(nil); err == nil {
+					l2 += int64(c)
+				}
+			}
+		}
+		out.Open("curvelane t=").U(tick).S(" out=").I(int64(run + 1)).
 			S(" left=").I(l1).S(" right=").I(l2).End()
 	}
 }
@@ -1046,11 +1188,11 @@ var schedule = []harness.Step{
 	// Five lane samples spread over the measurement window. One would be a
 	// snapshot of a belt that happens to have a gap in it; five is a statement
 	// about where the items live.
-	{Tick: 1900, Do: func() { sampleLanes(1900) }},
-	{Tick: 2300, Do: func() { sampleLanes(2300) }},
-	{Tick: 2700, Do: func() { sampleLanes(2700) }},
-	{Tick: 3100, Do: func() { sampleLanes(3100) }},
-	{Tick: 3500, Do: func() { sampleLanes(3500) }},
+	{Tick: 1900, Do: func() { sampleLanes(1900); sampleCurveLanes(1900) }},
+	{Tick: 2300, Do: func() { sampleLanes(2300); sampleCurveLanes(2300) }},
+	{Tick: 2700, Do: func() { sampleLanes(2700); sampleCurveLanes(2700) }},
+	{Tick: 3100, Do: func() { sampleLanes(3100); sampleCurveLanes(3100) }},
+	{Tick: 3500, Do: func() { sampleLanes(3500); sampleCurveLanes(3500) }},
 	{Tick: 3540, Do: func() { report(3540) }},
 	// After the last sample, so it cannot disturb one. Every rig has been
 	// standing untouched since tick 900, so the world and the registry must

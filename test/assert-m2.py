@@ -27,6 +27,8 @@ COMPILED = re.compile(
 )
 TIMING = re.compile(r"\[BBB-M2\] timing (.+?) Duration: ([\d.]+)ms")
 LANE = re.compile(r"\[BBB-M2\] lane t=(\d+) out=(\d+) left=(\d+) right=(\d+)")
+CURVELANE = re.compile(
+    r"\[BBB-M2\] curvelane t=(\d+) out=(\d+) left=(\d+) right=(\d+)")
 AUDIT = re.compile(
     r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) unbuilt=(\d+)"
     r"(?: refused=(\d+))?")
@@ -36,14 +38,16 @@ SEDGE_REFUSED = re.compile(
 T0, T1 = 1800, 3540
 
 # What the rigs BUILD, written down here rather than read off the guest's own
-# summary. Twenty-one clusters, two columns of parts per row -- see the layout
-# block at the top of guest/go/obs/m2/main.go.
+# summary. Twenty-three clusters, two columns of parts per row -- see the layout
+# block at the top of guest/go/obs/m2/main.go. The last two are the curve band:
+# `curve`, a 2->2 over four parts, and `sload`, a 1->1 over two with a third
+# edgeless part carrying the belt that must NOT become a port.
 #
 # It is a statement about the SAVE and not about the compiler, which is the
 # whole reason it is a constant: a rig that quietly lost a row, or that was
 # rebuilt one column wide in the old multi-edge idiom, moves this number, and
 # nothing the guest reports about itself could say so.
-WANT_CLUSTERS, WANT_PARTS = 21, 156
+WANT_CLUSTERS, WANT_PARTS = 23, 163
 
 # Every profiler window this suite is supposed to publish, by its LABEL.
 #
@@ -141,6 +145,17 @@ EXPECT = [
     # It also took TWO changes, not the one that was obvious. See the note on
     # the audit block at the bottom.
     ("lsio", 2, 2.0, 0.01),
+
+    # --- the curve band ----------------------------------------------------
+    # A 2->2 whose two outputs are CORNER belts: one turning north off an east
+    # face, one turning east off a south face. A belt across a face used to be
+    # nothing at all -- the incumbent's accepted limitation, inherited -- and is
+    # an output now, because the engine bends it towards its only perpendicular
+    # feeder as soon as we feed it. The claim this row makes is that such a port
+    # is a FULL port and that two of them balance: 2.000x at the same 1% bound
+    # every straight rig is held to. Whether it really CURVES rather than
+    # side-loads is a per-lane question and is asserted below.
+    ("curve", 2, 2.0, 0.01),
 ]
 
 
@@ -336,6 +351,76 @@ def main():
                 "lane splitter should halve a one-lane feed, not merely leak "
                 "onto the other lane" % (out, 100 * (1 - minority), left, right))
 
+    # --- the curve band: a corner is a FULL port, and a side-load is none ----
+    #
+    # The chest totals above already say `curve` delivers 2.000x and balances.
+    # What they cannot say is whether each port is really a CURVE. A belt fed
+    # only from the side carries both lanes; a belt side-loaded onto a straight
+    # run carries one, at half the rate -- and two half-lane ports feeding two
+    # chests would read as 1.0x rather than 2.0x, so a total does catch the gross
+    # case. It does not catch a port that is somehow full on one lane, and it
+    # says nothing at all about WHY the number is right. These do.
+    curvelanes = {}
+    for raw in lines:
+        m = CURVELANE.search(raw)
+        if m:
+            curvelanes.setdefault(int(m.group(2)), []).append(
+                (int(m.group(1)), int(m.group(3)), int(m.group(4))))
+    if not curvelanes:
+        fail.append("curve: no per-lane sample was ever logged, so the claim "
+                    "that a curved exit is a full port is untested -- the chest "
+                    "totals cannot tell a curve from anything else that fills")
+    for out in sorted(curvelanes):
+        rows = curvelanes[out]
+        left = sum(l for _, l, _ in rows)
+        right = sum(r for _, _, r in rows)
+        both = sum(1 for _, l, r in rows if l > 0 and r > 0)
+        print("curve    exit %d over %d samples: left=%d right=%d, both lanes "
+              "occupied on %d of them" % (out, len(rows), left, right, both))
+        if left == 0 or right == 0:
+            fail.append(
+                "curve: exit %d had %d items on its left lane and %d on its "
+                "right over %d samples. A curved exit carries BOTH lanes; one "
+                "empty lane is what a side-load looks like, and it is the one "
+                "thing the totals above cannot see"
+                % (out, left, right, len(rows)))
+            continue
+        if both < len(rows) - 1:
+            fail.append(
+                "curve: exit %d had both lanes occupied on only %d of %d "
+                "samples -- the corner is not being kept fed on both lanes"
+                % (out, both, len(rows)))
+        minority = min(left, right) / float(left + right)
+        if minority < 0.3:
+            fail.append(
+                "curve: exit %d is %.1f%% on one lane (left=%d right=%d). A "
+                "corner should be near even; this is the shape a half-lane port "
+                "makes" % (out, 100 * (1 - minority), left, right))
+
+    # sload: the side-loaded belt that must never become a port.
+    #
+    # ITS SECOND CHEST IS THE ASSERTION AND ZERO IS THE ONLY PASSING VALUE. The
+    # belt's rear is fed by a DEAD belt with no source at all, so nothing in the
+    # world can put an item on that run except an interface of ours on the
+    # edgeless part it stands against. Its first chest is what stops the zero
+    # being vacuous: the balancer beside it has to be delivering a full belt at
+    # the same time.
+    d = deltas("sload")
+    if d is not None:
+        print("sload    balancer %d items (%.3fx belt), side-loaded run %d items"
+              % (d[0], d[0] / float(belt), d[1]))
+        if not 0.98 <= d[0] / float(belt) <= 1.02:
+            fail.append("sload: the balancer beside the side-loaded belt "
+                        "delivered %.3f belts, expected 1.0 -- a rig that is not "
+                        "running cannot say anything about what it declined"
+                        % (d[0] / float(belt)))
+        if d[1] != 0:
+            fail.append("sload: %d items reached the side-loaded run's own "
+                        "chest. Its rear is fed by a dead belt, so the only "
+                        "thing that could have put them there is an output "
+                        "interface on the edgeless part -- a half-lane port, "
+                        "which is what the rule declines" % d[1])
+
     # --- item conservation across a recompile -------------------------------
     # The teardown that matters is the one the check itself provoked, which is
     # the last one logged before the check reported. Other rigs tear down during
@@ -516,7 +601,7 @@ def main():
             print("  " + f)
         return 1
     print("\nM2 network assertions passed (%d uniform-output rigs, plus tslow, "
-          "pass and lane)" % len(EXPECT))
+          "pass, lane, curve and sload)" % len(EXPECT))
     return 0
 
 

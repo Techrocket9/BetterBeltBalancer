@@ -64,6 +64,13 @@
 //	      and the conservation kill-test: 100 cycles of add-part /
 //	      remove-everything on a network that is FULL, and the count may never
 //	      rise and may not fall by more than the documented spill loss.
+//	H     a belt laid ACROSS a balancer's free face and picked up again. It is
+//	      leg B's shape one tile in, and it exists for one branch: a
+//	      perpendicular belt is the only thing that makes the classifier read
+//	      TILES OTHER THAN THE FACE ITSELF (compile.go, curvesFromCluster), and
+//	      until this leg existed no rig in this suite had one, so that arm could
+//	      have allocated per probe forever and every slope here would have been
+//	      green and blind.
 //
 // Every leg ends with the world in the state the calibration measured, so all
 // the audits cost the same and the subtraction is honest.
@@ -104,6 +111,9 @@ var out = harness.Line{Tag: "[BBB-MAR] "}
 // is Factorio's own, is not in the API description at all, and nothing in this
 // repository writes one down.
 var east uint32
+
+// north is leg H's alone: the one belt in this save that does not point east.
+var north uint32
 
 // Rigs are 30 rows apart, which is more than `spill_item_stack`'s 12-tile radius
 // in both directions: leg F counts a band and a neighbour's spill landing in it
@@ -303,6 +313,32 @@ func legB(phase, i int) {
 	}
 }
 
+// legH is a belt laid across the keep balancer's free SOUTH face and picked up
+// again. Perpendicular, so the curve arm runs; DECLINED, so nothing is rebuilt
+// and what the slope measures is the two probes and nothing else.
+//
+// It is declined by its FAR tile rather than by its rear, and that is the whole
+// reason for the permanent north-facing belt at (0, keepY+3): both probes then
+// run -- the rear one finding an empty tile, the far one finding the feeder --
+// where a fed rear would short-circuit after the first. Two queries per
+// iteration is the arm's worst case, which is the number worth holding.
+//
+// The permanent belt costs the rest of the suite nothing, measured rather than
+// assumed: it is two tiles from the nearest part, so classifyEdges never asks
+// about its tile, and it adds no cluster and no part -- so the calibration audit
+// re-classifies exactly the world it always did.
+func legH(phase, i int) {
+	s := surf()
+	switch phase {
+	case 0:
+		putSoft(s, belt, 0, keepY+2, &east)
+	case 1:
+		harness.KillAt(s, 0, keepY+2, "", beltType)
+	case 3:
+		probe("H", i)
+	}
+}
+
 // legC is one of keep's input belts, removed and put back. The edge list really
 // moves both times, so an iteration is TWO full teardown-and-rebuilds.
 func legC(phase, i int) {
@@ -442,6 +478,7 @@ var legs = []leg{
 	{"E", 50, 8, legE},
 	{"G", 100, 4, legG},
 	{"F", 100, 10, legF},
+	{"H", 100, 4, legH},
 	{"calZ", 10, 3, legCal("calZ")},
 }
 
@@ -482,6 +519,7 @@ func buildPlan() {
 func init() {
 	fkapi.Subscribe(fkapi.EventOnTick)
 	east = fkapi.DefinesDirectionEast()
+	north = fkapi.DefinesDirectionNorth()
 	buildPlan()
 }
 
@@ -520,6 +558,13 @@ func onInit() {
 		}
 		sink(s, keepY+r)
 	}
+
+	// Leg H's permanent half: a north-facing belt below keep's south face, which
+	// feeds the tile leg H lays its belt on. Two tiles from the nearest part, so
+	// it is never on a side classifyEdges asks about and it changes no rig; what
+	// it does is make leg H's belt a SIDE-LOAD, which the curve rule declines
+	// after running both of its probes.
+	put(s, belt, 0, keepY+3, &north, "")
 
 	// cycle: only the ends are permanent. Leg A places and removes everything
 	// between them.

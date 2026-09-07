@@ -56,6 +56,9 @@ LEGS = [
              "network -- so C:G is how the compile term scales"),
     ("F", 1, "a saturated balancer grown by an edgeless part, taken apart "
              "entirely and rebuilt, with every item counted"),
+    ("H", 2, "a belt laid ACROSS a balancer's free face and picked up again -- "
+             "perpendicular, so the curve arm's two probes run, and declined, "
+             "so nothing is rebuilt"),
 ]
 
 CALS = ("cal", "calA", "calZ")
@@ -95,6 +98,10 @@ CEILING = {
     "E": 6000.0,
     "G": 12000.0,
     "F": 12000.0,
+    # Leg H is leg B plus two probe queries and nothing else, so its ceiling is
+    # B's: the curve arm reuses its result buffer and compares types on the HOST,
+    # and if either of those stopped being true this is where it would show.
+    "H": 1200.0,
 }
 
 # Superlinearity. The second half of a leg may not cost materially more per

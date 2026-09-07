@@ -18,9 +18,12 @@ Two halves, and the second is the one with teeth:
                    seen without knowing what the answer should be.
   THE REFUSAL WORKS.  A second belt built against an occupied part, a belt
                    ROTATED onto one (which raises no event at all, so the audit
-                   is what finds it), and a part BRIDGING two working balancers
-                   into one whose bridging tile would carry two belts. In all
-                   three the standing network must be untouched and still
+                   is what finds it), a part BRIDGING two working balancers
+                   into one whose bridging tile would carry two belts, and a
+                   CURVED EXIT laid across an occupied part's free face -- the
+                   one of the four that a player could not provoke at all until
+                   the engine's own curve was classified. In all four the
+                   standing network must be untouched and still
                    delivering, the audit must say `drift=1 unbuilt=0`, exactly
                    one refusal must be issued per distinct edge state, and
                    nothing may be handed back -- a headless run has no players,
@@ -79,7 +82,7 @@ TILE = re.compile(r"\[BBB-SEDGE\] tile tag=(\S+) at=(-?\d+),(-?\d+) holds=\[(.*)
 # balancer over twice as many parts must be the same MACHINE.
 SHAPE_EXPECT = sorted([
     ("1", "1", "1"), ("1", "1", "1"), ("1", "1", "1"),
-    ("2", "2", "2"), ("2", "2", "2"), ("2", "2", "2"),
+    ("2", "2", "2"), ("2", "2", "2"), ("2", "2", "2"), ("2", "2", "2"),
     ("4", "4", "4"),
     ("3", "5", "8"),
 ])
@@ -95,21 +98,23 @@ SHAPE_EXPECT = sorted([
 # unbuilt=0` and never the other way round. `drift=0 unbuilt=1` there would be
 # the signature of a refusal that demolished first and asked afterwards.
 AUDIT_EXPECT = {
-    "t0":             (8, 36, 0, 0, 8),
-    "built":          (8, 36, 8, 0, 0),
+    "t0":             (9, 40, 0, 0, 9),
+    "built":          (9, 40, 9, 0, 0),
     # sbld's second belt: one cluster's edge list has moved.
-    "post-sbld":      (8, 36, 8, 1, 0),
+    "post-sbld":      (9, 40, 9, 1, 0),
     # ... and srot's rotation, which raised nothing, so THIS audit is what finds
     # it. Two refused clusters standing at once.
-    "post-rot":       (8, 36, 8, 2, 0),
+    "post-rot":       (9, 40, 9, 2, 0),
     # Rotated back: the edge list is the one the netInfo never lost.
-    "post-rot-back":  (8, 36, 8, 1, 0),
+    "post-rot-back":  (9, 40, 9, 1, 0),
     # The bridge: two clusters became one, and the merge was refused with both
     # standing networks left alone -- so `nets` still counts two of them, under
     # keys that are no longer roots.
-    "post-merge":     (7, 37, 8, 2, 0),
-    "post-unmerge":   (8, 36, 8, 1, 0),
-    "final":          (8, 36, 8, 1, 0),
+    "post-merge":     (8, 41, 9, 2, 0),
+    "post-unmerge":   (9, 40, 9, 1, 0),
+    # The curved exit, which drifts scrv and leaves sbld's drift standing.
+    "post-curve":     (9, 40, 9, 2, 0),
+    "final":          (9, 40, 9, 2, 0),
 }
 
 # rig -> its total delivery as a multiple of one saturated express belt.
@@ -121,6 +126,10 @@ RATE_EXPECT = {
     "sbld": 2.0,
     "srot": 2.0,
     "smrg": 2.0,
+    # Measured over a window the curved exit's refusal happens INSIDE, which is
+    # the point of putting the edit at t=2200: a refusal that demolished the
+    # standing network first would halve this rather than move it a little.
+    "scrv": 2.0,
 }
 
 SPREAD = 0.01
@@ -184,7 +193,8 @@ def main():
     for tag, want in (("init", ""),
                       ("post-sbld", "express-transport-belt"),
                       ("post-rot", "express-transport-belt"),
-                      ("post-merge", "bbb-balancer-part")):
+                      ("post-merge", "bbb-balancer-part"),
+                      ("post-curve", "express-transport-belt")):
         got = tiles.get(tag)
         print("  tile %-11s %s" % (tag, got))
         if got is None:
@@ -201,9 +211,9 @@ def main():
     refused = [m for m in (REFUSED.search(l) for l in lines) if m]
     for m in refused:
         print("  refused: %s" % m.group(0).strip()[:96])
-    if len(refused) != 3:
+    if len(refused) != 4:
         fail.append("the guest refused %d compile(s) for the one-belt-per-part "
-                    "rule, expected exactly three -- one per leg, and once per "
+                    "rule, expected exactly four -- one per leg, and once per "
                     "distinct edge state rather than once per audit: %r"
                     % (len(refused), [m.group(0).strip()[:70] for m in refused]))
     else:
@@ -223,8 +233,8 @@ def main():
     told = [m for m in (TOLDFORCE.search(l) for l in lines) if m]
     for m in told:
         print("  told: %s" % m.group(0).strip()[:88])
-    if len(told) != 3 or any("FAILED" in m.group(3) for m in told):
-        fail.append("the force was told about %d refusal(s)%s, expected three "
+    if len(told) != 4 or any("FAILED" in m.group(3) for m in told):
+        fail.append("the force was told about %d refusal(s)%s, expected four "
                     "clean reports. Every build here is a script build, so the "
                     "fork always takes force.print -- which is what says the "
                     "LocalisedString crossed and the LuaForce resolved from a "

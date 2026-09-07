@@ -840,7 +840,10 @@ for suite in $SUITES; do
       # read after each of ~500 cycles.
       echo "=== marathon: the permanent-heap slope per world operation ==="
       stage "$TMP/mar" bbb-marathon-test
-      run "$TMP/mar" "${BBB_MAR_TICKS:-4600}"
+      # 5020 rather than 4600 since leg H: the plan is a fold over the leg
+      # table, so a leg added to it moves the tick the last one ends on, and a
+      # calibration leg the run stops short of produces no samples at all.
+      run "$TMP/mar" "${BBB_MAR_TICKS:-5020}"
       echo "==> fitting the slopes"
       python3 "$ROOT/test/assert-marathon.py" "$TMP/mar/create.log" "$TMP/mar/run.log"
       ;;

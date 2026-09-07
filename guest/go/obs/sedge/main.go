@@ -44,6 +44,13 @@
 //	       before the compiler ever sees the cluster they make, so the merge
 //	       pre-pass is what has to refuse it -- with both standing networks
 //	       untouched
+//	scrv   a CURVED EXIT laid against an occupied part. A belt that merely runs
+//	       across a balancer's face used to be nothing at all; since the engine
+//	       bends it towards us as soon as we feed it, it is an output -- so a
+//	       belt line that starts beside a working part is a second belt on that
+//	       part and is refused, where it used to sit there inert. That is the
+//	       one thing a player can now do that they could not before, so it has a
+//	       rig of its own
 //
 // It ASSERTS NOTHING. test/assert-sedge.py decides; an observer that computed
 // the expected answer would be a second implementation of the thing under test.
@@ -76,6 +83,7 @@ const (
 	sbldY = 42 // rows 42..43, and the refused belt at row 41
 	srotY = 50 // rows 50..51, and the rotated belt at row 49
 	smrgY = 58 // 58..59 = A, 60 = the gap, 61..62 = B
+	scrvY = 66 // rows 66..67, and the curved exit at row 65
 	rows  = 72
 )
 
@@ -227,6 +235,17 @@ func mergeAdd() {
 	out.Open("merge-add end").End()
 }
 
+// curveAdd is a belt laid ACROSS a working part's free face, pointing east, with
+// an empty rear. It is not an input and it is not a straight output; it is the
+// shape the engine curves, and the refusal it provokes has to leave the standing
+// 2 -> 2 delivering right through it -- which is what the e..f rate window
+// straddles.
+func curveAdd() {
+	out.Open("scrv-add begin").End()
+	put(surf(), belt, 0, scrvY-1, &east, "")
+	out.Open("scrv-add end").End()
+}
+
 func mergeRemove() {
 	out.Open("merge-remove begin").End()
 	if o, ok := harness.FindOnTile(surf(), part, 0, smrgY+2); ok {
@@ -296,6 +315,8 @@ var schedule = []harness.Step{
 	{Tick: 1900, Do: mergeRemove},
 	{Tick: 1902, Do: func() { auditNow("post-unmerge") }},
 	{Tick: 2100, Do: func() { report("e") }},
+	{Tick: 2200, Do: curveAdd},
+	{Tick: 2202, Do: func() { auditNow("post-curve"); reportTile("post-curve", 0, scrvY-1) }},
 	{Tick: 3400, Do: func() { report("f") }},
 	{Tick: 3450, Do: func() { auditNow("final") }},
 }
@@ -359,7 +380,16 @@ func onInit() {
 	// part's north face and pointing EAST -- which is not an edge, because a
 	// belt flowing past a cluster is not pointing at it. Rotating it south at
 	// t=600 makes it one, silently.
+	//
+	// THE DEAD BELT BEHIND IT IS LOAD-BEARING AND IS NOT SCENERY. Since the
+	// curved exit was classified, a belt across a face with an EMPTY REAR is an
+	// output -- so without a feeder at (-1, srotY-1) this rig would be refused
+	// from tick zero and the rotation it is about would never be reached. An
+	// unfed belt in line behind it makes the target a side-load instead, which
+	// the rule declines, so the east state is inert exactly as it was written to
+	// be. It feeds nothing itself and is orthogonally adjacent to no part.
 	srot := column(s, srotY, 2, 2)
+	put(s, belt, -1, srotY-1, &east, "")
 	put(s, belt, 0, srotY-1, &east, "")
 	register("srot", srot...)
 
@@ -383,6 +413,13 @@ func onInit() {
 	put(s, belt, -1, smrgY+2, &east, "")
 	put(s, belt, 1, smrgY+2, &east, "")
 	register("smrg", a, b)
+
+	// scrv: a working 2 -> 2 whose north-west part gets a CURVED EXIT at t=2200.
+	// The belt is laid across that part's north face with NOTHING behind it, so
+	// the engine curves it towards the face and the compiler classifies it as an
+	// output -- on a part that already carries its input. Its rear is empty and
+	// stays empty, which is the whole difference between this rig and srot.
+	register("scrv", column(s, scrvY, 2, 2)...)
 
 	reportTile("init", 0, smrgY+2)
 	auditNow("t0")
