@@ -83,9 +83,9 @@ func entity() fkdata.V {
 
 // The item, and it is the incumbent's own rather than a convenience. The `mig`
 // suite puts fifty of these in a steel chest and asserts across the swap that
-// the stack survived and that its `place_result` flipped from `balancer-part` to
-// `bbb-balancer-part` -- which is a statement about anything only if the stack
-// size and the place_result start out as the real mod's.
+// the stack survived, that it still places `balancer-part`, and that the entity
+// of that name has changed hands -- which is a statement about anything only if
+// the stack size and the place_result start out as the real mod's.
 //
 //go:noinline
 func item() fkdata.V {

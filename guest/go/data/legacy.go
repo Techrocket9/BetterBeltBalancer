@@ -98,12 +98,29 @@ func legacyStubEntity() fkdata.V {
 		f("minable", obj(f("mining_time", num(0.1)), f("result", str("bbb-balancer-part")))),
 		f("placeable_by", obj(f("item", str("bbb-balancer-part")), f("count", num(1)))),
 
-		// A PLAYER CANNOT BUILD ONE, AND NO FLAG IS WHAT STOPS THEM. Nothing
-		// places this prototype: the stub item below has
-		// `place_result = "bbb-balancer-part"`, there is no recipe and no
-		// technology, and the only item whose `placeable_by` names it is this
-		// mod's own part item, which places this mod's own part. That is
-		// structural and stronger than any flag.
+		// THE STUB ITEM BELOW PLACES THIS PROTOTYPE, AND A HANG IS WHY. Pointing
+		// it at `bbb-balancer-part` reads better -- a legacy stack would place a
+		// real part with no swap at all -- and it puts the two names into each
+		// other's `items_to_place_this`. The engine appends an item whose
+		// `place_result` is an entity to that entity's list, so our part came out
+		// placed by [bbb-balancer-part, balancer-part] while the stub came out
+		// placed by [bbb-balancer-part] through the `placeable_by` above: a
+		// two-element cycle. A mod that walks item -> entity ->
+		// items_to_place_this and inserts every name it finds back into the table
+		// it is iterating never terminates on that pair, and one does --
+		// HandyHandsRefactored's quickbar cleanup, which runs from on_nth_tick
+		// while a personal roboport is enabled. Measured on a reporter's save with
+		// his own 55-mod set: Factorio spins in
+		// LuaEntityPrototype::luaReadItemsToPlaceThis forever, no crash and no log
+		// line. Placing the stub keeps our part's list at exactly one item.
+		//
+		// IT COSTS A PLAYER NOTHING. A stub built out of a legacy stack is swapped
+		// for a real part by the next flush (guest/go/legacy.go, `legacyBuilt`),
+		// which is the one tick of latency every ordinary part placement already
+		// has, and the stub draws this mod's own lone-part picture while it
+		// stands. What no player can do is get one out of nothing: there is no
+		// recipe and no technology, and the item is hidden, so the only way to
+		// hold a `balancer-part` is to have held one when the incumbent left.
 		//
 		// `not-blueprintable` is DELIBERATELY ABSENT, and the reason is the one
 		// case this whole file exists for. A migrating player's blueprint book is
@@ -178,10 +195,18 @@ func legacyStubMarker() fkdata.V {
 // logistic request or on a belt is deleted with its prototype exactly as an
 // entity is, and there is no runtime pass that could get them back -- so the
 // item has to survive the same load. It does not need renaming and is
-// deliberately not renamed: `place_result` points at this mod's part, so a
-// legacy stack simply places this mod's balancers. Walking every inventory in
-// the game to rewrite stacks would be a scan of the whole world for a cosmetic
-// difference in what the stack is called.
+// deliberately not renamed: walking every inventory in the game to rewrite
+// stacks would be a scan of the whole world for a cosmetic difference in what
+// the stack is called.
+//
+// `place_result` IS THE STUB ENTITY AND NOT `bbb-balancer-part`, and that is the
+// one field here which is not simply the incumbent's own. Naming our part would
+// file this item under `prototypes.entity["bbb-balancer-part"]
+// .items_to_place_this`, where our own item already sits, while our item is
+// filed under the stub entity's through its `placeable_by` -- a cycle between
+// the two names that hangs a mod walking it, measured. legacyStubEntity carries
+// the whole of it. A legacy stack still builds a working balancer: it places the
+// stub, and the next flush swaps that for a real part.
 //
 // The stack size is the incumbent's 50, so a full stack stays a full stack.
 //
@@ -194,7 +219,7 @@ func legacyStubItem() fkdata.V {
 		f("icon_size", num(64)),
 		f("subgroup", str("belt")),
 		f("order", str("c[splitter]-y[bbb-balancer]-z[legacy]")),
-		f("place_result", str("bbb-balancer-part")),
+		f("place_result", str(legacyEntity)),
 		f("stack_size", num(50)),
 		f("hidden", yes),
 		f("hidden_in_factoriopedia", yes),

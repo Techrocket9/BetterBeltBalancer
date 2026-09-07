@@ -389,6 +389,31 @@ func reportItem(phase string) {
 		S(" place_result=").S(place).End()
 }
 
+// reportPlacers is the item half asked of the ENGINE instead of the prototype.
+//
+// `place_result` alone stopped separating the two mod sets when the stub item
+// began placing the stub entity rather than this mod's part: it reads
+// `balancer-part` on both sides of every swap now, whoever owns the name. What
+// still moves is `items_to_place_this`, which the engine DERIVES -- every item
+// whose `place_result` is the entity, plus the one its `placeable_by` names --
+// so the first name in `balancer-part`'s list says whose prototype it is, and
+// the LENGTH of `bbb-balancer-part`'s says whether anything but our own item
+// places our part. Two items there is the cycle that hung a player's game
+// (guest/go/data/legacy.go).
+func reportPlacers(phase string) {
+	out.Open("placers phase=").S(phase)
+	for _, pair := range [2]struct{ key, name string }{
+		{"legacy", legacyPart}, {"ours", bbbPart},
+	} {
+		first, n, ok := harness.EntityPlacers(pair.name)
+		if !ok {
+			first, n = "absent", 0
+		}
+		out.S(" ").S(pair.key).S("=").S(first).S("/").I(int64(n))
+	}
+	out.End()
+}
+
 func techWord(l *harness.Line, force fkapi.Object, ok bool, name string) {
 	if !ok {
 		l.S("absent")
@@ -686,6 +711,7 @@ var schedule = []harness.Step{
 		census("t1")
 		reportCounts("t1")
 		reportItem("t1")
+		reportPlacers("t1")
 		reportTech("t1")
 		reportFidelity("t1")
 		reportSurfaces("t1")
@@ -764,6 +790,7 @@ func onInit() {
 	census("create")
 	reportCounts("create")
 	reportItem("create")
+	reportPlacers("create")
 	reportTech("create")
 	reportFidelity("create")
 	reportSurfaces("create")

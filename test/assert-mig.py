@@ -61,7 +61,12 @@ What is checked, and why each one is here:
     and every other rig in the save runs iron, so a copper count across every
     surface is that rig's contents and nothing else -- an equality rather than
     an estimate.
-  * THE ITEM STACK SURVIVED, and places whatever the mod set says it should.
+  * THE ITEM STACK SURVIVED, still places `balancer-part`, and the ENTITY of
+    that name changed hands. The second half is read off the engine's own
+    `items_to_place_this` rather than off `place_result`, which stopped
+    moving when the stub item began placing the stub entity -- and the
+    LENGTH of that list for `bbb-balancer-part` is the assertion that the
+    cycle which hung a player's game is not back.
   * THE FORCE CAN STILL CRAFT. The incumbent's technologies went with it.
   * THE ONES THIS ENGINE CAN BUILD BALANCE, against a bare express belt in the
     same save. A network adopted from the wrong edge list does not show up as a
@@ -103,6 +108,9 @@ BUILT = re.compile(r"\[BBB\] legacy: adopted a balancer-part built at (-?\d+),(-
 CENSUS = re.compile(r"\[BBB-MIG\] census phase=(\S+) balancer-part=(\d+) bbb-balancer-part=(\d+)")
 COUNT = re.compile(r"\[BBB-MIG\] count phase=(\S+) copper-plate=(\d+)")
 ITEM = re.compile(r"\[BBB-MIG\] legacy-item phase=(\S+) held=(-?\d+) place_result=(\S+)")
+PLACERS = re.compile(
+    r"\[BBB-MIG\] placers phase=(\S+) legacy=([^/\s]+)/(\d+) "
+    r"ours=([^/\s]+)/(\d+)")
 TECH = re.compile(r"\[BBB-MIG\] tech phase=(\S+) bbb-balancer=(\S+) belt-balancer-1=(\S+)")
 SAMPLE = re.compile(r"\[BBB-MIG\] sample tick=(\d+) (.*)")
 LATE = re.compile(r"\[BBB-MIG\] late-build legacy=(\d+) ours=(\d+)")
@@ -190,6 +198,37 @@ EXPECT_TRIGGER = {
     "later": "configuration_changed",
     "bb3": "configuration_changed",
     "fgone": "configuration_changed",
+}
+
+# WHO THE ENGINE SAYS PLACES WHAT, per leg and per phase.
+#
+# `place_result` used to carry this on its own: a legacy stack placed
+# `balancer-part` under the incumbent and `bbb-balancer-part` under us, so the
+# flip was the observation. It does not any more. The stub item places the STUB
+# ENTITY now, because naming this mod's part there put the two prototypes into
+# each other's `items_to_place_this` -- our item is in the stub's list through
+# `placeable_by`, the stub item would be in ours through `place_result` -- and a
+# mod that walks that graph while mutating its own table never terminates on the
+# cycle. One does, and it hung a player's game with no crash and no log line.
+#
+# So the item's `place_result` reads `balancer-part` on both sides of every swap
+# and is asserted as staying there, and what MOVES is the list the engine derives.
+# `items_to_place_this` is not a field any data stage writes, which is what makes
+# it the honest question here: it is the engine's own answer to whose
+# `balancer-part` this is.
+STUB = ("bbb-balancer-part", 2)      # ours: our part item, then the stub item
+THEIRS = ("balancer-part", 1)        # an incumbent's or the stranger's own item
+OURS = ("bbb-balancer-part", 1)      # our part, and the 1 IS the assertion
+ABSENT = ("absent", 0)               # this mod is not installed in that phase
+
+EXPECT_PLACERS = {
+    "added":   {"create": (THEIRS, ABSENT), "t1": (STUB, OURS)},
+    "later":   {"create": (THEIRS, OURS), "t1": (STUB, OURS)},
+    "bb3":     {"create": (THEIRS, OURS), "t1": (STUB, OURS)},
+    "built":   {"create": (STUB, OURS), "t1": (STUB, OURS)},
+    "readd":   {"create": (STUB, OURS), "t1": (THEIRS, OURS)},
+    "foreign": {"create": (THEIRS, ABSENT), "t1": (THEIRS, OURS)},
+    "fgone":   {"create": (THEIRS, OURS), "t1": (STUB, OURS)},
 }
 
 # The legs whose phase one has this mod and an INCUMBENT installed side by side,
@@ -406,7 +445,14 @@ def check_witness(counts, fail, phases=("t1", "post-audit", "final")):
 
 def check_item(items, fail, expect_place):
     """The item half: a stack of `balancer-part` in a chest survives the mod set
-    moving, and places whatever the surviving prototype says it places."""
+    moving, and still places `balancer-part`.
+
+    THE PLACE_RESULT IS ASSERTED AS NOT MOVING, which is the opposite of what it
+    used to say and is not the same as deleting the check. Whoever owns the name
+    -- an incumbent, the stranger, or this mod's stub -- points the item at the
+    entity of that same name, so a stack that started placing `bbb-balancer-part`
+    would mean this mod had reintroduced the cycle guest/go/data/legacy.go exists
+    to avoid. Which prototype the name now IS, is check_placers' question."""
     missing = [p for p in ("create", "t1") if p not in items]
     if missing:
         fail.append("no legacy-item line for phase=%s; the stack is only ever "
@@ -420,9 +466,42 @@ def check_item(items, fail, expect_place):
         fail.append("the stack of the incumbent's item went %d -> %d across the "
                     "swap; a removed prototype takes its items with it and the "
                     "stub is what stops that" % (held0, held1))
-    if place1 != expect_place:
-        fail.append("a surviving legacy stack places %r and should place %r"
-                    % (place1, expect_place))
+    if place0 != expect_place or place1 != expect_place:
+        fail.append("a legacy stack places %r before the swap and %r after, and "
+                    "should place %r on both sides: the item of a name places the "
+                    "entity of that name, whoever owns it"
+                    % (place0, place1, expect_place))
+
+
+def check_placers(placers, fail, leg):
+    """Whose `balancer-part` this is, asked of the engine's derived list.
+
+    A MISSING LINE IS A FAILURE. Both phases are compared against a written-down
+    expectation rather than against each other, so a phase the observer stopped
+    reporting takes its whole assertion with it if it is allowed to skip."""
+    want = EXPECT_PLACERS.get(leg)
+    if want is None:
+        return
+    for phase in ("create", "t1"):
+        got = placers.get(phase)
+        if got is None:
+            fail.append("no placers line for phase=%s; the engine's own answer to "
+                        "whose `balancer-part` this is was never asked for" % phase)
+            continue
+        wlegacy, wours = want[phase]
+        print("  placers at phase=%-6s balancer-part<-%s/%d  bbb-balancer-part<-%s/%d"
+              % (phase, got[0][0], got[0][1], got[1][0], got[1][1]))
+        if got[0] != wlegacy:
+            fail.append("at phase=%s `balancer-part` is placed by %s/%d and should "
+                        "be %s/%d: the engine says the prototype belongs to "
+                        "somebody else than this leg expects"
+                        % (phase, got[0][0], got[0][1], wlegacy[0], wlegacy[1]))
+        if got[1] != wours:
+            fail.append("at phase=%s `bbb-balancer-part` is placed by %s/%d and "
+                        "should be %s/%d -- a second item placing this mod's part "
+                        "closes a cycle with the stub, and a mod that walks "
+                        "items_to_place_this hangs on it"
+                        % (phase, got[1][0], got[1][1], wours[0], wours[1]))
 
 
 def check_throughput(run, fail):
@@ -1050,11 +1129,10 @@ def readd(create, run, census, counts, items, techs, blocked, adopted, audits,
 
     check_witness(counts, fail)
 
-    # THE ITEM GOES THE OTHER WAY IN THIS LEG, and that is the observation
-    # rather than an accident: phase one's stack is our own stub's, and once
-    # belt-balancer-2 is installed the prototype it places is the incumbent's
-    # again. A stack that still placed `bbb-balancer-part` would mean our stub
-    # had won a name the incumbent owns.
+    # THE STACK IS THE SAME STACK PLACING THE SAME NAME on both sides, and what
+    # went the other way in this leg is WHICH PROTOTYPE that name is: our stub in
+    # phase one, the incumbent's in phase two. check_placers is where that is
+    # read, off the engine's own derived list.
     check_item(items, fail, "balancer-part")
 
     # THE TECHNOLOGY HALF IS THIS LEG'S OWN. Everywhere else `belt-balancer-1`
@@ -1150,6 +1228,9 @@ def main():
     census = {m.group(1): (int(m.group(2)), int(m.group(3))) for m in find_all(both, CENSUS)}
     counts = {m.group(1): int(m.group(2)) for m in find_all(both, COUNT)}
     items = {m.group(1): (int(m.group(2)), m.group(3)) for m in find_all(both, ITEM)}
+    placers = {m.group(1): ((m.group(2), int(m.group(3))),
+                           (m.group(4), int(m.group(5))))
+               for m in find_all(both, PLACERS)}
     techs = {m.group(1): (m.group(2), m.group(3)) for m in find_all(both, TECH)}
     techf = {m.group(1): m.group(3) for m in find_all(both, TECHF)}
     healths = {m.group(1): (m.group(2), m.group(3), m.group(4))
@@ -1169,6 +1250,11 @@ def main():
 
     legacy_before, ours_before = census["create"]
     print("  phase one: %d %s standing, %d of ours" % (legacy_before, "balancer-part", ours_before))
+
+    # WHOSE PROTOTYPE IS WHOSE, in every leg, before any of them branches. It is
+    # the one assertion here that reads the engine's derived answer rather than a
+    # field this mod wrote, and it is what replaced the place_result flip.
+    check_placers(placers, fail, leg)
 
     if legacy_before != EXPECT_PARTS:
         fail.append("%d incumbent parts were built and the rigs make %d; every "
@@ -1387,7 +1473,7 @@ def main():
                     % (legacy_before, after_ours))
 
     check_witness(counts, fail)
-    check_item(items, fail, "bbb-balancer-part")
+    check_item(items, fail, "balancer-part")
     check_fidelity(healths, qualities, fail, "bbb-balancer-part")
     check_forces(techf, forceparts, fail, "true")
     check_surfaces(surfs, fail, scanned, True)

@@ -2235,9 +2235,10 @@ Everything above is about an EDIT: somebody asks a part for a second belt and is
 **Two things about the stub prototype are decisions rather than copies:**
 
 - **`placeable_by = { item = "bbb-balancer-part" }` and `minable.result = "bbb-balancer-part"`**, so a player who mines a stub and a robot that revives a ghost of one both end up holding THIS mod's item. That is what makes a migrating player's **blueprint book** keep working: every blueprint they took names `balancer-part`, its ghosts ask for our item, and the part the robot builds is queued by `legacyBuilt` and swapped by the next flush.
-- **`not-blueprintable` is deliberately ABSENT.** A player cannot build a stub and no flag is what stops them: nothing places that prototype, because the stub item's `place_result` is `bbb-balancer-part`, there is no recipe and no technology. That is structural and stronger than a flag -- and the flag would break the one path above in exchange for refusing a capture of a prototype that exists for at most one load. `not-upgradable` IS set: there is no upgrade path onto or off it and there must not be one.
+- **`not-blueprintable` is deliberately ABSENT.** A player cannot get a stub out of nothing and no flag is what stops them: there is no recipe, no technology, and the item is hidden, so the only way to hold a `balancer-part` is to have held one when the incumbent left. That is structural and stronger than a flag -- and the flag would break the one path above in exchange for refusing a capture of a prototype that exists for at most one load. `not-upgradable` IS set: there is no upgrade path onto or off it and there must not be one.
+- **The stub item's `place_result` is the STUB ENTITY, not `bbb-balancer-part`**, since 0.3.3, and it is the only field of that prototype which is not simply the incumbent's own. Pointing it at this mod's part put the two names into each other's `items_to_place_this` and hung a player's game. See "The two-element cycle that froze a game" below.
 
-**And the item is not renamed, which is a decision too.** A stack of the incumbent's part in a chest, a hand, a logistic request or a bot survives because the prototype survives, and its `place_result` is this mod's part -- so a legacy stack simply places this mod's balancers. Walking every inventory in the game to rewrite stacks would be a scan of the whole world for a cosmetic difference in what a stack is called.
+**And the item is not renamed, which is a decision too.** A stack of the incumbent's part in a chest, a hand, a logistic request or a bot survives because the prototype survives, and it goes on placing `balancer-part` -- which is the stub now, and which the next flush swaps for one of this mod's parts. Walking every inventory in the game to rewrite stacks would be a scan of the whole world for a cosmetic difference in what a stack is called.
 
 **The locale entry for `balancer-part` is the INCUMBENT'S OWN ENGLISH TEXT, verbatim** ("Balancer Part"), and only in `en`. This mod loads after both Belt Balancer 2 and 3, so a different string would rename a working mod's entity in its own player's UI; identical text makes the override a no-op, and shipping no non-English file leaves every translation they have winning by fallback.
 
@@ -2296,7 +2297,7 @@ Read position, force index, **quality** (as the prototype HANDLE, since `Quality
 | the balancers | as this mod's, at the same tiles, the same force, the same quality and the same health, compiled into networks on the load that adopts them |
 | every item ON THE BELTS | untouched: those belts are vanilla and nothing here reads or writes them |
 | every input and output | re-derived from the world by `classifyEdges`, so the ports are the ports the belts already implied |
-| a stack of the incumbent's ITEM | survives, keeps its name, and places this mod's parts |
+| a stack of the incumbent's ITEM | survives, keeps its name, and places the STUB -- which the next flush swaps for one of this mod's parts, the same tick of latency an ordinary part placement has. It stopped placing this mod's part directly in 0.3.3 and the reason is a hang: "The two-element cycle that froze a game" |
 | a BLUEPRINT BOOK of the incumbent's balancers | keeps working: ghosts ask for this mod's item, and each part a robot builds is swapped by the next flush |
 | the ability to craft | any force that owned a balancer is given `bbb-balancer` |
 | **the incumbent's own item BUFFER** | **gone, and there is no mechanism that could get it back** |
@@ -2598,6 +2599,93 @@ identical in all five conversion legs, with `sok2` at **1306 1306 -- 2.000x one 
 
 <!-- END: adopting an incumbent's save -->
 
+## The two-element cycle that froze a game — the stub item's `place_result`
+
+**A mod-portal report, 2026-09-07: Space Exploration plus a shelf of quality-of-life mods on Factorio 2.0.77 with this mod at 0.2.2, and the game freezes permanently -- no crash, no error dialog, nothing in the log.** Three gestures did it and two did not, and the split is the whole diagnosis:
+
+| what the player did | froze |
+|---|---|
+| enabled the personal roboport | **yes** |
+| hovered or added the balancer part in the QUICKBAR, unresearched | **yes** |
+| placed one part | **yes** |
+| the same save in `/editor` | no |
+| a fresh save with the same mod set | no |
+
+**Every one of those is explained by one handler in one neighbour.** HandyHandsRefactored 2.0.12 auto-crafts what a player's quickbar asks for, from `on_nth_tick`, in a branch guarded on `player.character.allow_dispatching_robots` -- the personal roboport -- and on the controller being a character. That is why the editor is exempt (a different controller) and why the roboport toggle is a trigger on its own. The rest of `items` is quickbar slots, the cursor, ghosts inside the roboport's construction area, upgrades and requests, which is why hovering the item and placing a part are the other two triggers, and why a fresh save with nothing built and nothing in the bar never enters the loop.
+
+**What it does, verbatim, `smarts.lua` lines 252-262:**
+
+```lua
+for item, data in pairs(items) do
+    local entity_prototype = prototypes.entity[item]
+    if entity_prototype and entity_prototype.items_to_place_this then
+        for _, v in pairs(entity_prototype.items_to_place_this) do
+            update_item(v.name, 0)
+            if v.name ~= item then items[item] = nil end
+        end
+    end
+end
+```
+
+`update_item` INSERTS a new key into `items` when `v.name` is not already there, and `items` is the table being walked. That is a mutation-during-`pairs` which Lua does not promise anything about, and it is fine as long as the item-to-entity-to-items graph has no cycle in it.
+
+**This mod's data stage had one, and it was invisible to every gate in the repository.** `prototypes.entity[e].items_to_place_this` is not a field any data stage WRITES: the engine derives it, from every item whose `place_result` is `e` PLUS the item named by `e`'s own `placeable_by`. So `legacyStubItem`'s `place_result = "bbb-balancer-part"` filed the stub item under our part, while `legacyStubEntity`'s `placeable_by` filed our item under the stub -- two prototypes, each in the other's list, from two lines that never mention each other. As the engine reported them:
+
+    prototypes.entity["bbb-balancer-part"].items_to_place_this = {bbb-balancer-part, balancer-part}
+    prototypes.entity["balancer-part"].items_to_place_this     = {bbb-balancer-part}
+
+**Reproduced headlessly with a probe that runs that loop verbatim**, on the reporter's own save under his own 55-mod set: **NO TERMINATION after 100,000 iterations** for a quickbar seeded `{bbb-balancer-part}`, for one seeded `{balancer-part}`, and for five slots with ours among them; the same seeding without our part terminates in **4 iterations**. A native stack sample of the hung process is `LuaGameScript::runNthTickHandler` -> `luaV_execute` -> `LuaEntityPrototype::luaReadItemsToPlaceThis`, at 97-99% of a core, forever.
+
+### The four shapes, measured in the engine before anything was changed
+
+A scratch data mod defined four candidate pairs and the probe ran the same loop over each. `A` is this mod's part and `B` the stub:
+
+| | the stub item places | the stub entity's `placeable_by` | the engine reports | the loop |
+|---|---|---|---|---|
+| **S0**, what shipped | **our part** | our item | `A=[A,B]  B=[A]` | **NO TERMINATION**, on all three seedings |
+| S1 | the stub | our item AND the stub item | `A=[A]  B=[A,B]` | terminates, 1 / 1 / 4 iterations |
+| **S2**, taken | **the stub** | our item alone | `A=[A]  B=[A,B]` | terminates, 1 / 1 / 4 iterations |
+| S3 | nothing | our item | `A=[A]  B=[A]` | terminates, 1 / 2 / 5 iterations |
+
+**S1 and S2 produce the same graph and S2 is the smaller change**: the engine appends an item whose `place_result` is an entity to that entity's list whether or not `placeable_by` also names it, so S1's second term buys nothing. Both leave `bbb-balancer-part` placed by exactly one item, which is the acyclic property, and both leave a legacy stack building something.
+
+**S3 was rejected because it costs the feature.** An item with no `place_result` is inert: a migrating player's fifty `balancer-part` in a chest become fifty things that cannot be placed, which is most of what "your stacks keep working" was for. S2 keeps them placeable and costs one tick -- the stub they place is queued by `legacyBuilt` and swapped by the next flush, which is the latency every ordinary part placement already has, and the stub draws this mod's own lone-part picture while it stands. The blueprint path is untouched: a ghost still asks for `bbb-balancer-part` through `placeable_by`, a robot still builds the stub, and the same flush still swaps it.
+
+### What now watches it
+
+**`test/check-datastage.py` asserts the graph on both golden arms, and does not hash it.** A hash says nothing moved and cannot say which shape it is holding still. The projection scans every prototype of every type for `place_result == "bbb-balancer-part"` -- any mod's item is entitled to break this, which is the same argument the whole-dump hash makes one level up -- and the assertions are: exactly one item places our part, in EITHER arm; and on `base`, the marker prototype is present and the `balancer-part` item places `balancer-part`. On `incumbent` the marker must be ABSENT, which is the stub branch not firing; there is no equivalent signal for the stub ITEM and none is needed, because a second `item` of one name is a duplicate-name load failure and that arm would die on `--dump-data exited 1`.
+
+**Red-proven 2026-09-07**, the one line reverted and the package rebuilt: the `base` arm fails by name on both new assertions -- ``` `bbb-balancer-part` is placed by ['balancer-part', 'bbb-balancer-part'] and must be placed by [bbb-balancer-part] alone``` and ``` the `balancer-part` item places 'bbb-balancer-part' and must place 'balancer-part' ``` -- with the `incumbent` arm green to the digit, which is the asymmetry the second mod set exists for and the third time it has paid for itself.
+
+**The `mig` suite lost a signal and gained a better one.** `place_result` was that suite's sharpest line -- a legacy stack placed `balancer-part` under the incumbent and `bbb-balancer-part` under us, so the flip was the observation. Under S2 it reads `balancer-part` on both sides of every swap, whoever owns the name, and that is asserted as NOT MOVING rather than deleted: the item of a name places the entity of that name, so a stack that started placing `bbb-balancer-part` again would be the cycle back. What moves instead is the list the ENGINE derives, which `guest/go/obs/mig` now reports per phase through `harness.EntityPlacers`:
+
+    [BBB-MIG] placers phase=t1 legacy=bbb-balancer-part/2 ours=bbb-balancer-part/1
+
+`EXPECT_PLACERS` in `test/assert-mig.py` is one row per leg per phase, and the two shapes it is built out of are `("bbb-balancer-part", 2)` where our stub owns the name and `("balancer-part", 1)` where an incumbent or the stranger does. **The `1` on `ours` in every phase of every leg is the assertion**: a second item placing our part is the defect, and the seven legs put this mod beside four incumbent names, a stranger, both directions of the swap and a plain reload.
+
+### The 2.1 base goldens are STALE and cannot be re-captured here
+
+The 2.0.77 `base` line moved `f4fbcaa603abc93b` -> **`1e1fcf4f56f5ef22`** and was re-captured; `incumbent` is byte-unchanged at `e7001bf98d6c6771`, which is the control that says the stub branch really did take its other arm there. **The 2.1.16 and 2.1.17 `base` rows are now wrong and this machine has no 2.1 binary**, so both carry a `_stale` note naming the change and the command:
+
+    make mod && test/check-datastage.py --capture
+
+They are marked rather than deleted or skipped. `check-datastage.py` prints a `_stale` note ON a failure and never in place of one -- an unrecapturable golden that stopped failing would be an engine nobody is checking at all, which is this repository's own "a check that skips is a check that passed" met in the gate that was written to answer a question no suite can ask. **The two `incumbent` rows are NOT stale** on either engine: another mod owns `balancer-part` there, so the stub item never existed to move.
+
+**And the prototype list checksum moved with it**, `790230733` -> `3427049257` on the `base` arm, which is a mild surprise: this file records that checksum as blind to field values (measured, when a `stack_size` went 1 -> 42). A `place_result` is not an ordinary field value, it is a cross-reference the engine resolves into an id, and that is the reading this move supports. It is still a smoke test and is still never a proof.
+
+### The wrong turns, measured and ruled out
+
+Four, and each was a real candidate with a real mechanism, killed by a measurement rather than by argument:
+
+| the theory | what killed it |
+|---|---|
+| **FkLua's dispatcher rotation.** A one-shot `on_tick` that unregisters and re-registers itself rotates the handler list, and two of them armed together pin the cursor at index 1 | Real, and it is not this. It TERMINATES as soon as one of them stops re-arming, so it defeats the pacing rather than hanging. Transcribed verbatim and run under `../FkLua/bin/lua52f`: two one-shots owing three steps each drained in **6 calls in one dispatch**, one always re-arming beside one owing three made **7 calls** and returned. Filed as [`FKLUA-GAPS.md`](FKLUA-GAPS.md) item 31 |
+| **the hidden surface**, which the 0.3.2 round had just touched | The freeze reproduces with no balancer built and no network compiled, on gestures that never reach a surface |
+| **the belt speed at the 0.25 floor under Space Exploration**, which loads a great many belt families and whose derivation runs at `data-final-fixes` | SE's deep-space belts top out at **0.1875**, below the floor, so `deriveHiddenSpeed` leaves all four hidden prototypes where they were and the arm never executes |
+| **a belt-connectable sharing the part's collision box under Squeak Through**, which rewrites collision masks wholesale | Nothing of any mod's shares that tile in the dump. Checked in the same pass: the technology unit resolves to the plain 20-pack fallback under this mod set, so the tech ladder is not in it either |
+
+**None of the five gates in this repository could have seen it, and that is the finding rather than an excuse.** All fourteen suites are about the RUNTIME and the defect is a prototype relationship the engine derives at load; the dump gate hashed a dump that CONTAINED the cycle and called it the golden; and nothing anywhere walks a prototype graph, because nothing in this mod does. What closes it is an assertion about a SHAPE, on a gate that already had the dump in hand.
+
 ## A part at uncommon quality is a part — the quality-blind lookups, closed
 
 **The four bare-name `find_entity` call sites the migration pass wrote up as NOT fixed are fixed, and the tenth suite exists because none of them was reachable by any rig this repo had.** The defect class, once more in one sentence: `find_entity` takes an `EntityWithQualityID` and resolves a bare name as **normal quality only** (the probe table is in the migration section), so a lookup that used it worked on every normal-quality save this repo has ever run and silently failed on a part a player built from a quality-rolled item. Closed 2026-08-20; `guest/go/findpart.go` is the fix and its header is the long form.
@@ -2705,6 +2793,7 @@ Design fixed 2026-07-31: **compile, don't interpret** -- balancer clusters compi
 | **...or the TWO that work** | A part bridging two working balancers into one that is over the limit is refused before their teardowns too, which are `AddPart`'s and not the compiler's: 0 items on the ground where the unfixed guest put 1,814, both halves still delivering 184 and 184 against 186 and 185 across the edit, and mining the part back out costing 0 teardowns and 0 builds. "The merge that would be over the limit" |
 | **...and a part clicks over a belt like a splitter does** | `fast_replaceable_group = "transport-belt"` on the part, which is base's own group: a balancer can be dropped straight into a belt line you already have, and the belt goes to the player. The group is symmetric, so a belt laid on a part replaces it too — and the engine raises NO event for the part it destroys, which is the whole of `guest/go/fastreplace.go`. "Fast replace" |
 | **A Belt Balancer 2 or 3 save becomes one of ours** | Uninstall the incumbent and every `balancer-part` it left standing becomes one of this mod's, at load, once per save: 31 parts across 3 surfaces and 2 forces into 9 clusters, **at the health and the quality they were standing at**, of which the ones laid ONE BELT PER PART deliver 2.000x and 3.997x one belt and the ones laid the incumbent's way are refused on Factorio 2.1 -- their geometry cannot function there under any design, so what a player gets is their parts, their items and a rebuild checklist, with the items on the belts conserved exactly (48 copper before and after), the item stacks surviving and placing our parts, and the technology granted. Nothing at all happens while the incumbent is installed, or while any other mod owns the name -- **including an incumbent that arrives AFTER this mod, on a save this mod has already converted**, where the balancers we own keep running and a `balancer-part` the newcomer places stays theirs. All four incumbent names are exercised, and so is the stranger being uninstalled in his turn. Proved against the real Belt Balancer 2 as well as the harness stand-in. "Adopting a Belt Balancer 2 or 3 save" |
+| **...and the compatibility item it leaves behind does not hang anybody** | The stub `balancer-part` item places the stub ENTITY, which the next flush swaps for a real part. Pointing it at `bbb-balancer-part` instead put the two names into each other's engine-derived `items_to_place_this`, and a neighbour that walks that graph while mutating its own table froze a player's game permanently -- no crash, no log line, reproduced headlessly at 97-99% of a core on his own save and mod set. Four candidate shapes were measured in the engine before one was picked. The dump gate asserts the graph on both mod sets now and the `mig` suite reads the engine's own list instead of a `place_result` that stopped moving. "The two-element cycle that froze a game" |
 | **A part at any quality is a part** | Every place the guest asks the world for one of its own entities by name is quality-blind since 2026-08-20 -- `findOnTile`, one helper for all five sites, after the migration pass found `find_entity` resolves a bare name as normal quality only. An uncommon balancer draws its shape, balances at 2.000x with 0.00% spread, is refused past the port limit WITH the refusal delivered, and survives a scripted colliding belt without losing a registry entry. The tenth suite (`qual`) is every part of that, red-proven against the pre-fix guest in one run. "A part at uncommon quality is a part" |
 | **Nothing the compiler places draws anything** | The hidden prototypes are clones of base belts and kept base's pictures — including a three-by-three linked-belt `structure` on the one prototype that stands where a player looks. All four are blanked, and the `edge` suite asserts the structural half: 180–197 visible-surface entities of ours, **every one on a registered part tile, 0 off one**, across six samples. "The tan streak" |
 | **...and the hidden SURFACE shows in nobody's surface lists** | `bbb-hidden` sat in Space Age's remote-view surface switcher — the mod portal's first bug report, 2026-08-31, and invisible to every suite because no assertion reads a GUI. Visibility is a per-force flag defaulting to visible and `LuaForce::set_surface_hidden` is the only mechanism the engine has, so the surface is hidden for every force at creation and at recovery, on the fresh-heap rebuild that repairs an existing save, and for a force created later (`on_force_created`, the 24th subscription). Read back per force in `m3` on all three paths and in `mig21` on the committed fixtures, which predate the fix and prove the before-state. "The surface in the remote view" |

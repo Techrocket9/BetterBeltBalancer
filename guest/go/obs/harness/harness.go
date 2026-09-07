@@ -1315,6 +1315,43 @@ func Researched(force fkapi.Object, name string) (done, present bool) {
 	return r, true
 }
 
+// entityPlacers is the scratch ItemsToPlaceThisInto writes into, so the walk
+// allocates once for the whole run rather than once per phase. An observer is
+// built -gc=leaking like every other one here.
+var entityPlacers []fkapi.ItemToPlace
+
+// EntityPlacers is `items_to_place_this` for one entity prototype: the name of
+// the first item in it, how many there are, and whether the prototype exists at
+// all.
+//
+// THE ENGINE DERIVES THIS LIST AND NO DATA STAGE WRITES IT, which is what makes
+// it worth asking the running game for. It holds every item whose `place_result`
+// is this entity, plus the item this entity's own `placeable_by` names -- so two
+// prototypes can end up in each other's lists without either one's data stage
+// having said anything that looks like a cycle. `mig` reads it because the
+// direction it moves across the swap is the engine's own answer to "whose
+// `balancer-part` is this now", and the COUNT is what says this mod's part is
+// placed by one item rather than two.
+func EntityPlacers(entity string) (first string, n int, ok bool) {
+	raw, err := fkapi.Prototypes.EntityRaw()
+	if err != nil {
+		return "", 0, false
+	}
+	v, err := fkapi.LuaCustomTable{Object: raw}.Get(fkapi.OfString(entity))
+	if err != nil || v.Tag != fkapi.TagObject {
+		return "", 0, false
+	}
+	entityPlacers, err = (fkapi.LuaEntityPrototype{Object: v.Object}).
+		ItemsToPlaceThisInto(entityPlacers)
+	if err != nil {
+		return "", 0, false
+	}
+	if len(entityPlacers) == 0 {
+		return "none", 0, true
+	}
+	return entityPlacers[0].Name, len(entityPlacers), true
+}
+
 // ItemPlaceResult is the entity name an item prototype places, empty when it
 // places nothing.
 //

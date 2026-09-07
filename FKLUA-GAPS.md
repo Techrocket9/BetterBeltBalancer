@@ -172,6 +172,32 @@ Two refinements came out of the fix round. The `defer` removed from `SubscribeFi
 
 Picked up here by regenerating the bindings, whose whole substantive diff across 178,268 lines is the six hints and the defer swap: no member, event or define id moved, and no signature moved. At the pickup both `-gc` arms reported `23 events subscribed, of 225` again, with `fk_api_gen.lua` back to 23,332 bytes and the packaged zip to 573,906; the subscribed count moves as the guest gains subscriptions, and the pruning holds either way. This mod's build now FAILS on a lost prune rather than reporting one: `make mod` and `make zip` capture the packager's report and stop on the give-up line, which members, events and defines all share.
 
+## 31. Two self-re-arming one-shot handlers drain each other in a single tick
+
+`fk_mod.lua` keeps one dispatcher per event holding a list of handlers, and the walk inside that dispatcher advances only when the slot still holds the function that just ran:
+
+```lua
+local i = 1
+while true do
+  local fn_ = list[i]
+  if fn_ == nil then break end
+  fn_(e)
+  if list[i] == fn_ then i = i + 1 end
+end
+```
+
+That is written for a handler which unregisters itself mid-dispatch, and the comment above it says so. `off_event` removes with `table.remove`, so the neighbour shifts down into the vacated slot and the cursor must not advance past it; `on_event` appends, so a handler that re-registers is back at the end rather than where it was. With ONE such handler the two operations cancel: the list has a single element, the removal shifts nothing, and the re-arm lands at index 1 again.
+
+With TWO armed at once they do not cancel, they rotate. Handler A at index 1 removes itself, B shifts down into index 1, `list[1] ~= A` so the cursor stays, A re-arms at the end. B then runs at index 1 and does the same. The cursor never leaves the head of a list whose contents keep cycling, so every step both handlers owe is spent inside one dispatch instead of one step per tick each. It terminates as soon as one of them stops re-arming, so what it costs is the pacing rather than the game: it would spin without end only if both re-armed unconditionally forever.
+
+Three handlers in `fk_mod.lua` have this shape, all deliberately: `flush_deferred`, `prebuild_step` and `gc_step` each `off_event` themselves on entry and `on_event` themselves again while work remains. A paced collection running while the heap pre-build is still owed puts two of them on `on_tick` together, which is the case above.
+
+Measured with a verbatim transcription of `on_event`, `off_event` and the walk, run under FkLua's own `bin/lua52f`. Two one-shots each owing three steps: **one dispatch made 6 calls** and both drained, where the intended behaviour is three ticks of two calls. One handler re-arming unconditionally beside one owing three steps: **7 calls**, then the dispatch returned rather than hanging.
+
+It was found while diagnosing a permanent freeze in a mod set that has this guest in it, and it is **not** that freeze: the cause there was a prototype-level cycle in the mod's own data stage, reproduced with no guest running at all. This is a separate defect with a smaller blast radius, recorded because nothing else would have looked at it.
+
+The fix that keeps the comment's original case working is to walk a SNAPSHOT of the list and call each entry only if it is still registered when its turn comes. Identity-based advancement is then unnecessary: removals during the dispatch are honoured by the membership test, and a re-arm lands in the next dispatch's snapshot rather than in this one's.
+
 ## Smaller notes
 
 - Upstream now treats a runtime log line as API surface with a stable opening clause, because downstream tests match on them; this mod asserts only on its own `[BBB]` lines. Its guest notes also point at Factorio's built-in filter categories (see item 3).

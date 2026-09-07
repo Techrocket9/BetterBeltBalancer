@@ -85,6 +85,15 @@ never make easy. So:
   out at turbo, 0.125, which is HALF this mod's floor, so on every other arm the
   correct behaviour and a derivation that does nothing at all are the same dump.
 
+...AND THE LEGACY STUB'S PLACING GRAPH, ON BOTH GOLDEN ARMS, WHICH IS ALSO NOT
+HASHED AND FOR THE SAME REASON. `items_to_place_this` is not a field any data
+stage writes -- the engine derives it, from every item whose `place_result` is
+the entity plus the item its own `placeable_by` names -- so a hash holds it still
+without ever saying what shape it is holding. The shape that matters is that
+exactly ONE item places `bbb-balancer-part`: a second one closes a cycle between
+that name and the stub's, and a mod walking item -> entity -> items_to_place_this
+hangs on it. See check_legacy_stub.
+
 A VARIANT ARM DRIVES THE REAL SETTING, through a `mod-settings.dat` this script
 writes into the staged mods directory. That file is Factorio's own binary
 property tree -- an eight-byte version, a bool, and a three-key dictionary of
@@ -519,6 +528,90 @@ def ingredients_of(dump: Path) -> list:
     return [(i["name"], i["amount"]) for i in got]
 
 
+# ---------------------------------------------------------------------------
+# THE LEGACY STUB'S PLACING GRAPH, asserted on both golden arms rather than
+# hashed.
+#
+# A hash says nothing moved and cannot say which shape it is holding still, and
+# the shape here is the one that hung a player's game. `prototypes.entity[e]
+# .items_to_place_this` is not a field a data stage writes: the engine builds it
+# from every item whose `place_result` is `e`, PLUS the item named by `e`'s own
+# `placeable_by`. So a stub item pointing at `bbb-balancer-part` while the stub
+# entity's `placeable_by` points back at that same item makes the two names each
+# other's placers -- and a third-party mod that walks item -> entity ->
+# items_to_place_this while inserting what it finds into the table it is walking
+# never terminates on a cycle. Measured on a reporter's save: Factorio spins in
+# LuaEntityPrototype::luaReadItemsToPlaceThis forever, no crash and no log line,
+# so nothing downstream of the data stage could ever have seen it.
+#
+# THE ASSERTION IS OVER THE WHOLE DUMP AND NOT OVER THIS MOD'S TWO PROTOTYPES.
+# What must hold is that exactly one item in the game places `bbb-balancer-part`,
+# and any mod's item is entitled to break that -- so the projection scans every
+# prototype of every type, which is the same argument the golden hash makes one
+# level up.
+# ---------------------------------------------------------------------------
+
+OUR_PART = "bbb-balancer-part"
+STUB_NAME = "balancer-part"
+STUB_MARKER = "bbb-legacy-stub"
+
+
+def legacy_stub_of(dump: Path) -> dict:
+    return project(dump, '{'
+                   'stub_place_result: .item["%s"].place_result, '
+                   'marker: (.["simple-entity"]["%s"] != null), '
+                   'placers: ([.[] | objects | .[] | objects '
+                   '| select(.place_result == "%s") | .name] | sort)}'
+                   % (STUB_NAME, STUB_MARKER, OUR_PART))
+
+
+def check_legacy_stub(arm: str, got: dict) -> bool:
+    """Returns True on a failure, which is the shape main() already counts in."""
+    bad = False
+    marker, placers = got["marker"], got["placers"]
+    place = got["stub_place_result"]
+
+    # ONE ITEM PLACES OUR PART, IN EITHER ARM. This is the whole defect stated:
+    # the cycle exists exactly when a second item does.
+    if placers != [OUR_PART]:
+        bad = True
+        print(f"FAIL {arm}: `{OUR_PART}` is placed by {placers} and must be "
+              f"placed by [{OUR_PART}] alone -- a second item here is a cycle "
+              f"through `placeable_by` and hangs a mod that walks it")
+    else:
+        print(f"  ok   {arm} placers of {OUR_PART}: {placers}")
+
+    if arm == "base":
+        # NOBODY ELSE OWNS THE NAME HERE, so the stub is defined and its item
+        # must place the STUB and not our part.
+        if not marker:
+            bad = True
+            print(f"FAIL {arm}: no `{STUB_MARKER}`; the legacy stub was not "
+                  f"defined on the one arm where nobody else owns the name, so "
+                  f"every assertion here is vacuous")
+        if place != STUB_NAME:
+            bad = True
+            print(f"FAIL {arm}: the `{STUB_NAME}` item places {place!r} and must "
+                  f"place {STUB_NAME!r}; the guest swaps that stub for a real "
+                  f"part on the next flush")
+        elif marker:
+            print(f"  ok   {arm} the {STUB_NAME} item places {place}")
+    elif arm == "incumbent":
+        # THE OTHER ARM OF THE STUB BRANCH. The marker is defined WITH the stub
+        # entity and never on its own, so its absence is the branch not firing.
+        # There is no equivalent signal for the stub ITEM and none is needed: a
+        # second `item` of one name is a duplicate-name load failure, so this arm
+        # would have died on `--dump-data exited 1` rather than passing quietly.
+        if marker:
+            bad = True
+            print(f"FAIL {arm}: `{STUB_MARKER}` is defined while another mod "
+                  f"owns `{STUB_NAME}`; this mod ate a still-installed "
+                  f"neighbour's prototype")
+        else:
+            print(f"  ok   {arm} no legacy stub, the incumbent owns {STUB_NAME}")
+    return bad
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -554,12 +647,18 @@ def main() -> int:
         shutil.rmtree(keep, ignore_errors=True)
 
     print(f"==> Factorio {version_full}; --dump-data over {len(arms)} golden arm(s)")
-    got = {a: run_arm(a, factorio, series, mod_dir, keep) for a in arms}
+    got = {a: run_arm(a, factorio, series, mod_dir, keep, probe=legacy_stub_of)
+           for a in arms}
 
     book = json.loads(GOLDENS.read_text()) if GOLDENS.exists() else {}
 
     if args.capture:
-        book.setdefault(version_full, {}).update(got)
+        # THE PROBE IS NOT A GOLDEN. check_legacy_stub compares it against a rule
+        # written down in this file, so recording it would invite the one thing a
+        # golden must never make easy -- re-capturing the answer instead of
+        # reading it. Only the hashes and the checksum are the engine's to record.
+        book.setdefault(version_full, {}).update(
+            {a: {k: v for k, v in g.items() if k != "probe"} for a, g in got.items()})
         # setdefault, not assignment: an engine's note is its own provenance
         # story, often hand-corrected after the capture -- a recapture must not
         # overwrite it with a generic one.
@@ -608,6 +707,13 @@ def main() -> int:
             if w[field] != g[field]:
                 bad = True
                 print(f"FAIL {a} {field}:\n  golden {w[field]}\n  got    {g[field]}")
+                # A `_stale` note is a golden whose owner already knows a change
+                # invalidated it and could not re-capture it -- a line for an
+                # engine this machine does not have. It is a NOTE ON A FAILURE and
+                # never a skip: an unrecapturable golden that stopped failing
+                # would be an engine nobody is checking at all.
+                if w.get("_stale"):
+                    print(f"       known stale: {w['_stale']}")
             else:
                 print(f"  ok   {a} {field} {g[field][:16]}")
         if w.get("prototype_list_checksum") != g.get("prototype_list_checksum"):
@@ -618,6 +724,13 @@ def main() -> int:
                   f"{w.get('prototype_list_checksum')} -> "
                   f"{g.get('prototype_list_checksum')} "
                   f"(a prototype appeared or vanished)")
+
+    # THE STUB'S PLACING GRAPH, PER ARM, and it runs whether or not the golden
+    # matched. A hash that moved is exactly when somebody wants to know which
+    # shape the dump is in, and this arm is the one shape a hash was never going
+    # to name on its own.
+    for a in arms:
+        bad |= check_legacy_stub(a, got[a]["probe"])
 
     if bad:
         if keep is not None:
