@@ -48,10 +48,12 @@ balancer has no free face to land on any more; `lim` is sixty-four belts over
 sixty-six parts with a spare part of its own; `brdg`'s gap tile is flanked by ONE
 belt rather than two, so the merge reaches the PORT limit rather than the
 one-belt bound; and `frepa`'s belt line ENDS on the tile the part is dropped
-onto. THE ONE-BELT BOUND ITSELF IS ASSERTED HERE ONLY AS A NEGATIVE -- not one
-refusal for it over the whole run -- because every edit in this suite is meant to
-be one the mod can honour, and the three ways of reaching that refusal are the
-`sedge` suite's subject.
+onto. THE ONE-BELT BOUND IS ASSERTED HERE AS EXACTLY ONE REFUSAL AND NO MORE, and the
+one is `frepd`'s: a belt laid over a part that carries an edge interface takes
+the part's tile, which is next to its neighbour, so that neighbour is handed a
+second belt. Every other edit in this suite is meant to be one the mod can
+honour. The three ways of reaching that refusal from a BELT are the `sedge`
+suite's subject; this is the fourth and it is a PART REMOVAL.
 
     python3 test/assert-edge.py create.log run.log
 """
@@ -132,13 +134,24 @@ TOLDFORCE = re.compile(
     r"(.*)$"
 )
 HANDBACKFAIL = re.compile(r"\[BBB\] alert: player (\d+) could not be handed back")
+# The same fork for the OTHER bound. `tellRefusal` is shared, so this is the
+# same sentence with the rule's own name in it, and the frepd arm is the only
+# thing in this suite that produces one.
+TOLDSEDGE = re.compile(
+    r"\[BBB\] told force (\d+) that cluster (\d+) is past the "
+    r"one-belt-per-part rule(.*)$")
 # FAST REPLACE. The `frep-can` lines are the ENGINE's own answer to the question
 # a player's cursor asks; the rest is what actually happened to the world.
 FREPCAN = re.compile(r"\[BBB-EDGE\] frep-can what=(\S+) value=(\S+)")
 FREPFWD = re.compile(
     r"\[BBB-EDGE\] frep-fwd created=(\S+) belt-left=(\S+) part-there=(\S+)")
-FREPEDGE = re.compile(
-    r"\[BBB-EDGE\] frep-edge created=(\S+) part-survived=(\S+)")
+# A BELT OVER A PART THAT CARRIES AN EDGE INTERFACE, which the two arms of the
+# frepc leg drive to its two outcomes. `iface-left` is the field nothing else
+# reports: the interface and the part are two entities on one tile and the
+# replace has to take both.
+FREPC = re.compile(
+    r"\[BBB-EDGE\] frepc tag=(\S+) created=(\S+) part-left=(\S+) "
+    r"belt-there=(\S+) iface-left=(\S+)")
 FREPREV = re.compile(
     r"\[BBB-EDGE\] frep-rev created=(\S+) part-left=(\S+) belt-there=(\S+)")
 FREPSPILL = re.compile(
@@ -173,7 +186,7 @@ HAND_OVERFLOW_MIN = 10
 # settled, and `flowing` is taken while every rig in the save is saturated --
 # which is the condition the tan-streak field report was made under.
 PLACE_TAGS = ("init", "post-merge", "post-add-out", "flowing", "final", "brdg",
-              "frep")
+              "frep", "frepc")
 
 # A floor, so that a probe which found nothing cannot pass. Eleven clusters with
 # two or more edges each is well over this; the number exists only to make an
@@ -365,10 +378,6 @@ EXPECT = {
     # a part dropped MID-line would take the belt behind it as an input and the
     # belt ahead as an output, which is two belts on one tile.
     "post-frep-fwd":           (14, 196, 14, 0, 0),
-    # A belt refused over an EDGE part -- one carrying an interface. Nothing
-    # moves: `can_fast_replace` is false there and the rig puts back what
-    # `create_entity` mined behind the engine's own check.
-    "post-frep-edge":          (14, 196, 14, 0, 0),
     # And a belt laid on the middle of frepb's NECK, which is the half nothing
     # tells the guest about. The column SPLITS into two three-part clusters, and
     # both of them are buildable because the target's two vertical neighbours
@@ -380,6 +389,22 @@ EXPECT = {
     # holding somebody's belt, for the rest of the session.
     "post-frep-rev":           (15, 195, 15, 0, 0),
     "frep-final":              (15, 195, 15, 0, 0),
+    # A BELT OVER A PART THAT CARRIES AN EDGE INTERFACE, the last leg and the
+    # only one whose rigs are two columns rather than two-part rows. Building
+    # them adds two clusters and eight parts -- frepc's five and frepd's three.
+    "frepc-built":             (17, 203, 17, 0, 0),
+    "pre-frepc":               (17, 203, 17, 0, 0),
+    "post-frepc-ok":           (17, 202, 17, 0, 0),
+    # ... and the arm whose neighbour was already full. THE PART REMOVAL'S
+    # TEARDOWN IS NOT THE COMPILE'S, so the check in front of compile() cannot
+    # save this network the way it saves the sixty-fifth belt's: `removePart`
+    # marks the old root dead, `flushDead` brings the network down, and only
+    # then does `flushLive` discover that what is left cannot be built. So one
+    # cluster stands with no network -- `nets` is 16 over 17 clusters -- and
+    # `drift` is 0 rather than 1, because there is no stored fingerprint left
+    # to disagree with the world. That pair is this leg's signature.
+    "post-frepc-no":           (17, 201, 16, 0, 0),
+    "frepc-final":             (17, 201, 16, 0, 0),
 }
 
 # THE TAGS AT WHICH A REFUSED MERGE IS STANDING, and what the audit's `nets=`
@@ -581,20 +606,32 @@ def main():
             fail("%s: unbuilt=%d, expected %d" % (tag, got[4], u))
     print()
 
-    # AND NOT ONE ONE-BELT-PER-PART REFUSAL, ANYWHERE IN THE RUN. Every rig here
-    # is laid so that no tile ever carries two belts, and every edit is aimed at
-    # a spare part, at an edge the rig already has, or at a tile with nothing on
-    # it. This is the assertion that says so: a refusal for the other bound would
+    # EXACTLY ONE ONE-BELT-PER-PART REFUSAL OVER THE WHOLE RUN, AND IT IS
+    # frepd's. Every other rig here is laid so that no tile ever carries two
+    # belts and every other edit is aimed at a spare part, at an edge the rig
+    # already has, or at a tile with nothing on it -- so a second refusal would
     # mean a rig or an edit had quietly stopped being the thing it is named for,
-    # and every count above it would go on passing. The three ways of REACHING
-    # that refusal are the `sedge` suite's subject.
+    # and every count above it would go on passing. The three ways of reaching
+    # this refusal from a BELT are the `sedge` suite's subject; the way this
+    # suite reaches it is the fourth, and it is a PART REMOVAL: a belt laid over
+    # an edge part hands its neighbour a second belt.
     sedge = [m for m in (SEDGEREFUSED.search(l) for l in lines) if m]
-    if sedge:
-        fail("%d cluster(s) were refused for the one-belt-per-part rule: %r. No "
-             "rig in this suite may ask a part for a second belt"
-             % (len(sedge), [m.group(0).strip()[:72] for m in sedge[:3]]))
-    print("one-belt-per-part refusals over the whole run: 0, as every rig and "
-          "every edit is laid to avoid one")
+    in_frepd = 0
+    inside = False
+    for line in lines:
+        if "[BBB-EDGE] frepc-no begin" in line:
+            inside = True
+        elif MARK.search(line):
+            inside = False
+        elif inside and SEDGEREFUSED.search(line):
+            in_frepd += 1
+    print("one-belt-per-part refusals over the whole run: %d, of which %d in "
+          "the frepd window" % (len(sedge), in_frepd))
+    if len(sedge) != 1 or in_frepd != 1:
+        fail("%d cluster(s) were refused for the one-belt-per-part rule and %d "
+             "of them inside the frepd window, expected exactly one of each: %r"
+             % (len(sedge), in_frepd,
+                [m.group(0).strip()[:72] for m in sedge[:3]]))
     print()
 
     # ---- conservation across every one of them -----------------------------
@@ -665,8 +702,8 @@ def main():
     # miner, and this suite has none, so it lands on the floor and is counted
     # here rather than treated as a leak.
     windows = {"remove begin": "removal", "hand mine": "hand",
-               "bmin-remove begin": "bmin"}
-    spills = {"removal": [], "hand": [], "bmin": []}
+               "bmin-remove begin": "bmin", "frepc-no begin": "frepd"}
+    spills = {"removal": [], "hand": [], "bmin": [], "frepd": []}
     phase = None
     for line in lines:
         opened = next((v for k, v in windows.items()
@@ -681,8 +718,9 @@ def main():
         s = SPILLED.search(line)
         if s and phase:
             spills[phase].append(int(s.group(1)))
-    removal, hand, bmin = spills["removal"], spills["hand"], spills["bmin"]
-    inside = removal + hand + bmin
+    removal, hand = spills["removal"], spills["hand"]
+    bmin, frepd_sp = spills["bmin"], spills["frepd"]
+    inside = removal + hand + bmin + frepd_sp
     print("a cluster DISSOLVED, which is a removal and not a recompile:")
     print("  spills in the removal window:   %d, totalling %d items"
           % (len(removal), sum(removal)))
@@ -690,6 +728,8 @@ def main():
           % (len(hand), sum(hand)))
     print("  spills in the port-boundary window: %d, totalling %d items"
           % (len(bmin), sum(bmin)))
+    print("  spills in the refused-replace window: %d, totalling %d items"
+          % (len(frepd_sp), sum(frepd_sp)))
     print("  spills over the whole run: %d, totalling %d items"
           % (len(spilled), sum(spilled)))
     if not removal or sum(removal) < 10:
@@ -697,10 +737,15 @@ def main():
              "the world: a dissolved cluster has no successor network and its "
              "contents must come back, not vanish into the reinsertion path"
              % sum(removal))
+    if not frepd_sp:
+        fail("the refused replace reached no spill at all: a belt laid over an "
+             "edge part whose neighbour is full takes the machine down (the "
+             "removal's teardown, not the compile's) and the contents have "
+             "nowhere to go. A leg where the network was empty proves nothing")
     if len(spilled) != len(inside):
-        fail("%d spills happened outside the three windows a player caused and "
-             "%d inside: a recompile nobody mined into must not reach the spill "
-             "path at all here" % (len(spilled) - len(inside), len(inside)))
+        fail("%d spills happened outside the four windows a player caused and "
+             "%d inside: a recompile nobody mined into must not reach the "
+             "spill path at all here" % (len(spilled) - len(inside), len(inside)))
     print()
 
     # ---- the port-boundary shrink -------------------------------------------
@@ -1377,7 +1422,9 @@ def main():
     cans = {m.group(1): m.group(2) for m in (FREPCAN.search(l) for l in lines) if m}
     spills_fr = {m.group(1): (m.group(2), int(m.group(3)), m.group(4).strip())
                  for m in (FREPSPILL.search(l) for l in lines) if m}
-    need = ("part-over-belt", "belt-over-edge-part", "belt-over-interior-part")
+    need = ("part-over-belt", "belt-over-interior-part",
+            "belt-over-edge-part-free-neighbour",
+            "belt-over-edge-part-full-neighbour")
     if any(t not in cans for t in need):
         fail("the fast-replace leg did not run: %s"
              % ", ".join(t for t in need if t not in cans))
@@ -1445,27 +1492,7 @@ def main():
              "live belt line must produce a balancer like any other"
              % (100 * spread))
 
-    # 3. THE REFUSAL. A part that carries an edge interface cannot be
-    #    belt-replaced: `bbb-linked-belt` is a belt-connectable of its own
-    #    standing on that same tile, so the engine's own check says no. That is
-    #    what a player's cursor gets, and it is the only thing that keeps the
-    #    reverse gesture off the edges of a machine.
-    edge = FREPEDGE.search("\n".join(lines))
-    if not edge:
-        fail("the fast-replace refusal leg did not report")
-    print("a BELT over a part that carries an edge interface:")
-    print("  can_fast_replace=%s  create_entity created=%s  part survived=%s"
-          % (cans["belt-over-edge-part"], edge.group(1), edge.group(2)))
-    if cans["belt-over-edge-part"] != "false":
-        fail("the engine would let a player lay a belt on a part that carries "
-             "an edge interface. Two belt-connectables on one tile is the whole "
-             "of spike S1's loophole and it is not something to rely on the "
-             "other way round: re-measure before believing this")
-    if edge.group(1) != "false":
-        fail("create_entity placed a belt on a part carrying an interface: it "
-             "returned an entity where it has always returned nil")
-
-    # 4. THE REVERSE, and the guest noticing it. `can_fast_replace` is true for
+    # 3. THE REVERSE, and the guest noticing it. `can_fast_replace` is true for
     #    the middle of frepb's NECK, the part goes, the belt takes the tile --
     #    and the ONLY thing that tells the guest is the belt's own build event.
     rev = FREPREV.search("\n".join(lines))
@@ -1485,14 +1512,18 @@ def main():
         fail("the part is still standing under the belt: create_entity fell "
              "back to creating rather than replacing")
     reaped = [m for m in (REAPED.search(l) for l in lines) if m]
-    print("  the guest unregistered it: %d time(s) %r"
+    print("  the guest unregistered a replaced part %d time(s), at %r"
           % (len(reaped), [(m.group(1), m.group(2)) for m in reaped]))
-    if len(reaped) != 1:
-        fail("the guest logged %d fast-replace removals, expected exactly 1. "
-             "None at all means guest/go/fastreplace.go never fired and the "
-             "registry is holding a tile that a player's belt is standing on; "
-             "more than one means it is firing for something that is not a "
-             "replace" % len(reaped))
+    # THREE, one per belt-over-part replace this run drives: the interior part
+    # here, and the two edge parts the frepc leg replaces. Each on its own tile,
+    # so a line fired twice for one gesture fails as loudly as a missing one.
+    tiles = [(m.group(1), m.group(2)) for m in reaped]
+    if len(reaped) != 3 or len(set(tiles)) != 3:
+        fail("the guest logged %d fast-replace removals on %d distinct tiles, "
+             "expected 3 on 3. Fewer means guest/go/fastreplace.go did not fire "
+             "for one of them and the registry is holding a tile that a "
+             "player's belt is standing on; more means it is firing for "
+             "something that is not a replace" % (len(reaped), len(set(tiles))))
     # That line can only be written when the part was ALREADY GONE by the time
     # the belt's build event arrived, so it is also this suite's measurement of
     # the thing it cannot ask directly: the engine raised no removal event for
@@ -1515,7 +1546,7 @@ def main():
         fail("the reverse replace put %d machine items on the ground, expected "
              "exactly 1 (the part)" % machine)
 
-    # 5. AND BOTH HALVES OF THE SPLIT KEEP RUNNING, AND THE NEW BELT IS AN EDGE
+    # 4. AND BOTH HALVES OF THE SPLIT KEEP RUNNING, AND THE NEW BELT IS AN EDGE
     #    OF BOTH OF THEM. The column became a two-part cluster above the belt and
     #    a one-part cluster below it, and that one belt is an OUTPUT of the first
     #    and an INPUT of the second -- two networks in series through a tile that
@@ -1557,6 +1588,110 @@ def main():
         fail("the lower half of frepb delivered %d after the split against %d "
              "before: it gained an input and cannot have got slower"
              % (a_tot[1], b_tot[1]))
+    print()
+
+    # ---- a belt over a part that CARRIES an edge interface -----------------
+    #
+    # The portal report. A part goes over a belt and, until `bbb-linked-belt`
+    # was given the part's own fast-replace group (guest/go/data/hidden.go), a
+    # belt would not go over a part on any tile the balancer was actually using
+    # -- because a part with an edge on it holds two colliding entities and the
+    # engine wants both of them in the group.
+    #
+    # TWO ARMS, BECAUSE THE GESTURE HAS TWO OUTCOMES AND THEY ARE DIFFERENT
+    # STATEMENTS. Both replace the top part of a column, the one carrying the
+    # input interface, with a south-facing belt; what differs is the part
+    # underneath. frepc's is edgeless and takes the new belt as its input, so
+    # the machine is the same machine one part shorter. frepd's already carries
+    # the column's output, so the same belt would be its second and the cluster
+    # cannot be built.
+    fc = {m.group(1): m.groups()[1:] for m in (FREPC.search(l) for l in lines) if m}
+    for arm in ("cok", "cno"):
+        if arm not in fc:
+            fail("the %s arm of the edge-part replace did not report" % arm)
+    if cans["belt-over-edge-part-free-neighbour"] != "true":
+        fail("the engine refuses a belt over a part that carries an edge "
+             "interface. That is the portal report itself, and it is what "
+             "`fast_replaceable_group` on bbb-linked-belt exists to fix: with "
+             "that line removed from guest/go/data/hidden.go this reads false "
+             "and neither arm below can happen")
+    if cans["belt-over-edge-part-full-neighbour"] != "true":
+        fail("the engine refuses the belt on frepd's edge part, so the refusal "
+             "this arm measures is unreachable and it proves nothing")
+    print("a BELT over a part that CARRIES an edge interface:")
+    for arm, what in (("cok", "neighbour edgeless"), ("cno", "neighbour full")):
+        made, partleft, beltthere, iface = fc[arm]
+        print("  %-20s created=%s  part left=%s  belt there=%s  interface left=%s"
+              % (what, made, partleft, beltthere, iface))
+        if made != "true" or beltthere != "true":
+            fail("the belt was not created over the edge part (%s arm)" % arm)
+        if partleft != "false":
+            fail("the part is still standing under the belt (%s arm): "
+                 "create_entity fell back to creating rather than replacing"
+                 % arm)
+        # THE INTERFACE IS THE HALF NOTHING ELSE LOOKS FOR. It is a second
+        # entity on the same tile and the replace has to take it too; one left
+        # behind is a belt-connectable of ours standing on a tile the registry
+        # no longer calls a part, which is the tan-streak class and which the
+        # placement probe below would then report as a stray.
+        if iface != "false":
+            fail("the edge interface is STILL STANDING on the tile the belt "
+                 "took (%s arm): the replace destroyed the part and left ours"
+                 % arm)
+        if arm not in spills_fr:
+            fail("the %s arm logged no ground sample" % arm)
+        handed, machine, _ = spills_fr[arm]
+        print("    handed back: [%s], %d machine item(s) removed" % (handed, machine))
+        if "bbb-balancer-part" not in handed:
+            fail("the PART was not handed back on the %s arm: with no player "
+                 "the engine spills it, exactly as a mined machine goes" % arm)
+        # ONE, not two. The interface is `minable`-less by construction
+        # (guest/go/data/hidden.go, strip), so destroying it yields no item and
+        # a player is handed the part alone. A second machine item here would
+        # mean one of ours had become something a player can hold.
+        if machine != 1:
+            fail("the %s arm put %d machine items on the ground, expected "
+                 "exactly 1 (the part). The edge interface has no item and must "
+                 "not acquire one" % (arm, machine))
+
+    # THE OK ARM KEEPS RUNNING, at the rate it had before the edit. Windows of
+    # the same length either side; the machine loses a part and no port.
+    ca, cb = windows_out.get("frepc-after-open"), windows_out.get("frepc-after-close")
+    cba, cbb = windows_out.get("frepc-before-open"), windows_out.get("frepc-before-close")
+    for w, n in ((ca, "frepc-after-open"), (cb, "frepc-after-close"),
+                 (cba, "frepc-before-open"), (cbb, "frepc-before-close")):
+        if not w or "frepc" not in w or "frepd" not in w:
+            fail("the edge-part window %s did not run" % n)
+    ok_b = sum(y - x for x, y in zip(cba["frepc"], cbb["frepc"]))
+    ok_a = sum(y - x for x, y in zip(ca["frepc"], cb["frepc"]))
+    no_b = sum(y - x for x, y in zip(cba["frepd"], cbb["frepd"]))
+    no_a = sum(y - x for x, y in zip(ca["frepd"], cb["frepd"]))
+    print("  over equal windows either side of the edit:")
+    print("    frepc (neighbour edgeless) %d -> %d" % (ok_b, ok_a))
+    print("    frepd (neighbour full)     %d -> %d" % (no_b, no_a))
+    if ok_b <= 0 or no_b <= 0:
+        fail("one of the two columns delivered nothing BEFORE the edit: its "
+             "control is dead and it proves nothing")
+    if ok_a < 0.9 * ok_b:
+        fail("frepc delivered %d items after the replace against %d before: "
+             "the machine lost a part and no port, so its rate must hold"
+             % (ok_a, ok_b))
+    # ... AND THE REFUSED ONE STOPS DEAD, asserted as a zero rather than as a
+    # loosened bound. A refused cluster has no network at all, so an item in
+    # that chest would be a balancer built where the rule says it cannot be.
+    if no_a != 0:
+        fail("frepd delivered %d items after its cluster was refused: a refused "
+             "cluster has no network and nothing may reach its chest" % no_a)
+    # AND THE REFUSAL WAS DELIVERED. `told force` is the arm a headless run can
+    # reach -- every build here is a script build, so the fork always takes
+    # force.print -- and it is what says the LocalisedString crossed and the
+    # LuaForce resolved from a force index off a part of the cluster.
+    told_c = [m for m in (TOLDSEDGE.search(l) for l in lines)
+              if m and m.group(2) == sedge[0].group(1)]
+    print("  the force was told about the refused column %d time(s)" % len(told_c))
+    if len(told_c) != 1 or "FAILED" in told_c[0].group(3):
+        fail("the force was told about the refused column %d time(s), expected "
+             "exactly 1 clean report" % len(told_c))
     print()
 
     # ---- and nothing of ours stands where nothing covers it ----------------

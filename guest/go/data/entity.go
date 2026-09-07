@@ -79,10 +79,12 @@ func entity() {
 		// which is the reverse gesture and is handled in guest/go/fastreplace.go.
 		//
 		// The group is symmetric by construction, so this also buys the reverse:
-		// a belt held over a part replaces the part. Only a part with NO EDGE
-		// INTERFACE on its tile can be replaced that way -- `bbb-linked-belt` is
-		// a belt-connectable of its own and blocks the placement, measured --
-		// which means the gesture reaches interior parts and is refused on edges.
+		// a belt held over a part replaces the part, which is what
+		// guest/go/fastreplace.go exists for. It reaches EVERY part, edges
+		// included, but only because `bbb-linked-belt` carries the same group
+		// (hidden.go): a part with an edge on it holds two colliding entities
+		// and the engine wants both of them in the group, so this line alone
+		// left the parts a balancer was actually using unreplaceable.
 		f("fast_replaceable_group", str("transport-belt")),
 		f("max_health", num(170)),
 		f("corpse", str("splitter-remnants")),

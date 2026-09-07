@@ -858,9 +858,13 @@ for suite in $SUITES; do
       # carry a spare part with nothing against it, `lim` is sixty-four belts
       # over sixty-six parts, `brdg`'s gap tile is flanked by one belt rather
       # than two, and `frepa`'s belt line ends on the tile the part lands on.
+      # THE ONE-BELT BOUND IS ASSERTED HERE AS EXACTLY ONE REFUSAL, and it is
+      # `frepd`'s: a belt laid over a part that carries an edge interface hands
+      # the part beyond it a second belt. Every other rig and every other edit
+      # is laid to avoid one.
       echo "=== edge: mid-operation churn, merges, splits and forces ==="
       stage "$TMP/edge" bbb-edge-test
-      run "$TMP/edge" "${BBB_EDGE_TICKS:-5900}"
+      run "$TMP/edge" "${BBB_EDGE_TICKS:-7120}"
       echo "==> asserting conservation and the edge cases"
       python3 "$ROOT/test/assert-edge.py" "$TMP/edge/create.log" "$TMP/edge/run.log"
       ;;

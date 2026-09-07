@@ -1026,6 +1026,13 @@ part, the target, another edgeless part and the output part in a row. Measured:
 true over the middle, `a belt-connectable fast-replaced the part at 20,98`, and
 two `1->1 over 1 ports` clusters where there was one.
 
+**THE END PARTS ANSWER `true` SINCE 0.3.3** and the reading above is kept as
+what phase 3 measured. `bbb-linked-belt` carries the balancer part's own
+fast-replace group now, so all five of that column's parts are replaceable --
+which does not change the band, because the MIDDLE is still the only tile that
+splits cleanly and the other four now stage the two outcomes the portal report
+brought with it. CLAUDE.md, "A belt over a part the balancer is using".
+
 **Band A's gesture got longer and did not change.** Eight parts means eight
 mining steps, and every one of the shrinks overflows: mined one part per 30
 ticks on the saturated rig, the three shrinks spilled **18 items each** and the

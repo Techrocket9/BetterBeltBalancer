@@ -4,7 +4,7 @@ package main
 // balancer part.
 //
 // `bbb-balancer-part` carries `fast_replaceable_group = "transport-belt"`
-// (mod-data/prototypes/entity.lua), which is base's own group for every
+// (guest/go/data/entity.go), which is base's own group for every
 // transport belt, underground belt, splitter and lane splitter. Holding a part
 // over a belt now replaces it the way holding a splitter over one does: the
 // belt and whatever it was carrying go to the player, and the part takes the
@@ -61,15 +61,34 @@ package main
 // (carry.go) reached through the other door, and `RemovePartMinedBy` is
 // literally the same call `onPart` makes for a mine.
 //
-// WHAT IS NOT COVERED, and it is script-only. A belt cannot replace a part that
-// carries an EDGE INTERFACE, because `bbb-linked-belt` is a belt-connectable of
-// its own standing on that same tile and it blocks the placement --
-// `can_fast_replace` is false there, measured, so the engine refuses a player
-// outright. A SCRIPT that ignores `can_fast_replace` and calls `create_entity`
-// anyway gets the part destroyed and no belt created, with no event of any kind:
-// nothing appears, so nothing below can fire. That is the failure envelope
-// (CLAUDE.md) exactly as it already reads for a mod calling `entity.destroy()`
-// on a part, and it is not new.
+// EVERY PART IS REPLACEABLE, INCLUDING ONE CARRYING AN EDGE INTERFACE, and that
+// is what the group on `bbb-linked-belt` bought (guest/go/data/hidden.go). A part
+// with an edge on it holds TWO colliding entities and the engine wants both of
+// them in the group; with only the part in it `can_fast_replace` was false there,
+// so the one gesture a player would try on a balancer they were actually using
+// was the one that did not work. The replace destroys both, and this file's check
+// is unchanged by it: it keys on the PART having gone, and the interface goes
+// with the part rather than instead of it.
+//
+// TWO CONSEQUENCES, BOTH ON THE PLAYER'S SIDE AND BOTH STATED RATHER THAN
+// HIDDEN.
+//
+// A belt laid where an edge part was is an edge of whatever part is next to it
+// ALONG THE SAME AXIS -- the removed part's tile is orthogonally adjacent to it,
+// which is what makes this different from mining a part, where the belts simply
+// stop being anybody's. On Factorio 2.1 that neighbour may already have its one
+// belt, and then the cluster the removal leaves cannot be built. The refusal is
+// correct and the TEARDOWN IS NOT THE COMPILE'S: `removePart` marks the old root
+// dead, so `flushDead` has brought the network down before `flushLive` discovers
+// what is left, and the machine's contents spill. That is the shape "The merge
+// that would be over the limit" describes for a MERGE, met one door along, and
+// it is not sparable the way a merge is -- the interface on the replaced tile is
+// already gone, so the standing network is damaged whatever this guest does.
+// The `edge` suite's frepd arm is the measurement.
+//
+// And a balancer is no longer immune to a belt DRAG. Every part a drag crosses
+// is replaced, exactly as a drag across a row of splitters replaces those. The
+// parts come back as items and the machine recompiles around what is left.
 
 // reapFastReplaced removes a part that a belt-connectable has just replaced.
 //

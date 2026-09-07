@@ -329,12 +329,16 @@ func bandBridge(s fkapi.LuaSurface) {
 // which is two belts on one part and is refused. Replacing the line's last tile
 // gives the new part one input, and the balancer becomes three in and two out.
 //
-// The reverse half is a five-part column with edges on its two ends only, so the
-// three middle parts carry no interface and a belt can be laid on them. Only the
-// MIDDLE one splits cleanly: the new belt is an output of the half above and an
-// input of the half below, and each half's other part already carries its own
-// belt, so the two parts either side of the new belt must be the ones with
-// nothing on them.
+// The reverse half is a five-part column with edges on its two ends only, and
+// ALL FIVE of its parts are belt-replaceable -- `bbb-linked-belt` carries the
+// part's own fast-replace group, so the two ends go together with the interface
+// standing on them. What the column stages is the three OUTCOMES that follow,
+// one per tile: the MIDDLE one splits cleanly, because the new belt is an output
+// of the half above and an input of the half below and each half's other part
+// already carries its own belt; either END leaves a machine that keeps running
+// one part shorter, because the belt lands where the part's own edge was; and
+// either tile BESIDE the middle hands its surviving neighbour a second belt, so
+// that half is refused. Three tiles, three answers, one rig.
 func bandFastReplace(s fkapi.LuaSurface) {
 	b := 90
 	for i := 0; i < 2; i++ {

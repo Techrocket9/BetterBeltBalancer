@@ -179,7 +179,15 @@ const (
 	// thousand items into it mid-run would read as this mod minting matter.
 	frep  = brdg + 2*brdgHalf + 12
 	frepB = frep + 8
-	rows  = frepB + 12
+
+	// A BELT OVER A PART THAT CARRIES AN EDGE INTERFACE. Two arms in one band,
+	// eight rows apart, because the gesture has two outcomes and they are
+	// different statements: `frepc` replaces an edge part whose along-axis
+	// neighbour is edgeless and the machine keeps running, `frepd` replaces one
+	// whose neighbour already has its belt and the cluster that leaves is
+	// refused. Built mid-run like the two above.
+	frepC = frepB + 12
+	rows  = frepC + 14
 )
 
 // ours is everything the compiler is allowed to put on the visible surface. All
@@ -1215,31 +1223,6 @@ func pFrepForward() {
 	out.Open("frep-fwd end").End()
 }
 
-// THE REFUSAL: a part that carries an edge interface cannot be belt-replaced,
-// because `bbb-linked-belt` is a belt-connectable standing on that same tile.
-// `can_fast_replace` is the engine's answer to a PLAYER and it is the assertion.
-//
-// `create_entity` does not ask that question -- it mines the part and only then
-// discovers it cannot place the belt -- so the part is put back. A player cannot
-// reach that state and a phantom left standing here would be an artefact in every
-// audit after it rather than the thing under test.
-func pFrepEdge() {
-	s := surf()
-	out.Open("frep-edge begin").End()
-	out.Open("frep-can what=belt-over-edge-part value=").
-		B(canFastReplace(s, belt, 0, frepB, dirS)).End()
-	_, made := harness.PlaceSoft(s, harness.Piece{
-		Name: belt, X: 0, Y: frepB, Dir: &dirS, FastReplace: true, Raise: true,
-	})
-	_, still := harness.FindAt(s, 0, frepB, part, "")
-	out.Open("frep-edge created=").B(made).S(" part-survived=").B(still).End()
-	if !still {
-		harness.PlaceSoft(s, harness.Piece{Name: part, X: 0, Y: frepB})
-	}
-	frepSweep("edge", frepB-3, frepB+8)
-	out.Open("frep-edge end").End()
-}
-
 // REVERSE: a south-facing belt onto an INTERIOR part, which splits the column
 // into a two-part cluster above and a one-part cluster below, with the new belt
 // an OUTPUT of the first and an INPUT of the second.
@@ -1265,6 +1248,99 @@ func pFrepReverse() {
 		S(" belt-there=").B(beltThere).End()
 	frepSweep("rev", frepB-3, frepB+8)
 	out.Open("frep-rev end").End()
+}
+
+// ---------------------------------------------------------------------------
+// A BELT OVER A PART THAT CARRIES AN EDGE INTERFACE
+//
+// The portal report, and the one tile of a working balancer the reverse gesture
+// could not reach until `bbb-linked-belt` was given the balancer part's own
+// fast-replace group (guest/go/data/hidden.go): a part with an edge on it holds
+// two colliding entities, and the engine wants both of them in the group.
+//
+// BOTH ARMS ARE A COLUMN whose TOP part carries the input interface, and the one
+// thing that differs is what stands under it.
+//
+//	frepc  five parts, and the one under the target carries nothing. The belt
+//	       that lands on the target becomes ITS input, so the machine is the same
+//	       machine one part shorter.
+//	frepd  three parts, and the one under the target already carries the column's
+//	       output belt. The same belt would be its second, so the cluster the
+//	       removal leaves cannot be built.
+//
+// SOUTH-FACING IN BOTH, and that is the direction the outcome turns on rather
+// than a choice: `dir` runs from the cluster tile towards the neighbour, so a
+// south-facing belt on a part's north side is flowing into it and classifies as
+// an INPUT (classifySide). A belt laid across the column's axis instead would be
+// neither `dir` nor `back` from either side and would change nothing at all,
+// which is the `pass` rig's rule and is not what this leg is about.
+// ---------------------------------------------------------------------------
+
+// frepColumnOut is the output side of a ONE-COLUMN rig: the drain has to start
+// at x=1, against the part itself, where `drainOut` starts at x=2 against the
+// east part of a two-column row.
+func frepColumnOut(s fkapi.LuaSurface, y int) harness.XY {
+	for x := 1; x <= 4; x++ {
+		put(s, belt, x, y, &dirE, "")
+	}
+	return sink(s, y, "")
+}
+
+func pFrepCBuild() {
+	s := surf()
+	out.Open("frepc-build begin").End()
+	for r := 0; r <= 4; r++ {
+		put(s, part, 0, frepC+r, nil, "")
+	}
+	frepIn(s, frepC)
+	outAdd("frepc", []harness.XY{frepColumnOut(s, frepC+4)})
+
+	// frepd. Three parts: the target, the one that already has its output, and
+	// an edgeless third so that the refused cluster is a CLUSTER rather than a
+	// lone part -- a single part carrying two belts is the same refusal reached
+	// by a smaller world, and this suite's other rigs are balancers.
+	for r := 8; r <= 10; r++ {
+		put(s, part, 0, frepC+r, nil, "")
+	}
+	frepIn(s, frepC+8)
+	outAdd("frepd", []harness.XY{frepColumnOut(s, frepC+9)})
+	out.Open("frepc-build end").End()
+}
+
+// frepReplaceEdge lays a south-facing belt on the part at (0, y) and reports what
+// the world holds afterwards -- the part, the belt, and the INTERFACE, which is
+// the entity this whole leg is about and which nothing else in the suite looks
+// for by name.
+func frepReplaceEdge(what string, y int, tag string, y0, y1 int) {
+	s := surf()
+	can := canFastReplace(s, belt, 0, y, dirS)
+	out.Open("frep-can what=").S(what).S(" value=").B(can).End()
+	made := false
+	if can {
+		_, made = harness.PlaceSoft(s, harness.Piece{
+			Name: belt, X: 0, Y: y, Dir: &dirS, FastReplace: true, Raise: true,
+		})
+	}
+	_, partLeft := harness.FindAt(s, 0, y, part, "")
+	_, beltThere := harness.FindAt(s, 0, y, "", "transport-belt")
+	_, ifaceLeft := harness.FindAt(s, 0, y, "bbb-linked-belt", "")
+	out.Open("frepc tag=").S(tag).S(" created=").B(made).S(" part-left=").B(partLeft).
+		S(" belt-there=").B(beltThere).S(" iface-left=").B(ifaceLeft).End()
+	frepSweep(tag, y0, y1)
+}
+
+func pFrepCOk() {
+	out.Open("frepc-ok begin").End()
+	frepReplaceEdge("belt-over-edge-part-free-neighbour", frepC, "cok",
+		frepC-3, frepC+6)
+	out.Open("frepc-ok end").End()
+}
+
+func pFrepCNo() {
+	out.Open("frepc-no begin").End()
+	frepReplaceEdge("belt-over-edge-part-full-neighbour", frepC+8, "cno",
+		frepC+7, frepC+13)
+	out.Open("frepc-no end").End()
 }
 
 // ---------------------------------------------------------------------------
@@ -1460,8 +1536,6 @@ var schedule = []harness.Step{
 	{Tick: chnEnd + 3402, Do: ac("pre-frep")},
 	{Tick: chnEnd + 3406, Do: pFrepForward},
 	{Tick: chnEnd + 3410, Do: ac("post-frep-fwd")},
-	{Tick: chnEnd + 3414, Do: pFrepEdge},
-	{Tick: chnEnd + 3418, Do: ac("post-frep-edge")},
 	{Tick: chnEnd + 3422, Do: pFrepReverse},
 	{Tick: chnEnd + 3426, Do: ac("post-frep-rev")},
 	// The after-window opens 162 ticks past the last edit and is the same length
@@ -1470,7 +1544,27 @@ var schedule = []harness.Step{
 	{Tick: chnEnd + 3938, Do: func() { report("frep-after-close") }},
 	{Tick: chnEnd + 3942, Do: func() { auditAndCount("frep-final"); probePlacement("frep") }},
 
-	{Tick: chnEnd + 3946, Do: func() { out.Open("done").End() }},
+	// AND THE PART THAT CARRIES AN EDGE, both ways it can go. Built here for the
+	// reason the two above are: everything before this line is a statement about
+	// a world these rigs are not in.
+	{Tick: chnEnd + 3950, Do: pFrepCBuild},
+	{Tick: chnEnd + 4270, Do: func() {
+		auditAndCount("frepc-built")
+		report("frepc-before-open")
+	}},
+	{Tick: chnEnd + 4620, Do: func() { report("frepc-before-close") }},
+	{Tick: chnEnd + 4624, Do: ac("pre-frepc")},
+	{Tick: chnEnd + 4628, Do: pFrepCOk},
+	{Tick: chnEnd + 4632, Do: ac("post-frepc-ok")},
+	{Tick: chnEnd + 4636, Do: pFrepCNo},
+	{Tick: chnEnd + 4640, Do: ac("post-frepc-no")},
+	// The same 350-tick window as the before one, opening 162 ticks past the
+	// last edit so that a rebuilt network has refilled its head.
+	{Tick: chnEnd + 4802, Do: func() { report("frepc-after-open") }},
+	{Tick: chnEnd + 5152, Do: func() { report("frepc-after-close") }},
+	{Tick: chnEnd + 5156, Do: func() { auditAndCount("frepc-final"); probePlacement("frepc") }},
+
+	{Tick: chnEnd + 5160, Do: func() { out.Open("done").End() }},
 }
 
 // ---------------------------------------------------------------------------
@@ -1663,7 +1757,8 @@ func buildFrepChests(s fkapi.LuaSurface) {
 	// stock has to be inside the conserved total from t=0: `countAll` is the
 	// instrument this whole suite rests on, and thirty thousand items appearing
 	// in it halfway through would read as the mod minting matter.
-	for _, y := range []int{frep, frep + 1, frep + 2, frepB, frepB + 4} {
+	for _, y := range []int{frep, frep + 1, frep + 2, frepB, frepB + 4,
+		frepC, frepC + 8} {
 		c := harness.Place(s, harness.Piece{Name: "steel-chest", X: -6, Y: y})
 		harness.InsertInto(c, "iron-plate", stock)
 	}
@@ -1690,7 +1785,7 @@ func onInit() {
 	// The real number, not the requested one: a steel chest holds 48 stacks, so
 	// an insert of stock stops at 4,800 whatever stock says.
 	total, _ := countAll()
-	out.Open("plan chn_end=").I(chnEnd).S(" end_tick=").I(chnEnd + 3950).
+	out.Open("plan chn_end=").I(chnEnd).S(" end_tick=").I(chnEnd + 5164).
 		S(" stock=").I(total).End()
 }
 

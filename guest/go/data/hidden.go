@@ -270,8 +270,24 @@ func cloneHidden(typ, base, name string) at {
 }
 
 // strip turns a cloned prototype into a hidden one: no item, no upgrade path, no
-// fast-replace group (it would offer our belt as a replacement for a real one),
-// no selection box, and none of the per-tick cost of being visible.
+// fast-replace group, no selection box, and none of the per-tick cost of being
+// visible.
+//
+// THE FAST-REPLACE GROUP IS DROPPED BECAUSE THESE PROTOTYPES HAVE NO GESTURE,
+// not because a group would be dangerous, and the reason written here until
+// 2026-09-07 -- "it would offer our belt as a replacement for a real one" -- is
+// measured false. A group is one half of a fast replace; the other half is an
+// ITEM IN A CURSOR, and no item places any of these, so none of them can ever BE
+// the replacement whatever group it carries. The upgrade planner is the other
+// door and the engine shuts it for the same reason: an interface offered as an
+// upgrade destination comes back *"is not a valid upgrade destination entity"*,
+// probed on 2.0.77.
+//
+// So the group decides one thing only, and it is the REVERSE direction: whether
+// a belt-connectable already standing on a tile lets a player replace what else
+// is there. `hidden()` gives it back to `bbb-linked-belt` for exactly that, and
+// the other three keep the drop because they stand on the hidden surface where
+// there is no cursor to serve.
 //
 //go:noinline
 func strip(p at) {
@@ -309,6 +325,33 @@ func hidden() {
 		// and this is a sibling of `layers`, not a member of it.
 		linked.set(yes, "collision_mask", "not_colliding_with_itself")
 	}
+	// AND THE FAST-REPLACE GROUP GOES BACK ON, WHICH `strip` HAD JUST TAKEN OFF.
+	// It is base's own group, the same string the balancer part carries
+	// (entity.go), and it is what lets a belt be laid over a part that carries an
+	// edge interface. Without it that gesture was refused -- a portal report, and
+	// an asymmetry a player has no way to read: a part goes over a belt and a
+	// belt would not go over a part, on any tile the balancer was actually using.
+	//
+	// THE ENGINE WANTS EVERY COLLIDER ON THE TILE IN THE GROUP, which is why one
+	// line here is the whole fix and why it had to be this prototype. A part
+	// carrying an edge holds two colliding entities, the part and this; probed on
+	// 2.0.77, `can_fast_replace` is false with the group on the part alone and on
+	// the interface alone, and true with it on both -- in all four directions,
+	// for a transport belt, an underground and a lane splitter, and never for a
+	// splitter (two tiles wide) or a linked belt (another group). The replace
+	// then destroys BOTH our entities and leaves the belt, the partner at the
+	// other end of the link survives with a nil neighbour, and what the interface
+	// was carrying rides onto the belt that replaced it.
+	//
+	// Nothing about the reverse direction's guest half moves: `reapFastReplaced`
+	// (guest/go/fastreplace.go) keys on the PART having gone under a
+	// belt-connectable's build event, and the recompile that removal queues tears
+	// the network down and sweeps the orphaned interface by area like any other.
+	//
+	// It is safe on the OTHER side of the group for the reason `strip`'s header
+	// now gives: no item places this prototype, so nothing can hold it over
+	// anything, and the upgrade planner refuses it as a destination.
+	linked.set(str("transport-belt"), "fast_replaceable_group")
 	// A linked belt remembers its partner in a blueprint and re-links on paste,
 	// and can be carried through a clone the same way. Both would resurrect a
 	// network the compiler does not know about, so both are refused at the
