@@ -36,6 +36,14 @@ Each part connects to one belt. A part already serving a belt refuses a second o
 
 The reason is the engine rather than a design choice. Each belt a balancer touches is served by a hidden interface standing on that part's tile, and Factorio 2.1 allows one of those per tile. Building a wider balancer is a matter of building it a part deeper: a column of parts on the input side and a column on the output side, with as many rows as you have belts.
 
+## Belts that turn as they leave
+
+A belt laid across a part's free face, with nothing behind it, is that part's output. The belt turns away from the balancer, so a corner does not need a tile of straight belt first, and the turn carries both lanes exactly as a straight output does.
+
+What decides it is the two tiles the belt could otherwise draw from: the one behind it and the one on its far side. If either holds another balancer part, or anything that feeds the belt, the belt is left alone. That is why a belt line running past a balancer stays a line running past: every tile of it has the tile before it behind it. It is also why a belt that something else already feeds is never taken as an output, even when it looks like a corner: it would carry only half a lane into the balancer's output, and a half-full output is the one thing this mod is not allowed to produce.
+
+A consequence worth knowing when you build: a belt line that *starts* beside a part which already serves a belt is a second belt on that part, and is refused and handed back. Start it one tile further out, or give it a belt behind it, and it stays unconnected as before.
+
 ## Fast replace
 
 Balancer parts share base's `transport-belt` fast-replace group, so a part held over a belt, an underground belt end or a lane splitter replaces it the way a splitter does: the belt and whatever it was carrying go to your inventory and the part takes the tile. Dropping a balancer straight into a belt line you already have is one click per tile. Splitters and loaders are not replaced this way (a splitter is two tiles wide, and loaders are a different group).

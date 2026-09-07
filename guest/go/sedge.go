@@ -427,6 +427,35 @@ func refuseSingleEdge(root uint32, fp uint64, worst uint32, tiles []key, force u
 //	away. So the only tile whose count can have gone UP is the new part's own --
 //	and this guest has the tick's new parts in hand already.
 //
+// THE CURVED EXIT MADE THAT PROOF LONGER AND DID NOT BREAK IT, and the longer
+// form is the one to check against when anything else about classification
+// moves. A tile's count no longer depends only on its own four neighbours: a
+// perpendicular belt beside it is an output or not according to two further
+// tiles, its rear and its far perpendicular one (compile.go,
+// curvesFromCluster). So "adding a part makes neighbours interior" is no longer
+// the whole story, and the question is whether a part's ARRIVAL can turn a
+// declined perpendicular belt into an accepted one. Every way it could is
+// monotone the other way:
+//
+//	the part lands ON the rear or far tile -- which is the only way its arrival
+//	can remove a feeder, because a part is 1x1 and destroys nothing but what it
+//	fast-replaces on its own tile. The tile is then a REGISTERED PART TILE, and
+//	tests 1 and 2 decline on exactly that. So the feeder going away and the
+//	decline arrive together, in that one dispatch, by construction.
+//
+//	the part lands on B itself -- the side becomes interior and the count falls.
+//
+//	the part lands anywhere else -- neither probe tile's contents changed, so
+//	the belt is classified exactly as it was.
+//
+// So the pass still classifies the new parts' own tiles and nothing else. What
+// it does NOT cover is a tile whose count rose because something OTHER than the
+// merge changed in the same tick -- a feeder mined, a belt rotated -- and that
+// gap is not new: it is the same gap a rotation beside a merging cluster has
+// always had, one tile further out. It costs completeness and never soundness,
+// which is the OLD behaviour: the predecessors come down for a refusal, items
+// conserved and spilled.
+//
 // SOUND, NOT COMPLETE, AND SOUNDNESS IS THE REQUIREMENT. Sparing a merge that
 // then COMPILES SUCCESSFULLY would leave both predecessors' networks standing
 // beside the new one -- three networks over one cluster, two of them holding
@@ -513,7 +542,7 @@ func edgesOnTile(surf fkapi.LuaSurface, k key, force uint32) int {
 		if _, ok := index[key{k.s, nx, ny}]; ok {
 			continue
 		}
-		if _, found := classifySide(surf, nx, ny, dirOf[d]); found {
+		if _, found := classifySide(surf, k.s, nx, ny, dirOf[d]); found {
 			n++
 		}
 	}

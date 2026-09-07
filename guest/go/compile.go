@@ -246,16 +246,39 @@ var (
 
 	beltTypeVals [6]fkapi.Value
 	beltTypes    fkapi.Value
-	searchPos    fkapi.MapPosition
-	searchArea   fkapi.BoundingBox
-	nameFilter   fkapi.Value
-	forceFilter  fkapi.Value
 
-	// findByPos and findByName are prebuilt so that a query does not construct
-	// a 320-byte filter struct from scratch each time.
-	findByPos  fkapi.EntitySearchFilters
-	findByName fkapi.EntitySearchFilters
+	// probeEnts is the curve arm's own result buffer, and it is separate from
+	// anything classifySide holds because the probe runs while that function's
+	// own `ents` is still being walked over. Reused rather than allocated:
+	// `FindEntitiesFilteredInto` writes into the capacity it is handed, so the
+	// arm that runs for every belt laid perpendicular to a balancer costs no
+	// permanent heap at all. The `mar` suite's leg H is what holds it to that.
+	probeEnts   []fkapi.Object
+	searchPos   fkapi.MapPosition
+	searchArea  fkapi.BoundingBox
+	nameFilter  fkapi.Value
+	forceFilter fkapi.Value
+
+	// findByPos, findAnyByPos and findByName are prebuilt so that a query does
+	// not construct a 320-byte filter struct from scratch each time.
+	findByPos    fkapi.EntitySearchFilters
+	findAnyByPos fkapi.EntitySearchFilters
+	findByName   fkapi.EntitySearchFilters
 )
+
+// The six belt-connectable types this classifier knows, in ONE list rather than
+// the two that used to have to agree by hand. initBuffers turns it into the
+// `type` filter the engine applies in C++, classifyStraight switches on the same
+// strings, and feedsTile walks it with `type_is` -- which compares on the HOST,
+// so the probe never copies a name into the guest heap the way `type` does.
+var beltTypeNames = [6]string{
+	"transport-belt",
+	"underground-belt",
+	"splitter",
+	"lane-splitter",
+	"loader-1x1",
+	"loader",
+}
 
 func init() { initBuffers() }
 
@@ -305,16 +328,14 @@ func initBuffers() {
 	// THE EDGE CLASSIFIER HAS TWO GATES AND THIS IS THE FIRST ONE. The engine
 	// applies this type list in C++ before `classifySide` sees anything, so a
 	// family missing from it is not merely unclassified -- it is never returned,
-	// and the switch below can never be reached for it. The two lists have to
-	// agree, and there is nothing that makes them: adding "lane-splitter" to
-	// classifySide alone changed exactly nothing, measured, on the run before
-	// this line was added.
-	beltTypeVals[0] = fkapi.OfString("transport-belt")
-	beltTypeVals[1] = fkapi.OfString("underground-belt")
-	beltTypeVals[2] = fkapi.OfString("splitter")
-	beltTypeVals[3] = fkapi.OfString("lane-splitter")
-	beltTypeVals[4] = fkapi.OfString("loader-1x1")
-	beltTypeVals[5] = fkapi.OfString("loader")
+	// and the switch below can never be reached for it. The two used to be two
+	// lists with nothing making them agree, which is how "lane-splitter" came to
+	// be in classifyStraight's switch and not here, changing exactly nothing,
+	// measured, on the run before it was fixed. They are one list now
+	// (beltTypeNames), which feedsTile walks as well.
+	for i := range beltTypeNames {
+		beltTypeVals[i] = fkapi.OfString(beltTypeNames[i])
+	}
 	beltTypes = fkapi.Value{Tag: fkapi.TagArray, Array: beltTypeVals[:]}
 
 	findByPos = fkapi.EntitySearchFilters{}
@@ -324,6 +345,25 @@ func initBuffers() {
 	// classification costs nothing: a belt belonging to another force is never
 	// returned, and an interface is never placed where it could not connect.
 	findByPos.Force = &forceFilter
+
+	// THE PROBE'S FILTER IS THE SAME QUERY WITHOUT THE FORCE TERM, and that is a
+	// correctness matter rather than a saving. Whether a belt curves is the
+	// ENGINE's decision and the engine does not care whose belt the feeder is,
+	// measured on 2.0.77 rather than assumed: items pushed onto one force's belt
+	// arrive on another force's belt three tiles further down the same line, and
+	// a belt whose only perpendicular feeder belongs to a DIFFERENT force reads
+	// `belt_shape = right` exactly as the same-force control does. (The same
+	// probe's negative is this rule's own: give that belt a fed rear as well and
+	// the shape goes back to `straight`.)
+	//
+	// So a rear tile holding a foreign feeder is a rear tile that is fed, and a
+	// force-filtered probe would miss it and accept a curve that is really a
+	// side-load. It errs the safe way in the other direction too: a foreign
+	// feeder means B has two feeders and does not curve at all, so declining is
+	// the right answer either way.
+	findAnyByPos = fkapi.EntitySearchFilters{}
+	findAnyByPos.Position = &searchPos
+	findAnyByPos.Type = &beltTypes
 
 	findByName = fkapi.EntitySearchFilters{}
 	findByName.Area = &searchArea
@@ -498,9 +538,11 @@ var dirOf [4]uint32
 // classifyEdges finds every belt-connectable pointing into or out of the
 // cluster, one per boundary tile SIDE.
 //
-// The incumbent's accepted limitation is inherited by construction: a belt's
-// `direction` is where it sends items, so a belt curving away at the edge is
-// simply not pointing at us and is not an output.
+// A belt's `direction` is where it SENDS items, so most of the reading is that
+// one field: a belt pointing at us is an input, one we point at is an output.
+// The exception is the CURVED EXIT -- a belt across our face that the engine
+// bends towards us as soon as we feed it -- which is the incumbent's accepted
+// limitation and was ours until curvesFromCluster; see there.
 //
 // IT ALSO COUNTS THE EDGES PER TILE, into sedge.go's two package-level numbers,
 // and that costs one integer per tile and nothing else: this walk already
@@ -524,7 +566,7 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 				continue // interior side
 			}
 			dir := dirOf[d]
-			out, found := classifySide(surf, nx, ny, dir)
+			out, found := classifySide(surf, k.s, nx, ny, dir)
 			if !found {
 				continue
 			}
@@ -553,7 +595,11 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 //
 // `dir` points FROM the cluster tile TOWARDS this one, so a belt flowing
 // Opposite(dir) is flowing into the cluster.
-func classifySide(surf fkapi.LuaSurface, tx, ty int32, dir uint32) (out bool, found bool) {
+//
+// `si` is the surface INDEX and not a second reading of the handle: the curve
+// arm below asks the REGISTRY about two tiles, and the registry is keyed by
+// index.
+func classifySide(surf fkapi.LuaSurface, si uint32, tx, ty int32, dir uint32) (out bool, found bool) {
 	searchPos.X = float64(tx) + 0.5
 	searchPos.Y = float64(ty) + 0.5
 	ents, err := surf.FindEntitiesFiltered(findByPos)
@@ -561,6 +607,7 @@ func classifySide(surf fkapi.LuaSurface, tx, ty int32, dir uint32) (out bool, fo
 		return false, false
 	}
 	back := plan.Opposite(dir)
+	curveDir, curve := uint32(0), false
 	for i := range ents {
 		e := fkapi.LuaEntity{Object: ents[i]}
 		t, err := e.Type()
@@ -571,58 +618,219 @@ func classifySide(surf fkapi.LuaSurface, tx, ty int32, dir uint32) (out bool, fo
 		if err != nil {
 			continue
 		}
-		switch t {
-		case "transport-belt", "splitter", "lane-splitter":
-			// All three are read the same way -- a direction and nothing else --
-			// and they are together for two different reasons.
-			//
-			// A SPLITTER is two tiles wide and each half is its own edge; the
-			// per-tile search finds it once from each of the cluster tiles it
-			// touches, which is exactly the per-half behaviour wanted. (M2's
-			// `spio` rig.)
-			//
-			// A LANE SPLITTER is 1x1, so nothing about halves applies to it. It
-			// is here because it is a directional belt-connectable exactly as a
-			// belt is, and because it was the one such family that could stand
-			// against a balancer and be SILENTLY invisible: unnamed in this
-			// switch, a cluster fed and drained entirely through them classifies
-			// zero edges, compiles to nothing and delivers nothing -- while
-			// reporting `drift=0 unbuilt=0`, because a fingerprint over an empty
-			// edge list matches the world perfectly. Measured on the guest
-			// before this line existed; M2's `lsio` rig is the red proof.
-			if d == back {
-				return false, true
-			}
-			if d == dir {
-				return true, true
-			}
-		case "underground-belt":
-			// Only the overground end exists as an entity, and which end it is
-			// decides which way it can talk to us.
-			bt, err := e.BeltToGroundType()
-			if err != nil {
-				continue
-			}
-			if bt == linkTypeOutput && d == back {
-				return false, true
-			}
-			if bt == linkTypeInput && d == dir {
-				return true, true
-			}
-		case "loader-1x1", "loader":
-			lt, err := e.LoaderType()
-			if err != nil {
-				continue
-			}
-			if lt == linkTypeOutput && d == back {
-				return false, true
-			}
-			if lt == linkTypeInput && d == dir {
-				return true, true
-			}
+		if o, f := classifyStraight(e, t, d, dir, back); f {
+			return o, f
+		}
+		// A CANDIDATE FOR THE CURVE ARM: a plain belt running across this face
+		// rather than into or out of it. Only a transport belt curves -- an
+		// underground end, a loader, a splitter and a lane splitter all have a
+		// fixed input face and no amount of feeding turns them round -- so this
+		// is the one type that gets a second question asked about it.
+		//
+		// The question is NOT asked here. It reads two more tiles, and
+		// `searchPos` and `findByPos` are package-level scratch that this loop's
+		// own query is still walking, so the probes go after the loop.
+		if t == "transport-belt" && !curve && d != dir && d != back {
+			curveDir, curve = d, true
+		}
+	}
+	if curve && curvesFromCluster(surf, si, tx, ty, dir, curveDir) {
+		return true, true
+	}
+	return false, false
+}
+
+// classifyStraight is the part of the reading that an entity's own direction and
+// end type decide, with no reference to any other tile. It is the whole of what
+// classifySide used to be, and it is a function of its own so that the curve
+// arm's probes ask the same question of a probe tile that the classifier asks of
+// a cluster's face -- one switch, not two lists of types that have to agree.
+//
+// `t` is the caller's reading of the entity's type: classifySide has it from
+// `type`, and feedsTile from a `type_is` ladder that copies no string.
+func classifyStraight(e fkapi.LuaEntity, t string, d, dir, back uint32) (out bool, found bool) {
+	switch t {
+	case "transport-belt", "splitter", "lane-splitter":
+		// All three are read the same way -- a direction and nothing else --
+		// and they are together for two different reasons.
+		//
+		// A SPLITTER is two tiles wide and each half is its own edge; the
+		// per-tile search finds it once from each of the cluster tiles it
+		// touches, which is exactly the per-half behaviour wanted. (M2's
+		// `spio` rig.)
+		//
+		// A LANE SPLITTER is 1x1, so nothing about halves applies to it. It
+		// is here because it is a directional belt-connectable exactly as a
+		// belt is, and because it was the one such family that could stand
+		// against a balancer and be SILENTLY invisible: unnamed in this
+		// switch, a cluster fed and drained entirely through them classifies
+		// zero edges, compiles to nothing and delivers nothing -- while
+		// reporting `drift=0 unbuilt=0`, because a fingerprint over an empty
+		// edge list matches the world perfectly. Measured on the guest
+		// before this line existed; M2's `lsio` rig is the red proof.
+		if d == back {
+			return false, true
+		}
+		if d == dir {
+			return true, true
+		}
+	case "underground-belt":
+		// Only the overground end exists as an entity, and which end it is
+		// decides which way it can talk to us.
+		//
+		// ASKED AS `is "output"` RATHER THAN READ AS A STRING: BeltConnectionType
+		// is a two-literal union in both pinned API descriptions, so one bool
+		// answers both arms at the same one host call the string read cost, and
+		// nothing crosses into the guest heap. That is what lets feedsTile share
+		// this switch without allocating.
+		isOut, err := e.BeltToGroundTypeIs(linkTypeOutput)
+		if err != nil {
+			return false, false
+		}
+		if isOut && d == back {
+			return false, true
+		}
+		if !isOut && d == dir {
+			return true, true
+		}
+	case "loader-1x1", "loader":
+		isOut, err := e.LoaderTypeIs(linkTypeOutput)
+		if err != nil {
+			return false, false
+		}
+		if isOut && d == back {
+			return false, true
+		}
+		if !isOut && d == dir {
+			return true, true
 		}
 	}
 	return false, false
+}
+
+// ---------------------------------------------------------------------------
+// The curved exit
+// ---------------------------------------------------------------------------
+
+// curvesFromCluster decides the one shape classifyEdges could never see: a belt
+// running PERPENDICULAR to a cluster's face that the engine will curve, so that
+// it draws from that face rather than passing it.
+//
+// THE ENGINE DOES THE CURVE ITSELF and this is only whether to classify.
+// Measured on 2.0.77 before a line of this was written: a belt with an empty
+// rear and exactly one perpendicular feeder curves towards that feeder, ANY
+// belt-connectable counts as the feeder -- an interface linked belt included --
+// and the curved run carries BOTH LANES (26 and 29 items per lane over a
+// seven-belt dead-ended run, against 28 and 28 straight). So an output interface
+// on the cluster tile is all it takes, and a port that curves is a full port.
+//
+// Four tests over the two tiles that could supply B instead of us -- its REAR,
+// where a straight run would come from, and its FAR perpendicular tile, the face
+// opposite ours:
+//
+//	1, 2  neither tile is a registered part tile of ANY cluster. That is not an
+//	      optimisation. `findByPos` filters on beltTypeNames, which deliberately
+//	      omits linked-belt, so a foreign cluster's own output interface standing
+//	      on its own tile is INVISIBLE to tests 3 and 4 -- and the registry is
+//	      the only thing that can see it. It also settles the symmetric case: a
+//	      belt with a part on both perpendicular sides is declined by BOTH
+//	      clusters, which is a deterministic answer where picking one would not
+//	      be.
+//	3, 4  nothing standing on either tile points into B. This is classifySide's
+//	      own reading asked at the probe tile, so an underground's input end, a
+//	      loader's input type and a belt facing away all correctly fail to count
+//	      as a feeder without a second list of types to keep in step.
+//
+// A SIDE-LOADED EXIT IS EXCLUDED ON PURPOSE, and it is the one shape a player
+// might expect and not get. A belt whose rear is fed shares itself between two
+// sources, so our port would deliver half a lane -- and a half-lane port backs
+// the butterfly up, which breaks the exact balance this mod exists for. A belt
+// that merely STARTS beside the machine is accepted, and that is vanilla's own
+// splitter semantics: a splitter feeds the head of a line.
+//
+// THE FINGERPRINT NEEDS NOTHING FOR ANY OF THIS. A curved output and a straight
+// one on the same face are the same `plan.Edge` -- same tile, same direction,
+// same Out -- because the interface is identical and only the belt beyond it
+// differs. So a belt that starts curving, or stops, moves the edge LIST and
+// therefore the fingerprint, exactly as a rotation does.
+//
+// AND THE NEIGHBOUR GATE ALREADY REACHES BOTH PROBE TILES, which is what makes
+// this recompile when a player edits one of them. main.go's nearCluster walks
+// Chebyshev distance 2 around the event; B is 1 from the cluster tile, its rear
+// is 1 (diagonally) and its far tile is 2. Nothing widens.
+func curvesFromCluster(surf fkapi.LuaSurface, si uint32, bx, by int32, dir, d uint32) bool {
+	rear, ok := dirIndex(plan.Opposite(d))
+	if !ok {
+		return false
+	}
+	away, ok := dirIndex(dir)
+	if !ok {
+		return false
+	}
+	rx, ry := bx+dirs[rear][0], by+dirs[rear][1]
+	fx, fy := bx+dirs[away][0], by+dirs[away][1]
+	if _, part := index[key{si, rx, ry}]; part {
+		return false
+	}
+	if _, part := index[key{si, fx, fy}]; part {
+		return false
+	}
+	// The direction from B TOWARDS each probe tile, which is what classifySide
+	// wants of a tile it is asked about.
+	if feedsTile(surf, rx, ry, plan.Opposite(d)) {
+		return false
+	}
+	return !feedsTile(surf, fx, fy, dir)
+}
+
+// feedsTile reports whether anything standing at (px, py) sends items to the
+// tile on its `pdir` side.
+//
+// It allocates NOTHING, which is the whole reason it is not simply a second call
+// to classifySide: this runs for every belt anyone lays across a balancer's
+// face, and under `-gc=leaking` a result slice and a type string per probe would
+// be permanent heap on one of the guest's higher-multiplier paths. So the query
+// writes into a buffer it keeps and the type is compared on the HOST.
+//
+// The `d != back` skip is not a shortcut past the switch, it is the switch's own
+// shape said once: every one of classifyStraight's six types answers "feeds the
+// tile on my `pdir` side" with `d == back` and nothing else, so an entity
+// pointing anywhere else cannot be a feeder whatever it turns out to be. A type
+// added there whose feeding arm reads some other direction has to move this too.
+func feedsTile(surf fkapi.LuaSurface, px, py int32, pdir uint32) bool {
+	searchPos.X = float64(px) + 0.5
+	searchPos.Y = float64(py) + 0.5
+	ents, err := surf.FindEntitiesFilteredInto(probeEnts, findAnyByPos)
+	probeEnts = ents
+	if err != nil {
+		// A query this guest cannot make is a question it cannot answer, and the
+		// safe answer is "something might be feeding it": declining a curve
+		// costs a port the player has to lay differently, where accepting one
+		// wrongly costs half a lane on every port of the machine.
+		return true
+	}
+	back := plan.Opposite(pdir)
+	for i := range ents {
+		e := fkapi.LuaEntity{Object: ents[i]}
+		d, err := e.Direction()
+		if err != nil {
+			continue
+		}
+		if d != back {
+			continue
+		}
+		for n := range beltTypeNames {
+			is, err := e.TypeIs(beltTypeNames[n])
+			if err != nil || !is {
+				continue
+			}
+			if out, found := classifyStraight(e, beltTypeNames[n], d, pdir, back); found && !out {
+				return true
+			}
+			break
+		}
+	}
+	return false
 }
 
 // fingerprint is FNV-1a over the edge list. See netInfo.fp for why a hash and
