@@ -3,6 +3,7 @@ package tune
 import (
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -47,24 +48,35 @@ func (planWorld) ModName() string { return ModName }
 
 // wantSetting is one expected prototype: every field, transcribed.
 //
-// THE FIELD SET IS PART OF THE TRANSCRIPTION since the customizer landed. Three
-// settings of two shapes carry three different field lists, so `fields` names
+// THE FIELD SET IS PART OF THE TRANSCRIPTION since the customizer landed. Six
+// settings of four shapes carry four different field lists, so `fields` names
 // what each one may have rather than one list covering all of them, and it is
 // derived from the transcription below rather than from the plan: a dropdown
-// has `allowed_values`, a text setting has `auto_trim`, and a
-// `localised_description` appears on the two the library composes one for. The
-// emission order is FkRecipes go/settings.go's, whose own note puts the
-// description last "because it is the bulkiest field and because it is composed
-// out of everything above it"; the comparison is order-insensitive, so what is
-// checked here is the SET.
+// has `allowed_values`, a text setting has `auto_trim`, a numeric one has
+// `minimum_value` and `maximum_value`, and a `localised_description` appears on
+// the four the library composes one for. The emission order is FkRecipes
+// go/settings.go's, whose own note puts the description last "because it is the
+// bulkiest field and because it is composed out of everything above it"; the
+// comparison is order-insensitive, so what is checked here is the SET.
 type wantSetting struct {
-	settingType  string
-	name         string
-	kind         string
-	defaultValue string
+	settingType string
+	name        string
+	kind        string
+	// defaultValue is a Value rather than a string because two of the six are
+	// NUMBERS: an int setting's `default_value` is emitted as a number, and a
+	// prototype that stringified it would be a different prototype.
+	defaultValue fkrecipes.Value
 	order        string
 	allowed      []string
 	autoTrim     bool
+	// bounds is {minimum_value, maximum_value} for the two numeric settings and
+	// nil for every other kind. NEITHER BOUND IS A BALANCE OPINION: the engine
+	// RESETS a stored number outside its own bounds to the default rather than
+	// clamping it, so what is declared is exactly the set of values the data
+	// stage can ever read -- and the library refuses a custom research cost
+	// whose count could be below 1 or whose seconds could be 0, because the
+	// engine refuses a unit with either.
+	bounds []float64
 	// description is the composed localised_description, or the zero Value for
 	// a setting the library composes none for.
 	description fkrecipes.Value
@@ -79,6 +91,9 @@ func (w wantSetting) fields() []string {
 	if w.autoTrim {
 		out = append(out, "auto_trim")
 	}
+	if w.bounds != nil {
+		out = append(out, "minimum_value", "maximum_value")
+	}
 	if w.description.Kind != fkrecipes.KindNil {
 		out = append(out, "localised_description")
 	}
@@ -91,7 +106,7 @@ func wantSettings() []wantSetting {
 			kind:         "string-setting",
 			name:         "bbb-recipe-cost",
 			settingType:  "startup",
-			defaultValue: "vanilla",
+			defaultValue: fkrecipes.Str("vanilla"),
 			order:        "a",
 			// SEVEN VALUES, THE SIX THAT SHIPPED IN THEIR ORDER AND `custom`
 			// LAST. Factorio keys a stored startup choice by this string, so a
@@ -111,12 +126,12 @@ func wantSettings() []wantSetting {
 			description: fkrecipes.Arr(
 				fkrecipes.Str(""),
 				localeKey("mod-setting-description.bbb-recipe-cost"),
-				presetLine("vanilla", "4 iron-plate, 2 iron-gear-wheel, 2 transport-belt"),
-				presetLine("cheap", "2 iron-plate, 1 transport-belt"),
-				presetLine("belt-fast", "4 iron-plate, 2 iron-gear-wheel, 2 fast-transport-belt"),
-				presetLine("belt-express", "4 steel-plate, 2 iron-gear-wheel, 2 express-transport-belt"),
-				presetLine("splitter", "1 splitter, 2 iron-plate"),
-				presetLine("splitter-express", "1 express-splitter, 2 steel-plate"),
+				presetLine("bbb-recipe-cost", "vanilla", "4 iron-plate, 2 iron-gear-wheel, 2 transport-belt"),
+				presetLine("bbb-recipe-cost", "cheap", "2 iron-plate, 1 transport-belt"),
+				presetLine("bbb-recipe-cost", "belt-fast", "4 iron-plate, 2 iron-gear-wheel, 2 fast-transport-belt"),
+				presetLine("bbb-recipe-cost", "belt-express", "4 steel-plate, 2 iron-gear-wheel, 2 express-transport-belt"),
+				presetLine("bbb-recipe-cost", "splitter", "1 splitter, 2 iron-plate"),
+				presetLine("bbb-recipe-cost", "splitter-express", "1 express-splitter, 2 steel-plate"),
 			),
 		},
 		{
@@ -128,7 +143,7 @@ func wantSettings() []wantSetting {
 			kind:         "string-setting",
 			name:         "bbb-recipe-ingredients",
 			settingType:  "startup",
-			defaultValue: "default",
+			defaultValue: fkrecipes.Str("default"),
 			order:        "aa",
 			autoTrim:     true,
 			description: fkrecipes.Arr(
@@ -141,13 +156,71 @@ func wantSettings() []wantSetting {
 			kind:         "string-setting",
 			name:         "bbb-tech-cost",
 			settingType:  "startup",
-			defaultValue: "logistics",
+			defaultValue: fkrecipes.Str("logistics"),
 			order:        "b",
-			allowed:      []string{"logistics", "logistics-2", "logistics-3"},
-			// NO DESCRIPTION FIELD, which is the assertion that this dropdown
-			// did NOT get a custom arm: the library composes one only for a
-			// dropdown that has one, so a stray `Custom` on the research setting
-			// would show up here as a field this mod never asked for.
+			// FOUR VALUES, THE THREE THAT SHIPPED IN THEIR ORDER AND `custom`
+			// LAST, which is the recipe dropdown's migration made a second time
+			// and for the same reason: a stored `logistics-3` still reads
+			// `logistics-3`, and the fourth row is the only one nobody can have
+			// stored.
+			allowed: []string{"logistics", "logistics-2", "logistics-3", "custom"},
+			// THE COMPOSED DESCRIPTION, and its lines say something different
+			// from the recipe dropdown's. A research preset has no list to
+			// render -- what it costs is whatever the game charges for that
+			// technology, which the settings stage has no data.raw to read -- so
+			// the library writes the SOURCE it would copy from
+			// (FkRecipes go/customize.go:575, costPresetText). Each is the FIRST
+			// rung of that option's ladder, which is the tier the player asked
+			// for; where a ladder steps down is a fact about their mod set and
+			// is not knowable here.
+			description: fkrecipes.Arr(
+				fkrecipes.Str(""),
+				localeKey("mod-setting-description.bbb-tech-cost"),
+				presetLine("bbb-tech-cost", "logistics", "cost of logistics"),
+				presetLine("bbb-tech-cost", "logistics-2", "cost of logistics-2"),
+				presetLine("bbb-tech-cost", "logistics-3", "cost of logistics-3"),
+			),
+		},
+		{
+			// THE RESEARCH CUSTOMIZER'S PACK LIST, the second free-text field.
+			// `default_value` is the word for the reason the recipe's is, and
+			// the declared list is `1 automation-science-pack`, which is
+			// [FallbackUnit]'s pack: base's own `logistics` cost.
+			kind:         "string-setting",
+			name:         "bbb-tech-packs",
+			settingType:  "startup",
+			defaultValue: fkrecipes.Str("default"),
+			order:        "ba",
+			autoTrim:     true,
+			description: fkrecipes.Arr(
+				fkrecipes.Str(""),
+				localeKey("mod-setting-description.bbb-tech-packs"),
+				fkrecipes.Str("\ndefault: 1 automation-science-pack"),
+			),
+		},
+		{
+			// THE UNIT COUNT. An int setting, so `default_value` is a NUMBER,
+			// and both bounds are emitted: 1 is what the library demands of a
+			// count (the engine refuses a unit count of 0) and the ceiling is
+			// this mod's own.
+			kind:         "int-setting",
+			name:         "bbb-tech-count",
+			settingType:  "startup",
+			defaultValue: fkrecipes.Num(20),
+			order:        "bb",
+			bounds:       []float64{1, 1000000},
+		},
+		{
+			// THE SECONDS PER UNIT. A double setting, whose minimum has to be
+			// ABOVE zero rather than at least 1 -- the engine refuses a unit
+			// time of 0 -- and 1 second is this mod's floor rather than the
+			// library's.
+			kind:         "double-setting",
+			name:         "bbb-tech-seconds",
+			settingType:  "startup",
+			defaultValue: fkrecipes.Num(15),
+			order:        "bc",
+			bounds:       []float64{1, 3600},
 		},
 	}
 }
@@ -158,15 +231,19 @@ func localeKey(key string) fkrecipes.Value {
 	return fkrecipes.Arr(fkrecipes.Str(key))
 }
 
-// presetLine is one preset's line of the dropdown's composed description: a
+// presetLine is one preset's line of a dropdown's composed description: a
 // newline, the VALUE'S OWN locale entry (the label the player sees in the
-// menu, not the raw key), then the list written out.
-func presetLine(value, list string) fkrecipes.Value {
+// menu, not the raw key), then what that preset means written out.
+//
+// THE SETTING IS A PARAMETER because both dropdowns compose one now, and the
+// key is `<setting>-<value>` in a flat namespace: a line built under the wrong
+// setting would point the player's tooltip at another row's label.
+func presetLine(setting, value, text string) fkrecipes.Value {
 	return fkrecipes.Arr(
 		fkrecipes.Str(""),
 		fkrecipes.Str("\n"),
-		localeKey("string-mod-setting.bbb-recipe-cost-"+value),
-		fkrecipes.Str(": "+list),
+		localeKey("string-mod-setting."+setting+"-"+value),
+		fkrecipes.Str(": "+text),
 	)
 }
 
@@ -182,7 +259,7 @@ func planOps(t *testing.T) []fkrecipes.Op {
 	return ops
 }
 
-func TestTheSettingsPlanIsThreeExtendsAndNothingElse(t *testing.T) {
+func TestTheSettingsPlanIsSixExtendsAndNothingElse(t *testing.T) {
 	ops := planOps(t)
 	if len(ops) != len(wantSettings()) {
 		t.Fatalf("the settings stage emits %d op(s) and this mod has %d settings "+
@@ -191,8 +268,8 @@ func TestTheSettingsPlanIsThreeExtendsAndNothingElse(t *testing.T) {
 	for i, op := range ops {
 		// An OpSet would be a write into somebody else's prototype and an OpLog
 		// a degradation notice; neither belongs in a plan that declares two
-		// dropdowns and a text field, and either would mean the library was
-		// asked for something this mod did not ask for.
+		// dropdowns, two text fields and two numbers, and either would mean the
+		// library was asked for something this mod did not ask for.
 		if op.Kind != fkrecipes.OpExtend {
 			t.Errorf("op %d is kind %d and every op of a settings plan is an "+
 				"OpExtend (%d)", i, op.Kind, fkrecipes.OpExtend)
@@ -205,20 +282,27 @@ func TestEverySettingPrototypeIsTheOneThatShipped(t *testing.T) {
 	want := wantSettings()
 	if len(ops) != len(want) {
 		t.Fatalf("%d op(s) against %d expected setting(s); "+
-			"TestTheSettingsPlanIsThreeExtendsAndNothingElse says which", len(ops), len(want))
+			"TestTheSettingsPlanIsSixExtendsAndNothingElse says which", len(ops), len(want))
 	}
 	for i, w := range want {
 		got := fieldsOf(t, ops[i].Proto)
 		checkStr(t, w.name, got, "type", w.kind)
 		checkStr(t, w.name, got, "name", w.name)
 		checkStr(t, w.name, got, "setting_type", w.settingType)
-		checkStr(t, w.name, got, "default_value", w.defaultValue)
+		if !reflect.DeepEqual(got["default_value"], w.defaultValue) {
+			t.Errorf("%s's default_value is %s and shipped as %s",
+				w.name, showValue(got["default_value"]), showValue(w.defaultValue))
+		}
 		checkStr(t, w.name, got, "order", w.order)
 		if w.allowed != nil {
 			checkAllowed(t, w.name, got, w.allowed)
 		}
 		if w.autoTrim {
 			checkBool(t, w.name, got, "auto_trim", true)
+		}
+		if w.bounds != nil {
+			checkNum(t, w.name, got, "minimum_value", w.bounds[0])
+			checkNum(t, w.name, got, "maximum_value", w.bounds[1])
 		}
 		if w.description.Kind != fkrecipes.KindNil {
 			if !reflect.DeepEqual(got["localised_description"], w.description) {
@@ -239,6 +323,56 @@ func TestEverySettingPrototypeIsTheOneThatShipped(t *testing.T) {
 				t.Errorf("%s carries an unexpected field %q", w.name, key)
 			}
 		}
+	}
+}
+
+// settingProto is one emitted setting prototype BY NAME, so a test that cares
+// about three of the six does not have to know which index they sit at.
+func settingProto(t *testing.T, ops []fkrecipes.Op, name string) map[string]fkrecipes.Value {
+	t.Helper()
+	for _, op := range ops {
+		got := fieldsOf(t, op.Proto)
+		if v, ok := got["name"]; ok && v.Kind == fkrecipes.KindStr && v.Str == name {
+			return got
+		}
+	}
+	t.Fatalf("no setting named %q was emitted", name)
+	return nil
+}
+
+// TestTheCustomResearchDefaultsAreTheFallbackUnit is the one thing the
+// transcription above cannot say: that the three numbers a player who picks
+// Custom and types nothing is charged are BASE'S OWN `logistics` UNIT, and not
+// three numbers that happen to look like it.
+//
+// [FallbackUnit] is what this technology costs in a game whose logistics chain
+// is gone, and it is what the custom arm defaults to as well, so the two have to
+// be ONE statement rather than two transcriptions -- a settings screen holding
+// two different vanilla costs is a thing only a dump would ever show.
+//
+// THE TWO NUMBERS ARE THE HALF WITH TEETH. They are literals in [Plan] and
+// literals in [FallbackUnit], so this comparison can fail. The PACK half cannot:
+// `bbb-tech-packs` is declared FROM `FallbackUnit().Packs`, and what is checked
+// there is the RENDERING -- that the declared pack reaches the player's tooltip
+// as `1 automation-science-pack`, which is the text they copy to start from.
+func TestTheCustomResearchDefaultsAreTheFallbackUnit(t *testing.T) {
+	unit := FallbackUnit()
+	ops := planOps(t)
+
+	checkNum(t, SettingTechCount, settingProto(t, ops, SettingTechCount),
+		"default_value", float64(unit.Count))
+	checkNum(t, SettingTechSeconds, settingProto(t, ops, SettingTechSeconds),
+		"default_value", unit.Seconds)
+
+	rendered := make([]string, 0, len(unit.Packs))
+	for _, p := range unit.Packs {
+		rendered = append(rendered, strconv.FormatInt(p.Amount, 10)+" "+p.Name)
+	}
+	want := fkrecipes.Str("\ndefault: " + strings.Join(rendered, ", "))
+	desc := settingProto(t, ops, SettingTechPacks)["localised_description"]
+	if len(desc.Arr) == 0 || !reflect.DeepEqual(desc.Arr[len(desc.Arr)-1], want) {
+		t.Errorf("%s's description ends with %s and the fallback unit's packs "+
+			"render as %s", SettingTechPacks, showValue(desc), showValue(want))
 	}
 }
 

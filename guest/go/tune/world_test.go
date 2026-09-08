@@ -60,6 +60,14 @@ import (
 // list empty the name would fall out of `resolveName` as `no item or fluid is
 // named water` and the category rule would be a branch no test here reaches.
 //
+// THE PACK FIELD HAS ITS OWN FLUID RULE AND THE SAME STOCKED NAME PINS IT.
+// A pack list is looked up among the tools, then the items, then the fluids,
+// and a fluid there is refused with `water is a fluid, and research takes
+// science packs only` (the library's sentence, not the category one), which
+// [TestAPackTextTheGameCannotAnswerIsRefused] pins; un-stock `water` and that
+// row degrades to `no science pack is named water`, which is what says the
+// fluid is load-bearing for it too.
+//
 // EVERY ANSWER IS A LIST RATHER THAN A MAP, and `TechNames` sorts a copy. The
 // World contract says that method returns SORTED names and the library's cycle
 // walk rests on it; a Go map's iteration order is randomised per run, so a
@@ -113,6 +121,13 @@ type fixtureWorld struct {
 	// "present but not a string" arm is a branch no fixture can reach -- and
 	// that arm is not the same as an absent setting: it is what a mod that
 	// redefined this mod's setting as an int would hand the planner.
+	//
+	// IT DOES NOT MODEL THE ENGINE'S BOUNDS. A real game RESETS a stored number
+	// outside its setting's declared range to the default; this map answers
+	// whatever a test put in it, so a test driving 50 units cannot see a
+	// maximum lowered below 50. The declared bounds are pinned as fields by
+	// [TestEverySettingPrototypeIsTheOneThatShipped], and the engine enforcing
+	// them is the gate's `tech-custom` arm's business.
 	startupRaw map[string]fkrecipes.Value
 }
 
@@ -186,13 +201,18 @@ func (w fixtureWorld) ItemExists(name string) bool   { return has(w.items, name)
 func (w fixtureWorld) EntityExists(name string) bool { return has(w.entities, name) }
 func (w fixtureWorld) RecipeExists(name string) bool { return has(w.recipes, name) }
 
-// ToolExists is the science-pack question, and a `CostBy` fallback's pack
-// ladder is the only thing in this mod's plan that asks it.
+// ToolExists is the science-pack question, and THREE things in this mod's plan
+// ask it now: a `CostBy` fallback's pack ladder, the custom arm's declared pack
+// ladder when the text is untouched, and every name a player types into
+// `bbb-tech-packs`. All three ask this and not [fixtureWorld.ItemExists], which
+// is what [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused] pins from the
+// outside.
 func (w fixtureWorld) ToolExists(name string) bool { return has(w.tools, name) }
 
 // FluidExists is asked only about a name a PLAYER typed into
-// `bbb-recipe-ingredients`, and only after the items answered no. See the
-// header for what the one stocked fluid is for.
+// `bbb-recipe-ingredients` or `bbb-tech-packs`, and only after the items (or,
+// in a pack list, the tools and then the items) answered no. See the header for
+// what the one stocked fluid is for.
 func (w fixtureWorld) FluidExists(name string) bool { return has(w.fluids, name) }
 
 func (w fixtureWorld) tech(name string) (fixtureTech, bool) {
@@ -242,7 +262,7 @@ func unitOf(count, seconds float64, pack string, amount float64) *fkrecipes.Valu
 // everythingWorld is a game that has every name any ladder in this package can
 // reach, the two science packs its research can be priced in, `water` for the
 // one refusal a fluid earns, the three logistics technologies with DISTINCT
-// units, the balancer part entity, and all three settings answering their
+// units, the balancer part entity, and all six settings answering their
 // declared defaults.
 //
 // THE THREE UNITS DIFFER ON PURPOSE. What `CostBy` promises is that the unit
@@ -262,8 +282,8 @@ func everythingWorld() fixtureWorld {
 			{name: TechLogistics3, prereqs: []string{TechLogistics2},
 				unit: unitOf(300, 15, "logistic-science-pack", 2)},
 		},
-		// ALL THREE SETTINGS ANSWER, THE TEXT ONE WITH THE RESERVED WORD, which
-		// is what a real game hands the planner: Factorio stores every
+		// ALL SIX SETTINGS ANSWER, THE TWO TEXT ONES WITH THE RESERVED WORD,
+		// which is what a real game hands the planner: Factorio stores every
 		// setting's current value in mod-settings.dat, untouched defaults
 		// included (measured by the library, FkRecipes go/lib.go:230), so a
 		// player who never opened the settings screen still answers `default`
@@ -274,8 +294,47 @@ func everythingWorld() fixtureWorld {
 			SettingRecipeCost:        RecipeDefault(),
 			SettingRecipeIngredients: theDefaultWord,
 			SettingTechCost:          TechDefault(),
+			SettingTechPacks:         theDefaultWord,
+		},
+		// THE TWO NUMBERS CANNOT GO IN THE MAP ABOVE, which is why they are
+		// here rather than beside their siblings: `startup` produces a string
+		// and the library reads a research count through `KindNum`
+		// (FkRecipes go/customize.go:825, readNumber), so a string would be
+		// UNREADABLE and every custom arm would carry a degradation line and
+		// the declared default. These are the declared defaults said in the
+		// kind the engine stores them in.
+		startupRaw: map[string]fkrecipes.Value{
+			SettingTechCount:   fkrecipes.Num(20),
+			SettingTechSeconds: fkrecipes.Num(15),
 		},
 	}
+}
+
+// withNumberStartup is `withStartup` for the two numeric settings: the
+// everything game with one of them answering another number.
+//
+// It goes through `startupRaw` because that is the only map that can hold a
+// number, and `StartupSetting` consults it FIRST -- so a test that drives a
+// number here and one that drives a dropdown through `withStartup` do not have
+// to know about each other.
+func (w fixtureWorld) withNumberStartup(name string, value float64) fixtureWorld {
+	return w.withRawStartup(name, fkrecipes.Num(value))
+}
+
+// withoutNumberStartup is `withoutStartup` for the two numeric settings: the
+// everything game with one of them answering ABSENT. It has to exist beside
+// `withoutStartup` because the two numbers live in `startupRaw`, which that
+// helper does not touch -- so without this, "the count row is missing from a
+// hand-edited mod-settings.dat" would be a state no fixture could reach.
+func (w fixtureWorld) withoutNumberStartup(name string) fixtureWorld {
+	next := map[string]fkrecipes.Value{}
+	for k, v := range w.startupRaw {
+		if k != name {
+			next[k] = v
+		}
+	}
+	w.startupRaw = next
+	return w
 }
 
 // withStartup is the one-variable-at-a-time driver: the everything game with

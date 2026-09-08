@@ -49,7 +49,7 @@
 // join.
 package tune
 
-// The three startup settings this package is the fold behind.
+// The six startup settings this package is the fold behind.
 //
 // NAMED HERE RATHER THAN IN THE DATA GUEST because three things have to agree
 // about them and only one of the three can be compiled: the prototype the
@@ -60,22 +60,26 @@ package tune
 // check itself is the library's own `CheckLocaleWith`, run from
 // [TestTheLocaleFileSatisfiesThePlan].
 //
-// All three are defined on BOTH ENGINES, unlike `bbb-multi-edge-parts`, which
+// All six are defined on BOTH ENGINES, unlike `bbb-multi-edge-parts`, which
 // exists on 2.0 alone because there is nothing for it to say on 2.1. A recipe
 // cost means the same thing on either.
 //
-// THE THIRD IS THE ONE NAME HERE THAT NOTHING HAS EVER SHIPPED, and it still
-// carries the historical `bbb-` prefix rather than the one FkRecipes would
+// THE FOUR CUSTOMIZER NAMES ARE THE ONES NOTHING HAS EVER SHIPPED, and they
+// still carry the historical `bbb-` prefix rather than the one FkRecipes would
 // generate. [Plan]'s header is where that is argued in full; the short of it is
 // that a generated setting's order comes from its DECLARATION INDEX, so this
 // mod cannot choose where such a row sits relative to the two legacy orders it
-// already ships, and that a settings menu showing `better-belt-balancer-...`
-// on one row and `bbb-...` on the two beside it is one namespace with a seam
-// in it.
+// already ships -- and for the three research fields the index would put all
+// three ABOVE the dropdown they configure. A settings menu showing
+// `better-belt-balancer-...` on four rows and `bbb-...` on the two beside them
+// is one namespace with a seam in it as well.
 const (
 	SettingRecipeCost        = "bbb-recipe-cost"
 	SettingRecipeIngredients = "bbb-recipe-ingredients"
 	SettingTechCost          = "bbb-tech-cost"
+	SettingTechPacks         = "bbb-tech-packs"
+	SettingTechCount         = "bbb-tech-count"
+	SettingTechSeconds       = "bbb-tech-seconds"
 )
 
 // SettingMultiEdgeParts is the 2.0-only runtime-global bool, which this package

@@ -63,7 +63,8 @@ a machine with different DLC produces a different hash for a mod that is
 perfectly fine. A golden line whose engine does not match the binary is a SKIP
 with a message, never a failure.
 
-...AND TEN VARIANT ARMS AND A SPEED ARM, WHICH ARE NOT HASHED.
+...AND FOURTEEN VARIANT ARMS (ONE OF THEM THE VANILLA CONTROL) AND A SPEED ARM,
+WHICH ARE NOT HASHED.
 
 0.3.1 made the recipe's cost, the research's cost and the hidden network's belt
 speed depend on things a golden cannot hold still. A hash is the right
@@ -87,6 +88,14 @@ never make easy. So:
   this file that is not read out of a dump -- what the library does with a text
   under a preset is by design invisible in the prototypes, so the sentence is
   the whole of the evidence. See RECIPE_CUSTOM_ARMS.
+
+  the RESEARCH CUSTOMIZER gets three more (0.3.3): two assert the PAIR a
+  written cost decides, the unit and the prerequisite, because a cost the
+  player wrote has no source technology and the tree position comes from the
+  plan's own ladder rather than from the unit it copied; the third is a pack
+  text edited under a tier, which is `recipe-ignored` for the research and
+  asserts the tier's own unit beside the library's line. See TECH_CUSTOM_ARMS
+  and TECH_IGNORED_ARMS.
 
   the SPEED derivation gets an arm with a mod in it that defines a faster belt,
   because no mod set this machine can otherwise install has one -- vanilla tops
@@ -323,6 +332,96 @@ RECIPE_CUSTOM_ARMS = [
 # TECHNOLOGY'S OWN unit in the same dump, which is a statement no transcription
 # could make.
 TECH_VARIANTS = ["logistics-2", "logistics-3"]
+
+# ---------------------------------------------------------------------------
+# THE RESEARCH CUSTOMIZER'S ARMS, which are the fourth value of `bbb-tech-cost`
+# and the three fields beside it.
+#
+# THE EXPECTED UNIT IS WRITTEN OUT HERE, WHERE TECH_VARIANTS' IS NOT, and the
+# reason is the whole difference between the two sections. A tier's cost is
+# whatever base charges for that technology, so it is compared against that
+# technology in the same dump; a CUSTOM cost is three numbers the player typed,
+# so the only honest expectation is those three numbers. The shape is the
+# engine's own short tuple form, `{count, time, ingredients={{name, amount}}}`,
+# which is what base's own units are written in and what the library emits.
+#
+# AND THE PREREQUISITE IS ASSERTED BESIDE IT, because a written cost has no
+# source technology for the tree position to move with. It comes from the plan's
+# `Position` ladder -- logistics-3, then logistics-2, then logistics -- and in a
+# base game that is `logistics-3`, which is also what makes the first arm below
+# a measurement rather than coverage.
+#
+# ANTI-VACUITY, AND BOTH ARMS CARRY IT, unlike the recipe customizer's three.
+# A .dat that was ignored or malformed leaves `bbb-tech-cost` at `logistics`,
+# whose unit in a stock game is 20 automation science over 15 seconds -- the
+# SAME THREE NUMBERS the untouched custom arm expects, because the defaults are
+# base's own logistics unit on purpose. What separates them is the
+# PREREQUISITE: `logistics` for a .dat that did not arrive, `logistics-3` for
+# one that did. The second arm separates them a second way, on numbers no tier
+# charges, and both assert the library's own log line, which no tier emits at
+# all.
+#
+# `bbb-tech-count` IS AN INT SETTING AND tools/mod-settings.py WRITES EVERY
+# NUMBER AS A PROPERTY-TREE DOUBLE (type 2). FkRecipes measured on this same
+# engine that an int setting reads a type-2 double and a type-6 signed int
+# alike (agents/customizer-design.md, the mod-settings.dat table: "the int
+# written as type 6 and as type 2 | both read as the same number"), and the
+# second arm is where that is confirmed rather than assumed: a count the engine
+# had rejected or reset would read back as the default 20 and fail the unit
+# comparison by the one field it moved.
+# ---------------------------------------------------------------------------
+
+TECH_PACKS_SETTING = "bbb-tech-packs"
+TECH_COUNT_SETTING = "bbb-tech-count"
+TECH_SECONDS_SETTING = "bbb-tech-seconds"
+
+TECH_CUSTOM_ARMS = [
+    # `custom` with all three fields as they ship: the reserved word `default`
+    # in the pack list, and the two numbers at the values the settings declare.
+    # That is [FallbackUnit] in guest/go/tune, which is base's own `logistics`
+    # cost, so picking Custom and typing nothing changes the price of nothing.
+    ("tech-custom-default", {TECH_SETTING: "custom"},
+     {"count": 20, "time": 15, "ingredients": [["automation-science-pack", 1]]},
+     ["logistics-3"],
+     "fkrecipes: bbb-balancer takes its research cost from bbb-tech-packs: "
+     "count 20, time 15, packs 1 automation-science-pack"),
+    # `custom` with all three written. `logistic-science-pack` is a pack no
+    # tier of this mod's charges on its own, and 50 x 20s is a cost no
+    # technology in a base game has, so neither the list nor either number can
+    # be confused with something that was copied.
+    ("tech-custom",
+     {TECH_SETTING: "custom",
+      TECH_PACKS_SETTING: "1 automation-science-pack, 1 logistic-science-pack",
+      TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20},
+     {"count": 50, "time": 20,
+      "ingredients": [["automation-science-pack", 1], ["logistic-science-pack", 1]]},
+     ["logistics-3"],
+     "fkrecipes: bbb-balancer takes its research cost from bbb-tech-packs: "
+     "count 50, time 20, packs 1 automation-science-pack, 1 logistic-science-pack"),
+]
+
+# THE PACK TEXT EDITED UNDER A TIER, which is `recipe-ignored` for the research
+# and the one state of the three fields the arms above cannot visit: all three
+# moved while the dropdown still names a tier. The tier wins, so the expected
+# unit is the SOURCE TECHNOLOGY'S OWN, read out of the same dump exactly as
+# TECH_VARIANTS reads it, and the prerequisite is that tier; the library's line
+# is the only evidence the text was read and deliberately not used.
+#
+# ANTI-VACUITY: the three values are ones logistics-2 does not charge -- two
+# automation packs where it charges one of each, 50 units where it charges 200,
+# 20 seconds where it charges 30 -- so a planner that took any one of them under
+# a tier fails the unit comparison by that field, and not only the line. The
+# two numbers are written into the .dat as well, and draw no line of their own:
+# under a tier no number of this mod's enters the unit, so there is nothing to
+# report about them, which is the claim guest/go/tune's
+# TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo makes on the host.
+TECH_IGNORED_ARMS = [
+    ("tech-ignored", "logistics-2",
+     {TECH_SETTING: "logistics-2", TECH_PACKS_SETTING: "2 automation-science-pack",
+      TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20},
+     "fkrecipes: bbb-tech-packs is edited, but bbb-tech-cost is not on custom, "
+     "so the text is ignored"),
+]
 
 # ---------------------------------------------------------------------------
 # THE SPEED ARM's fixture: a Factorio mod written in Go whose whole job is to
@@ -851,7 +950,7 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
     Returns True on a failure, which is the shape main() already counts in.
     """
     print(f"==> the cost settings, "
-          f"{len(RECIPE_VARIANTS) + len(TECH_VARIANTS) + len(RECIPE_CUSTOM_ARMS) + 1} "
+          f"{len(RECIPE_VARIANTS) + len(TECH_VARIANTS) + len(RECIPE_CUSTOM_ARMS) + len(TECH_CUSTOM_ARMS) + len(TECH_IGNORED_ARMS) + 1} "
           f"variant arm(s)")
     bad = False
 
@@ -924,6 +1023,70 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
         else:
             u = ours["unit"]
             print(f"  ok   {arm:<26} {u['count']} x {u['time']}s, after {value}")
+
+    # THE RESEARCH CUSTOMIZER, two arms, each asserting the unit AND the
+    # prerequisite. See TECH_CUSTOM_ARMS for what each state is, why the
+    # expected unit is written out where TECH_VARIANTS' is not, and what makes
+    # each arm anti-vacuous.
+    for arm, startup, want_unit, want_after, want_line in TECH_CUSTOM_ARMS:
+        got = run_arm(arm, factorio, series, mod_dir, None, startup=startup,
+                      probe=lambda d: project(d, '.technology["bbb-balancer"]'))
+        ours, lines = got["probe"], got["fkrecipes_lines"]
+        if ours["unit"] != want_unit:
+            bad = True
+            print(f"FAIL {arm}: the research unit is {ours['unit']}\n"
+                  f"{'':>5}  and {startup} should be {want_unit}")
+            continue
+        if ours.get("prerequisites") != want_after:
+            bad = True
+            print(f"FAIL {arm}: the prerequisite is {ours.get('prerequisites')}, "
+                  f"not {want_after} -- a written cost is placed by the plan's "
+                  f"own ladder, and nothing else places it")
+            continue
+        if want_line not in lines:
+            bad = True
+            print(f"FAIL {arm}: the library's log lines are {lines}\n"
+                  f"{'':>5}  and one of them has to be {want_line!r}")
+            continue
+        u = ours["unit"]
+        print(f"  ok   {arm:<26} {u['count']} x {u['time']}s in "
+              f"{[p[0] for p in u['ingredients']]}, after {want_after[0]}\n"
+              f"{'':>5}  said {want_line!r}")
+
+    # THE PACK TEXT EDITED UNDER A TIER. See TECH_IGNORED_ARMS: the tier's own
+    # unit and prerequisite, read the way the tier arms read them, plus the line.
+    for arm, tier, startup, want_line in TECH_IGNORED_ARMS:
+        def tier_probe(dump: Path, src=tier):
+            return project(dump, '{ours: .technology["bbb-balancer"], '
+                                 'src: .technology["%s"]}' % src)
+
+        got = run_arm(arm, factorio, series, mod_dir, None, startup=startup,
+                      probe=tier_probe)
+        ours, src, lines = got["probe"]["ours"], got["probe"]["src"], got["fkrecipes_lines"]
+        if src is None:
+            bad = True
+            print(f"FAIL {arm}: base has no `{tier}` technology, so this arm "
+                  f"proves nothing")
+            continue
+        if ours["unit"] != src["unit"]:
+            bad = True
+            print(f"FAIL {arm}: the research unit is {ours['unit']}\n"
+                  f"{'':>5}  and `{tier}` charges {src['unit']}: a field the "
+                  f"player wrote reached the unit under a tier")
+            continue
+        if ours.get("prerequisites") != [tier]:
+            bad = True
+            print(f"FAIL {arm}: the prerequisite is {ours.get('prerequisites')}, "
+                  f"not [{tier}]")
+            continue
+        if want_line not in lines:
+            bad = True
+            print(f"FAIL {arm}: the library's log lines are {lines}\n"
+                  f"{'':>5}  and one of them has to be {want_line!r}")
+            continue
+        u = ours["unit"]
+        print(f"  ok   {arm:<26} {u['count']} x {u['time']}s, after {tier}\n"
+              f"{'':>5}  said {want_line!r}")
     return bad
 
 

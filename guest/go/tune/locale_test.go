@@ -181,17 +181,27 @@ func localeSections(t *testing.T) map[string]map[string]string {
 	return out
 }
 
-// TestBothCostSettingsAreDescribed is the first of the three the library does
-// not make, and its header says why: a description is OPTIONAL there, because
-// the engine's failure mode for a missing one is a lost tooltip rather than an
-// `Unknown key` render.
+// TestEverySettingThisPlanDeclaresIsDescribed is the first of the three the
+// library does not make, and its header says why: a description is OPTIONAL
+// there for a bool, an int, a double or a plain dropdown, because the engine's
+// failure mode for a missing one is a lost tooltip rather than an `Unknown key`
+// render.
 //
-// This mod wants one anyway. Both of these settings change what a machine
-// costs, one of them by copying a number out of somebody else's technology, and
-// neither is guessable from a two-word label.
-func TestBothCostSettingsAreDescribed(t *testing.T) {
+// THIS MOD WANTS ONE FOR ALL SIX, and the list is the whole of what [Plan]
+// declares rather than the two dropdowns it started as. Every one of these
+// decides what a machine costs to build or to research -- two by naming a
+// preset, two by taking a list the player writes, two by taking a number -- and
+// none of them is guessable from a label of under fifty characters. The library
+// already demands four of the six (both text fields, and both dropdowns now
+// that each composes its presets onto its own description), so what this test
+// adds is the two NUMBERS: a count and a seconds field with no tooltip say
+// nothing about which setting has to be on Custom for them to do anything.
+func TestEverySettingThisPlanDeclaresIsDescribed(t *testing.T) {
 	sec := localeSections(t)
-	for _, name := range []string{SettingRecipeCost, SettingTechCost} {
+	for _, name := range []string{
+		SettingRecipeCost, SettingRecipeIngredients,
+		SettingTechCost, SettingTechPacks, SettingTechCount, SettingTechSeconds,
+	} {
 		if strings.TrimSpace(sec["mod-setting-description"][name]) == "" {
 			t.Errorf("no [mod-setting-description] %s: the settings menu shows "+
 				"the label with no tooltip under it", name)

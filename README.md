@@ -46,7 +46,7 @@ The collision mask is unchanged: a belt still cannot be laid *through* a balance
 
 ## Cost and research
 
-Two startup settings decide what a balancer part costs. Both are under Settings > Mod settings > Startup, and both default to what the mod has always shipped, so an existing save is unchanged by the update. Startup settings need a restart of Factorio to take effect.
+Two startup settings decide what a balancer part costs, and each has a Custom option with settings beside it where you write the value yourself. All of them are under Settings > Mod settings > Startup, and all default to what the mod has always shipped, so an existing save is unchanged by the update. Startup settings need a restart of Factorio to take effect.
 
 They are declared through [FkRecipes](https://github.com/Techrocket9/FkRecipes), the shared data-stage library, under the same names, defaults and menu order earlier versions shipped, so a choice you have already made carries over. The balancer part item, its recipe and its technology are declared through the same library, under the names they have always had, so blueprints and saved research carry over too.
 
@@ -60,10 +60,15 @@ They are declared through [FkRecipes](https://github.com/Techrocket9/FkRecipes),
 | Express belts | 4 steel plates, 2 gears, 2 express transport belts |
 | Splitter | 1 splitter, 2 iron plates |
 | Express splitter | 1 express splitter, 2 steel plates |
+| Custom | whatever you write in the Custom balancer part recipe setting below it |
 
-**Balancer research cost** picks which technology unlocks the balancer: Logistics (the default), Logistics 2 or Logistics 3. The cost is read from that technology rather than written down, so it follows whatever your mods charge for that tier, and the balancer's prerequisite moves with it so that it sits beside its own tier in the technology tree.
+**Custom balancer part recipe** is read only while the recipe setting is on Custom. Write the amount, then the item's internal name, and separate ingredients with commas: `2 iron-plate, 1 splitter`. Internal names are the ones the game uses in its own data and in rich text (`iron-plate`, not "Iron plate"). The word `default` means the mod's own recipe, and the recipe setting's tooltip lists every preset written this way, so you can start from the one you were on. A name your game does not have, a display name, or a fluid is refused when the game loads, with a message naming the setting and the entry, rather than guessed at. The full format, with every message and what causes it, is FkRecipes' [ingredient list reference](https://github.com/Techrocket9/FkRecipes/blob/master/docs/ingredient-list.md).
 
-Both settings are safe in an overhaul pack. No ingredient name reaches the game unless that item is present: each one has a chain of substitutes ending at iron plate, and the first item your mod set actually has is the one used. A recipe naming an item nobody defined would refuse to load the game, so it cannot happen. The same holds for the research: if the technology an option names is missing, or has been turned into a trigger technology with no research cost, the next tier down is used, and if none of them can be read the balancer costs what base charges for Logistics and has no prerequisite.
+**Balancer research cost** picks which technology unlocks the balancer: Logistics (the default), Logistics 2, Logistics 3, or Custom. For the three tiers the cost is read from that technology rather than written down, so it follows whatever your mods charge for that tier, and the balancer's prerequisite moves with it so that it sits beside its own tier in the technology tree.
+
+On Custom the cost comes from the three settings below it: the science packs, written the same way as the recipe and taking science packs only (`1 automation-science-pack, 1 logistic-science-pack`); how many units the research costs; and how many seconds one unit takes. Left alone they are 20 automation science packs at 15 seconds each, which is what Logistics costs in the base game. That default is taken as written too: in a mod set that has no automation science pack, Custom left alone refuses to load with a message saying the research has no science pack the game has, where the three tiers copy their technology's own cost and load. A custom research sits after Logistics 3, or after the highest of Logistics 2 and Logistics that your mods have, and has no prerequisite if none of the three exists.
+
+The presets and the tiers are safe in an overhaul pack. No ingredient name reaches the game unless that item is present: each one has a chain of substitutes ending at iron plate, and the first item your mod set actually has is the one used. A recipe naming an item nobody defined would refuse to load the game, so it cannot happen. The same holds for the research: if the technology an option names is missing, or has been turned into a trigger technology with no research cost, the next tier down is used, and if none of them can be read the balancer costs what base charges for Logistics and has no prerequisite. A custom list is the opposite on purpose: it is taken as written, every name must exist in your game, and a missing one refuses to load with a message naming it, which is the check you want for a list you typed.
 
 ## Belt speed
 

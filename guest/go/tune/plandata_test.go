@@ -1003,6 +1003,368 @@ func checkExactlyOneLog(t *testing.T, logs []string, want string) {
 	t.Errorf("the plan's log stream is %q\n want exactly one line, %q", logs, want)
 }
 
+// ---------------------------------------------------------------------------
+// THE RESEARCH CUSTOMIZER: the fourth value, and the three fields behind it.
+//
+// `bbb-tech-cost` gained `custom` and `bbb-tech-packs`, `bbb-tech-count` and
+// `bbb-tech-seconds` arrived beside it, so a player who wants a research cost
+// none of the three tiers charges can write one. The same rule the recipe's
+// section states holds here: every sentence a PLAYER can be shown is compared
+// word for word, because a refusal that stops the load is all they are given to
+// fix it with.
+//
+// WHAT IS DIFFERENT FROM THE RECIPE'S HALF, and it is why these are not the
+// same tests twice. A written recipe replaces one field of one prototype; a
+// written research cost replaces the unit AND decides where the technology
+// hangs, because the prerequisite that used to move with the copied unit has no
+// source to move from. So every arm below asserts the PAIR.
+// ---------------------------------------------------------------------------
+
+// customUnit is the unit shape the library emits for a written cost: the
+// engine's SHORT TUPLE form, `{count, time, ingredients={{name, amount}}}`,
+// which is the same shape [unitOf] builds for a fixture technology and the same
+// one the tier arms copy verbatim.
+func customUnit(count, seconds float64, packs ...ingredientPair) fkrecipes.Value {
+	tuples := make([]fkrecipes.Value, 0, len(packs))
+	for _, p := range packs {
+		tuples = append(tuples, fkrecipes.Arr(fkrecipes.Str(p.name), fkrecipes.Num(p.amount)))
+	}
+	return fkrecipes.Obj(
+		fkrecipes.Pair("count", fkrecipes.Num(count)),
+		fkrecipes.Pair("time", fkrecipes.Num(seconds)),
+		fkrecipes.Pair("ingredients", fkrecipes.Arr(tuples...)),
+	)
+}
+
+// checkUnit is the whole-unit comparison the four arms below share.
+func checkUnit(t *testing.T, what string, got map[string]fkrecipes.Value, want fkrecipes.Value) {
+	t.Helper()
+	if !reflect.DeepEqual(got["unit"], want) {
+		t.Errorf("%s: the unit is %s\n want %s", what, showValue(got["unit"]), showValue(want))
+	}
+}
+
+// TestTheCustomResearchCostUntouchedIsTheFallbackUnit is the state a player
+// reaches by picking Custom and typing nothing, and it is deliberately the same
+// cost `logistics` charges in a stock game.
+//
+// THE THREE FIELDS DEFAULT TO [FallbackUnit] so that switching to Custom is a
+// no-op until the player edits something. That is the opposite of a hidden
+// change: the row they just picked prices the research exactly as the row above
+// it did, and every edit from there is theirs.
+//
+// THE PACK TEXT IS UNTOUCHED AND THE TWO NUMBERS ARE STILL READ, which is the
+// library's rule and not a shortcut: "THE COUNT AND THE SECONDS ARE ALWAYS
+// READ, on both text paths. They are separate settings and the player may have
+// moved them whether or not they touched the pack list" (FkRecipes
+// go/customize.go:750). So the log line reports all three even here, where
+// nothing was written -- one line, and it is the only thing the plan says.
+//
+// AND THE PREREQUISITE IS `logistics-3`, which is the [Plan] `Position`
+// ladder's first rung: a written cost has no source technology to move with, so
+// the arm carries its own placement.
+func TestTheCustomResearchCostUntouchedIsTheFallbackUnit(t *testing.T) {
+	w := everythingWorld().withStartup(SettingTechCost, TechCustom)
+	protos, logs := extendsOf(t, dataOps(t, w))
+	got := protoOf(t, protos, "technology", TechName)
+
+	checkUnit(t, "custom untouched", got,
+		customUnit(20, 15, ingredientPair{"automation-science-pack", 1}))
+	checkPrereqs(t, "custom untouched", got, TechLogistics3)
+	checkExactlyOneLog(t, logs,
+		"fkrecipes: bbb-balancer takes its research cost from bbb-tech-packs: "+
+			"count 20, time 15, packs 1 automation-science-pack")
+
+	// NO max_level, AND IT IS AN ASSERTION RATHER THAN AN ABSENCE NOBODY
+	// LOOKED AT. Under a tier the library copies the source technology's level
+	// cap along with its unit ([TestTheCopiedUnitCarriesTheSourceMaxLevel]);
+	// under Custom there is no source, so a cap arriving here could only have
+	// come from a technology this cost has nothing to do with.
+	checkOnly(t, TechName, got,
+		"type", "name", "icon", "icon_size", "prerequisites", "unit", "effects", "order")
+}
+
+// TestTheCustomResearchCostIsTheThreeSettings is the feature, stated as the
+// research a player gets.
+//
+// ALL THREE FIELDS ARE DRIVEN AT ONCE, which is the one place in this file that
+// moves more than one variable, and it is deliberate: the three are one cost.
+// What makes it readable is that no two of them can be confused -- 50 units, 20
+// seconds and a two-pack list, against defaults of 20, 15 and one pack -- so a
+// planner that dropped any one of them fails on that field by name.
+//
+// THE PACK ORDER IS THE TYPED ORDER, for the reason a written recipe's is: the
+// list a player writes is the list the research screen shows them back.
+func TestTheCustomResearchCostIsTheThreeSettings(t *testing.T) {
+	w := everythingWorld().
+		withStartup(SettingTechCost, TechCustom).
+		withStartup(SettingTechPacks, "1 automation-science-pack, 1 logistic-science-pack").
+		withNumberStartup(SettingTechCount, 50).
+		withNumberStartup(SettingTechSeconds, 20)
+	protos, logs := extendsOf(t, dataOps(t, w))
+	got := protoOf(t, protos, "technology", TechName)
+
+	checkUnit(t, "a written research cost", got, customUnit(50, 20,
+		ingredientPair{"automation-science-pack", 1},
+		ingredientPair{"logistic-science-pack", 1}))
+	checkPrereqs(t, "a written research cost", got, TechLogistics3)
+	// A LITERAL, not the constants spliced together: this section compares
+	// every line a player is shown word for word, and a renamed constant has to
+	// fail this test rather than travel through it.
+	checkExactlyOneLog(t, logs,
+		"fkrecipes: bbb-balancer takes its research cost from bbb-tech-packs: "+
+			"count 50, time 20, packs 1 automation-science-pack, 1 logistic-science-pack")
+}
+
+// TestThePositionLadderStepsDownAndThenLetsGo is the placement half of the
+// custom arm, driven through every rung.
+//
+// THE COST DOES NOT MOVE WITH IT, which is the difference from
+// [TestALadderStepsDownAndTakesThePrerequisiteWithIt] and the reason both
+// exist. A tier's ladder steps down to a technology whose UNIT is then copied,
+// so the pair moves together; this ladder decides a place in the tree only, and
+// the price is the player's in all three worlds.
+//
+// THE LAST CASE IS THE ONE WITH NO ROWS LEFT. A prerequisite naming a
+// technology nobody defined is a load error rather than a cost, so the library
+// emits none and says so -- and this mod's research still exists, still costs
+// what the player wrote, and simply hangs off nothing.
+func TestThePositionLadderStepsDownAndThenLetsGo(t *testing.T) {
+	base := everythingWorld().withStartup(SettingTechCost, TechCustom)
+	l1, _ := base.tech(TechLogistics)
+	l2, _ := base.tech(TechLogistics2)
+	want := customUnit(20, 15, ingredientPair{"automation-science-pack", 1})
+	const costLine = "fkrecipes: bbb-balancer takes its research cost from " +
+		"bbb-tech-packs: count 20, time 15, packs 1 automation-science-pack"
+
+	for _, tc := range []struct {
+		name  string
+		world fixtureWorld
+		after string
+	}{
+		{"logistics-3 absent", base.withTechs(l1, l2), TechLogistics2},
+		{"only logistics is left", base.withTechs(l1), TechLogistics},
+	} {
+		protos, logs := extendsOf(t, dataOps(t, tc.world))
+		got := protoOf(t, protos, "technology", TechName)
+		checkPrereqs(t, tc.name, got, tc.after)
+		checkUnit(t, tc.name, got, want)
+		checkExactlyOneLog(t, logs, costLine)
+	}
+
+	// NO LOGISTICS CHAIN AT ALL. A tier would land on [FallbackUnit] here; the
+	// custom arm does not, because its cost never came from a technology.
+	protos, logs := extendsOf(t, dataOps(t, base.withTechs()))
+	got := protoOf(t, protos, "technology", TechName)
+	checkUnit(t, "no logistics at all", got, want)
+	if v, ok := got["prerequisites"]; ok {
+		t.Errorf("the technology carries prerequisites %s in a game with no "+
+			"logistics technology at all: that names something nobody defined",
+			showValue(v))
+	}
+	// THE ORDER IS THE COST AND THEN THE PLACEMENT, which is the library's own
+	// ("what it costs, then where it hangs", FkRecipes go/data.go:548) and is
+	// asserted rather than tolerated: a transcript a maintainer reads top to
+	// bottom is the only place these two lines are ever seen together.
+	if !reflect.DeepEqual(logs, []string{
+		costLine,
+		"fkrecipes: bbb-balancer: none of logistics-3, logistics-2, logistics " +
+			"is present, so the technology has no prerequisite",
+	}) {
+		t.Errorf("the plan's log stream is %q\n want the cost and then the "+
+			"dropped ladder", logs)
+	}
+}
+
+// TestAPackTextTheGameCannotAnswerIsRefused pins the three refusals a player is
+// likeliest to see out of this field, WORD FOR WORD.
+//
+// THE FIRST IS THE ONE THAT SEPARATES THIS FIELD FROM THE RECIPE'S. Both take
+// the same language and the same names, and `1 iron-plate` is a perfectly good
+// entry in one and refused in the other -- because the engine takes tool-type
+// items in a research unit and nothing else ("Invalid research unit
+// (iron-plate). Research unit(s) can only be tool type items at the moment",
+// measured by the library). The sentence says which of the two fields the
+// player is standing in rather than repeating the engine's.
+//
+// THE SECOND IS THE MISTAKE THIS MOD'S OWN LABELS INVITE, exactly as the recipe
+// field's display-name case is: `automation science pack` is what the research
+// screen calls it, and the language answers with the internal name.
+//
+// THE THIRD IS THE WORD THE RECIPE FIELD ACCEPTS AND THIS ONE DOES NOT. `none`
+// is a recipe with no ingredients, which is a thing; a research with no science
+// pack is one a player finishes by opening the screen, and the library refuses
+// to emit it on this mod's behalf.
+//
+// THE FOURTH IS THE FLUID, and it is the recipe field's fluid refusal with a
+// different second clause: there the category rule refuses it, here research
+// takes science packs and nothing else. Every real game has `water`, the two
+// fields take one language, and a player who has used the first field is the
+// player likeliest to reach for the same name in the second; the fixture stocks
+// `water` for exactly this row and the recipe's.
+func TestAPackTextTheGameCannotAnswerIsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want string
+	}{
+		{
+			text: "1 water",
+			want: `fkrecipes: bbb-tech-packs, entry 1 ("1 water"): ` +
+				`water is a fluid, and research takes science packs only`,
+		},
+		{
+			text: "1 iron-plate",
+			want: `fkrecipes: bbb-tech-packs, entry 1 ("1 iron-plate"): ` +
+				`iron-plate is an item, not a science pack`,
+		},
+		{
+			text: "1 automation science pack",
+			want: `fkrecipes: bbb-tech-packs, entry 1 ("1 automation science pack"): ` +
+				`no science pack is named "automation science pack"; ` +
+				`did you mean automation-science-pack`,
+		},
+		{
+			text: "none",
+			want: "fkrecipes: bbb-tech-packs: research takes at least one science pack",
+		},
+	} {
+		w := everythingWorld().
+			withStartup(SettingTechCost, TechCustom).
+			withStartup(SettingTechPacks, tc.text)
+		_, err := Plan().PlanData(w)
+		if err == nil {
+			t.Errorf("the pack text %q planned cleanly: a research unit the "+
+				"engine refuses reached a prototype, which is a load failure "+
+				"with this mod's name on it in somebody else's pack", tc.text)
+			continue
+		}
+		if err.Error() != tc.want {
+			t.Errorf("the pack text %q is refused with\n got  %q\n want %q",
+				tc.text, err.Error(), tc.want)
+		}
+	}
+}
+
+// TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused is the OTHER side of
+// the tool question, and it is not the same as the refusal above.
+//
+// A player who typed nothing gets the DECLARED pack list, whose ladder is
+// walked through `ToolExists` and whose rungs are DROPPED rather than refused
+// when the game has none of them (FkRecipes go/data.go:1070,
+// resolvePackLadders) -- the same tolerance every ingredient ladder in this
+// package has.
+//
+// THE GAME HERE HAS SCIENCE PACKS AND HAS THIS ONE AS AN ORDINARY ITEM, which
+// is what makes the question sharp rather than "a game with no packs at all":
+// `logistic-science-pack` is a tool, `automation-science-pack` is in the items
+// and nowhere else, and a ladder asking ItemExists would sail through. That is
+// exactly the shape FkRecipes' own go/world.go warns a consumer's fixture
+// about: "a fixture that names a science pack only in its items will see every
+// hand-rolled research cost lose its packs".
+//
+// AND WHAT A LOST LAST PACK GETS IS A REFUSAL, not a free research. It is the
+// same sentence [TestAReachedFallbackWithNoPackInTheGameIsRefused] pins for the
+// fallback, which is the point: a lost pack reads the same however the cost was
+// chosen. The drop itself is a log line the library writes on the way, and it
+// is not asserted here because a refused plan hands back the refusal and no
+// ops at all.
+func TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused(t *testing.T) {
+	w := everythingWorld().
+		withStartup(SettingTechCost, TechCustom).
+		withItems(append(ladderVocabulary(), "automation-science-pack")...).
+		withTools("logistic-science-pack")
+
+	_, err := Plan().PlanData(w)
+	if err == nil {
+		t.Fatal("a game holding this mod's science pack as an ordinary item " +
+			"priced its research anyway: the pack ladder is asking ItemExists, " +
+			"and the engine takes tool-type items in a unit and nothing else")
+	}
+	want := "fkrecipes: the technology bbb-balancer has no science pack the " +
+		"game has; research takes at least one"
+	if err.Error() != want {
+		t.Errorf("the refusal reads\n got  %q\n want %q", err.Error(), want)
+	}
+}
+
+// TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo is the research side
+// of [TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo], and it pins one
+// claim more than that one does: that under a tier NONE of the three fields is
+// read. The pack text draws the library's one line saying it was read and not
+// used (FkRecipes go/data.go:558, noteIgnoredText, which runs on the tier path
+// alone); the count and the seconds are moved as well and draw nothing, because
+// under a tier the unit is copied from the source and no number of this mod's
+// enters it.
+//
+// WHAT MAKES THIS NOT VACUOUS is the unit beside the line. The three fields are
+// set to 50, 20 and two automation packs, none of which logistics-2 charges, so
+// a planner that took any one of them under a tier would fail the unit
+// comparison by that field and not only lose a sentence in the log.
+func TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo(t *testing.T) {
+	w := everythingWorld().
+		withStartup(SettingTechCost, TechLogistics2).
+		withStartup(SettingTechPacks, "2 automation-science-pack").
+		withNumberStartup(SettingTechCount, 50).
+		withNumberStartup(SettingTechSeconds, 20)
+	l2, _ := w.tech(TechLogistics2)
+	protos, logs := extendsOf(t, dataOps(t, w))
+	got := protoOf(t, protos, "technology", TechName)
+
+	checkUnit(t, "edited fields under logistics-2", got, *l2.unit)
+	checkPrereqs(t, "edited fields under logistics-2", got, TechLogistics2)
+	// A literal, for the reason every pinned sentence in this file is one.
+	checkExactlyOneLog(t, logs,
+		"fkrecipes: bbb-tech-packs is edited, but bbb-tech-cost is not on "+
+			"custom, so the text is ignored")
+}
+
+// TestAnUnreadableResearchNumberTakesTheDeclaredDefault is the two numbers'
+// version of [TestAnUnreadableCustomTextTakesTheDeclaredList], and there are
+// two shapes of unreadable rather than one because a number has both: a row
+// MISSING from a hand-edited mod-settings.dat, and a row PRESENT under the
+// wrong type, which is what another mod redefining this mod's setting as text
+// would hand the planner. The library reads both through one function
+// (FkRecipes go/customize.go:822, readNumber) and both take the declared
+// default with one sentence, which is pinned here word for word.
+//
+// THE STREAM IS ASSERTED WHOLE, two lines in order: the degradation first,
+// because the number is read before the cost line is written, and then the
+// cost line carrying the DECLARED number -- which is the half with teeth, since
+// the fixture supplies nothing and the 20 or the 15 can only have come from
+// [Plan]'s own declaration.
+func TestAnUnreadableResearchNumberTakesTheDeclaredDefault(t *testing.T) {
+	want := customUnit(20, 15, ingredientPair{"automation-science-pack", 1})
+	const costLine = "fkrecipes: bbb-balancer takes its research cost from " +
+		"bbb-tech-packs: count 20, time 15, packs 1 automation-science-pack"
+	for _, tc := range []struct {
+		name  string
+		world fixtureWorld
+		line  string
+	}{
+		{
+			"the count row is missing",
+			everythingWorld().withStartup(SettingTechCost, TechCustom).
+				withoutNumberStartup(SettingTechCount),
+			"fkrecipes: the setting bbb-tech-count was not readable, so its default applies",
+		},
+		{
+			"the seconds row holds text",
+			everythingWorld().withStartup(SettingTechCost, TechCustom).
+				withRawStartup(SettingTechSeconds, fkrecipes.Str("15")),
+			"fkrecipes: the setting bbb-tech-seconds was not readable, so its default applies",
+		},
+	} {
+		protos, logs := extendsOf(t, dataOps(t, tc.world))
+		got := protoOf(t, protos, "technology", TechName)
+		checkUnit(t, tc.name, got, want)
+		checkPrereqs(t, tc.name, got, TechLogistics3)
+		if !reflect.DeepEqual(logs, []string{tc.line, costLine}) {
+			t.Errorf("%s: the plan's log stream is %q\n want the degradation "+
+				"and then the cost, %q", tc.name, logs, []string{tc.line, costLine})
+		}
+	}
+}
+
 // TestEveryAmountIsAWholeNumber is what plan.go's int64 conversion rests on.
 //
 // [Item.Amount] is a float64 and the library takes an int64, so a plan with a

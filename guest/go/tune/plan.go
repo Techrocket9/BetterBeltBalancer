@@ -11,8 +11,9 @@ import (
 // layer executes that stream against fkdata. This mod's two startup dropdowns
 // have been declared here and nowhere else since 2026-09-01; its item, its
 // recipe and its technology joined them in round two, the recipe customizer's
-// text setting in round three, and everything else this mod emits at a data
-// stage is still hand-rolled in guest/go/data.
+// text setting and the research customizer's three fields in round three, and
+// everything else this mod emits at a data stage is still hand-rolled in
+// guest/go/data.
 //
 // ---------------------------------------------------------------------------
 // WHY THE `Legacy` CONSTRUCTORS, WHICH IS THE FIRST DECISION IN THIS FILE
@@ -72,18 +73,20 @@ import (
 // that keep the default honest.
 //
 // ---------------------------------------------------------------------------
-// WHY THE CUSTOMIZER'S TEXT SETTING IS `Legacy` TOO, WHICH IS THE SECOND
+// WHY THE CUSTOMIZERS' FOUR SETTINGS ARE `Legacy` TOO, WHICH IS THE SECOND
 // DECISION AND THE ONE THAT DEVIATES FROM THE LIBRARY'S OWN DOCUMENTATION
 // ---------------------------------------------------------------------------
 //
-// `bbb-recipe-ingredients` has never shipped, so no stored value forces its
-// hand: [fkrecipes.Lib.IngredientsSetting] would take a bare name, prefix it,
-// and derive its order from the declaration index -- which is exactly what
-// FkRecipes' docs/migration.md writes in the worked example for THIS MOD
-// ("balancer-part-ingredients"), and what
+// `bbb-recipe-ingredients`, `bbb-tech-packs`, `bbb-tech-count` and
+// `bbb-tech-seconds` have never shipped, so no stored value forces their hand:
+// [fkrecipes.Lib.IngredientsSetting], [fkrecipes.Lib.PacksSetting],
+// [fkrecipes.Lib.IntSetting] and [fkrecipes.Lib.DoubleSetting] each take a bare
+// name, prefix it, and derive its order from the declaration index -- which is
+// exactly what FkRecipes' docs/migration.md writes in the worked example for
+// THIS MOD ("balancer-part-ingredients"), and what
 // [fkrecipes.Lib.LegacyIngredientsSetting]'s own comment says the Legacy form is
-// not for ("a name this mod ALREADY SHIPS"). It is declared Legacy anyway, and
-// the reason is MEASURED IN THE LIBRARY rather than argued.
+// not for ("a name this mod ALREADY SHIPS"). All four are declared Legacy
+// anyway, and the reason is MEASURED IN THE LIBRARY rather than argued.
 //
 // `orderString(i)` (FkRecipes go/settings.go) derives a generated setting's
 // order from its DECLARATION INDEX as two base-26 letters, `'a'+i/26` and
@@ -95,23 +98,27 @@ import (
 // and this plan declares nowhere near twenty-six, so every generated setting
 // it could hold lands between the recipe dropdown and the research dropdown.
 //
-// FOR THIS ONE SETTING THAT HAPPENS TO BE WHERE IT BELONGS, and that is not the
-// point. The research customizer is three more settings -- packs, count,
-// seconds -- and generated orders put all three there too: recipe, ingredients,
-// packs, count, seconds, research. The research dropdown would sit BELOW its own
-// custom fields, and no ordering of the declarations can fix it, because the
+// FOR THE RECIPE'S TEXT FIELD THAT HAPPENS TO BE WHERE IT BELONGS, AND FOR THE
+// RESEARCH'S THREE IT IS WRONG, which is the half round three measured rather
+// than predicted. Generated orders put packs, count and seconds between the two
+// dropdowns as well, so the menu would read: recipe, ingredients, packs, count,
+// seconds, research. THE RESEARCH DROPDOWN WOULD SIT BELOW ITS OWN CUSTOM
+// FIELDS -- three rows a player reads before the row that decides whether any of
+// them is live -- and no ordering of the declarations can fix it, because the
 // letters come from the index rather than from where the line is written. The
-// Legacy constructor takes an EXPLICIT order, "aa" sorts between "a" and "b",
-// and [TestEverySettingPrototypeIsTheOneThatShipped] is what pins the three
-// order strings.
+// Legacy constructor takes an EXPLICIT order: "aa" sorts between "a" and "b",
+// and "ba", "bb" and "bc" sort after "b", each of its three fields under the
+// dropdown that switches them on. [TestEverySettingPrototypeIsTheOneThatShipped]
+// is what pins the six order strings.
 //
-// THE NAME IS THE COST AND IT IS PAID DELIBERATELY. A generated one would read
-// `better-belt-balancer-recipe-ingredients`, beside two rows spelled `bbb-`;
-// one settings namespace with a seam in it is a thing a player can see, and
-// nothing is lost by choosing the historical prefix for a name before anybody
-// has stored it. The friction is the library's and is filed as such: a consumer
-// holding legacy orders cannot CHOOSE where a generated setting lands relative
-// to them, because the declaration index picks the letters.
+// THE NAMES ARE THE COST AND IT IS PAID DELIBERATELY. Generated ones would read
+// `better-belt-balancer-recipe-ingredients` and three more of that shape, beside
+// two rows spelled `bbb-`; one settings namespace with a seam in it is a thing a
+// player can see, and nothing is lost by choosing the historical prefix for a
+// name before anybody has stored it. The friction is the library's and is filed
+// as such: a consumer holding legacy orders cannot CHOOSE where a generated
+// setting lands relative to them, because the declaration index picks the
+// letters.
 //
 // ---------------------------------------------------------------------------
 // TWO HOOKS, AND EACH NAMES THE HALF IT RUNS
@@ -141,15 +148,15 @@ func Plan() *fkrecipes.Lib {
 	lib := fkrecipes.New()
 
 	// Declaration order agrees with menu order here, but it is not what
-	// DECIDES it: all three of these carry an explicit order string, so "a",
-	// "aa" and "b" are the sort and the lines below are only written to match.
-	// "a" and "b" are what the two dropdowns have always shipped; "aa" is the
-	// customizer's, argued in the header. All three are STARTUP, which is not a
-	// choice made here: FkRecipes emits `setting_type = "startup"` for every
-	// setting it declares, because what this library exists to decide are
-	// prototypes and a prototype is built before a map exists. The one setting
-	// of this mod's that is runtime-global is hand-rolled in
-	// guest/go/data/settings.go for exactly that reason.
+	// DECIDES it: all six of these carry an explicit order string, so "a",
+	// "aa", "b", "ba", "bb" and "bc" are the sort and the lines below are only
+	// written to match. "a" and "b" are what the two dropdowns have always
+	// shipped; the other four are the customizers', argued in the header. All
+	// six are STARTUP, which is not a choice made here: FkRecipes emits
+	// `setting_type = "startup"` for every setting it declares, because what
+	// this library exists to decide are prototypes and a prototype is built
+	// before a map exists. The one setting of this mod's that is runtime-global
+	// is hand-rolled in guest/go/data/settings.go for exactly that reason.
 	recipeCost := lib.LegacyDropdownSettingNeedingLocale(
 		SettingRecipeCost, RecipeDefault(), RecipeValues(), "a")
 
@@ -172,7 +179,45 @@ func Plan() *fkrecipes.Lib {
 		SettingRecipeIngredients, asIngredients(RecipePlan(RecipeVanilla)), "aa")
 
 	techCost := lib.LegacyDropdownSettingNeedingLocale(
-		SettingTechCost, TechDefault(), TechOptions(), "b")
+		SettingTechCost, TechDefault(), TechValues(), "b")
+
+	// THE RESEARCH COST THE PLAYER WRITES, as the three fields a Factorio unit
+	// actually has: what it is paid in, how many, and how long one takes.
+	//
+	// THE DEFAULTS ARE [FallbackUnit], WHICH IS BASE'S OWN `logistics` UNIT --
+	// 20 automation science over 15 seconds -- so a player who picks Custom and
+	// changes nothing gets what this technology has cost in every save this mod
+	// has ever been in. The packs are built FROM `FallbackUnit().Packs` rather
+	// than written out a second time; the two numbers are literals here and
+	// [TestTheCustomResearchDefaultsAreTheFallbackUnit] is what says they are
+	// still that unit's, because a second transcription that drifted would put
+	// two different "vanilla" costs in one settings screen.
+	//
+	// THE PACK LIST CARRIES NO `Fallbacks` LADDER, AND THAT IS A DECISION.
+	// Every other ladder in this package ends at a name every game with belts
+	// has -- `iron-plate` for an ingredient, the logistics tiers for a cost --
+	// and THERE IS NO SCIENCE PACK WITH THAT PROPERTY. `automation-science-pack`
+	// is base's own name and an overhaul is free to remove it; no other name is
+	// likelier to be present, so a second rung would be a guess dressed as a
+	// ladder. What happens without one is the library's and is pinned by
+	// [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused]: the ladder is
+	// walked through `ToolExists`, a pack no rung answers for is DROPPED with a
+	// line, and a unit that loses every pack is refused by name rather than
+	// emitted free.
+	//
+	// WHY A MAXIMUM IS DECLARED AT ALL, since neither bound is a balance
+	// opinion. The engine RESETS a stored number outside its own bounds to the
+	// default rather than clamping it (measured by the library, FkRecipes
+	// go/customize.go:342), so the declared range is exactly the set of values
+	// the data stage can ever read -- and the library refuses a `CustomCost`
+	// whose count can be below 1 or whose seconds can be 0, because the engine
+	// refuses a unit with either. The minima are therefore load-bearing and the
+	// maxima are the other half of the same fence: a player who types 10^12
+	// units has not written a research, and a number the engine would hand back
+	// as a reset is better than one nothing can pay.
+	techPacks := lib.LegacyPacksSetting(SettingTechPacks, FallbackUnit().Packs, "ba")
+	techCount := lib.LegacyIntSetting(SettingTechCount, 20, fkrecipes.Between(1, 1000000), "bb")
+	techSeconds := lib.LegacyDoubleSetting(SettingTechSeconds, 15, fkrecipes.Between(1, 3600), "bc")
 
 	// THE ITEM, and every field of it is transcribed from what shipped.
 	//
@@ -283,6 +328,34 @@ func Plan() *fkrecipes.Lib {
 	// is simply worse: a source priced by `count_formula` and no `count` used to
 	// produce a unit with neither and abort the load with this mod's name on it,
 	// and a verbatim copy loads.
+	//
+	// `Custom` IS THE FOURTH VALUE AND `CustomValue` IS LEFT EMPTY, which the
+	// library reads as the word `custom` -- the field exists for a mod whose
+	// dropdown already ships a preset by that name, and none of the three tiers
+	// is one. On any tier the three fields are not read at all, except that an
+	// EDITED pack text draws one line saying it is ignored (FkRecipes
+	// go/data.go:558, noteIgnoredText), which is the same courtesy the recipe's
+	// text gets.
+	//
+	// `Position` IS WHY A CUSTOM COST STILL LANDS SOMEWHERE IN THE TREE. Under
+	// every tier the prerequisite moves with the unit because a source
+	// technology was named; a written cost names none, so the arm carries its
+	// own ladder and the library takes the FIRST rung the game has as the sole
+	// prerequisite ("the first technology the game has becomes the sole
+	// prerequisite, exactly as a chosen tier's source would", FkRecipes
+	// go/customize.go:805, customPrereqs), or no prerequisite at all with a line
+	// saying so.
+	//
+	// IT STARTS AT `logistics-3` RATHER THAN AT `logistics`, WHICH IS THE ONE
+	// CHOICE IN THIS ARM. A player writing their own cost is pricing the
+	// research themselves, and the science they are likeliest to charge is the
+	// science the highest logistics tier already gates -- so the position that
+	// does not surprise them is the top of the chain rather than the bottom,
+	// where a blue-science cost would sit at a red-science place in the tree.
+	// The ladder then steps DOWN for the same reason [TechLadder] does: a pack
+	// without `logistics-3` still places the research, and a game with no
+	// logistics chain at all leaves it unattached rather than naming a
+	// technology nobody defined.
 	lib.LegacyTechnology(TechName, fkrecipes.TechSpec{
 		Icon:     PartIcon,
 		IconSize: 64,
@@ -292,6 +365,12 @@ func Plan() *fkrecipes.Lib {
 			Setting:  techCost,
 			Choices:  techChoices(),
 			Fallback: FallbackUnit(),
+			Custom: &fkrecipes.CustomCost{
+				Packs:    techPacks,
+				Count:    techCount,
+				Seconds:  techSeconds,
+				Position: []string{TechLogistics3, TechLogistics2, TechLogistics},
+			},
 		},
 	})
 
@@ -344,8 +423,13 @@ func asIngredients(plan []Item) []fkrecipes.Ingredient {
 	return out
 }
 
-// techChoices is the same for [TechLadder]: one choice per allowed value, whose
+// techChoices is the same for [TechLadder]: one choice per TIER value, whose
 // sources are that option's ladder, most preferred first.
+//
+// THREE AND NOT FOUR, for the reason [recipeChoices] is six and not seven:
+// `custom` is a value of the dropdown with no ladder behind it, and the library
+// takes it as the `Custom` arm instead. So this walks [TechOptions] and the
+// dropdown is declared with [TechValues].
 func techChoices() []fkrecipes.CostChoice {
 	options := TechOptions()
 	out := make([]fkrecipes.CostChoice, 0, len(options))
@@ -364,6 +448,11 @@ func techChoices() []fkrecipes.CostChoice {
 // technology has cost in every save this mod has ever been in, so a pack that
 // removed the chain gets the vanilla cost rather than a broken load, and
 // nobody who has not removed it can tell the difference.
+//
+// IT IS ALSO WHAT THE CUSTOM ARM'S THREE FIELDS DEFAULT TO, since round three:
+// the same unit is what a player who picks Custom and types nothing is charged,
+// so the pack list of `bbb-tech-packs` is taken from here rather than written a
+// second time. See the declarations in [Plan] for why the two numbers are not.
 //
 // Exported so a test can compare it against the fixture's `logistics` without
 // either of them being derived from the other.
