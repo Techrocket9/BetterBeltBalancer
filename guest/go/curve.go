@@ -102,7 +102,10 @@ func curveRecheck() { curveCache = curveUnchecked }
 // written before this setting existed produces by a different route -- the
 // engine supplies a prototype's default for a key `mod-settings.dat` has no
 // entry for, so a 0.3.2 save reads true on its first load here and is
-// classified under the new rule with nothing extra to do.
+// classified under the new rule with nothing extra to do. Observed rather than
+// inferred: no suite writes a `mod-settings.dat` at all, so every one of them
+// runs on exactly that state -- `m2`'s curve rig compiles at load and `sedge`'s
+// `scrv` refusal fires, both of which need this answer to be ON.
 func curvedExitsAllowed() bool {
 	if curveCache == curveUnchecked {
 		curveCache = curveOn
