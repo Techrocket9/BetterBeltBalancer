@@ -270,9 +270,16 @@ func TestEveryRecipeOptionIsTheListTheGateAsserts(t *testing.T) {
 // rung is a defect either way, so every line is an error.
 func TestEveryOptionFallsAllTheWayToIronPlate(t *testing.T) {
 	for _, option := range RecipeOptions() {
+		// ONE ITEM, WHICH IS WHAT THE HEADER SAYS AND IS NOW LITERALLY TRUE.
+		// The science pack used to be stocked here too, because the library
+		// probed a `CostBy` fallback's pack whether or not the fallback was
+		// reached and that probe was an ItemExists. It is a ToolExists now,
+		// answered by the fixture's own `tools`, which `withItems` does not
+		// touch -- so nothing in this world's item vocabulary is about
+		// research any more.
 		w := everythingWorld().
 			withStartup(SettingRecipeCost, option).
-			withItems(FallbackName, "automation-science-pack")
+			withItems(FallbackName)
 		protos, logs := extendsOf(t, dataOps(t, w))
 		for _, line := range logs {
 			t.Errorf("%s degraded in a game that has the last rung of every "+
@@ -299,13 +306,17 @@ func TestEveryOptionFallsAllTheWayToIronPlate(t *testing.T) {
 // which the library takes the same way. The alternative is naming a prototype
 // nobody defined, which is not a load that completes.
 //
-// THE SCIENCE PACK IS STILL IN THIS GAME AND IT HAS TO BE. See
-// TestTheFallbackPackIsProbedEvenWhenUnreachable, which is the finding.
+// NO ITEMS AT ALL, AND THE RESEARCH IS STILL PAID FOR. The science pack used
+// to be stocked here to keep the plan from being refused over an unreachable
+// fallback; it is a TOOL now and `withItems` does not touch the tools, so this
+// world is what its name says. See
+// [TestAnUnreachedFallbacksPackIsNeverProbed], which is where that finding was
+// closed.
 func TestAGameWithNoIngredientsIsAnEmptyRecipeRatherThanAnInventedOne(t *testing.T) {
 	for _, option := range RecipeOptions() {
 		w := everythingWorld().
 			withStartup(SettingRecipeCost, option).
-			withItems("automation-science-pack")
+			withItems()
 		protos, _ := extendsOf(t, dataOps(t, w))
 		if got := ingredientsOf(t, protoOf(t, protos, "recipe", PartName)); len(got) != 0 {
 			t.Errorf("%s invented %v in a game with no ingredients at all", option, got)
@@ -313,36 +324,83 @@ func TestAGameWithNoIngredientsIsAnEmptyRecipeRatherThanAnInventedOne(t *testing
 	}
 }
 
-// TestTheFallbackPackIsProbedEvenWhenUnreachable pins a BEHAVIOUR CHANGE round
-// two brought in, so that it is a decision on the record rather than a surprise.
+// TestAnUnreachedFallbacksPackIsNeverProbed is round two's finding CLOSED, and
+// the assertion is the inverse of the one that recorded it.
 //
-// The library validates `CostChoices.Fallback` before it resolves anything, so
-// the fallback's science pack is presence probed whether or not the fallback is
-// ever reached. A pack with a perfectly good `logistics` and no
-// `automation-science-pack` in it is therefore REFUSED at plan time, where the
-// hand-rolled technology this replaced would have loaded and used logistics'
-// own unit.
+// WHAT ROUND TWO PINNED. `TestTheFallbackPackIsProbedEvenWhenUnreachable` said
+// the library validated `CostChoices.Fallback` before it resolved anything, so
+// the fallback's science pack was presence probed whether or not the fallback
+// was ever reached: a pack with a perfectly good `logistics` and no
+// `automation-science-pack` in it was REFUSED at plan time, where the
+// hand-rolled technology this replaced loaded and copied logistics' own unit.
+// It was graded AWKWARD in agents/fkrecipes-migration.md and its header ended
+// "the day the library probes lazily this test says so".
 //
-// GRADED AWKWARD, and the grade is the point rather than the pin. The library
-// does exactly what its own documentation says, which is why it is not MISLED;
-// what makes it awkward is that a MIGRATING consumer cannot avoid it. A zero
-// UnitSpec is refused for its count, so a CostBy always carries a fallback, and
-// a fallback is always probed -- there is no way to say "this cost applies only
-// if nothing else does, so ask about its pack only then". The failure it
-// replaces is narrower rather than absent (a fallback that DID fire in such a
-// pack emitted a unit naming a missing item, which is the engine's own assignID
-// abort), and the day the library probes lazily this test says so.
-func TestTheFallbackPackIsProbedEvenWhenUnreachable(t *testing.T) {
-	// `logistics` is present and carries a unit, so the fallback is
-	// unreachable by construction; only the pack is missing.
-	_, err := Plan().PlanData(everythingWorld().withItems(FallbackName))
-	if err == nil {
-		t.Fatal("a game with no automation-science-pack planned cleanly: the " +
-			"library has stopped validating an unreachable fallback, which is " +
-			"better and is not what this mod is written against")
+// THAT DAY IS 2026-09-07. FkRecipes c7a806e resolves the fallback at the one
+// point it applies -- "THE FALLBACK IS RESOLVED ONLY HERE, which is the point:
+// its packs are probed when the fallback is what applies, and never when a
+// source answered" (go/data.go:598) -- and the design record calls it the
+// answer to this mod's ask by name, in a row of FkRecipes'
+// agents/customizer-design.md whose decision ends: the Fallback is resolved
+// only when used. The fallback's NUMBERS are still checked eagerly, in the plan
+// walk with no World in hand (go/data.go:330), which is the right split: a
+// count of zero is this mod's mistake and is knowable without asking the game
+// anything.
+//
+// SO A GAME WITH NO SCIENCE PACK AT ALL LOADS, as long as something carries a
+// unit. What says the SOURCE arm ran, rather than a fallback that happened to
+// survive, is the prerequisite (exactly `logistics`) and the empty log stream:
+// [FallbackUnit] is logistics' own numbers written out, so a surviving fallback
+// would carry the same unit, and the unit comparison is kept as the half that
+// says the research charges what logistics charges. Measured by the review:
+// with every ladder emptied the fallback survives, the unit compares equal, and
+// what fires is the missing prerequisite and the "fallback cost applies" line.
+func TestAnUnreachedFallbacksPackIsNeverProbed(t *testing.T) {
+	base := everythingWorld()
+	l1, _ := base.tech(TechLogistics)
+
+	protos, logs := extendsOf(t, dataOps(t, base.withTools()))
+	for _, line := range logs {
+		t.Errorf("a game whose logistics carries a unit degraded over a "+
+			"fallback nothing reached: %s", line)
 	}
-	want := "fkrecipes: the technology bbb-balancer prices itself in " +
-		"automation-science-pack, which does not exist"
+	got := protoOf(t, protos, "technology", TechName)
+	checkPrereqs(t, "an unreached fallback", got, TechLogistics)
+	if !reflect.DeepEqual(got["unit"], *l1.unit) {
+		t.Errorf("the unit is %s and logistics charges %s",
+			showValue(got["unit"]), showValue(*l1.unit))
+	}
+}
+
+// TestAReachedFallbackWithNoPackInTheGameIsRefused is the other half, and it is
+// what the lazy probe MOVED rather than removed.
+//
+// The pack question did not go away: it moved to the one game that has to
+// answer it, which is the game where the fallback is what prices the research.
+// There the pack is walked as a ladder and dropped if nothing on it is a tool
+// (FkRecipes c7a806e gave [fkrecipes.Pack] a `Fallbacks` list for exactly
+// that), and a unit that loses every pack is refused rather than emitted --
+// because a research with no packs is not a cheap research, it is a free one,
+// which the engine loads without complaint.
+//
+// THIS MOD DECLARES ITS FALLBACK PACK WITH NO LADDER, one rung named
+// `automation-science-pack`, so this is the whole of what a game without red
+// science does to it: a refusal naming the technology, at plan time, which
+// `EmitData` routes through `fkdata.Raise`. That is a load this mod fails and
+// it is the right answer -- the alternative is a technology a player finishes
+// by opening the research screen.
+func TestAReachedFallbackWithNoPackInTheGameIsRefused(t *testing.T) {
+	// No technology at all, so no rung of any ladder carries a unit and the
+	// fallback IS the price; and no tool, so the one pack it names resolves to
+	// nothing.
+	_, err := Plan().PlanData(everythingWorld().withTechs().withTools())
+	if err == nil {
+		t.Fatal("a game with no science pack priced this mod's research " +
+			"anyway: a research that costs nothing is one a player finishes " +
+			"by opening the screen")
+	}
+	want := "fkrecipes: the technology bbb-balancer has no science pack the " +
+		"game has; research takes at least one"
 	if err.Error() != want {
 		t.Errorf("the refusal reads\n got  %q\n want %q", err.Error(), want)
 	}
@@ -490,62 +548,57 @@ func TestNoLogisticsAtAllIsTheFallbackAndNoPrerequisite(t *testing.T) {
 	}
 }
 
-// TestAnUnknownOptionIsWhatTheLibraryDoesToday pins the OTHER SIDE OF THE
-// ENGINE'S GUARD, and it is a recording rather than a requirement.
+// TestAnUnofferedStoredValueIsRefusedByName is the OTHER SIDE OF THE ENGINE'S
+// GUARD, re-pinned in the library's new words.
 //
-// [RecipePlan] and [TechLadder] both carry a default arm for "an option this
-// build does not know", and NO SHIPPED PATH CONSULTS EITHER: [Plan] builds one
-// choice per allowed value, so an unknown string reaches the library's own
-// `choiceFor`/`sourcesFor`, gets nil, and comes out as an empty recipe and a
-// fallback-priced technology with no prerequisite. What makes that unreachable
-// is Factorio, not this package: an unknown value in mod-settings.dat is
-// silently RESET to the default before the data stage runs, measured on the
-// engine, so a player cannot produce this state and neither can the gate.
+// WHAT IT USED TO SAY. Round two's TestAnUnknownOptionIsWhatTheLibraryDoesToday
+// recorded that a stored value no dropdown offers reached the library's own
+// choice lookup, got nothing back, and came out as a recipe made of NOTHING
+// beside a fallback-priced technology -- with one log line, the technology's,
+// and the recipe half silent. It was a recording rather than a requirement and
+// it said so: if the library ever changed its answer, that test was what would
+// say the answer moved.
 //
-// It is pinned anyway because it is the behaviour of the code that ships,
-// behind a guard that belongs to somebody else. If the engine ever stops
-// resetting, or the library ever starts treating a missing choice as the
-// default's, this test is what says the answer moved.
-func TestAnUnknownOptionIsWhatTheLibraryDoesToday(t *testing.T) {
-	const unknown = "not-an-option"
-	w := everythingWorld().
-		withStartup(SettingRecipeCost, unknown).
-		withStartup(SettingTechCost, unknown)
-	protos, logs := extendsOf(t, dataOps(t, w))
-
-	// The recipe: NO INGREDIENTS AND NO LINE SAYING SO. The library's own
-	// default-option fallback is gated on the chosen plan having declared
-	// something, and an unknown value declares nothing, so that arm is skipped.
-	if got := ingredientsOf(t, protoOf(t, protos, "recipe", PartName)); len(got) != 0 {
-		t.Errorf("an unknown recipe option produced %v; the library answers "+
-			"an unknown choice with no plan at all", got)
-	}
-
-	// The technology: the fallback unit, and NO prerequisite.
-	tech := protoOf(t, protos, "technology", TechName)
-	if _, ok := tech["prerequisites"]; ok {
-		t.Errorf("an unknown technology option left prerequisites %s in place",
-			showValue(tech["prerequisites"]))
-	}
-	want := fkrecipes.Obj(
-		fkrecipes.Pair("count", fkrecipes.Num(20)),
-		fkrecipes.Pair("time", fkrecipes.Num(15)),
-		fkrecipes.Pair("ingredients", fkrecipes.Arr(
-			fkrecipes.Arr(fkrecipes.Str("automation-science-pack"), fkrecipes.Num(1)))),
-	)
-	if !reflect.DeepEqual(tech["unit"], want) {
-		t.Errorf("an unknown technology option priced the research %s, want the "+
-			"fallback %s", showValue(tech["unit"]), showValue(want))
-	}
-
-	// EXACTLY ONE LINE, and it is the technology's. The recipe half is silent,
-	// which is the asymmetry worth pinning: a player in this state would have a
-	// balancer part craftable from nothing with nothing in the log about it.
-	wantLine := "fkrecipes: bbb-balancer: no source for the " + unknown +
-		" cost carries a unit, so the fallback cost applies and the technology " +
-		"has no prerequisite"
-	if len(logs) != 1 || logs[0] != wantLine {
-		t.Errorf("the log stream is %v\n want exactly [%q]", logs, wantLine)
+// IT MOVED ON 2026-09-07. FkRecipes c7a806e refuses such a value by name, for
+// `IngredientsBy` and `CostBy` alike, and names this mod as the reason: "What
+// it used to do was worse than a refusal: the choice lookup found no plan, the
+// recipe came out made of nothing, and no line said so. This is the pilot's own
+// finding, closed." (go/data.go). A refusal is the right answer -- a balancer
+// part craftable out of thin air is a worse outcome than a mod that does not
+// load, and the state is not one a player can reach by accident.
+//
+// WHAT MAKES THE ARM UNREACHABLE IS STILL FACTORIO AND THAT HAS NOT CHANGED.
+// An unknown value in `mod-settings.dat` is silently RESET to the default
+// before the data stage runs, measured on the engine, with no log line; a wrong
+// TYPE is refused loudly by the engine itself. So no player produces this state
+// and neither can the dump gate: it is reachable only through a hand-edited
+// mod-settings.dat, which is why it is pinned on the host and not in
+// test/check-datastage.py.
+//
+// THE NAME IN THE SENTENCE IS THE EMITTED ONE, which for this mod's two Legacy
+// settings is the unprefixed name a player's mod-settings.dat actually carries.
+//
+// ONE DROPDOWN AT A TIME, because the library reports the FIRST refusal its
+// resolution walk found: a world that broke both would only ever prove the
+// recipe's.
+func TestAnUnofferedStoredValueIsRefusedByName(t *testing.T) {
+	const unoffered = "not-an-option"
+	for _, setting := range []string{SettingRecipeCost, SettingTechCost} {
+		_, err := Plan().PlanData(everythingWorld().withStartup(setting, unoffered))
+		if err == nil {
+			t.Errorf("%s holding %q planned cleanly: the library has gone back "+
+				"to answering an unoffered value with no plan at all, which is "+
+				"a recipe made of nothing or a fallback-priced technology with "+
+				"no prerequisite, and nothing said about the recipe half",
+				setting, unoffered)
+			continue
+		}
+		want := "fkrecipes: " + setting + ` holds "` + unoffered +
+			`", which is not one of its values`
+		if err.Error() != want {
+			t.Errorf("%s: the refusal reads\n got  %q\n want %q",
+				setting, err.Error(), want)
+		}
 	}
 }
 

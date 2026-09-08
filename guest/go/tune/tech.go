@@ -44,15 +44,18 @@ func TechDefault() string { return TechOptions()[0] }
 //
 // THE DEFAULT ARM IS A SHAPE GUARD AND NOT A LIVE FALLBACK, exactly as
 // [RecipePlan]'s is and for the same reason: [Plan] builds one `CostChoice` per
-// allowed value, so an unknown string reaches the library's `sourcesFor` rather
-// than this switch, gets an empty ladder, and lands on [FallbackUnit] with no
-// prerequisite. Measured on the host against the real path:
+// allowed value, so an unknown string reaches the library's dropdown read
+// rather than this switch, and since FkRecipes c7a806e it is REFUSED BY NAME
+// where it used to get an empty ladder and land on [FallbackUnit] with no
+// prerequisite:
 //
-//	TECH unit={count=20, time=15, ingredients=[["automation-science-pack", 1]]} prereq present=false
+//	fkrecipes: bbb-tech-cost holds "not-an-option", which is not one of its values
 //
-// What makes it unreachable is the engine RESETTING an unknown value to the
-// default before the data stage runs, silently and with no log line; the
-// quotation and the loud wrong-type case are in [RecipePlan]'s header.
+// [TestAnUnofferedStoredValueIsRefusedByName] pins that sentence for this
+// dropdown and for the recipe's. What makes it unreachable is the engine
+// RESETTING an unknown value to the default before the data stage runs,
+// silently and with no log line; the quotation and the loud wrong-type case are
+// in [RecipePlan]'s header.
 //
 // WHAT WALKS IT IS FkRecipes' `CostBy` since round two, as one `CostChoice` per
 // option built by [Plan]. This file is the ladder DATA and the option list; the

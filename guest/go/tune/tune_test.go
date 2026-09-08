@@ -117,8 +117,9 @@ func TestTechLaddersWalkDown(t *testing.T) {
 	// finding rather than a tidy-up. It asserted `TechLadder`'s default arm,
 	// which NO SHIPPED PATH CONSULTS: [Plan] builds one CostChoice per allowed
 	// value, so an unknown string reaches the library's own lookup and never
-	// this switch. What the real path does with one is
-	// [TestAnUnknownOptionIsWhatTheLibraryDoesToday].
+	// this switch. What the real path does with one since FkRecipes c7a806e is
+	// REFUSE the load by name, and
+	// [TestAnUnofferedStoredValueIsRefusedByName] is where that is pinned.
 	cases := map[string][]string{
 		TechLogistics:  {"logistics"},
 		TechLogistics2: {"logistics-2", "logistics"},

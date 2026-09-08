@@ -8,12 +8,30 @@ import (
 
 // THE FIXTURE GAME, and it is the whole reason the plan is checkable at all.
 //
-// [fkrecipes.World] is the eleven questions the planner is allowed to ask about
-// the game outside its own plan, and the emit layer answers them out of
+// [fkrecipes.World] is the thirteen questions the planner is allowed to ask
+// about the game outside its own plan, and the emit layer answers them out of
 // data.raw. A host test answers them out of this, which is what lets `go test`
 // say what the data stage will emit with no Factorio in the room and no wasm
 // toolchain: the fields of every prototype, the ingredient every ladder picks
 // in a game that is missing something, and the refusal a probe produces.
+//
+// IT EMBEDS [fkrecipes.UnimplementedWorld], WHICH IS WHAT THE LIBRARY BUILT
+// FOR THE DAY THAT INTERFACE GROWS -- and it has now grown twice. Round two
+// added `EntityExists` and this fixture stopped compiling with a Go error
+// naming a method this mod had never heard of; round three added `FluidExists`
+// and `ToolExists` and did it again (measured 2026-09-07 against FkRecipes
+// c7a806e: `fixtureWorld does not implement fkrecipes.World (missing method
+// FluidExists)`, once per PlanData call site: three then, four in the tree
+// this commit leaves). The embed answers every question this
+// fixture does not with a panic naming itself, so the NEXT question costs
+// nothing until a plan of this mod's actually asks it.
+//
+// FluidExists IS LEFT TO THAT PANIC, DELIBERATELY. Nothing this mod declares
+// is a fluid ingredient -- [RecipePlan]'s six plans name items and only items
+// -- so the library never asks, and an answer written here would be a fixture
+// modelling a question no test drives. The day an ingredient becomes a fluid,
+// `fkrecipes: World.FluidExists is not implemented by this fixture` names the
+// method to write, which is better than a `false` that silently drops it.
 //
 // EVERY ANSWER IS A LIST RATHER THAN A MAP, and `TechNames` sorts a copy. The
 // World contract says that method returns SORTED names and the library's cycle
@@ -24,13 +42,29 @@ import (
 // was not told about, so a test that forgot to stock an ingredient sees the
 // ladder step past it rather than a convenient yes.
 type fixtureWorld struct {
+	fkrecipes.UnimplementedWorld
+
 	modName string
 
 	// The names this game has, by family. `entities` is what `PlaceResult` is
-	// probed against and `items` what every ingredient is.
+	// probed against, `items` what every ingredient is, and `tools` what every
+	// SCIENCE PACK is.
+	//
+	// A PACK IS ASKED OF ToolExists AND NOT OF ItemExists, since FkRecipes
+	// c7a806e. A research unit takes tool-type items and nothing else, which
+	// the library measured on the engine as `Invalid research unit
+	// (iron-plate). Research unit(s) can only be tool type items at the
+	// moment`, so its pack ladder asks that question rather than ItemExists --
+	// and go/world.go warns in as many words that "a fixture that names a
+	// science pack only in its items will see every hand-rolled research cost
+	// lose its packs". The two packs therefore live in `tools` and NOT in
+	// `items`: no ladder in this package names a science pack as an
+	// ingredient, and listing them in both would leave `withItems` reading as
+	// though it still drove the pack question.
 	items    []string
 	entities []string
 	recipes  []string
+	tools    []string
 
 	// The technologies, with the unit each one carries. A technology with a
 	// nil unit is present and unit-less, which is the research_trigger shape
@@ -120,6 +154,10 @@ func (w fixtureWorld) ItemExists(name string) bool   { return has(w.items, name)
 func (w fixtureWorld) EntityExists(name string) bool { return has(w.entities, name) }
 func (w fixtureWorld) RecipeExists(name string) bool { return has(w.recipes, name) }
 
+// ToolExists is the science-pack question, and a `CostBy` fallback's pack
+// ladder is the only thing in this mod's plan that asks it.
+func (w fixtureWorld) ToolExists(name string) bool { return has(w.tools, name) }
+
 func (w fixtureWorld) tech(name string) (fixtureTech, bool) {
 	for _, t := range w.techs {
 		if t.name == name {
@@ -165,8 +203,9 @@ func unitOf(count, seconds float64, pack string, amount float64) *fkrecipes.Valu
 }
 
 // everythingWorld is a game that has every name any ladder in this package can
-// reach, the three logistics technologies with DISTINCT units, the balancer
-// part entity, and both dropdowns answering their defaults.
+// reach, the two science packs its research can be priced in, the three
+// logistics technologies with DISTINCT units, the balancer part entity, and
+// both dropdowns answering their defaults.
 //
 // THE THREE UNITS DIFFER ON PURPOSE. What `CostBy` promises is that the unit
 // comes from the source the setting names, and three identical units would be
@@ -174,7 +213,8 @@ func unitOf(count, seconds float64, pack string, amount float64) *fkrecipes.Valu
 func everythingWorld() fixtureWorld {
 	return fixtureWorld{
 		modName:  ModName,
-		items:    append(ladderVocabulary(), "automation-science-pack", "logistic-science-pack"),
+		items:    ladderVocabulary(),
+		tools:    []string{"automation-science-pack", "logistic-science-pack"},
 		entities: []string{PartName},
 		techs: []fixtureTech{
 			{name: TechLogistics, unit: unitOf(20, 15, "automation-science-pack", 1)},
@@ -206,6 +246,15 @@ func (w fixtureWorld) withStartup(name, value string) fixtureWorld {
 // that is missing something is expressed here.
 func (w fixtureWorld) withItems(items ...string) fixtureWorld {
 	w.items = items
+	return w
+}
+
+// withTools replaces the game's whole SCIENCE PACK vocabulary, which is how a
+// pack that renamed or removed the science packs is expressed here. Called with
+// nothing it is a game with no science pack at all, which is the game a
+// `CostBy` fallback cannot be paid for in.
+func (w fixtureWorld) withTools(tools ...string) fixtureWorld {
+	w.tools = tools
 	return w
 }
 

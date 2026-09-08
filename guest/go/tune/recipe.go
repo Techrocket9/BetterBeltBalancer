@@ -65,11 +65,15 @@ func RecipeDefault() string { return RecipeOptions()[0] }
 // rather than to nothing", and that stopped being true when the library took
 // over the walk. [Plan] builds ONE `IngredientChoice` per allowed value, so an
 // unknown string never reaches this function at all: it reaches the library's
-// own `choiceFor`, which answers nil, and a nil plan is a recipe with NO
-// ingredients and no log line. Measured on the host, driving the real path with
-// the setting answering `not-an-option`:
+// own dropdown read, which since FkRecipes c7a806e REFUSES IT BY NAME rather
+// than answering with no plan -- "A STORED VALUE THE DROPDOWN DOES NOT OFFER IS
+// REFUSED. ... What it used to do was worse than a refusal: the choice lookup
+// found no plan, the recipe came out made of nothing, and no line said so. This
+// is the pilot's own finding, closed." (go/data.go:1298). The refusal names the
+// setting as a player's mod-settings.dat carries it, this mod's two being
+// Legacy and therefore unprefixed:
 //
-//	RECIPE ingredients=[] len=0
+//	fkrecipes: bbb-recipe-cost holds "not-an-option", which is not one of its values
 //
 // WHAT MAKES THAT UNREACHABLE IS THE ENGINE, not this switch. Factorio
 // validates `allowed_values` itself, and it does it by RESETTING rather than by
@@ -83,7 +87,7 @@ func RecipeDefault() string { return RecipeOptions()[0] }
 //	ROOT.startup.bbb-recipe-cost.value.
 //
 // So the arm below is what this function answers if it is ever called by
-// something other than [Plan], and [TestAnUnknownOptionIsWhatTheLibraryDoesToday]
+// something other than [Plan], and [TestAnUnofferedStoredValueIsRefusedByName]
 // is what pins the other side of the engine's guard. Neither is a live path.
 func RecipePlan(option string) []Item {
 	switch option {

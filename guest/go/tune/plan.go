@@ -170,16 +170,29 @@ func Plan() *fkrecipes.Lib {
 	// all, which is what stops `prerequisites = {"logistics"}` naming a
 	// technology nobody defined.
 	//
-	// TWO BEHAVIOUR CHANGES, WRITTEN DOWN RATHER THAN DISCOVERED, and both are
-	// graded in agents/fkrecipes-migration.md.
+	// ONE BEHAVIOUR CHANGE IS STILL OPEN, WRITTEN DOWN RATHER THAN DISCOVERED,
+	// and it is graded in agents/fkrecipes-migration.md; a second was graded
+	// there and is CLOSED, which is the paragraph below.
 	//
-	// THE FALLBACK'S SCIENCE PACK IS PROBED WHETHER OR NOT THE FALLBACK IS
-	// REACHED, so a pack with a perfectly good `logistics` and no
-	// `automation-science-pack` in it is refused at plan time where the
-	// hand-rolled version loaded and copied logistics' own unit. A migrating
-	// consumer cannot avoid it: a zero UnitSpec is refused for its count, so a
-	// CostBy always carries a fallback and a fallback is always probed. Graded
-	// AWKWARD -- a load that used to succeed and now refuses.
+	// THE FALLBACK'S SCIENCE PACK USED TO BE PROBED WHETHER OR NOT THE FALLBACK
+	// WAS REACHED, so a pack with a perfectly good `logistics` and no
+	// `automation-science-pack` in it was refused at plan time where the
+	// hand-rolled version loaded and copied logistics' own unit. FkRecipes
+	// c7a806e answered the ask: "THE FALLBACK IS RESOLVED ONLY HERE, which is
+	// the point: its packs are probed when the fallback is what applies, and
+	// never when a source answered" (go/data.go:598), so a game with no science
+	// pack at all loads as long as a source carries a unit, and
+	// [TestAnUnreachedFallbacksPackIsNeverProbed] is that half. The fallback's
+	// NUMBERS are still checked eagerly, in the plan walk and with no question
+	// asked of the game (go/data.go:330), which is the right split: a count of
+	// zero is this mod's own mistake. What the lazy resolve MOVED rather than
+	// removed is the other half -- where the fallback IS the price its packs
+	// are walked as ladders, and a unit that loses every one of them is refused
+	// with `fkrecipes: the technology bbb-balancer has no science pack the game
+	// has; research takes at least one`, which
+	// [TestAReachedFallbackWithNoPackInTheGameIsRefused] pins. That refusal is
+	// the right answer and not a regression: a research with no packs is not a
+	// cheap one, it is free.
 	//
 	// `max_level` TRAVELS WITH THE UNIT. It lives on the TECHNOLOGY rather than
 	// in the unit, and `CostBy` copies the source's, where the hand-rolled
