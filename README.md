@@ -44,6 +44,8 @@ What decides it is the two tiles the belt could otherwise draw from: the one beh
 
 A consequence worth knowing when you build: a belt line that *starts* beside a part which already serves a belt is a second belt on that part, and is refused and handed back. Start it one tile further out, or give it a belt behind it, and it stays unconnected as before.
 
+That is a change to what a factory you already have means, so it is behind a map setting, "Belts may turn as they leave a balancer", on by default. It is under Settings > Mod settings > Map, it takes effect without a restart, and changing it re-checks every balancer in the save. Turn it off and a belt across a part's face is left unconnected again, exactly as it was before this version. A balancer whose only outputs were corners then has no outputs at all: it stops, and what it was holding is returned to the ground beside it, the same as when you take a machine apart. Turning the setting back on rebuilds it.
+
 ## Fast replace
 
 Balancer parts share base's `transport-belt` fast-replace group, so a part held over a belt, an underground belt end or a lane splitter replaces it the way a splitter does: the belt and whatever it was carrying go to your inventory and the part takes the tile. Dropping a balancer straight into a belt line you already have is one click per tile. Splitters and loaders are not replaced this way (a splitter is two tiles wide, and loaders are a different group).

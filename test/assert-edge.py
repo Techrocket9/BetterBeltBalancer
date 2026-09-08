@@ -912,7 +912,11 @@ def main():
     # setting, which left every transition of the multi-edge flip handler
     # reachable by a human and by nothing else (agents/single-edge.md, phase 9).
     # It is inert on Factorio 2.1, where that setting does not exist.
-    want_iface = {"audit", "set-multi-edge-parts"}
+    # `set-curved-exits` joined it on 2026-09-07 for the same reason and one
+    # more: that setting is defined on BOTH engines, so it is the first method
+    # here a suite can drive on the engine trunk targets, and the `m2` suite
+    # does.
+    want_iface = {"audit", "set-multi-edge-parts", "set-curved-exits"}
     if set(iface.group(1).split(",")) != want_iface:
         fail("the remote interface exposes %r, expected exactly %s"
              % (iface.group(1), ",".join(sorted(want_iface))))

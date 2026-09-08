@@ -34,8 +34,22 @@ AUDIT = re.compile(
     r"(?: refused=(\d+))?")
 SEDGE_REFUSED = re.compile(
     r"\[BBB\] alert: cluster (\d+) has (\d+) parts? carrying more than one belt")
+CURVEFLIP = re.compile(
+    r"\[BBB-M2\] curveflip tag=(\w+) wanted=(\w+) accepted=(\w+) value=(\w+)")
+CURVERULE = re.compile(
+    r"\[BBB\] curved exits: a belt across a balancer's face is (.+?); "
+    r"(\d+) clusters re-queued")
+TORNDOWN = re.compile(r"\[BBB\] torn down cluster (\d+), returned (\d+) items")
+SPILLED = re.compile(r"\[BBB\] spilled (\d+) items beside cluster (\d+)")
 
 T0, T1 = 1800, 3540
+
+# The curve-setting band's four report ticks: the 400-tick window with the rule
+# OFF, and the 400-tick window after it comes back. See the schedule at the
+# bottom of guest/go/obs/m2/main.go for why the second one does not open behind
+# the rebuild that produced it.
+OFF0, OFF1 = 3620, 4020
+ON0, ON1 = 4260, 4660
 
 # What the rigs BUILD, written down here rather than read off the guest's own
 # summary. Twenty-three clusters, two columns of parts per row -- see the layout
@@ -558,6 +572,198 @@ def main():
                     "are all built to the rule; the first was cluster %s with "
                     "%s part(s) carrying more than one belt"
                     % (len(refusals), refusals[0].group(1), refusals[0].group(2)))
+
+    # --- the curve setting, turned off and on again over a running save ------
+    #
+    # `bbb-curved-exits` is the runtime-global bool behind the curve rule
+    # (guest/go/curve.go). What this band asserts is that flipping it
+    # RE-CLASSIFIES A STANDING SAVE rather than only deciding what the next thing
+    # somebody builds means -- and that the flip costs exactly the clusters whose
+    # edges moved and no others.
+    #
+    # THE RIG IS ALREADY IN THE SAVE. `curve` is a 2->2 whose only two outputs
+    # are corners, so with the rule off it is a cluster with inputs and nothing
+    # else -- which is a legitimate half-built state, not a refusal: plan.Build
+    # declines it and the audit does not count it `unbuilt`. Every other cluster
+    # in the save is unaffected, which is what makes "one teardown, one spill,
+    # one compile over the whole band" a statement rather than a coincidence.
+    print()
+    flips = {m.group(1): m.groups() for m in (CURVEFLIP.search(l) for l in lines) if m}
+    for tag, want in (("off", "false"), ("on", "true")):
+        if tag not in flips:
+            fail.append("curveflip %s: the observer never wrote the setting, so "
+                        "everything below it is untested" % tag)
+            continue
+        _, wanted, accepted, value = flips[tag]
+        print("curve setting: flip %-3s wanted=%s accepted=%s, settings.global "
+              "reads %s" % (tag, wanted, accepted, value))
+        if accepted != "true":
+            fail.append("curveflip %s: the mod refused the remote call. Only the "
+                        "mod that DEFINED a runtime-global may write it, so "
+                        "without `set-curved-exits` on the interface there is no "
+                        "way to drive this at all" % tag)
+        if value != want:
+            fail.append("curveflip %s: settings.global['bbb-curved-exits'] reads "
+                        "%s and should read %s -- the write did not land, and "
+                        "every count below would then be measuring nothing"
+                        % (tag, value, want))
+
+    # The guest's own line, which is the only evidence that the flip reached the
+    # handler rather than merely changing a value nobody read.
+    rules = [m.groups() for m in (CURVERULE.search(l) for l in lines) if m]
+    if len(rules) != 2:
+        fail.append("the guest logged %d curved-exit flips and the observer made "
+                    "2: a flip that changed the setting and did not re-queue is "
+                    "a save that keeps its old classification until something "
+                    "else touches it" % len(rules))
+    for what, n in rules:
+        print("curve setting: the guest re-queued %s clusters (%s)" % (n, what))
+        if int(n) != WANT_CLUSTERS:
+            fail.append("a curved-exit flip re-queued %s clusters and the save "
+                        "holds %d: the flip has to offer every cluster the new "
+                        "rule, because it cannot know which ones a belt lies "
+                        "across" % (n, WANT_CLUSTERS))
+
+    # WHAT THE WHOLE BAND COST THE WORLD, counted after the last of the ordinary
+    # assertions has been made (tick 3560's audit) so that nothing above is
+    # included. Three lines, and each of them is one line.
+    start = 0
+    for i, raw in enumerate(lines):
+        if CURVEFLIP.search(raw) and "tag=off" in raw:
+            start = i
+            break
+    tail = lines[start:] if start else []
+    if not tail:
+        fail.append("the curve-setting band never ran")
+    else:
+        downs = [m.groups() for m in (TORNDOWN.search(l) for l in tail) if m]
+        spills = [m.groups() for m in (SPILLED.search(l) for l in tail) if m]
+        comps = [m.groups() for m in (COMPILED.search(l) for l in tail) if m]
+        print("curve setting: over both flips the guest tore down %d network(s), "
+              "spilled %d time(s) and compiled %d cluster(s)"
+              % (len(downs), len(spills), len(comps)))
+        # EXACTLY ONE OF EACH, and the reason each is one is different.
+        #
+        # ONE TEARDOWN because `curve` is the only cluster in the save whose edge
+        # list the rule moves; every other one skips on the fingerprint it never
+        # lost, which is what makes a whole-save re-queue affordable at all.
+        #
+        # ONE SPILL because the cluster it belonged to has no successor: a
+        # machine that no longer exists is a REMOVAL, and this mod's rule for a
+        # removal's items is that they go back to the world rather than into a
+        # network that is not there. A recompile reinserts; this is not one.
+        #
+        # ONE COMPILE, on the way back, and none on the way out.
+        if len(downs) != 1:
+            fail.append("the curve-setting band tore down %d networks and the "
+                        "rule moves exactly one cluster's edges (`curve`): every "
+                        "other cluster must skip on its fingerprint"
+                        % len(downs))
+        if len(spills) != 1:
+            fail.append("the curve-setting band spilled %d times, expected 1. "
+                        "The cluster that loses its only outputs has no successor "
+                        "to reinsert into, and no other cluster loses anything"
+                        % len(spills))
+        if len(comps) != 1:
+            fail.append("the curve-setting band compiled %d clusters and the "
+                        "rule coming back rebuilds exactly one" % len(comps))
+        if downs and spills and downs[0][1] != spills[0][0]:
+            fail.append("the teardown drained %s items and %s were spilled: a "
+                        "cluster with no successor spills what it drained, exactly"
+                        % (downs[0][1], spills[0][0]))
+        if downs and spills and downs[0][0] != spills[0][1]:
+            fail.append("cluster %s was torn down and cluster %s spilled -- the "
+                        "spill belongs to the teardown that produced it"
+                        % (downs[0][0], spills[0][1]))
+        if downs and int(downs[0][1]) == 0:
+            fail.append("the teardown drained nothing, so the spill it produced "
+                        "proves nothing about where a lost port's items go")
+
+    # THE AUDIT EITHER SIDE, and `nets` is the whole assertion.
+    #
+    # `unbuilt` must NOT move: a cluster with inputs and no outputs is a
+    # legitimate half-built state and is never counted, which is exactly why
+    # `nets` had to be written down beside it. `refused` must not move either --
+    # losing a port is not a refusal, and a refusal here would mean the rule had
+    # taken a belt away from one part and given it to another.
+    tagged = audits[-3:] if len(audits) >= 3 else []
+    if len(tagged) < 3:
+        fail.append("the curve-setting band needs the audit at tick 3560 and one "
+                    "after each flip, and only %d audits were logged in total"
+                    % len(audits))
+    else:
+        before, off, on = tagged
+        print("curve setting: audits (clusters, parts, nets, drift, unbuilt, "
+              "refused) %s -> %s -> %s" % (before, off, on))
+        if off != (WANT_CLUSTERS, WANT_PARTS, WANT_CLUSTERS - 1, 0, 0, 0):
+            fail.append("with the curve rule OFF the audit reads %s and should "
+                        "read %s: `curve`'s only outputs were corners, so it is "
+                        "one network short and nothing else moves -- and it is "
+                        "not `unbuilt`, because a cluster with no outputs is a "
+                        "half-built state rather than a decline"
+                        % (off, (WANT_CLUSTERS, WANT_PARTS, WANT_CLUSTERS - 1, 0, 0, 0)))
+        if on != (WANT_CLUSTERS, WANT_PARTS, WANT_CLUSTERS, 0, 0, 0):
+            fail.append("with the curve rule back ON the audit reads %s and "
+                        "should read %s: turning it on again has to rebuild the "
+                        "network turning it off took away"
+                        % (on, (WANT_CLUSTERS, WANT_PARTS, WANT_CLUSTERS, 0, 0, 0)))
+
+    # AND WHAT THE CHESTS SAY, which is the half no audit can make: a cluster
+    # can have a network and deliver nothing.
+    def window(rig, t0, t1):
+        if rig not in samples or t0 not in samples[rig] or t1 not in samples[rig]:
+            return None
+        a, b = samples[rig][t0], samples[rig][t1]
+        return [b[i] - a[i] for i in range(len(b))]
+
+    for tag, t0, t1 in (("off", OFF0, OFF1), ("on", ON0, ON1)):
+        cbelt = window("ctrl", t0, t1)
+        cur = window("curve", t0, t1)
+        other = window("sat4", t0, t1)
+        if cbelt is None or cur is None or other is None:
+            fail.append("the curve-setting band's %s window never reported" % tag)
+            continue
+        b = float(cbelt[0])
+        print("curve setting: over t=%d..%d with the rule %s, the corners "
+              "delivered %s (%.3fx, %.3fx of one belt), the control belt %d and "
+              "sat4 %.3fx"
+              % (t0, t1, tag, cur, cur[0] / b, cur[1] / b, cbelt[0],
+                 sum(other) / b))
+        # THE ANTI-VACUITY, and it is the same one `sload` has: a rig that
+        # stopped running would satisfy "the corners delivered nothing" for
+        # every wrong reason.
+        if not 3.92 <= sum(other) / b <= 4.08:
+            fail.append("sat4 delivered %.3f belts over the %s window and it is "
+                        "a 4->4: a save that is not running cannot say anything "
+                        "about what the flip did to one rig in it"
+                        % (sum(other) / b, tag))
+        if tag == "off":
+            # NOT ZERO, AND THE REASON IS NOT THE RULE. The interface is gone the
+            # tick the flush lands, and what was already standing on the two
+            # corner runs walks into the chests over the next few seconds.
+            # Measured at 16 and 19 items against a live port's ~300, so a
+            # sixth of a belt separates "draining out" from "still a port" by a
+            # factor of six in both directions.
+            for i, d in enumerate(cur):
+                if d / b > 0.15:
+                    fail.append("with the curve rule OFF, corner %d took %d "
+                                "items (%.3f of a belt) over %d ticks. A belt "
+                                "across a face is supposed to be nothing at all "
+                                "again; this is a port that is still running"
+                                % (i + 1, d, d / b, t1 - t0))
+        else:
+            total = sum(cur) / b
+            mean = sum(cur) / 2.0
+            spread = (max(cur) - min(cur)) / mean if mean else 1.0
+            if not 1.96 <= total <= 2.04:
+                fail.append("with the curve rule back ON, the two corners "
+                            "delivered %.3f belts and a 2->2 delivers 2.0 -- the "
+                            "network was rebuilt and is not carrying what it did "
+                            "before the flip" % total)
+            if spread > 0.01:
+                fail.append("with the curve rule back ON, the two corners spread "
+                            "%.2f%% (%s), over the 1%% bound every other rig here "
+                            "is held to" % (spread * 100, cur))
 
     # --- the timing block, which is an ASSERTION and not only a report --------
     #

@@ -1294,13 +1294,19 @@ var schedule = []harness.Step{
 	{Tick: 4020, Do: func() { report(4020) }},
 	{Tick: 4040, Do: func() { flipCurves(true, "on") }},
 	{Tick: 4050, Do: func() { auditNow(0) }},
-	{Tick: 4060, Do: func() { report(4060) }},
+	// THE ON WINDOW OPENS 210 TICKS AFTER THE REBUILD AND NOT BEHIND IT, which
+	// is the `plat` suite's rule for the same reason: a rebuild puts every
+	// drained item back at the HEAD of the butterfly, so the outputs are starved
+	// by construction until the pipeline refills. Measured at 20 ticks the two
+	// corners deliver 0.927x and 0.923x of a belt, which is a statement about the
+	// window rather than about the ports.
+	{Tick: 4260, Do: func() { report(4260) }},
 	// The per-lane sample again, on the window that follows the rule coming
 	// back: a corner that was rebuilt has to carry both lanes exactly as the one
 	// built at load did.
-	{Tick: 4200, Do: func() { sampleCurveLanes(4200) }},
-	{Tick: 4400, Do: func() { sampleCurveLanes(4400) }},
-	{Tick: 4460, Do: func() { report(4460) }},
+	{Tick: 4300, Do: func() { sampleCurveLanes(4300) }},
+	{Tick: 4500, Do: func() { sampleCurveLanes(4500) }},
+	{Tick: 4660, Do: func() { report(4660) }},
 }
 
 //go:wasmexport fk_on_init
