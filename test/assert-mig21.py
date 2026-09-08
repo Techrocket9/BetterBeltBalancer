@@ -112,6 +112,23 @@ REQUEUED = re.compile(
 GRANDFATHER = re.compile(r"\[BBB\] single-edge: kept multiple belts per part enabled")
 GFFAILED = re.compile(r"could not be written")
 FLIPPED = re.compile(r"\[BBB\] single-edge: multiple belts per part turned (ON|OFF)")
+# THE CURVED-EXIT PASS, WHICH MUST NOT SPEAK ON EITHER ARM OF THIS SUITE, and
+# `mig21` is the only place in the estate that can say so. Its fixtures are the
+# ONE genuinely pre-0.3.3 world this repository has -- written by a 2.0.77 binary
+# that is gone and by a guest that exported no `fk_state_version` -- so every
+# load of them is UNDECIDED about curved exits, which is precisely the state a
+# false positive would need. Neither fixture contains a belt across a balancer's
+# face, so no classification in either load may produce a curve edge and nothing
+# may be written.
+#
+# WHY THAT IS NOT OBVIOUS, and why it is asserted rather than assumed: on 2.1
+# the engine prunes all but one belt-connectable per tile before any script runs,
+# so the guest wakes into crippled machines whose classifications no longer match
+# what is standing. Reading one of those as a curve would turn the rule off for a
+# save that has nothing to do with it -- and it would do it in the same dispatch
+# as the multi-edge migration, whose count `recountEdgesPerTile` is what keeps
+# honest. Both arms assert it.
+CURVEANY = re.compile(r"\[BBB\] (?:alert: )?curved exits:")
 TORNDOWN = re.compile(r"\[BBB\] torn down cluster (\d+), returned (\d+) items")
 SPILLED = re.compile(r"\[BBB\] spilled (\d+) items beside cluster (\d+)")
 TOOKBACK = re.compile(r"\[BBB\] cluster (\d+) took back (\d+) items")
@@ -308,6 +325,21 @@ def check_chart_wall(text, tags):
                       "its own log line")
 
 
+def check_no_curve(text):
+    """No load of these fixtures may decide anything about curved exits.
+
+    See CURVEANY. Asserted on both arms because the fixtures are the same two
+    saves and the reason is the same on either engine: there is no belt across a
+    balancer's face in them, so nothing in either load can be read as evidence
+    about the rule -- and a `bbb-curved-exits = false` written here would turn a
+    feature off for a save that never met it.
+    """
+    check(not CURVEANY.search(text),
+          "the curved-exit pass spoke. These fixtures predate 0.3.3 so every load "
+          "of them is undecided about the rule, and neither of them contains a "
+          "belt across a balancer's face for the decision to be taken on")
+
+
 def grandfather_arm(text, want):
     """THE 2.0 ARM: the same save, on the engine that built it.
 
@@ -496,6 +528,7 @@ def grandfather_arm(text, want):
     check(not HANDEDBACK.search(text),
           "a piece was handed back to a player. There is no player in a headless "
           "run and nothing was placed in this one")
+    check_no_curve(text)
 
     # --- and the state is stable ---------------------------------------------
     audits = AUDIT.findall(text)
@@ -723,6 +756,7 @@ def main():
     check(not FLIPPED.search(text),
           "the setting-changed handler ran. Nothing can change a setting that this "
           "engine does not define")
+    check_no_curve(text)
 
     # --- and the state is stable ----------------------------------------------
     audits = AUDIT.findall(text)

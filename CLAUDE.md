@@ -1538,43 +1538,57 @@ and then **M2's entire assertion set is run over the result** -- 3.998x on `sat4
 
 ### `curv` -- `test/assert-curve.py`, a save from before the curved exit
 
-**The fifteenth suite, and the only world in the estate that is built to a rule the guest building it no longer has.** It is `upg`'s shape -- one guest creates the save and another loads it, through `bump_build` -- plus the one thing `upg` has no reason to do: `guest/go/obs/curv` builds three balancers with no perpendicular belt anywhere near them, forces the compile with an audit marker, and only THEN lays the belts the new rule would read as outputs, with `create_entity` and **no `raise_built`** so the mod is never told. That is `m3`'s `noev` idiom used to FORGE a save rather than to provoke a defect: a network compiled before those belts existed is byte for byte a network compiled before the rule existed.
+**The fifteenth suite, and the only world in the estate that is built to a rule the guest building it no longer has.** Two things make it that, and neither works alone. Its create phase runs a PRE-STATE build of the shipped guest -- `make prestate`, `-tags prestate`, whose `fk_state_version` reports 0 the way every build up to 0.3.2 did by not exporting it at all -- so the save carries the watermark of a world that predates the rule. And `guest/go/obs/curv` builds every balancer with no perpendicular belt anywhere near it, forces the compile with an audit marker, and only THEN lays the belts the new rule would read as outputs, with `create_entity` and **no `raise_built`** so the mod is never told. That is `m3`'s `noev` idiom used to FORGE a save rather than to provoke a defect: the prestate build's classifier is the shipped one, so a network compiled beside those belts would have taken them.
 
-Three rigs and a control belt, on a flat scratch surface. Each rig is a 1 -> 1; what differs is where the curve belt stands.
+Eight rigs and a control belt, over two surfaces and two forces. The first three are the shape the pass was written for; the next three are the shapes an adversarial review found it could not see, and each one is a perfectly ordinary thing for an old save to contain.
 
-| rig | the belt across a face | what the new rule would make of it |
+| rig | what it is | what the load must do with it |
 |---|---|---|
-| `A` | against a THIRD, EDGELESS part attached below the 1 -> 1 | an output: the balancer becomes 1 -> 2 and the port the player has HALVES |
-| `B` | against the part that already carries the spine's own output | two edges on one tile, which the single-edge rule forbids |
-| `C` | none at all | nothing. It must adopt exactly as it stood whatever happens to the other two |
+| `A` | a 1 -> 1 with a THIRD, EDGELESS part below it, and the curve belt against that part | adopt it whole. The new rule would make it 1 -> 2 and HALVE the port the player has |
+| `B` | the same belt against the part that already carries the spine's own output | adopt it whole. The new rule would put two edges on that tile, which the single-edge rule forbids |
+| `C` | no perpendicular belt anywhere | adopt it whole, exactly as it stood -- the control on the other seven |
+| `D` | HALF-BUILT: an input and no output, so the old rule gave it no network at all, and a belt line running past | leave it half-built. There is nothing standing for an adoption to compare, so the pass that compared could never have seen it |
+| `E` | an old-rule 1 -> 1 whose OUTPUT BELT was mined with no event, plus a curve belt | recompile it as an INPUT-ONLY cluster. The standing interfaces describe a belt that is gone, so no reading of the world is a bijection with them |
+| `F` | an old-rule 2-in/1-out over three parts with an extra INPUT laid with no event, and its curve belt on the tile that already carries the output | recompile it 2 -> 1. Under the new rule that tile carries two edges, so the machine is condemned AND the multi-edge grandfather speaks for a save with one belt on every part |
+| `G` | `A`'s shape on a SECOND FORCE | adopt it, and tell that force separately |
+| `H` | `A`'s shape on a SECOND SURFACE | adopt it |
 
-**Two legs, and the second is a different SAVE rather than a different observer.** `test/run.sh`'s `curve_setting_off` writes a `mod-settings.dat` through `tools/mod-settings.py` -- the first any suite has ever written, and the reason the curve rule's "every suite runs on the declared default" note now says *every other*. With the setting off from the first byte the curve arm produces no edge at all, so the adoption comparison matches on its FIRST reading and this pass never runs.
+**THREE LEGS, AND EACH MOVES ONE VARIABLE.** Measured 2026-09-07, Factorio 2.0.77, base only, 1,200 ticks; the control belt delivered **600** items over the window and every main is a 1 -> 1:
 
-Measured 2026-09-07, Factorio 2.0.77, base only, 1,200 ticks; the control belt delivered **600** items over the window:
+| | `kept` | `off` | `state1` |
+|---|---|---|---|
+| what created the save | the pre-state build | the pre-state build, with `bbb-curved-exits` written **false** into a `mod-settings.dat` before the map was made | **the shipped build** |
+| `fk_migrate` was handed state version | **0** | **0** | **1** |
+| the rebuild | 4 surfaces, 20 parts, **8 clusters, 5 adopted, 3 rebuilt** | identical | 8 clusters, **1 adopted, 7 rebuilt** |
+| balancers kept | **7** | **none: no curved-exit line anywhere** | none |
+| told | **force 1 about 6 with 6 pings charted 6; force 4 about 1 with 1 ping charted 1** | nothing | nothing |
+| `settings.global bbb-curved-exits` | `true` in the create, **`false`** at every sample after the load | `false` throughout | **`true`** throughout |
+| teardowns / spills / compiles | **2 / 1 (12 items) / 1** | identical | -- |
+| items on the ground at the end | **12**, which is the spill exactly | 12 | -- |
+| `A/B/C/F/G/H-main` | **600 items each, 1.000x one belt** | identical | -- |
+| every `*-curve` chest | **exactly 0** | exactly 0 | **300 300 600 600 300 300 300** |
+| the final audit | **`clusters=8 parts=20 nets=6 drift=0 unbuilt=0 refused=0`** | identical | -- |
 
-| | the `kept` leg | the `off` leg |
-|---|---|---|
-| the rebuild | **3 surfaces, 7 parts, 3 clusters, 3 adopted, 0 rebuilt** | identical |
-| the decision | `kept the old reading for this save -- 2 balancers`, once | **no curved-exit line anywhere** |
-| the message | **told force 1 about 2 balancers, 2 pings, charted 2** | none |
-| `settings.global bbb-curved-exits` | `true` in the create, **`false`** at every sample after the load | `false` throughout |
-| teardowns / spills / compiles | **0 / 0 / 0** | 0 / 0 / 0 |
-| `A-main`, `B-main`, `C-main` | **600 / 600 / 600 items, 1.000x one belt each** | identical |
-| `A-curve`, `B-curve` | **exactly 0** | exactly 0 |
-| the final audit | **`clusters=3 parts=7 nets=3 drift=0 unbuilt=0 refused=0`** | identical |
+**The three that are rebuilt are rebuilt because the WORLD changed under them and not because the rule did**, which is what the leg asserts rather than merely reports: D was never compiled at all, E's output belt is gone, F gained an input. The two of them that HAD a network pay a teardown, and only E spills -- its successor is input-only and cannot take its items back, where F's is a working 2 -> 1 and does. `nets` is 6 rather than 8 because D and E end with an input and no output, which is a legitimate half-built state and is never counted `unbuilt`, which is exactly why it is asserted beside it.
 
-**THE FRESH-WORLD NEGATIVE IS THE CREATE LOG AND COSTS NOTHING.** `bump_build` moves a version and a build stamp and not a line of code, so the create phase is this same guest building a world from nothing -- and a create that logged a curve-kept line would be one firing where there is no adopted network for an adoption to have failed at. The script asserts no such line and the setting reading `true`.
+**`off` IS THE SAME WORLD COMING OUT THE SAME WAY WITH NOTHING SAID ABOUT IT**, and that is a stronger negative than a quieter world would be: every teardown, every spill and every rate is identical, so what the leg isolates is the decision and nothing else. **`state1` is the same world again with only the watermark moved**, and its curve belts are ordinary outputs -- 300 on the halved 1 -> 2s, 600 where the main was already dead -- which is the correct answer for a save this build wrote and is what says the trigger is the version rather than the shape of the world.
 
-**36 items are seeded into the compiler's own entities before the save is written**, which is `mig21`'s trap met for `mig21`'s reason: a `--create` never reaches a tick, so without it every network in the save is empty and "the upgrade spilled nothing" is a vacuous zero.
+**THE FRESH-WORLD NEGATIVE IS THE CREATE LOG AND COSTS NOTHING.** The create phase builds a world from nothing, so a create that logged a curve-kept line would be one firing where there was no earlier rule for anything to have been built to. The script asserts no such line, the create audit as an exact tuple, and the setting reading what that leg staged.
 
-**And the flip handler's own line must be ABSENT**, which is a tooth the first passing run of this suite put there: see "A save from before the curve rule keeps the reading it was built to", where the guest's own write announced itself as a player's flip.
+**84 items are seeded into the compiler's own entities before the save is written, and the create log's own `inside` line reads 84 back**, which is `mig21`'s trap met for `mig21`'s reason and then made an identity: a `--create` never reaches a tick, so nothing can have moved between the seeding and the reading, and a run in which the two disagree is one where the seeding did not take.
 
-**Red-proven twice, and the two catch different halves.**
+**And the flip handler's own line must be ABSENT**, which is a tooth the first passing run of this suite put there; so must any `single-edge:` line at all, which is the tooth rig `F` put there.
+
+**Red-proven three times, and the three catch three different things.**
 
 | injected defect | what fired |
 |---|---|
-| **the curve-free retry disabled** in `inspectNetwork`, which is the guest before this pass | **eleven assertions**, and they are the spike's own table reproduced inside a suite: **1 of 3 adopted and 2 rebuilt**, **2 teardowns and one spill of 12 items** with 6 of them still on the ground at the end, `A-main` and `B-main` at **300 items, 0.500x one belt** against `C-main`'s 600, and `A-curve` and `B-curve` taking **300 each** -- a line the player never meant as an output carrying half their throughput. On 2.0 the run also carries `single-edge: kept multiple belts per part enabled for this save -- 1 balancers use it; settings.global bbb-multi-edge-parts = true`, with a ping at `[gps=1,12,bbb-curv]`: the OTHER rule's grandfather, fired by a curve, for a save that never used multiple belts per part |
-| **`edgemode.CurveKeepNeeded` stubbed to false**, so the decision is taken and never recorded | **four**, and the shape is the point: every number about the WORLD is right -- 3 adopted, 0 rebuilt, 0 teardowns, three mains at 1.000x, both curve chests at 0 -- and the save is not marked. The setting reads `true` at both samples and nobody was told, so the next load would find the same two clusters and do it all again. It is the half a rate cannot see |
+| **`fk_state_version` not exported** -- the `//go:wasmexport` line removed, so FkLua stores 0 for both builds | **the `state1` leg, five assertions**, led by *the save this leg loaded was stamped state version 0 and it has to be 1*: the load decides, the setting reads `false` at `t1` and at `final`, and every curve chest takes 0. **The `kept` and `off` legs stay green**, which is the point -- with no watermark every save looks old, and the leg that says so is the one whose save is new |
+| **the signature narrowed back to the bijection** -- `curveDecide` gated on the curve-free list being in one-to-one correspondence with what is standing, which is the pass as it shipped | **the `kept` leg, five assertions**, and they are the review's three shapes reproduced inside a suite. The guest keeps the old reading for **4** balancers rather than 7 and tells the forces about **[3, 1]** rather than [6, 1]; D is compiled 1 -> 1 onto its curve belt, E is torn down and recompiled onto its, and F is condemned and refused -- **3 teardowns, 2 spills of 24 items, 14 still on the ground**. And the log carries `single-edge: kept multiple belts per part enabled for this save -- 1 balancers use it; settings.global bbb-multi-edge-parts = true`, with a ping at F: the other rule's grandfather, fired by a curve, for a save that never used multiple belts per part |
+| **the per-tile recount dropped** -- the strip left in place and `recountEdgesPerTile` returning early, so the counts go on describing the reading WITH the curves | **the `kept` leg, three assertions.** Every rate and every ping is right -- 6 and 1 balancers told, all six mains at 1.000x, every curve chest at 0 -- and F is condemned anyway on a tile whose second edge the load has already decided not to see: **2 spills of 24 items where the rigs allow 1**, and `single-edge: kept multiple belts per part enabled for this save -- 2 balancers use it`. It is the half a rate cannot see, and it is what the settle order below is often mistaken for |
+
+**AND ONE INJECTION THAT DOES NOT FIRE, WHICH IS WORTH MORE THAN A FOURTH THAT DOES.** Reverting the settle order -- `settleEdgeMode` before `settleCurveMode` -- moves **not one number in the suite**, on either engine. The decision is taken inside `classifyEdges`, which is upstream of both settles, so by the time either runs there is no curve edge left for a multi-edge count to have seen. The order is kept because it reads in the direction the answers depend, and the comment in `flush()` says plainly that it is not what protects anything: `recountEdgesPerTile` is, and the row above is the proof of it.
+
 
 ### `plat` -- `test/assert-plat.py`, the only suite that needs Space Age
 
@@ -1746,6 +1760,8 @@ The eleventh suite, **the only one built to Factorio 2.1's rule and the only one
 **Both arms read back the hidden surface's per-force visibility since 0.3.2** (issue #1): every force reads `hidden=false` at `cfg` -- these fixtures predate the remote-view fix, which is the anti-vacuity control no other suite can stage -- and `hidden=true` at `final`, after the fresh-heap rebuild repaired it. See "The surface in the remote view".
 
 **Both arms' ping lists CHART what they point at**, and the suite carries the tripwire that says why that cannot be checked directly: `is_chunk_charted` reads false for everything on a headless run, nauvis's origin chunk included, because a force with no players has no chart. What is asserted is the guest's own `charted N` against the ping count, and zero-before-zero-after on the engine's side.
+
+**AND SINCE 2026-09-07 IT IS THE ESTATE'S ONLY GENUINELY PRE-0.3.3 WORLD, SO IT PINS THE CURVED-EXIT PASS'S OTHER NEGATIVE.** Its fixtures were written by a 2.0.77 binary that is gone and by a guest that exported no `fk_state_version`, so **every load of them is UNDECIDED about curved exits** -- which is exactly the state a false positive needs. Neither contains a belt across a balancer's face, so no classification in either load may produce a curve edge, and BOTH ARMS fail on any `curved exits:` line at all. It is not a formality on 2.1: the engine has pruned all but one belt-connectable per tile before any script runs, so the guest wakes into crippled machines whose classifications no longer match what is standing, and a curve read out of one of those would turn the rule off for a save that never met it -- in the same dispatch as the multi-edge migration whose count `recountEdgesPerTile` keeps honest.
 
 **And the negative is the half THAT engine exists to pin**: the grandfather write must never be attempted where the settings key does not exist, so the 2.1 arm fails on any grandfather line, any failed-write alert and any setting-changed line at all. Red-proven three times, each catching something different -- the condemnation disabled (eleven assertions, 652 hidden entities left standing over 2,320 stranded items, audit `nets=21 drift=21`), the summary suppressed (exactly two, everything else unmoved), and the announce check removed (exactly one, a migration announced with the ordinary "the extra piece was left in place" sentence). Full tables in [`agents/single-edge.md`](agents/single-edge.md)'s phase-2 status section.
 

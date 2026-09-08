@@ -120,6 +120,12 @@ FACTORIO="${FACTORIO_BIN:-$HOME/Library/Application Support/Steam/steamapps/comm
 MOD_NAME="$(sed -n 's/^name = "\(.*\)"$/\1/p' "$ROOT/fklua.toml")"
 MOD_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$ROOT/fklua.toml")"
 MOD_DIR="$ROOT/dist/${MOD_NAME}_${MOD_VERSION}"
+# THE PRE-STATE FIXTURE: the same mod built `-tags prestate`, whose
+# `fk_state_version` reports 0 the way every build before 0.3.3 did by not
+# exporting the hook at all. It is what makes the `curv` suite's create phase
+# write a save that predates the curve rule. `make prestate` builds it and
+# `make test` depends on it; only the curv arm below stages it.
+PRESTATE_DIR="$ROOT/dist/prestate/${MOD_NAME}_${MOD_VERSION}"
 
 [ -x "$FACTORIO" ] || { echo "factorio not found at: $FACTORIO (set FACTORIO_BIN)" >&2; exit 1; }
 [ -d "$MOD_DIR" ]  || { echo "no built mod at $MOD_DIR; run \`make mod\` first" >&2; exit 1; }
@@ -309,11 +315,19 @@ copy_testmod() {
 # with no dependency on Space Age, and quality-blind lookups are a base-plus-
 # quality defect class, so gating their coverage behind the DLC would be wrong
 # in both directions.
+# `STAGE_MOD_SRC` IS WHICH BUILD OF THIS MOD GETS STAGED, and exactly one arm
+# ever sets it: `curv`'s create phase needs the pre-state fixture rather than the
+# shipped package (PRESTATE_DIR above). It is a variable rather than a fifth
+# positional so that the fourteen call sites that do not care read as they always
+# did, and so that setting it wrong is a missing directory rather than a
+# mis-shifted argument.
 stage() {
   local work="$1" testmod="$2" dlc="${3:-false}" qual="${4:-${3:-false}}"
+  local src="${STAGE_MOD_SRC:-$MOD_DIR}"
+  [ -d "$src" ] || { echo "no mod to stage at $src" >&2; exit 1; }
   rm -rf "$work"
   mkdir -p "$work/mods"
-  cp -R "$MOD_DIR" "$work/mods/"
+  cp -R "$src" "$work/mods/"
   copy_testmod "$testmod" "$work/mods/$testmod"
   stamp_engine "$work/mods/$testmod"
   # The Space Age DLC mods ship inside the Factorio install's data/ directory,
@@ -403,6 +417,26 @@ bump_build() {
   grep -q 'build = "' "$f" || { echo "no build stamp in $f" >&2; exit 1; }
   perl -pi -e 's/build = "[^"]+"/build = "m3-upgrade-test"/' "$f"
   echo "==> mod version and guest build stamp bumped: this is an upgrade"
+}
+
+# swap_shipped <workdir> -- replace the pre-state fixture with the shipped mod,
+# at a bumped version, between the two phases.
+#
+# It is `bump_build` for a suite whose two phases are genuinely two BUILDS rather
+# than one build wearing two stamps. `curv`'s create phase runs the guest whose
+# `fk_state_version` reports 0, so the save it writes carries the watermark of
+# every build before 0.3.3; the load has to be the shipped guest or there is
+# nothing to notice it. The version bump is the same one `bump_build` makes and
+# for the same reason; the build STAMP needs no perl here because the two
+# packages really do carry different ones.
+swap_shipped() {
+  local old="$1/mods/${MOD_NAME}_${MOD_VERSION}"
+  local upgv="${MOD_VERSION%.*}.$(( ${MOD_VERSION##*.} + 1 ))"
+  local new="$1/mods/${MOD_NAME}_${upgv}"
+  rm -rf "$old"
+  cp -R "$MOD_DIR" "$new"
+  perl -pi -e 's/"version": "[^"]+"/"version": "'"$upgv"'"/' "$new/info.json"
+  echo "==> the pre-state guest was swapped for the shipped one at $upgv: this is the update that brought the curve rule"
 }
 
 # curve_setting_off <workdir> -- write a mod-settings.dat turning the curved-exit
@@ -901,11 +935,16 @@ for suite in $SUITES; do
       ;;
     curv)
       # A SAVE BUILT BEFORE THE CURVED EXIT, HANDED TO THE GUEST THAT HAS IT.
-      # `upg`'s shape -- one guest creates, another loads -- plus the one thing
-      # that suite has no reason to do: the observer lays the curve belts with
-      # NO EVENT after the audit has compiled the networks, so what the save
-      # carries is three networks the classifier would have built with the curve
-      # arm switched off. That is what a save from before 0.3.3 is.
+      # `upg`'s shape -- one guest creates, another loads -- with two things
+      # that suite has no reason to do. The create phase runs the PRE-STATE
+      # build, whose `fk_state_version` reports 0 like every build up to 0.3.2,
+      # so the save carries the watermark of a world that predates the rule; and
+      # the observer lays its curve belts with NO EVENT after the audit has
+      # compiled the networks, so what the save carries is balancers the
+      # classifier would have built with the curve arm switched off. Neither
+      # half is enough alone: the watermark without the world would decide over
+      # nothing, and the world without the watermark is a 0.3.3 save with some
+      # belts near it.
       #
       # ITS OWN SUITE RATHER THAN A SECOND OBSERVER INSIDE `upg`, and the reason
       # is readability rather than cost: a benchmark phase is a whole Factorio
@@ -914,23 +953,39 @@ for suite in $SUITES; do
       # assertion set over its own logs, which is a statement about the M2 world
       # and would have to be threaded around a second one.
       echo "=== curv: a save from before the curved exit keeps the reading it was built to ==="
-      stage "$TMP/curv" bbb-curv-test
-      BETWEEN=bump_build run "$TMP/curv" "${BBB_CURV_TICKS:-1200}"
+      STAGE_MOD_SRC="$PRESTATE_DIR" stage "$TMP/curv" bbb-curv-test
+      BETWEEN=swap_shipped run "$TMP/curv" "${BBB_CURV_TICKS:-1200}"
       unset BETWEEN
       echo "==> asserting the upgrade, the write and the fresh-world negative"
       python3 "$ROOT/test/assert-curve.py" "$TMP/curv/create.log" "$TMP/curv/run.log"
       # THE SECOND LEG IS THE SAME WORLD ON A SAVE ALREADY DECIDED. With the
       # setting off from the first byte the curve arm produces no edge at all,
-      # so the adoption comparison matches on its first reading and this pass
-      # never runs -- which is the negative that says it cannot fire twice.
+      # so the load reads a world with nothing in it to decide about -- which is
+      # the negative that says the pass cannot fire on a save that answered
+      # already, and that it does not announce a flip nobody made on the way
+      # past.
       echo "=== curv: ... and does nothing at all to a save that already decided ==="
-      stage "$TMP/curvoff" bbb-curv-test
+      STAGE_MOD_SRC="$PRESTATE_DIR" stage "$TMP/curvoff" bbb-curv-test
       curve_setting_off "$TMP/curvoff"
-      BETWEEN=bump_build run "$TMP/curvoff" "${BBB_CURV_TICKS:-1200}"
+      BETWEEN=swap_shipped run "$TMP/curvoff" "${BBB_CURV_TICKS:-1200}"
       unset BETWEEN
       echo "==> asserting that nothing happened"
       python3 "$ROOT/test/assert-curve.py" --leg off \
         "$TMP/curvoff/create.log" "$TMP/curvoff/run.log"
+      # AND THE THIRD LEG IS THE SAME WORLD ON A SAVE THIS BUILD WROTE. The
+      # SHIPPED guest creates it, so the watermark says 1 and the load is not
+      # undecided -- and the forged old-rule networks are then read the way a
+      # 0.3.3 save's must be: the curve belts are outputs, the balancers are
+      # rebuilt around them, and nothing is kept. It is the one leg that says
+      # the trigger is the version and not the shape of the world, and it costs
+      # a Factorio run to say it.
+      echo "=== curv: ... and a save this build wrote is not decided at all ==="
+      stage "$TMP/curv13" bbb-curv-test
+      BETWEEN=bump_build run "$TMP/curv13" "${BBB_CURV_TICKS:-1200}"
+      unset BETWEEN
+      echo "==> asserting that the watermark, and not the world, is the trigger"
+      python3 "$ROOT/test/assert-curve.py" --leg state1 \
+        "$TMP/curv13/create.log" "$TMP/curv13/run.log"
       ;;
     plat)
       echo "=== Space Age: a space platform surface, and belt stacking ==="

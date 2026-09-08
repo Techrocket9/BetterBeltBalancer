@@ -298,11 +298,19 @@ PRUNE_GIVEUP := was not a compile-time constant
 # scratch repackaging that has to be trusted to have been the same.
 MOD_REPORT   := $(DIST)/.fklua-mod.report.json
 
-# $(call fklua_mod,<extra flags>)
+# THE REPORT PATH IS THE THIRD PARAMETER AND IT DEFAULTS, because there are two
+# callers of this macro and only one of them is the mod that ships. The pre-state
+# fixture packages a second guest through the same recipe, so a single report path
+# would leave $(MOD_REPORT) describing the FIXTURE after any `make test`, which is
+# the "quoted from the build that shipped" property above lost silently. The log is
+# shared on purpose: it is grepped inside the macro, before the next call can
+# overwrite it.
+#
+# $(call fklua_mod,<wasm>,<extra flags>[,<report path>])
 define fklua_mod
 	@mkdir -p $(DIST)
-	@echo "$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) --report $(MOD_REPORT) $(1)"
-	@$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) --report $(MOD_REPORT) $(1) > $(PRUNE_LOG) 2>&1; \
+	@echo "$(FKLUA) mod $(1) --persist=$(PERSIST) $(FKLUA_GC) --report $(if $(3),$(3),$(MOD_REPORT)) $(2)"
+	@$(FKLUA) mod $(1) --persist=$(PERSIST) $(FKLUA_GC) --report $(if $(3),$(3),$(MOD_REPORT)) $(2) > $(PRUNE_LOG) 2>&1; \
 	  st=$$?; cat $(PRUNE_LOG); exit $$st
 	@if grep -q '$(PRUNE_GIVEUP)' $(PRUNE_LOG); then \
 	  echo ""; \
@@ -327,7 +335,7 @@ endef
 # `defines.direction` values went when `gen-bindings` started emitting an
 # accessor per define. See CLAUDE.md, "The layout check is gone".
 mod: $(WASM) $(DATA_WASM) $(DATA_SRC) fklua.toml
-	$(call fklua_mod,-o $(DIST))
+	$(call fklua_mod,$(WASM),-o $(DIST))
 	python3 test/check-sprites.py $(MOD_DIR)
 	python3 test/check-changelog.py $(MOD_DIR)/changelog.txt $(MOD_VERSION)
 	@echo "mod ready: $(MOD_DIR)"
@@ -351,7 +359,7 @@ $(PERSIST_STAMP):
 	@mkdir -p $(DIST) && rm -f $(DIST)/.persist-* $(MOD_DIR).zip && touch $@
 
 $(MOD_DIR).zip: $(WASM) $(DATA_WASM) $(DATA_SRC) fklua.toml $(PERSIST_STAMP) $(GC_STAMP)
-	$(call fklua_mod,--zip -o $(DIST))
+	$(call fklua_mod,$(WASM),--zip -o $(DIST))
 	@ls -l $(MOD_DIR).zip
 
 # The 47-variant sprite sheet and the icon, both computed rather than drawn.
@@ -385,9 +393,45 @@ interactive-install: $(OBS_IACT_DIR)
 	cp -R $(OBS_IACT_DIR) "$(MODS_DIR)/bbb-interactive-setup"
 	@echo "installed bbb-interactive-setup into $(MODS_DIR)"
 
+# --- the pre-state guest -----------------------------------------------------
+#
+# ONE SUITE NEEDS A SAVE THAT WAS WRITTEN BEFORE THIS GUEST EXISTED, and this is
+# the only way to get one out of a repository that has exactly one tree.
+#
+# `curv`'s two phases run the same package: test/run.sh makes an upgrade out of a
+# build stamp, not out of two checkouts. So with `fk_state_version` reporting 1
+# the created save would carry 1, the load would not be undecided, and the suite
+# would be measuring a save nobody can have. `-tags prestate` reports 0 instead
+# -- the number FkLua stores for a guest that does not export the hook at all --
+# and moves nothing else: same classifier, same compiler, same curve rule, which
+# is why the observer still has to forge its old-rule networks with no event.
+# guest/go/stateversion_prestate.go.
+#
+# A SECOND FULL GUEST BUILD AND A SECOND PACKAGE, both under $(DIST)/prestate so
+# that nothing can confuse one with the shipped mod. It is a test fixture: `make
+# test` builds it, `make mod` and `make zip` do not, and it is never installed.
+PRESTATE_WASM := $(DIST)/bbb-prestate.wasm
+PRESTATE_OUT  := $(DIST)/prestate
+# Its own report, so packaging the fixture cannot overwrite the shipped mod's.
+PRESTATE_REPORT := $(DIST)/.fklua-mod-prestate.report.json
+PRESTATE_DIR  := $(PRESTATE_OUT)/$(MOD_NAME)_$(MOD_VERSION)
+
+.PHONY: prestate
+prestate: $(PRESTATE_DIR)
+
+$(PRESTATE_WASM): $(GUEST_SRC) $(shell find guest/go/plan -name '*.go' -not -name '*_test.go') guest/go/fkapi/fkapi.go $(GC_STAMP)
+	@mkdir -p $(DIST)
+	cd guest/go && tinygo build $(TINYGO_FLAGS) -tags prestate -o ../../$(PRESTATE_WASM) .
+	@ls -l $(PRESTATE_WASM)
+
+$(PRESTATE_DIR): $(PRESTATE_WASM) $(DATA_WASM) $(DATA_SRC) fklua.toml Makefile
+	rm -rf $(PRESTATE_OUT)
+	$(call fklua_mod,$(PRESTATE_WASM),-o $(PRESTATE_OUT),$(PRESTATE_REPORT))
+	@echo "pre-state fixture ready: $(PRESTATE_DIR)"
+
 # --- test --------------------------------------------------------------------
 
-test: mod observers
+test: mod observers prestate
 	@# FKLUA travels beside FACTORIO_BIN for the reason `datastage-check` sends
 	@# it: one suite writes a mod-settings.dat and `fklua modsettings write` is
 	@# what writes it. Without this line a `make FKLUA=... test` would package

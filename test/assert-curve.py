@@ -1,34 +1,42 @@
 #!/usr/bin/env python3
-"""Assert that a save built before the curved exit keeps the reading it was built to.
+"""Assert what a save's own state version decides about the curved exit.
 
 The `curv` suite creates a world with one guest and loads it with another, the
-way `upg` does -- and its observer does the one thing `upg` has no reason to:
-after the audit marker has compiled every network into the save, it lays the
-belts the new rule would read as outputs with `create_entity` and NO
-`raise_built`, so the mod is never told. What the save carries is therefore
-three networks the classifier would have built with the curve arm switched off,
-in a world the curve arm has plenty to say about, which is what a save from
-before 0.3.3 is (CLAUDE.md, "A save from before the curve rule keeps the reading
-it was built to").
+way `upg` does, and adds the two things that suite has no reason to. The create
+phase runs the PRE-STATE build, whose `fk_state_version` reports 0 the way every
+build up to 0.3.2 did by not exporting it at all, so the save carries the
+watermark of a world that predates the rule. And the observer lays the belts the
+new rule would read as outputs with `create_entity` and NO `raise_built`, after
+the audit marker has compiled every network into the save, so what it carries is
+balancers the classifier would have built with the curve arm switched off.
 
-What the load must do with it: adopt every one of those networks on their
-curve-free reading, tear nothing down, spill nothing, write
-`bbb-curved-exits = false` for that save, and tell each owning force once with a
-ping per balancer.
+What the load must do with it: read every one of them under the rule the save
+was written to, tear down only what the world itself has changed, write
+`bbb-curved-exits = false`, and tell each owning force once with a ping per
+balancer (CLAUDE.md, "A save from before the curve rule keeps the reading it was
+built to").
 
     python3 test/assert-curve.py create.log run.log
-    python3 test/assert-curve.py --leg off create.log run.log
+    python3 test/assert-curve.py --leg off    create.log run.log
+    python3 test/assert-curve.py --leg state1 create.log run.log
 
-THE `off` LEG IS THE SAME WORLD ON A SAVE THAT WAS ALREADY DECIDED, staged by
-test/run.sh writing a mod-settings.dat. With the setting off the curve arm
-produces no edge at all, so the adoption comparison matches on its FIRST reading
-and this pass never runs -- which is the negative that says it cannot fire twice.
+THREE LEGS, AND EACH ONE MOVES ONE VARIABLE.
+
+`kept` is the pass. `off` is the same world on a save whose setting was already
+false before the map was made (test/run.sh's `curve_setting_off`): the curve arm
+produces no edge there, so the load has nothing to decide about and must say
+nothing -- and must not announce a flip nobody made on the way past.
+
+`state1` is the same world created by the SHIPPED guest, so the save is stamped
+1 and the load is not undecided at all. Its curve belts become outputs, its
+balancers are rebuilt around them, and nothing is kept. That is the correct
+answer for a 0.3.3 save and it is the leg that says the trigger is the WATERMARK
+and not the shape of the world: `kept` and `off` see `fk_migrate(0)` and this one
+sees `fk_migrate(1)` over a world that is otherwise identical.
 
 AND THE FRESH-WORLD NEGATIVE IS THE CREATE LOG, at no extra Factorio run. The
-create phase is this same guest building a world from nothing: `bump_build`
-moves a version and a build stamp and not a line of code, so a create that
-logged a curve-kept line would be one firing on a save with no adopted network
-at all.
+create phase builds a world from nothing, so a create that logged a curve-kept
+line would be one firing where no world was built to the old rule at all.
 """
 
 import argparse
@@ -50,6 +58,7 @@ TOLD = re.compile(
     r"a belt could turn as it left one, (\d+) pings(.*)$"
 )
 CHARTED = re.compile(r"charted (\d+)")
+PING = re.compile(r"first \[gps=(-?\d+),(-?\d+),(\S+?)\]")
 # Any line at all from the pass, for the two negatives.
 ANY_CURVE = re.compile(r"\[BBB\] (?:alert: )?curved exits:")
 # THE FLIP HANDLER'S OWN LINE, which must not appear at all. The write this pass
@@ -60,6 +69,14 @@ ANY_CURVE = re.compile(r"\[BBB\] (?:alert: )?curved exits:")
 # first passing run of this suite (CLAUDE.md, "A save from before the curve
 # rule").
 FLIPPED = re.compile(r"\[BBB\] curved exits: a belt across a balancer's face is")
+# THE OTHER RULE'S MIGRATION, WHICH MUST NEVER SPEAK HERE. A tile whose second
+# edge is a curve is not a tile carrying two belts in a save that is keeping the
+# old reading -- but a load that read the curve first saw one, condemned the
+# machine, and then had `settleEdgeMode` write `bbb-multi-edge-parts = true` and
+# tell the force it had kept multiple belts per part working, for a world with
+# one belt on every part. Rig F is that shape and this is the assertion that
+# catches it.
+SEDGE_ANY = re.compile(r"\[BBB\] (?:alert: )?single-edge:")
 
 TEARDOWN = re.compile(r"\[BBB\] torn down cluster")
 SPILL = re.compile(r"\[BBB\] spilled (\d+) items beside cluster")
@@ -78,17 +95,50 @@ SEEDED = re.compile(r"\[BBB-CURV\] seeded (\d+) items")
 # THE WORLD, WRITTEN DOWN HERE RATHER THAN READ OFF THE GUEST. `mar`'s own red
 # proof is why: an injected defect that halved a rig passed every assertion the
 # suite had, because every number it checked came from the same classification
-# it had broken. Three clusters -- A is three parts (a 1 -> 1 and the edgeless
-# spare the curve belt stands against), B and C are two each.
-CLUSTERS, PARTS = 3, 7
-# A and B. C has no perpendicular belt anywhere near it and must adopt on the
-# first reading like any ordinary save.
-LEGACY = 2
+# it had broken. Eight clusters over twenty parts, on two surfaces and two
+# forces: A and G are three parts (a 1 -> 1 and the edgeless spare the curve
+# belt stands against), F is three (a 2 -> 1 whose middle part is edgeless), H
+# is three on the second surface, and B, C, D and E are two each.
+CLUSTERS, PARTS = 8, 20
 
-# What a 1 -> 1 delivers against a bare express belt fed the same way. The M2
-# suite records 0.998x for this shape; the bound is loose on purpose, because a
+# Every rig with a belt across one of its faces: A, B, D, E, F, G, H. C has none
+# and must be read the same way whatever happens to the others.
+LEGACY = 7
+# ...split by owning force. G is the second force's and everything else is the
+# player's. The values are what each force is told about; the KEYS are not, and
+# are not asserted -- a force INDEX is the engine's to hand out.
+LEGACY_PER_FORCE = [6, 1]
+
+# WHAT THE WORLD ITSELF CHANGED, AND ONLY THAT. Five of the eight clusters are
+# exactly as the old rule compiled them and must be adopted whole. Three are not,
+# and none of them is the curve's doing:
+#   D  was never compiled at all -- an input and no output is a half-built state
+#   E  had its output belt mined with no event, so what stands describes a belt
+#      that is gone
+#   F  had an extra input laid with no event
+# So three rebuilds, and the two of them that HAD a network pay a teardown: E's
+# successor is input-only and cannot take its items back, so those spill; F's is
+# a working 2 -> 1 and takes them.
+WANT_ADOPTED, WANT_REBUILT = 5, 3
+WANT_TEARDOWNS, WANT_SPILLS = 2, 1
+
+# The final audit. `nets` is short of `clusters` by D and E, which end the run
+# with an input and no output -- a legitimate half-built state that is never
+# counted `unbuilt`, which is exactly why it is written down beside it.
+FINAL_AUDIT = (CLUSTERS, PARTS, 6, 0, 0, 0)
+# ...and at create, where the audit reports the registry as its own dispatch
+# finds it and that dispatch is what compiles: everything but D is still to be
+# built when it looks.
+CREATE_AUDIT = (CLUSTERS, PARTS, 0, 0, 7, 0)
+
+# What a balancer delivers against a bare express belt fed the same way. The M2
+# suite records 0.998x for a 1 -> 1; the bound is loose on purpose, because a
 # rate that has moved for the reason this suite is about does not move by 2%.
 RATE_LO, RATE_HI = 0.95, 1.02
+MAINS = ("A-main", "B-main", "C-main", "F-main", "G-main", "H-main")
+# Every belt the old rule read as nothing, and must go on reading as nothing.
+CURVES = ("A-curve", "B-curve", "D-curve", "E-curve", "F-curve", "G-curve",
+          "H-curve")
 
 
 def parse(paths):
@@ -109,6 +159,12 @@ def counts(lines, tag):
 
 
 def scalar(lines, rx, tag, group):
+    """The value at a named moment, or None if the line is not there at all.
+
+    A CHECK THAT SKIPS IS A CHECK THAT PASSED, which this repository has met
+    twice and which is why every caller below tests for None separately from
+    testing the value. `if ground:` read an absent line as a clean zero.
+    """
     for m in (rx.search(l) for l in lines):
         if m and m.group(1) == tag:
             return int(m.group(group))
@@ -124,10 +180,11 @@ def setting_at(lines, tag):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--leg", default="kept", choices=("kept", "off"))
+    ap.add_argument("--leg", default="kept", choices=("kept", "off", "state1"))
     ap.add_argument("logs", nargs=2)
     args = ap.parse_args()
     create, run = parse(args.logs)
+    leg = args.leg
     fail = []
 
     # ---------------------------------------------------------------- the world
@@ -136,24 +193,58 @@ def main():
         fail.append(
             "only %d items were seeded into the compiler's own entities; every "
             "'nothing was spilled' below would be a vacuous zero" % seeded)
-    print("  seeded %d items into the networks before the save was written" % seeded)
+    held = scalar(create, INSIDE, "create", 2)
+    if held is None:
+        fail.append("no inside-the-networks line in the create phase")
+    elif held != seeded:
+        fail.append(
+            "%d items were seeded and %d are standing in the compiler's entities "
+            "at the end of the create. A `--create` never reaches a tick, so "
+            "nothing can have moved between the two" % (seeded, held))
+    print("  seeded %d items into the networks, and %s are standing there when "
+          "the save is written" % (seeded, held))
 
-    # THE FRESH-WORLD NEGATIVE. The create phase is this guest building a world
-    # from nothing, so nothing can have been adopted and nothing may be kept.
+    got = [tuple(int(g) for g in m.groups())
+           for m in (AUDIT.search(l) for l in create) if m]
+    if not got:
+        fail.append("no audit in the create phase")
+    elif got[0] != CREATE_AUDIT:
+        fail.append("the create audit is %s and the rigs build %s"
+                    % (got[0], CREATE_AUDIT))
+
+    # THE FRESH-WORLD NEGATIVE. The create phase builds a world from nothing, so
+    # nothing in it was built to a rule it did not have.
     if [l for l in create if ANY_CURVE.search(l)]:
         fail.append("the create phase spoke about curved exits, and it builds a "
-                    "world from nothing: there is no adopted network for an "
-                    "adoption to have failed at")
-    want_create = "true" if args.leg == "kept" else "false"
+                    "world from nothing: there was no earlier rule for anything "
+                    "in it to have been built to")
+    want_create = "false" if leg == "off" else "true"
     if setting_at(create, "create") != want_create:
         fail.append("the setting read %r in the create phase and this leg leaves "
                     "it %s" % (setting_at(create, "create"), want_create))
     print("  create: no curved-exit line, and the setting reads %s" % want_create)
 
     # ------------------------------------------------------------- the rebuild
-    if not any(TOLD_MIGRATE.search(l) for l in run):
+    stamp = [int(m.group(1)) for m in (TOLD_MIGRATE.search(l) for l in run) if m]
+    if not stamp:
         fail.append("fk_migrate was never called: either the build stamp bump "
                     "did not take, or the guest stopped exporting the hook")
+    else:
+        # THE WHOLE TRIGGER, IN ONE NUMBER. 0 is what FkLua stores for a guest
+        # that does not export fk_state_version, which is every build up to
+        # 0.3.2 and which the pre-state fixture reproduces; 1 is this build.
+        want_stamp = 1 if leg == "state1" else 0
+        print("  fk_migrate was handed state version %d" % stamp[0])
+        if stamp[0] != want_stamp:
+            fail.append(
+                "the save this leg loaded was stamped state version %d and it "
+                "has to be %d. %s" % (stamp[0], want_stamp,
+                                      "The create phase ran the shipped guest "
+                                      "rather than the pre-state one"
+                                      if want_stamp == 0 else
+                                      "The create phase ran the pre-state guest "
+                                      "rather than the shipped one"))
+
     hits = [m for m in (REBUILT.search(l) for l in run) if m]
     if not hits:
         print("the guest never rebuilt its registry from the world; there is "
@@ -167,51 +258,80 @@ def main():
     if (clusters, parts) != (CLUSTERS, PARTS):
         fail.append("the rebuild found %d clusters of %d parts and the rigs "
                     "build %d of %d" % (clusters, parts, CLUSTERS, PARTS))
-    if rebuilt or adopted != clusters:
-        fail.append(
-            "%d of %d networks were adopted and %d rebuilt. Adopting is the "
-            "whole of this pass: a rebuilt cluster is one whose standing network "
-            "was thrown away and re-derived under the new rule, which is exactly "
-            "what a player must not find" % (adopted, clusters, rebuilt))
 
-    # ------------------------------------------------------------- the decision
+    if leg == "state1":
+        state1(create, run, fail)
+    else:
+        kept_leg(leg, run, adopted, rebuilt, fail)
+
+    if fail:
+        print("\nCURVE UPGRADE ASSERTIONS FAILED:")
+        for f in fail:
+            print("  " + f)
+        sys.exit(1)
+    print("\ncurve upgrade assertions passed")
+
+
+def kept_leg(leg, run, adopted, rebuilt, fail):
+    """The two legs whose save predates the rule: one to decide, one already decided."""
+    if (adopted, rebuilt) != (WANT_ADOPTED, WANT_REBUILT):
+        fail.append(
+            "%d networks were adopted and %d rebuilt, and the rigs are laid so "
+            "that %d must be adopted and %d rebuilt. A cluster rebuilt here is "
+            "one whose standing network was thrown away and re-derived under a "
+            "rule its world was not built to, which is exactly what a player "
+            "must not find -- and the three that ARE rebuilt are rebuilt because "
+            "the WORLD changed under them, not because the rule did"
+            % (adopted, rebuilt, WANT_ADOPTED, WANT_REBUILT))
+
     kept = [m for m in (KEPT.search(l) for l in run) if m]
     told = [m for m in (TOLD.search(l) for l in run) if m]
     if any(KEPT_FAILED.search(l) for l in run):
         fail.append("the setting could not be written; the guest said so and the "
                     "next load would classify these balancers with curves again")
-
     if [l for l in run if FLIPPED.search(l)]:
         fail.append("the flip handler announced a change nobody made. The only "
                     "write in this run is the guest's own, and a re-entrant "
                     "handler that acts on it re-queues the whole save from "
                     "inside the flush that is settling it")
+    if [l for l in run if SEDGE_ANY.search(l)]:
+        fail.append("the multi-edge migration spoke. Every part in this world "
+                    "carries one belt, and the only way a tile here reads as "
+                    "two is a curve edge the load should never have kept")
 
-    if args.leg == "kept":
+    if leg == "kept":
         if len(kept) != 1:
             fail.append("the guest kept the old reading %d times and it must do "
                         "it once, on the load that decides" % len(kept))
         elif int(kept[0].group(1)) != LEGACY:
             fail.append("the guest kept the old reading for %s balancers and the "
-                        "rigs build %d that were laid to it"
+                        "rigs build %d with a belt across a face"
                         % (kept[0].group(1), LEGACY))
-        if len(told) != 1:
-            fail.append("%d forces were told and one force owns every rig here"
-                        % len(told))
-        else:
-            f, n, pings, tail = told[0].groups()
-            ch = CHARTED.search(tail)
-            print("  told force %s about %s balancers, %s pings, charted %s"
-                  % (f, n, pings, ch.group(1) if ch else "?"))
-            if int(n) != LEGACY or int(pings) != LEGACY:
-                fail.append("force %s was told about %s balancers with %s pings "
-                            "and the rigs build %d: a checklist that names a "
-                            "machine and does not point at it is the scavenger "
-                            "hunt the pings exist to end" % (f, n, pings, LEGACY))
-            if not ch or int(ch.group(1)) != LEGACY:
-                fail.append("%s balancers were charted and %d were pinged; a "
+        per = []
+        for m in told:
+            f, n, pings, tail = m.groups()
+            ch, gps = CHARTED.search(tail), PING.search(tail)
+            print("  told force %s about %s balancers, %s pings, %s, charted %s"
+                  % (f, n, pings, gps.group(0) if gps else "no ping",
+                     ch.group(1) if ch else "?"))
+            if n != pings or not gps:
+                fail.append("force %s was told about %s balancers with %s pings: "
+                            "a checklist that names a machine and does not point "
+                            "at it is the scavenger hunt the pings exist to end"
+                            % (f, n, pings))
+            if not ch or ch.group(1) != pings:
+                fail.append("%s balancers were charted and %s were pinged; a "
                             "[gps=] at uncharted ground opens on black"
-                            % (ch.group(1) if ch else "no", LEGACY))
+                            % (ch.group(1) if ch else "no", pings))
+            per.append(int(n))
+        # THE ORDER IS ASSERTED AND NOT SORTED AWAY. Which force is told first,
+        # and which of its balancers the ping list names, come out of the
+        # rebuild's own cluster order -- and that order reaches every client, so
+        # a run in which it moved would be a run in which two peers were handed
+        # two different checklists.
+        if per != LEGACY_PER_FORCE:
+            fail.append("the forces were told about %s balancers, in that order, "
+                        "and the rigs put %s on them" % (per, LEGACY_PER_FORCE))
         for tag in ("t1", "final"):
             if setting_at(run, tag) != "false":
                 fail.append("settings.global bbb-curved-exits reads %r at %s and "
@@ -219,12 +339,12 @@ def main():
                             % (setting_at(run, tag), tag))
     else:
         # THE SAVE WAS DECIDED BEFORE IT WAS EVER LOADED, so there is nothing for
-        # this pass to find and nothing for it to say.
+        # this pass to find and nothing for it to say -- and the world comes out
+        # exactly as it does in the leg that decides, which is the point.
         if kept or told or [l for l in run if ANY_CURVE.search(l)]:
             fail.append("a save whose setting was already off was decided again: "
-                        "the curve arm cannot produce an edge there, so the "
-                        "adoption comparison should have matched on its first "
-                        "reading and this pass should never have run")
+                        "the curve arm cannot produce an edge there, so nothing "
+                        "in that load can have been read as evidence")
         for tag in ("t1", "final"):
             if setting_at(run, tag) != "false":
                 fail.append("the setting reads %r at %s and this leg staged it "
@@ -233,20 +353,26 @@ def main():
         print("  the already-decided save: no curved-exit line anywhere, setting "
               "still off")
 
-    # ------------------------------------------------ nothing moved in the world
+    # ------------------------------------------------ what moved in the world
     teardowns = sum(1 for l in run if TEARDOWN.search(l))
     spills = [int(m.group(1)) for m in (SPILL.search(l) for l in run) if m]
     compiles = sum(1 for l in run if COMPILED.search(l))
     print("  %d teardowns, %d spills (%d items), %d compiles"
           % (teardowns, len(spills), sum(spills), compiles))
-    if teardowns or spills:
-        fail.append("%d teardowns and %d spills of %d items. Adopting is what "
-                    "this pass is for: a save that keeps its own reading has "
-                    "nothing to tear down and nothing to put on the floor"
-                    % (teardowns, len(spills), sum(spills)))
+    if (teardowns, len(spills)) != (WANT_TEARDOWNS, WANT_SPILLS):
+        fail.append(
+            "%d teardowns and %d spills, and the rigs are laid for %d and %d. "
+            "Five of these eight clusters are exactly as the old rule compiled "
+            "them and must not be touched at all; the two teardowns are E, whose "
+            "output belt is gone, and F, which gained an input"
+            % (teardowns, len(spills), WANT_TEARDOWNS, WANT_SPILLS))
     ground = scalar(run, GROUND, "final", 2)
-    if ground:
-        fail.append("%d items are on the ground at the end of the run" % ground)
+    if ground is None:
+        fail.append("no ground-items line at the end of the run")
+    elif ground != sum(spills):
+        fail.append("%d items are on the ground at the end of the run and %d were "
+                    "spilled: the only items that may reach the floor here are "
+                    "the ones E's teardown could not hand back" % (ground, sum(spills)))
 
     # ------------------------------------------------------------- the balancers
     for tag in ("t1", "t2"):
@@ -260,21 +386,27 @@ def main():
                         "every ratio below would be measured against nothing"
                         % ctrl)
         else:
-            for name in ("A-main", "B-main", "C-main"):
-                got = b.get(name, 0) - a.get(name, 0)
-                r = got / ctrl
-                print("  %-7s %5d items, %.3fx one belt" % (name, got, r))
+            for name in MAINS:
+                delivered = b.get(name, 0) - a.get(name, 0)
+                r = delivered / ctrl
+                print("  %-7s %5d items, %.3fx one belt" % (name, delivered, r))
                 if not RATE_LO <= r <= RATE_HI:
                     fail.append("%s delivered %d items against the control's "
-                                "%d, %.3fx one belt" % (name, got, ctrl, r))
-            for name in ("A-curve", "B-curve"):
-                got = b.get(name, 0) - a.get(name, 0)
-                print("  %-7s %5d items" % (name, got))
-                if got:
+                                "%d, %.3fx one belt" % (name, delivered, ctrl, r))
+            # E's OUTPUT BELT WAS MINED, so its chest is fed by nothing and stays
+            # at zero. That is what says the recompile left it an INPUT-ONLY
+            # cluster rather than joining it to the belt running past.
+            if b.get("E-main") != 0:
+                fail.append("E-main took %s items and its output belt was mined "
+                            "before the save was written" % b.get("E-main"))
+            for name in CURVES:
+                delivered = b.get(name, 0) - a.get(name, 0)
+                print("  %-7s %5d items" % (name, delivered))
+                if delivered:
                     fail.append(
                         "%s took %d items. That line is a belt the old rule read "
                         "as nothing, and a save that kept the old rule must go "
-                        "on reading it as nothing" % (name, got))
+                        "on reading it as nothing" % (name, delivered))
 
     # ---------------------------------------------------------------- the audit
     audits = [m for m in (AUDIT.search(l) for l in run) if m]
@@ -282,21 +414,42 @@ def main():
         fail.append("no audit in the benchmark phase")
     else:
         got = tuple(int(g) for g in audits[-1].groups())
-        want = (CLUSTERS, PARTS, CLUSTERS, 0, 0, 0)
         print("  final audit: clusters=%d parts=%d nets=%d drift=%d unbuilt=%d "
               "refused=%d" % got)
-        if got != want:
+        if got != FINAL_AUDIT:
             fail.append("the final audit is %s and the rigs build %s. `nets` is "
-                        "asserted beside `unbuilt` because a cluster with no "
-                        "outputs is a half-built state and is never counted "
-                        "unbuilt" % (got, want))
+                        "asserted beside `unbuilt` because a cluster with an "
+                        "input and no output is a half-built state and is never "
+                        "counted unbuilt" % (got, FINAL_AUDIT))
 
-    if fail:
-        print("\nCURVE UPGRADE ASSERTIONS FAILED:")
-        for f in fail:
-            print("  " + f)
-        sys.exit(1)
-    print("\ncurve upgrade assertions passed")
+
+def state1(create, run, fail):
+    """The save this build wrote: no decision, and the curve belts are outputs."""
+    if [l for l in run if ANY_CURVE.search(l)]:
+        fail.append("the load decided something about curved exits on a save "
+                    "this build wrote. Its standing networks ARE the curve-on "
+                    "reading; there is nothing in it to keep")
+    for tag in ("create", "t1", "final"):
+        lines = create if tag == "create" else run
+        if setting_at(lines, tag) != "true":
+            fail.append("the setting reads %r at %s and nothing in this leg may "
+                        "write it" % (setting_at(lines, tag), tag))
+    # AND THE BELTS ARE READ AS OUTPUTS, which is the half that says the leg is
+    # not passing because the world is inert. The world is the same forged world
+    # as the other two legs; what differs is the watermark, and under this one
+    # every curve belt is a port.
+    a, b = counts(run, "t1"), counts(run, "t2")
+    if not a or not b:
+        fail.append("no chest counts to say whether the curve belts were read as "
+                    "outputs")
+        return
+    took = {n: b.get(n, 0) - a.get(n, 0) for n in CURVES}
+    print("  the curve chests took %s" % took)
+    if not any(v > 0 for v in took.values()):
+        fail.append(
+            "not one curve belt delivered anything. On a save stamped with this "
+            "build's own state version they are ordinary outputs, so a run in "
+            "which they carry nothing is one where the world was never built")
 
 
 if __name__ == "__main__":

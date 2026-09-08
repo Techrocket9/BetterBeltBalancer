@@ -5,27 +5,31 @@
 // HOW A SAVE FROM BEFORE 0.3.3 IS BUILT BY A GUEST FROM AFTER IT
 // ---------------------------------------------------------------------------
 //
-// The `upg` suite already creates a save with one guest and loads it with
-// another (test/run.sh, bump_build), and that is half of what this needs. The
-// other half is a world whose STANDING NETWORKS were compiled under the old
-// reading, and the same source cannot build one under the new rule -- except by
-// the one route `m3`'s `noev` rig established: place the curve belts with
-// `create_entity` and NO `raise_built`, so the mod is never told and never
-// re-classifies.
+// Two halves, and neither works alone.
 //
-// So `fk_on_init` builds three balancers with no perpendicular belt anywhere
-// near them, forces the compile with an audit marker, and only THEN lays the
-// belts that the new rule would read as outputs. What is written into the save
-// is three networks the classifier would have built with the curve arm switched
-// off, in a world the curve arm has plenty to say about -- which is exactly a
-// save made before the feature existed, and is what `guest/go/curveupg.go` is
-// looking for.
+// The WATERMARK is test/run.sh's: the create phase runs a guest built
+// `-tags prestate`, whose `fk_state_version` reports 0 the way every build up to
+// 0.3.2 did by not exporting it at all, and the benchmark phase runs the shipped
+// one. So the save carries the stamp a pre-curve save carries.
+//
+// The WORLD is this file's, and the prestate build does not help with it: its
+// classifier is the shipped one, so a balancer compiled beside a curve-eligible
+// belt would take that belt as an output. What is needed is a network compiled
+// BEFORE those belts existed, which is `m3`'s `noev` idiom used to forge rather
+// than to provoke -- `create_entity` with no `raise_built`, so the mod is never
+// told and never re-classifies. So `fk_on_init` builds every balancer with no
+// perpendicular belt anywhere near it, forces the compile with an audit marker,
+// and only THEN lays the belts.
 //
 // ---------------------------------------------------------------------------
 // THE RIGS
 // ---------------------------------------------------------------------------
 //
-// Every belt in them is legal, inert and unremarkable under the OLD rule:
+// Every belt in them is legal, inert and unremarkable under the OLD rule. The
+// first three are the shape the pass was written for; the next three are the
+// shapes an adversarial review found it could not see, each a perfectly ordinary
+// thing for an old save to contain and each one that used to be recompiled under
+// the new rule as though it had been built to it (guest/go/curveupg.go).
 //
 //	A  a 1 -> 1 with a THIRD, EDGELESS part below it, and a belt line whose head
 //	   stands on that part's free south face running EAST across it. Old rule:
@@ -35,11 +39,26 @@
 //	   OUTPUT and the balancer is 1 -> 2, at half the rate on the port the
 //	   player has.
 //	B  the same belt against a part that ALREADY carries its one belt -- the
-//	   east output of a 1 -> 1. Old rule: inert again. New rule: that tile
-//	   carries two edges, which the single-edge rule forbids, so the standing
-//	   network is condemned and the balancer stops.
+//	   east output of a 1 -> 1. New rule: that tile carries two edges, which the
+//	   single-edge rule forbids, so the standing network is condemned.
 //	C  the control: a 1 -> 1 with no perpendicular belt anywhere near it. It
-//	   must adopt exactly as it stood whatever happens to the other two.
+//	   must adopt exactly as it stood whatever happens to the others.
+//	D  HALF-BUILT: two parts with an input and no output, so the old rule gave
+//	   them no network at all, and a belt line running past. There is nothing
+//	   standing for an adoption to compare, so the pass that compared could never
+//	   have seen this one.
+//	E  an old-rule 1 -> 1 whose OUTPUT BELT was mined while the mod was
+//	   uninstalled -- destroyed with no event, like the curve belts. The standing
+//	   interfaces describe a belt that is gone, so no reading of the world is a
+//	   bijection with them.
+//	F  an old-rule 2-in/1-out over THREE parts with one extra INPUT laid while
+//	   the mod was uninstalled, and its curve belt on the tile that already
+//	   carries the output. Neither reading matches; under the new rule that tile
+//	   carries two edges, so the machine is condemned AND the multi-edge
+//	   grandfather speaks for a save with one belt on every part.
+//	G  A's shape on a SECOND FORCE, which is what says the checklist is per force
+//	   rather than per save.
+//	H  A's shape on a SECOND SURFACE.
 //
 // plus `ctrl`, a bare express belt from the same kind of source to the same
 // kind of sink, which is the yardstick every rate here is read against.
@@ -62,9 +81,15 @@ const (
 	belt   = "express-transport-belt"
 	loader = protos.CurvLoader
 	surf   = "bbb-curv"
+	// The second surface, which exists so that the rebuild's walk has to reach
+	// past the one every other rig is on.
+	surfB = "bbb-curv-b"
+	// The second force, for the same reason one level across: the checklist is
+	// one message per owning force and a one-force save cannot say so.
+	forceB = "bbb-curv-force"
 )
 
-var dirE uint32
+var dirE, dirS uint32
 
 // The chests, in the order they are reported. A rig registry holds TILES rather
 // than handles: what it keeps has to go on being true across the save between
@@ -72,26 +97,38 @@ var dirE uint32
 var (
 	chests    []harness.XY
 	chestName []string
+	chestSurf []string
 )
 
 func init() {
 	fkapi.Subscribe(fkapi.EventOnTick)
 	dirE = fkapi.DefinesDirectionEast()
+	dirS = fkapi.DefinesDirectionSouth()
 }
 
 func flat() fkapi.LuaSurface {
 	return harness.Flat{
 		Name: surf, MapWidth: 256, MapHeight: 256,
-		ChunkCenter: fkapi.MapPosition{X: 0, Y: 24},
+		ChunkCenter: fkapi.MapPosition{X: 0, Y: 32},
 		ChunkRadius: 4,
-		X0:          -10, Y0: -4, X1: 12, Y1: 44,
+		X0:          -10, Y0: -4, X1: 12, Y1: 62,
+		Tile: "grass-1",
+	}.Make()
+}
+
+func flatB() fkapi.LuaSurface {
+	return harness.Flat{
+		Name: surfB, MapWidth: 256, MapHeight: 256,
+		ChunkCenter: fkapi.MapPosition{X: 0, Y: 0},
+		ChunkRadius: 2,
+		X0:          -10, Y0: -4, X1: 12, Y1: 8,
 		Tile: "grass-1",
 	}.Make()
 }
 
 // put is one piece the mod is TOLD about.
 func put(s fkapi.LuaSurface, name string, x, y int, dir *uint32, typ string) {
-	harness.Place(s, harness.Piece{Name: name, X: x, Y: y, Dir: dir, Type: typ, Raise: true})
+	harness.Place(s, harness.Piece{Name: name, X: x, Y: y, Dir: dir, Type: typ, Raise: true, Force: rigForce})
 }
 
 // silent is one piece the mod is NOT told about: `create_entity` with no
@@ -102,10 +139,16 @@ func put(s fkapi.LuaSurface, name string, x, y int, dir *uint32, typ string) {
 // so the standing network goes on describing the world as it was. Here that is
 // not a defect being provoked but a save being FORGED -- a network compiled
 // before these belts existed is byte for byte a network compiled before the rule
-// existed.
+// existed. `E`'s mined output belt is the same act with the sign reversed.
 func silent(s fkapi.LuaSurface, name string, x, y int, dir *uint32) {
-	harness.Place(s, harness.Piece{Name: name, X: x, Y: y, Dir: dir})
+	harness.Place(s, harness.Piece{Name: name, X: x, Y: y, Dir: dir, Force: rigForce})
 }
+
+// rigForce is which force the rig currently being laid belongs to. Every piece
+// of a rig has to be on one force or the belts are not edges of the parts: the
+// engine filters the edge query by the CLUSTER's force, so a player-force belt
+// beside a second force's part is invisible to it by design.
+var rigForce string
 
 func beltsX(s fkapi.LuaSurface, from, to, y int, raise bool) {
 	step := 1
@@ -125,27 +168,28 @@ func beltsX(s fkapi.LuaSurface, from, to, y int, raise bool) {
 }
 
 func source(s fkapi.LuaSurface, x, y int) {
-	c := harness.Place(s, harness.Piece{Name: "infinity-chest", X: x, Y: y})
+	c := harness.Place(s, harness.Piece{Name: "infinity-chest", X: x, Y: y, Force: rigForce})
 	harness.InfinityFilter(c, "iron-plate", "", 1000)
 	put(s, loader, x+1, y, &dirE, "output")
 }
 
-func sink(s fkapi.LuaSurface, name string, x, y int) {
+func sink(s fkapi.LuaSurface, sname, name string, x, y int) {
 	put(s, loader, x, y, &dirE, "input")
-	harness.Place(s, harness.Piece{Name: "steel-chest", X: x + 1, Y: y})
+	harness.Place(s, harness.Piece{Name: "steel-chest", X: x + 1, Y: y, Force: rigForce})
 	chests = append(chests, harness.XY{X: x + 1, Y: y})
 	chestName = append(chestName, name)
+	chestSurf = append(chestSurf, sname)
 }
 
 // The straight 1 -> 1 every rig is built around: a source feeding part (0,base)
 // from the west and part (1,base) draining east into a chest.
-func spine(s fkapi.LuaSurface, name string, base int) {
+func spine(s fkapi.LuaSurface, sname, name string, base int) {
 	put(s, part, 0, base, nil, "")
 	put(s, part, 1, base, nil, "")
 	source(s, -5, base)
 	beltsX(s, -3, -1, base, true)
 	beltsX(s, 2, 4, base, true)
-	sink(s, name, 5, base)
+	sink(s, sname, name, 5, base)
 }
 
 // ctrl is the yardstick: the same source and the same sink with a plain belt run
@@ -153,54 +197,124 @@ func spine(s fkapi.LuaSurface, name string, base int) {
 func ctrl(s fkapi.LuaSurface, base int) {
 	source(s, -5, base)
 	beltsX(s, -3, 4, base, true)
-	sink(s, "ctrl", 5, base)
+	sink(s, surf, "ctrl", 5, base)
 }
 
 const (
 	baseA    = 0
-	baseB    = 12
-	baseC    = 24
-	baseCtrl = 32
+	baseB    = 8
+	baseC    = 16
+	baseD    = 24
+	baseE    = 32
+	baseF    = 40
+	baseG    = 48
+	baseCtrl = 56
+	baseH    = 0 // on surfB, which holds nothing else
 )
 
 // spines lays everything the mod is told about. It runs BEFORE the audit, so the
 // networks compiled into the save know nothing of the belts below.
-func spines(s fkapi.LuaSurface) {
-	spine(s, "A-main", baseA)
+func spines(s, b fkapi.LuaSurface) {
+	rigForce = harness.PlayerForce
+	spine(s, surf, "A-main", baseA)
 	// A's third part, edgeless: the tile the curve belt will stand against.
 	put(s, part, 0, baseA+1, nil, "")
-	spine(s, "B-main", baseB)
-	spine(s, "C-main", baseC)
+	spine(s, surf, "B-main", baseB)
+	spine(s, surf, "C-main", baseC)
+
+	// D, the HALF-BUILT one: an input and no output at all, so the old rule
+	// compiled no network and there is nothing standing for anything to compare.
+	put(s, part, 0, baseD, nil, "")
+	put(s, part, 1, baseD, nil, "")
+	source(s, -5, baseD)
+	beltsX(s, -3, -1, baseD, true)
+
+	// E, whose output belt is mined below. Ordinary until then.
+	spine(s, surf, "E-main", baseE)
+
+	// F, three parts, one in and one out, with the middle part left edgeless so
+	// that the extra input laid below has somewhere legal to land.
+	put(s, part, 0, baseF, nil, "")
+	put(s, part, 1, baseF, nil, "")
+	put(s, part, 2, baseF, nil, "")
+	source(s, -5, baseF)
+	beltsX(s, -3, -1, baseF, true)
+	beltsX(s, 3, 5, baseF, true)
+	sink(s, surf, "F-main", 6, baseF)
+
+	// G, A's shape on a second force. Every piece of it, the source and the sink
+	// included -- see rigForce.
+	harness.CreateForce(forceB)
+	rigForce = forceB
+	spine(s, surf, "G-main", baseG)
+	put(s, part, 0, baseG+1, nil, "")
+	rigForce = harness.PlayerForce
+
 	ctrl(s, baseCtrl)
+
+	// H, A's shape on a second surface.
+	spine(b, surfB, "H-main", baseH)
+	put(b, part, 0, baseH+1, nil, "")
 }
 
-// curves lays the belts the OLD rule had nothing to say about, with no event.
+// curves lays the belts the OLD rule had nothing to say about, with no event --
+// and mines the one belt E is about, the same way.
 //
-// A's head stands on (0, baseA+2), the south face of the spare part at
-// (0, baseA+1). B's stands on (1, baseB+1), the south face of the part whose
-// east face already holds the spine's output. Both tiles the curve rule reads
-// are kept clear by the layout rather than by luck: the REAR of each head and
-// the far perpendicular tile are never built on.
-func curves(s fkapi.LuaSurface) {
+// Every head's two probe tiles are kept clear by the layout rather than by luck:
+// `curvesFromCluster` reads the head's REAR and the tile beyond it on the far
+// perpendicular side, and nothing in this world is ever built on either.
+func curves(s, b fkapi.LuaSurface) {
+	rigForce = harness.PlayerForce
 	beltsX(s, 0, 4, baseA+2, false)
-	sink(s, "A-curve", 5, baseA+2)
+	sink(s, surf, "A-curve", 5, baseA+2)
 	beltsX(s, 1, 4, baseB+1, false)
-	sink(s, "B-curve", 5, baseB+1)
+	sink(s, surf, "B-curve", 5, baseB+1)
+	beltsX(s, 1, 4, baseD+1, false)
+	sink(s, surf, "D-curve", 5, baseD+1)
+
+	// E: the output belt goes, with no event, and the curve belt arrives.
+	if o, ok := harness.FindOnTile(s, belt, 2, baseE); ok {
+		harness.Destroy(o, false)
+	} else {
+		out.Open("could not find E's output belt to mine").End()
+	}
+	beltsX(s, 1, 4, baseE+1, false)
+	sink(s, surf, "E-curve", 5, baseE+1)
+
+	// F: an extra input on the middle part's north face, and the curve belt on
+	// the tile that already carries the output.
+	silent(s, belt, 1, baseF-1, &dirS)
+	beltsX(s, 2, 5, baseF+1, false)
+	sink(s, surf, "F-curve", 6, baseF+1)
+
+	rigForce = forceB
+	beltsX(s, 0, 4, baseG+2, false)
+	sink(s, surf, "G-curve", 5, baseG+2)
+	rigForce = harness.PlayerForce
+
+	beltsX(b, 0, 4, baseH+2, false)
+	sink(b, surfB, "H-curve", 5, baseH+2)
 }
 
 //go:wasmexport fk_on_init
 func onInit() {
 	s := flat()
-	spines(s)
+	b := flatB()
+	spines(s, b)
 	// The synchronous drain: `--create` never reaches a tick, so without this
 	// every network in the save would be compiled on the first tick of the
 	// benchmark instead of into the save -- and this one has to be compiled
 	// before the belts below exist, which is the whole point.
-	harness.Audit(s, 8, 40)
-	curves(s)
+	harness.Audit(s, 8, 58)
+	curves(s, b)
 	out.Open("built rigs and then laid the curve belts with no event").End()
-	report("create")
+	// SEEDED BEFORE THE REPORT, so that the create log's `inside` line is the
+	// seeding read back out of the world rather than the zero that precedes it.
+	// That is what makes the count an identity a run can be held to -- a
+	// `--create` never reaches a tick, so nothing has moved between the two --
+	// and the assertion script compares them.
 	seed()
+	report("create")
 }
 
 // ours is everything this mod's compiler places: the hidden network proper and
@@ -320,26 +434,40 @@ func inside() (int64, int64) {
 
 // report is one line per chest plus the ground total, the setting and what is
 // standing inside the networks, at a named moment.
+//
+// THE GROUND IS COUNTED OVER BOTH SURFACES, which is what makes its total a
+// conserved quantity again: a rig on the second surface that spilled would
+// otherwise be counted nowhere.
 func report(tag string) {
 	out.Open("setting t=").S(tag).S(" value=").S(settingValue()).End()
-	s, ok := harness.SurfaceIfAny(surf)
-	if !ok {
+	s, okA := harness.SurfaceIfAny(surf)
+	b, okB := harness.SurfaceIfAny(surfB)
+	if !okA || !okB {
 		out.Open("no surface at ").S(tag).End()
 		return
 	}
 	for i := range chests {
-		n := harness.ChestCount(s, "steel-chest", chests[i].X, chests[i].Y)
+		on := s
+		if chestSurf[i] == surfB {
+			on = b
+		}
+		n := harness.ChestCount(on, "steel-chest", chests[i].X, chests[i].Y)
 		out.Open("chest t=").S(tag).S(" ").S(chestName[i]).S(" n=").I(n).End()
 	}
-	ground := int64(0)
-	stacks := 0
-	for _, o := range harness.EntitiesInOfType(s, harness.Box(-12, -6, 14, 46), "item-entity") {
+	ground, stacks := int64(0), int64(0)
+	for _, o := range harness.EntitiesInOfType(s, harness.Box(-12, -6, 14, 64), "item-entity") {
 		if _, c, ok := harness.GroundStack(o); ok {
 			ground += c
 			stacks++
 		}
 	}
-	out.Open("ground t=").S(tag).S(" items=").I(ground).S(" stacks=").I(int64(stacks)).End()
+	for _, o := range harness.EntitiesInOfType(b, harness.Box(-12, -6, 14, 10), "item-entity") {
+		if _, c, ok := harness.GroundStack(o); ok {
+			ground += c
+			stacks++
+		}
+	}
+	out.Open("ground t=").S(tag).S(" items=").I(ground).S(" stacks=").I(stacks).End()
 	held, ents := inside()
 	out.Open("inside t=").S(tag).S(" items=").I(held).S(" ents=").I(ents).End()
 }
@@ -353,7 +481,7 @@ var schedule = []harness.Step{
 	{Tick: 1140, Do: func() {
 		if s, ok := harness.SurfaceIfAny(surf); ok {
 			out.Open("final audit follows").End()
-			harness.Audit(s, 8, 40)
+			harness.Audit(s, 8, 58)
 		}
 	}},
 	{Tick: 1180, Do: func() { report("final") }},
