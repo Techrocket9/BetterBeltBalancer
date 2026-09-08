@@ -128,6 +128,23 @@ const (
 // definition is guest/go/data/settings.go, behind the `bbb-can-stack` gate.
 const SettingMultiEdgeParts = "bbb-multi-edge-parts"
 
+// SettingCurvedExits is the OTHER hand-rolled setting, and it is named here for
+// SettingMultiEdgeParts' reason: the prototype the settings stage emits and the
+// locale file have to agree, and this is where a `go test` can see both.
+//
+// THE CONTROL GUEST READS IT TOO AND CANNOT IMPORT THIS PACKAGE, so its copy is
+// a literal in guest/go/curve.go, exactly as `bbb-multi-edge-parts`' is in
+// sedge.go. The reason is the FkRecipes import above: linking this package into
+// the control guest links the data stage's emit layer with it, and the build
+// dies on a duplicate wasm export. curve.go's header is the long form.
+//
+// It is a runtime-global bool defaulting to TRUE, defined on BOTH engines --
+// what a belt across a balancer's face means is this mod's decision rather than
+// a fact about the engine. FkRecipes declares no runtime-global of any kind, so
+// like the bool above it is hand-rolled in guest/go/data/settings.go and its
+// policy lives in guest/go/curve.go.
+const SettingCurvedExits = "bbb-curved-exits"
+
 // ModName is the name fklua.toml packages this mod under, and it is the prefix
 // FkRecipes derives every generated name from.
 //
@@ -148,7 +165,7 @@ const ModName = "better-belt-balancer"
 // one. What it stops is `bbb-multi-edge-parts`' own `[mod-setting-name]` line
 // being reported as an entry matching no declared setting.
 func HandRolledSettings() []string {
-	return []string{SettingMultiEdgeParts}
+	return []string{SettingMultiEdgeParts, SettingCurvedExits}
 }
 
 // Item is one entry of a PLAN: a ladder of candidate names, most preferred

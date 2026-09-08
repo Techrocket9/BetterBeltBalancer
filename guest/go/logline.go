@@ -116,6 +116,16 @@ func logAlertStart(s string) {
 
 func logS(s string) { lineLen += copy(lineBuf[lineLen:], s) }
 
+// logB writes a setting's value the way a player reads it back. Both string
+// constants are in `.rodata`, so this allocates nothing and is a branch.
+func logB(v bool) {
+	if v {
+		logS("true")
+		return
+	}
+	logS("false")
+}
+
 func logU(v uint32) {
 	i := len(lineDigits)
 	for {

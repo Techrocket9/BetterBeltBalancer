@@ -794,7 +794,7 @@ for suite in $SUITES; do
     m2)
       echo "=== M2: compiled network balance ==="
       stage "$TMP/m2" bbb-m2-test
-      run "$TMP/m2" "${BBB_M2_TICKS:-3600}"
+      run "$TMP/m2" "${BBB_M2_TICKS:-4500}"
       echo "==> asserting network behaviour"
       python3 "$ROOT/test/assert-m2.py" "$TMP/m2/create.log" "$TMP/m2/run.log"
       ;;
@@ -820,7 +820,7 @@ for suite in $SUITES; do
       # network were mis-adopted, its rig would not balance.
       echo "=== M3: a mod upgrade -- the guest heap is discarded mid-save ==="
       stage "$TMP/upg" bbb-m2-test
-      BETWEEN=bump_build run "$TMP/upg" "${BBB_M2_TICKS:-3600}"
+      BETWEEN=bump_build run "$TMP/upg" "${BBB_M2_TICKS:-4500}"
       unset BETWEEN
       echo "==> asserting the rebuild, then M2's own numbers over it"
       python3 "$ROOT/test/assert-upgrade.py" "$TMP/upg/create.log" "$TMP/upg/run.log"

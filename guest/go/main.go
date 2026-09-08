@@ -224,13 +224,13 @@ func init() {
 	// surface does not exist yet. See lifecycle.go, onForceCreated.
 	fkapi.Subscribe(fkapi.EventOnForceCreated)
 
-	// THE ONE SETTING THIS MOD HAS, and the only subscription here that cannot
-	// fire on the engine trunk targets: `bbb-multi-edge-parts` is defined by the
-	// settings stage on Factorio 2.0.x and never on 2.1.x, so on 2.1 this is a
-	// subscription to a change that cannot happen. It is subscribed
-	// unconditionally all the same, because the alternative is a subscription list
-	// that branches on the engine -- and the mod-data tree is deliberately
-	// identical on both release branches (fklua.toml).
+	// THE TWO RUNTIME-GLOBAL SETTINGS THIS MOD HAS. `bbb-curved-exits` is defined
+	// on both engines; `bbb-multi-edge-parts` is defined on Factorio 2.0.x and
+	// never on 2.1.x, so half of what this subscription carries cannot fire on
+	// the engine trunk targets. It is subscribed unconditionally either way,
+	// because the alternative is a subscription list that branches on the engine
+	// -- and the mod-data tree is deliberately identical on both release branches
+	// (fklua.toml).
 	//
 	// NO FILTER EXISTS FOR IT. `runtime-api.json` gives a `filter` concept to 30
 	// events and this is not one of them, so it arrives whenever ANY mod's runtime
@@ -257,6 +257,7 @@ func onInit() {
 	// pays for adopts the networks this one just built rather than rebuilding
 	// them.
 	edgeModeRecheck()
+	curveRecheck()
 	// A NEW SAVE'S REGISTRY IS EMPTY AND THEREFORE IN AGREEMENT WITH ANY RULE, so
 	// this is where the anchor starts. Without it a first flip of the setting
 	// would arrive on ModeUnknown and act -- which on an empty registry is a
@@ -297,6 +298,7 @@ func onConfigurationChanged() {
 	// and every multi-edge cluster in the save has to be refused rather than
 	// compiled. Free on every other load: sedge.go's answer is one point query.
 	edgeModeRecheck()
+	curveRecheck()
 	ensureRegistry()
 	legacyRecheck(legTrigConfig)
 }
@@ -326,6 +328,7 @@ func onMigrate(oldVersion uint32) {
 	logS("); the heap is fresh and the registry comes from the world")
 	logEnd()
 	edgeModeRecheck()
+	curveRecheck()
 	ensureRegistry()
 	// A fresh heap knows nothing about a migration it may already have done, so
 	// the decision is taken again from the world. It is cheap and it is correct:
@@ -459,8 +462,15 @@ func onEventBody(id, ptr uint32) {
 		// the decoder copied out of the host before this guest was entered. That
 		// copy is the one cost, it is a keypress rather than a tick, and there is
 		// no cheaper form: a name is the only thing that identifies which setting
-		// moved. See sedge.go for what happens when it is ours.
-		onEdgeModeSettingChanged(fkapi.ReadOnRuntimeModSettingChanged(ptr).Setting)
+		// moved. See sedge.go and curve.go for what happens when it is ours.
+		//
+		// TWO HANDLERS AND NOT A DISPATCHER: this mod defines two runtime-global
+		// settings and each file owns its own. Both compare the name against
+		// theirs and return, which is two string compares on a keypress and is
+		// what keeps sedge.go from having to know a rule that is not about it.
+		name := fkapi.ReadOnRuntimeModSettingChanged(ptr).Setting
+		onEdgeModeSettingChanged(name)
+		onCurvedExitsSettingChanged(name)
 		return
 	}
 

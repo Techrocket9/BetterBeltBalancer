@@ -1010,6 +1010,81 @@ func sampleCurveLanes(tick uint64) {
 }
 
 // ---------------------------------------------------------------------------
+// the curve setting, turned off and on again over a running save
+// ---------------------------------------------------------------------------
+//
+// `bbb-curved-exits` is the runtime-global bool behind the curve rule
+// (guest/go/curve.go). It is the FIRST setting of this mod's that a suite can
+// drive on the engine trunk targets -- `bbb-multi-edge-parts` exists on 2.0
+// alone -- and this band is what says a flip really re-classifies a standing
+// save rather than only taking effect on the next thing somebody builds.
+//
+// THE WRITE IS A `remote.call` AND NOT AN ASSIGNMENT, and that is the engine's
+// rule rather than a preference: Factorio refuses `settings.global[k] = v` from
+// anybody but the mod that made the setting -- "Settings can only be changed by
+// the owning player or the mod that made the setting" -- and a runtime-global
+// has no owning player. So the mod opens a door (`set-curved-exits`) and this
+// observer walks through it, which is the same argument `bbb-audit` has and the
+// same one the `flip` suite makes on the other engine.
+//
+// THE STATUS IS READ RATHER THAN THE CALL BEING MADE BARE. A bare `remote.call`
+// on a missing interface RAISES, which from inside `on_tick` would abort the
+// whole schedule; `fkapi.RemoteCall` hands the same refusal back as a Status, so
+// a mod that had not opened the door reads as `accepted=false` and the run
+// reaches the assertion that says so.
+const (
+	modName         = "better-belt-balancer"
+	curveMethod     = "set-curved-exits"
+	curveSetting    = "bbb-curved-exits"
+	settingValueKey = "value"
+)
+
+// curveSettingValue is `settings.global["bbb-curved-exits"].value` as the string
+// the log line carries.
+//
+// REPORTED RATHER THAN ASSUMED, because every assertion in this band rests on
+// the flip having landed: a run in which the write silently did nothing would
+// satisfy "the curve outputs stopped delivering" for any number of other
+// reasons. It is the shipped guest's own idiom -- the raw LuaCustomTable handle
+// plus one index read, two host calls, against a whole-dictionary attribute that
+// would materialise every runtime setting in the game.
+func curveSettingValue() string {
+	raw, err := fkapi.Settings.GlobalRaw()
+	if err != nil {
+		return "absent"
+	}
+	v, err := fkapi.LuaCustomTable{Object: raw}.Get(fkapi.OfString(curveSetting))
+	if err != nil || v.Tag != fkapi.TagMap {
+		return "absent"
+	}
+	for i := range v.Map {
+		if v.Map[i].Key.Tag != fkapi.TagString || v.Map[i].Key.Str != settingValueKey {
+			continue
+		}
+		if v.Map[i].Val.Tag == fkapi.TagBool && v.Map[i].Val.Bool {
+			return "true"
+		}
+		return "false"
+	}
+	return "absent"
+}
+
+func flipCurves(on bool, tag string) {
+	v, st := fkapi.RemoteCall(modName, curveMethod, fkapi.OfBool(on))
+	accepted := st == fkapi.StatusOK && v.Tag == fkapi.TagBool && v.Bool
+	out.Open("curveflip tag=").S(tag).S(" wanted=").S(boolStr(on)).
+		S(" accepted=").S(boolStr(accepted)).
+		S(" value=").S(curveSettingValue()).End()
+}
+
+func boolStr(v bool) string {
+	if v {
+		return "true"
+	}
+	return "false"
+}
+
+// ---------------------------------------------------------------------------
 // the schedule
 // ---------------------------------------------------------------------------
 
@@ -1200,6 +1275,32 @@ var schedule = []harness.Step{
 	// face is the reason this audit is worth taking: a classifier that decided
 	// it WAS an edge would have rebuilt that network and reported the drift.
 	{Tick: 3560, Do: func() { auditNow(0) }},
+
+	// --- the curve setting, off and then on again ---------------------------
+	//
+	// AFTER EVERYTHING ELSE HAS REPORTED, so that no number above this line is
+	// taken over a save whose classification rule has moved. Every rig in the
+	// table keeps the figures it has always been recorded with.
+	//
+	// The audit two ticks after each flip is what makes the re-classification
+	// observable: the handler queues and asks for the next tick's flush, so the
+	// world has settled by then, and the marker's own dispatch reports the
+	// registry as it now stands. Each flip is then bracketed by a report pair
+	// 400 ticks apart -- long enough that a port delivering at all shows up as
+	// hundreds of items rather than as a rounding difference.
+	{Tick: 3600, Do: func() { flipCurves(false, "off") }},
+	{Tick: 3610, Do: func() { auditNow(0) }},
+	{Tick: 3620, Do: func() { report(3620) }},
+	{Tick: 4020, Do: func() { report(4020) }},
+	{Tick: 4040, Do: func() { flipCurves(true, "on") }},
+	{Tick: 4050, Do: func() { auditNow(0) }},
+	{Tick: 4060, Do: func() { report(4060) }},
+	// The per-lane sample again, on the window that follows the rule coming
+	// back: a corner that was rebuilt has to carry both lanes exactly as the one
+	// built at load did.
+	{Tick: 4200, Do: func() { sampleCurveLanes(4200) }},
+	{Tick: 4400, Do: func() { sampleCurveLanes(4400) }},
+	{Tick: 4460, Do: func() { report(4460) }},
 }
 
 //go:wasmexport fk_on_init

@@ -73,12 +73,6 @@ const StackMarkerName = "bbb-can-stack"
 // settings.lua's header is the rest of the argument.
 const MultiEdgeSetting = "bbb-multi-edge-parts"
 
-// A ModSetting is a table with one entry, so the policy is read as
-// `settings.global[name].value` and written as `settings.global[name] =
-// {value = v}` -- the whole table, never the field. There is no index-assign for
-// a field of a value inside a custom table and there does not need to be.
-const settingValueKey = "value"
-
 // The locale keys, in mod-data/locale/en/better-belt-balancer.cfg -- the same
 // pair shape the port limit has, and for the same reason: a player whose piece
 // comes back and a robot whose piece stands are told different things.
@@ -222,40 +216,25 @@ func stackMarkerPresent() bool {
 // WRITE has to be gated, and it is gated on the capability marker rather than on
 // this, because writing an undefined key raises.
 //
-// `settings.global` is a LuaCustomTable, so this is the `prototypes.entity`
-// idiom again: the raw handle plus one index read, two host calls, against a
-// whole-dictionary attribute that would materialise every runtime setting in the
-// game. The handle is taken fresh every time -- no reference outlives its
-// dispatch, which is this guest's oldest rule -- and the whole call happens once
-// per heap behind multiEdgeAllowed's cache.
+// The read itself is globalsetting.go's, shared with `bbb-curved-exits`; what
+// is this function's own is the third state. ABSENT IS KEPT DISTINCT FROM OFF
+// because the fold needs it: `GrandfatherNeeded` may write an Off and may never
+// write an Absent. The whole call happens once per heap behind
+// multiEdgeAllowed's cache.
 func settingMultiEdge() edgemode.Setting {
-	raw, err := fkapi.Settings.GlobalRaw()
-	if err != nil {
+	on, present := readGlobalBool(MultiEdgeSetting)
+	switch {
+	case !present:
 		return edgemode.SettingAbsent
+	case on:
+		return edgemode.SettingOn
 	}
-	v, err := fkapi.LuaCustomTable{Object: raw}.Get(fkapi.OfString(MultiEdgeSetting))
-	if err != nil || v.Tag != fkapi.TagMap {
-		return edgemode.SettingAbsent
-	}
-	for i := range v.Map {
-		if v.Map[i].Key.Tag != fkapi.TagString || v.Map[i].Key.Str != settingValueKey {
-			continue
-		}
-		if v.Map[i].Val.Tag == fkapi.TagBool && v.Map[i].Val.Bool {
-			return edgemode.SettingOn
-		}
-		return edgemode.SettingOff
-	}
-	return edgemode.SettingAbsent
+	return edgemode.SettingOff
 }
 
-// settingKV is the one-entry ModSetting table the write hands over, package
-// level so that flipping the setting allocates nothing.
-var settingKV [1]fkapi.KeyValue
-
 // writeMultiEdgeSetting is `settings.global["bbb-multi-edge-parts"] = {value =
-// on}`, and it is the only write this mod makes to anything outside its own
-// entities.
+// on}`, one of the two writes this mod makes to anything outside its own
+// entities. The other is curve.go's, to its own setting.
 //
 // THE CAPABILITY GATE IS A CORRECTNESS GATE. Writing a `settings.global` key
 // that this engine does not define RAISES -- measured on 2.1.14,
@@ -265,22 +244,12 @@ var settingKV [1]fkapi.KeyValue
 // belt-and-braces here costs one cached compare and buys the guarantee that no
 // future caller can reach the raise by forgetting.
 //
-// It is expressible at all only since FkLua grew an index-assign member kind
-// (FKLUA-GAPS.md item 23): the runtime API declares no write side on
-// `LuaCustomTable`'s index operator, so the binding is emitted from an allowlist
-// over what the description says in prose.
+// The write itself is globalsetting.go's; this function is the gate.
 func writeMultiEdgeSetting(on bool) bool {
 	if !stackCapable() {
 		return false
 	}
-	raw, err := fkapi.Settings.GlobalRaw()
-	if err != nil {
-		return false
-	}
-	settingKV[0] = fkapi.KeyValue{Key: fkapi.OfString(settingValueKey), Val: fkapi.OfBool(on)}
-	err = fkapi.LuaCustomTable{Object: raw}.Set(fkapi.OfString(MultiEdgeSetting),
-		fkapi.Value{Tag: fkapi.TagMap, Map: settingKV[:]})
-	return err == nil
+	return writeGlobalBool(MultiEdgeSetting, on)
 }
 
 // edgeAnchorSettle records what the registry has just been reconciled to.

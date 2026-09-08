@@ -34,7 +34,8 @@ import (
 //	against the complete set of the mod's setting names rather than against the
 //	two this package knows about, which is what catches an entry left behind by
 //	a rename. The hand-rolled list is what makes that reading available, and
-//	[HandRolledSettings] is why `bbb-multi-edge-parts` is not reported as one.
+//	[HandRolledSettings] is why the two hand-rolled bools are not reported
+//	as ones.
 //
 //	It checks that every declared setting has a `[mod-setting-name]` at all.
 //
@@ -222,18 +223,30 @@ func TestEverySettingThisPlanDeclaresIsDescribed(t *testing.T) {
 	}
 }
 
-// TestTheHandRolledSettingIsNamed is the second, and it is the other side of
-// what the hand-rolled list buys.
+// TestTheHandRolledSettingsAreNamedAndDescribed is the second, and it is the
+// other side of what the hand-rolled list buys.
 //
-// Telling `CheckLocaleWith` about `bbb-multi-edge-parts` stops it reporting
-// that entry as an orphan, and it deliberately creates no obligation in return:
-// the library knows the name and nothing else, so it never demands an entry for
-// it. This mod knows it is a setting a 2.0 player sees in the Map tab, so it
-// demands one here.
-func TestTheHandRolledSettingIsNamed(t *testing.T) {
-	if strings.TrimSpace(localeSections(t)["mod-setting-name"][SettingMultiEdgeParts]) == "" {
-		t.Errorf("no [mod-setting-name] %s: the settings menu shows the raw key",
-			SettingMultiEdgeParts)
+// Telling `CheckLocaleWith` about the two hand-rolled settings stops their
+// entries being reported as orphans, and it deliberately creates no obligation
+// in return: the library knows the names and nothing else, so it never demands
+// an entry for either. This mod knows they are rows a player sees in the Map
+// tab, so it demands both halves here -- the label, without which the menu shows
+// the raw key, and the tooltip, which is where each of them says what turning it
+// off costs. Neither is guessable from the label.
+//
+// IT WALKS THE LIST RATHER THAN NAMING THE SETTINGS, so a third hand-rolled
+// setting is covered by declaring it.
+func TestTheHandRolledSettingsAreNamedAndDescribed(t *testing.T) {
+	sec := localeSections(t)
+	for _, name := range HandRolledSettings() {
+		if strings.TrimSpace(sec["mod-setting-name"][name]) == "" {
+			t.Errorf("no [mod-setting-name] %s: the settings menu shows the raw key",
+				name)
+		}
+		if strings.TrimSpace(sec["mod-setting-description"][name]) == "" {
+			t.Errorf("no [mod-setting-description] %s: the settings menu shows "+
+				"the label with no tooltip under it", name)
+		}
 	}
 }
 
@@ -261,7 +274,8 @@ func TestTheGrandfatherMessageQuotesTheRealMenuLabel(t *testing.T) {
 	}
 	label := sec["mod-setting-name"][SettingMultiEdgeParts]
 	if strings.TrimSpace(label) == "" {
-		// TestTheHandRolledSettingIsNamed reports the absence itself.
+		// TestTheHandRolledSettingsAreNamedAndDescribed reports the
+		// absence itself.
 		return
 	}
 

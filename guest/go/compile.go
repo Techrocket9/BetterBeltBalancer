@@ -634,7 +634,12 @@ func classifySide(surf fkapi.LuaSurface, si uint32, tx, ty int32, dir uint32) (o
 			curveDir, curve = d, true
 		}
 	}
-	if curve && curvesFromCluster(surf, si, tx, ty, dir, curveDir) {
+	// THE POLICY IS ASKED BEFORE THE PROBE AND NOT INSIDE IT. `curvesFromCluster`
+	// makes two `find_entities_filtered` calls, and a save that has turned the
+	// rule off has to pay what this guest paid before the rule existed -- which
+	// the `mar` suite's leg H measures. `curvedExitsAllowed` is one integer
+	// compare after the first call of each heap; see curve.go.
+	if curve && curvedExitsAllowed() && curvesFromCluster(surf, si, tx, ty, dir, curveDir) {
 		return true, true
 	}
 	return false, false
@@ -758,6 +763,12 @@ func classifyStraight(e fkapi.LuaEntity, t string, d, dir, back uint32) (out boo
 // this recompile when a player edits one of them. main.go's nearCluster walks
 // Chebyshev distance 2 around the event; B is 1 from the cluster tile, its rear
 // is 1 (diagonally) and its far tile is 2. Nothing widens.
+//
+// THE WHOLE RULE IS BEHIND `bbb-curved-exits`, which is on by default and which
+// a player turns off to get 0.3.2's reading back: a belt across a face is then
+// nothing at all again. The caller asks the policy before it calls this, so with
+// the rule off neither probe is made. guest/go/curve.go is why the setting
+// exists.
 func curvesFromCluster(surf fkapi.LuaSurface, si uint32, bx, by int32, dir, d uint32) bool {
 	rear, ok := dirIndex(plan.Opposite(d))
 	if !ok {

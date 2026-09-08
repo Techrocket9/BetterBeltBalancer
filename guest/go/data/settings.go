@@ -5,8 +5,8 @@ import (
 	"github.com/Techrocket9/fklua/guest/go/fkdata"
 )
 
-// THE SETTINGS STAGE. Three settings: two costs on every engine, and one
-// engine-gated rule.
+// THE SETTINGS STAGE. Four settings: two costs and one classification rule on
+// every engine, and one engine-gated rule.
 //
 // ---------------------------------------------------------------------------
 // THE TWO COST SETTINGS ARE DECLARED THROUGH FkRecipes SINCE 2026-09-01, and
@@ -143,18 +143,44 @@ import (
 // (measured, along with `feature_flags`), which is what makes the question
 // answerable here at all.
 //
-// ON A 2.1 ENGINE THE BOOL IS NOT EMITTED AT ALL, and `test/check-datastage.py`
-// pins that from the other side: trunk's mod-settings dump carries the two
-// startup dropdowns and no `runtime-global` entry. It used to be `{}` -- this
-// function emitted nothing whatever on 2.1 -- and the two cost settings are why
-// it is not any more. The early `return` is still the same early `return` the
-// Lua had; what moved is that there are now two settings in front of it.
+// ON A 2.1 ENGINE THE MULTI-EDGE BOOL IS NOT EMITTED AT ALL, and
+// `test/check-datastage.py` pins that from the other side: trunk's mod-settings
+// dump carries the two startup dropdowns and ONE runtime-global -- the
+// curved-exit rule -- where the 2.0 arm carries two. It used to be `{}`, this
+// function emitting nothing whatever on 2.1, and the cost settings are why it is
+// not any more. The early `return` is still the same early `return` the Lua had;
+// what moved is what is in front of it.
 //
 //go:noinline
 func settings() {
 	// The two cost dropdowns are already out: main.go's fk_settings hook calls
-	// `EmitSettings` before this function. What is left here is the one setting
-	// FkRecipes has no verb for.
+	// `EmitSettings` before this function. What is left here are the two settings
+	// FkRecipes has no verb for -- both runtime-global, which the library emits
+	// nothing but startup.
+
+	// THE CURVED-EXIT RULE, and it is emitted BEFORE the engine gate rather than
+	// after it. What a belt across a balancer's face means is a decision this mod
+	// takes and not a fact about what the engine permits, so unlike the bool
+	// below it exists on 2.1 as well -- and on that engine this function returns
+	// two lines down.
+	//
+	// DEFAULT TRUE, so that the rule is on for everybody who does not go looking.
+	// A player whose existing factory it changes -- a belt line that merely
+	// started beside a part is that part's output now -- is who turns it off, and
+	// guest/go/curve.go's header is the whole of that argument.
+	fkdata.Extend(obj(
+		f("type", str("bool-setting")),
+		f("name", str(tune.SettingCurvedExits)),
+		// Map rather than global-per-user: what it controls is which belts are
+		// PORTS of machines standing in the save, so it has to be one answer for
+		// everybody in a multiplayer game.
+		f("setting_type", str("runtime-global")),
+		f("default_value", yes),
+		// After the multi-edge bool on the engine that has one, and alone on the
+		// engine that does not.
+		f("order", str("b")),
+	))
+
 	if !canStack() {
 		return
 	}

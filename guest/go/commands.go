@@ -60,6 +60,21 @@ const (
 	// `writeMultiEdgeSetting` is gated on the capability marker, which is absent
 	// there, so the method exists, returns false and writes nothing.
 	callSetMultiEdge = 2
+
+	// AND THE SAME DOOR ONTO `bbb-curved-exits`, for the same reason and one
+	// more.
+	//
+	// The reason is the one above: only the mod that DEFINED a runtime-global
+	// setting may write it, so without this method the flip handler in
+	// guest/go/curve.go -- and everything a flip obliges, which is a whole-save
+	// re-classification -- is reachable by a human and by nothing else.
+	//
+	// The one more is that this setting exists on BOTH engines, where
+	// `set-multi-edge-parts` is inert on 2.1. So this is the first method here a
+	// suite can drive on the engine trunk targets, and the `m2` suite does: it
+	// turns the rule off over a running save and asserts what happens to the
+	// balancer whose only outputs were curves.
+	callSetCurvedExits = 3
 )
 
 // The names. `CmdAudit` deliberately matches the marker prototype's name --
@@ -94,7 +109,8 @@ func init() {
 	// is the only reason any of this is testable -- see the header.
 	fkapi.AddInterface(RemoteIface,
 		fkapi.InterfaceMethod{Name: "audit", ID: callAudit},
-		fkapi.InterfaceMethod{Name: "set-multi-edge-parts", ID: callSetMultiEdge})
+		fkapi.InterfaceMethod{Name: "set-multi-edge-parts", ID: callSetMultiEdge},
+		fkapi.InterfaceMethod{Name: "set-curved-exits", ID: callSetCurvedExits})
 }
 
 // fk_on_call is the whole inbound surface for both: one export, id-dispatched,
@@ -110,17 +126,25 @@ func init() {
 //go:wasmexport fk_on_call
 func onCall(id, argp, retp uint32) uint32 {
 	switch id {
-	case callSetMultiEdge:
-		// THE ONE LEG THAT READS `argp`. It is the tier-2 array of the arguments
-		// as they arrived, so `remote.call(iface, 'set-multi-edge-parts', true)`
-		// is a one-element array holding a bool. Anything else -- no argument, a
-		// number, a string -- is read as FALSE rather than refused, which is the
-		// safe direction: the default is off and the mode a caller cannot name is
-		// the mode this engine's successor enforces.
-		on := false
-		if v := fkapi.ReadDyn(argp); v.Tag == fkapi.TagArray && len(v.Array) > 0 {
-			on = v.Array[0].Tag == fkapi.TagBool && v.Array[0].Bool
+	case callSetCurvedExits:
+		// ITS DEFAULT IS THE SETTING'S OWN, which is the opposite of the leg
+		// below and is the same rule stated once: a caller who names no mode gets
+		// what a player who never opened the menu has. Here that is ON.
+		on := argBool(argp, true)
+		ok := writeGlobalBool(CurvedExitsSetting, on)
+		logStart("remote set-curved-exits=")
+		logB(on)
+		if !ok {
+			logS(" REFUSED: the setting could not be written")
 		}
+		logEnd()
+		fkapi.WriteDyn(retp, fkapi.OfBool(ok))
+
+	case callSetMultiEdge:
+		// FALSE FOR A CALLER WHO NAMES NO MODE, which is this setting's own
+		// default and is the safe direction twice over: the mode a caller cannot
+		// name is the mode this engine's successor enforces.
+		on := argBool(argp, false)
 		// The SAME write the grandfather pass makes, and therefore the same
 		// synchronous `on_runtime_mod_setting_changed` re-entry a player's flip
 		// produces -- everything sedge.go does about a flip has happened by the
@@ -130,11 +154,7 @@ func onCall(id, argp, retp uint32) uint32 {
 		// and illegal from inside a flush.
 		ok := writeMultiEdgeSetting(on)
 		logStart("remote set-multi-edge-parts=")
-		if on {
-			logS("true")
-		} else {
-			logS("false")
-		}
+		logB(on)
 		if !ok {
 			logS(" REFUSED: this Factorio does not define the setting")
 		}
@@ -164,4 +184,20 @@ func onCall(id, argp, retp uint32) uint32 {
 	// the safe-point violation it exists to avoid.
 	gcArmIfNeeded()
 	return 0
+}
+
+// argBool reads the first argument of a remote call as a bool, answering `def`
+// for a call that passed none or passed something that is not one.
+//
+// `argp` is the tier-2 ARRAY of the arguments as they arrived, so
+// `remote.call(iface, 'set-curved-exits', true)` is a one-element array holding
+// a bool. Anything else is `def` RATHER THAN A REFUSAL, and each caller states
+// its own: a mod author who calls a method wrong should get the mode a player
+// who never opened the menu has, not a mode neither of them chose.
+func argBool(argp uint32, def bool) bool {
+	v := fkapi.ReadDyn(argp)
+	if v.Tag != fkapi.TagArray || len(v.Array) == 0 || v.Array[0].Tag != fkapi.TagBool {
+		return def
+	}
+	return v.Array[0].Bool
 }
