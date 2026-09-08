@@ -259,13 +259,93 @@ func forgetOverLimit(root uint32) {
 	}
 }
 
+// WHAT THE REFUSAL FOUND STANDING, which is the clause both bounds' log lines
+// end on.
+//
+// It is three states and it used to be one sentence: "refused BEFORE the
+// teardown, so the standing network is untouched", written out separately in
+// this file and in sedge.go. That sentence is true of an EDIT to a working
+// balancer, which is the case both bounds were built for and the case every
+// suite drives -- and false of the two ways a cluster can reach a refusal with
+// its network already gone. Having it twice is why finding it false in one of
+// them did not fix the other.
+const (
+	refuseStanding = iota // the cluster's own network is up, and stays up
+	refuseTornDown        // a network covering these tiles came down first
+	refuseNoNet           // there was never one to lose
+)
+
+// refusalFound answers which of the three, out of state the flush is already
+// holding: `nets` for the cluster's own network, and the open carry pools for
+// one that came down earlier in this dispatch.
+//
+// THE SECOND ARM IS THE ONE THE SENTENCE WAS MISSING, and there are two ways
+// into it. A CONDEMNED cluster tears its own network down twenty lines above
+// the check (compile.go's ordering carve-out) and leaves an `owned` pool under
+// this very root, so every refusal a 2.0 multi-edge save produces on 2.1 was
+// claiming the remnant it had just demolished was untouched. And a REMOVAL that
+// shrinks a cluster past what the mod can build -- a part mined, or a belt
+// fast-replacing an edge part, which is that removal by another door -- has its
+// teardown taken by `flushDead` under the root the removal killed, so this
+// cluster has no network of its own while a pool covering its tiles stands open
+// with the contents in it. The `edge` suite's `frepd` arm is the measurement.
+//
+// The predicate over that pool is `takeCarry`'s own selection rule with
+// `hadNet` false, and that is not a coincidence: what a successor would draw
+// from is exactly what this refusal is failing to draw from.
+//
+// It costs nothing where nothing came down -- `carryPools` is empty on every
+// flush that tore nothing down, which is every flush but the ones that did --
+// and it is reached only by a refusal, which is rare by construction.
+func refusalFound(root uint32, tiles []key, force uint32) int {
+	if _, up := nets[root]; up {
+		return refuseStanding
+	}
+	if len(carryPools) == 0 || len(tiles) == 0 {
+		return refuseNoNet
+	}
+	x0, y0, x1, y1 := clusterBox(tiles)
+	for i := range carryPools {
+		pool := &carryPools[i]
+		if pool.owned {
+			if pool.root == root {
+				return refuseTornDown
+			}
+			continue
+		}
+		if pool.matches(tiles[0].s, force, x0, y0, x1, y1) {
+			return refuseTornDown
+		}
+	}
+	return refuseNoNet
+}
+
+// logRefusalFound writes that clause. The caller has already written everything
+// up to and including the word "refused".
+//
+// "handed back" and never "spilled": `handBack` offers an unclaimed pool to the
+// player who caused the removal before it reaches the floor (carry.go), and a
+// belt fast-replacing a part is a removal a player caused. Naming the floor
+// here would be wrong for the one gesture most likely to produce this line.
+func logRefusalFound(found int) {
+	switch found {
+	case refuseStanding:
+		logS(" BEFORE the teardown, so the standing network is untouched")
+	case refuseTornDown:
+		logS(" AFTER the network on these tiles came down, so its contents are")
+		logS(" handed back")
+	default:
+		logS(", and this cluster had no network to lose")
+	}
+}
+
 // logRefusedOverLimit is the refusal's log line, shared by the ordinary path
 // and the silent rebuild path. `alert:` and NOT `error:`: an error in this
 // guest means one thing -- a compile did not produce a network that should
 // have -- and `test/run.sh` fails a run on one. A player asking for a balancer
 // bigger than the mod builds is an expected condition with a defined outcome,
 // and the edge suite asserts this very line.
-func logRefusedOverLimit(root uint32, pt plan.Ports) {
+func logRefusedOverLimit(root uint32, pt plan.Ports, found int) {
 	logAlertStart("cluster ")
 	logU(root)
 	logS(" would need ")
@@ -276,7 +356,8 @@ func logRefusedOverLimit(root uint32, pt plan.Ports) {
 	logU(uint32(pt.M))
 	logS(" outputs, over the limit of ")
 	logU(plan.MaxPorts)
-	logS("; refused BEFORE the teardown, so the standing network is untouched")
+	logS("; refused")
+	logRefusalFound(found)
 	logEnd()
 }
 
@@ -327,19 +408,24 @@ func refuseAdmit(root uint32, fp uint64) int {
 }
 
 // refuseOverLimit is compile()'s answer when a cluster's edge list has outgrown
-// plan.MaxPorts. The standing network has not been touched and must not be.
+// plan.MaxPorts.
 //
 // Returns with the world exactly as it found it: everything below is a log
-// line, a message and a queue insertion.
+// line, a message and a queue insertion. Whether there was a standing network
+// for it to leave alone is a different question and `refusalFound` is what asks
+// it -- an EDIT to a working balancer is refused in front of its own teardown
+// and the machine keeps running, and a REMOVAL that shrinks one past the bound
+// has already lost its network to `flushDead` by the time this runs.
 func refuseOverLimit(root uint32, fp uint64, pt plan.Ports, tiles []key, force uint32) {
+	found := refusalFound(root, tiles, force)
 	switch refuseAdmit(root, fp) {
 	case refuseSilent:
 		return
 	case refuseLogOnly:
-		logRefusedOverLimit(root, pt)
+		logRefusedOverLimit(root, pt, found)
 		return
 	}
-	logRefusedOverLimit(root, pt)
+	logRefusedOverLimit(root, pt, found)
 	limMsg[1].Number = float64(plan.MaxPorts)
 	// The number the PLAYER sees is the belt count on the machine's bigger
 	// side, never pt.P: a player placed one belt and has no window into the

@@ -123,7 +123,7 @@ Same rig, same schedule, the only difference being the one call at the top of `f
 
 **The item total was conserved to the item in both arms**, which is exactly why this was invisible for a milestone. What moved is where the items were and whether the machines still existed.
 
-Verbatim from the failing run, and note what the alert claims while it happens — true of the cluster being refused, which had no network of its own, and a lie about the two that did:
+Verbatim from the failing run, and note what the alert claimed while it happened — true of the cluster being refused, which had no network of its own, and a lie about the two that did. That clause is `refusalFound`'s since 0.3.3 and has three arms; against the same failing guest it would read *AFTER the network on these tiles came down, so its contents are handed back*, which is the arm the two open pools select and is the truth this transcript is the record of:
 
 ```
 [BBB] merge 18+64->18 (17 parts)

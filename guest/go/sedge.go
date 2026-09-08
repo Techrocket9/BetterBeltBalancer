@@ -332,7 +332,13 @@ func multiEdgeShape() (worst uint32, over bool) {
 // this guest means a compile did not produce a network that should have, and
 // `test/run.sh` fails a run on one. A balancer built to a rule this Factorio
 // does not permit is an expected condition with a defined outcome.
-func logRefusedSingleEdge(root uint32, worst, tiles uint32) {
+//
+// THE CLAUSE IT ENDS ON IS limit.go's, and taking it from there rather than
+// writing it out again is the point: the two bounds carried one sentence in two
+// copies, it was true of an edit to a working balancer and false of a refusal
+// that arrives after the network has already come down, and one copy being
+// found false left the other saying it. See `refusalFound`.
+func logRefusedSingleEdge(root uint32, worst, tiles uint32, found int) {
 	logAlertStart("cluster ")
 	logU(root)
 	logS(" has ")
@@ -340,12 +346,18 @@ func logRefusedSingleEdge(root uint32, worst, tiles uint32) {
 	logS(" carrying more than one belt, worst ")
 	logU(worst)
 	logS("; this Factorio allows one belt per balancer part, so the compile is")
-	logS(" refused BEFORE the teardown and the standing network is untouched")
+	logS(" refused")
+	logRefusalFound(found)
 	logEnd()
 }
 
 // refuseSingleEdge is compile()'s answer when a cluster asks for two belts on
-// one part. The standing network has not been touched and must not be.
+// one part.
+//
+// It touches nothing, which is not the same as there being something standing
+// for it to leave alone: `refusalFound` is what tells the three apart, and both
+// of its other two arms are reachable here -- a condemned 2.0 remnant on 2.1,
+// and a belt fast-replacing an edge part into a neighbour that already has one.
 //
 // Every discipline here is limit.go's, reached through the same three-way
 // admission: a refusal issued from inside `rebuildFromWorld` logs and requeues
@@ -353,11 +365,12 @@ func logRefusedSingleEdge(root uint32, worst, tiles uint32) {
 // worst information a refusal will ever have), a repeat of an edge state
 // already refused says nothing at all, and anything else logs and speaks.
 func refuseSingleEdge(root uint32, fp uint64, worst uint32, tiles []key, force uint32) {
+	found := refusalFound(root, tiles, force)
 	switch refuseAdmit(root, fp) {
 	case refuseSilent:
 		return
 	case refuseLogOnly:
-		logRefusedSingleEdge(root, worst, sedgeTiles)
+		logRefusedSingleEdge(root, worst, sedgeTiles, found)
 		// A REFUSAL THE REBUILD ISSUED IS A BALANCER NOBODY JUST BUILT. The
 		// world was like this when the save opened; the informed flush a tick
 		// later will refuse it again and speak, and what it should say then is
@@ -382,7 +395,7 @@ func refuseSingleEdge(root uint32, fp uint64, worst uint32, tiles []key, force u
 		}
 		return
 	}
-	logRefusedSingleEdge(root, worst, sedgeTiles)
+	logRefusedSingleEdge(root, worst, sedgeTiles, found)
 	// AND THE THIRD PRODUCER: A CLUSTER THE MIGRATION JUST CONVERTED. `legacyScan`
 	// and `legacyRunBuilds` turn a Belt Balancer save's parts into ours and the
 	// very next flush -- this one -- refuses every one of them that is laid the

@@ -1265,7 +1265,11 @@ def main():
     #
     # Note what the alert said while it happened: "refused BEFORE the teardown,
     # so the standing network is untouched". True of the cluster being refused,
-    # which had no network, and a lie about the two that did.
+    # which had no network, and a lie about the two that did. That clause has
+    # three arms since 0.3.3 (guest/go/limit.go, refusalFound) and the spared
+    # merge takes the third, "and this cluster had no network to lose" -- which
+    # is what the merged cluster has and all this line can honestly say about
+    # it. That both halves are still up is asserted below, off the spare line.
     brdg = {m.group(1): (int(m.group(2)), int(m.group(3)), int(m.group(4)))
             for m in (BRDG.search(l) for l in lines) if m}
     need = ("before-open", "before-close", "after-open", "after-close",
