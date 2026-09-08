@@ -107,6 +107,12 @@ func curveRecheck() { curveCache = curveUnchecked }
 // runs on exactly that state -- `m2`'s curve rig compiles at load and `sedge`'s
 // `scrv` refusal fires, both of which need this answer to be ON.
 func curvedExitsAllowed() bool {
+	// A LOAD THAT HAS DECIDED AND HAS NOT YET WRITTEN answers off whatever the
+	// cache and the setting say, because the setting has not been asked yet and
+	// the cache cannot survive the dispatch. See curveupg.go, curveForcedOff.
+	if curveForcedOff {
+		return false
+	}
 	if curveCache == curveUnchecked {
 		curveCache = curveOn
 		if on, present := readGlobalBool(CurvedExitsSetting); present && !on {

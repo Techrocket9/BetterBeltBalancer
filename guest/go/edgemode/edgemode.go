@@ -168,3 +168,31 @@ func Reconcile(marker bool, s Setting, anchor Mode) (Mode, Action) {
 func GrandfatherNeeded(marker bool, s Setting, multiEdgeClusters uint32) bool {
 	return marker && s != SettingOn && multiEdgeClusters > 0
 }
+
+// CurveKeepNeeded reports whether this load should turn the curved-exit reading
+// OFF for a save that was built before there was one, and say so.
+//
+// THREE STATES INSIDE THIS PACKAGE RATHER THAN A FOURTH PURE ONE, and the reason
+// is the one that made this package pure in the first place, read backwards.
+// `edgemode` exists because the engine its interesting states live on is one
+// this repository cannot run: multi-edge is 2.0 only, so those branches could
+// never be executed from a 2.1 headless test. `bbb-curved-exits` is declared on
+// BOTH engines, so every state of this fold is reachable from an ordinary run --
+// what it needs is a test, not a package.
+//
+// The count carries no provenance, exactly as GrandfatherNeeded's does: a
+// cluster is counted when the network standing in the world is the one the
+// classifier would have built with the curve arm switched off, which is the
+// signature curveupg.go describes and the only thing that can produce it.
+//
+// SettingOff is already the answer, so a save decided on an earlier load asks
+// for nothing -- and that arm is a SHAPE GUARD rather than a live path, for the
+// reason curveupg.go states: the count can only be non-zero when the curve arm
+// ran, and the curve arm is gated on the same setting, so Off and a non-zero
+// count cannot both be true of one load. It is here so that the fold agrees with
+// the gate instead of relying on it. SettingAbsent is treated as ON because the
+// setting is declared true: a game whose settings stage does not define it
+// behaves as though it did.
+func CurveKeepNeeded(s Setting, legacyClusters uint32) bool {
+	return s != SettingOff && legacyClusters > 0
+}

@@ -253,7 +253,13 @@ var (
 	// `FindEntitiesFilteredInto` writes into the capacity it is handed, so the
 	// arm that runs for every belt laid perpendicular to a balancer costs no
 	// permanent heap at all. The `mar` suite's leg H is what holds it to that.
-	probeEnts   []fkapi.Object
+	probeEnts []fkapi.Object
+
+	// edgeCurved is index-parallel to edgeBuf: whether each edge was produced by
+	// the curve arm. Package level and high-water for edgeBuf's own reason, and
+	// read by exactly one caller (curveupg.go's curveFreeEdges).
+	edgeCurved []bool
+
 	searchPos   fkapi.MapPosition
 	searchArea  fkapi.BoundingBox
 	nameFilter  fkapi.Value
@@ -552,6 +558,7 @@ var dirOf [4]uint32
 // `mar` suite holds everything on this path to.
 func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge {
 	edgeBuf = edgeBuf[:0]
+	edgeCurved = edgeCurved[:0]
 	sedgeWorst, sedgeTiles = 0, 0
 	// The engine filters by force for us. A belt of another force could never
 	// have connected to an interface of ours, so classifying it as an edge
@@ -566,7 +573,7 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 				continue // interior side
 			}
 			dir := dirOf[d]
-			out, found := classifySide(surf, k.s, nx, ny, dir)
+			out, found, viaCurve := classifySide(surf, k.s, nx, ny, dir)
 			if !found {
 				continue
 			}
@@ -579,6 +586,10 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 				ld = plan.Opposite(dir)
 			}
 			edgeBuf = append(edgeBuf, plan.Edge{TileX: k.x, TileY: k.y, Dir: ld, Out: out})
+			// WHICH EDGES THE CURVE ARM PRODUCED, parallel to edgeBuf and used
+			// by one caller: the adoption comparison, which asks what this
+			// cluster would look like WITHOUT them. See curveupg.go.
+			edgeCurved = append(edgeCurved, viaCurve)
 		}
 		if onTile > 1 {
 			sedgeTiles++
@@ -599,12 +610,15 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 // `si` is the surface INDEX and not a second reading of the handle: the curve
 // arm below asks the REGISTRY about two tiles, and the registry is keyed by
 // index.
-func classifySide(surf fkapi.LuaSurface, si uint32, tx, ty int32, dir uint32) (out bool, found bool) {
+// `viaCurve` is true only when the answer came from the curve arm, which is what
+// tells the adoption comparison which edges a world built before 0.3.3 cannot
+// have an interface for (curveupg.go).
+func classifySide(surf fkapi.LuaSurface, si uint32, tx, ty int32, dir uint32) (out bool, found bool, viaCurve bool) {
 	searchPos.X = float64(tx) + 0.5
 	searchPos.Y = float64(ty) + 0.5
 	ents, err := surf.FindEntitiesFiltered(findByPos)
 	if err != nil {
-		return false, false
+		return false, false, false
 	}
 	back := plan.Opposite(dir)
 	curveDir, curve := uint32(0), false
@@ -619,7 +633,7 @@ func classifySide(surf fkapi.LuaSurface, si uint32, tx, ty int32, dir uint32) (o
 			continue
 		}
 		if o, f := classifyStraight(e, t, d, dir, back); f {
-			return o, f
+			return o, f, false
 		}
 		// A CANDIDATE FOR THE CURVE ARM: a plain belt running across this face
 		// rather than into or out of it. Only a transport belt curves -- an
@@ -640,9 +654,9 @@ func classifySide(surf fkapi.LuaSurface, si uint32, tx, ty int32, dir uint32) (o
 	// the `mar` suite's leg H measures. `curvedExitsAllowed` is one integer
 	// compare after the first call of each heap; see curve.go.
 	if curve && curvedExitsAllowed() && curvesFromCluster(surf, si, tx, ty, dir, curveDir) {
-		return true, true
+		return true, true, true
 	}
-	return false, false
+	return false, false, false
 }
 
 // classifyStraight is the part of the reading that an entity's own direction and
@@ -1802,6 +1816,11 @@ func flush() {
 	// file a claim against. One length test on an empty slice in every save that
 	// was built under the rule it is running under. See sedge.go.
 	settleEdgeMode()
+	// AND THE CURVED-EXIT DECISION, for all three of the reasons above and in
+	// the same place. It is a different setting and a different sentence; what
+	// it shares is that it writes a runtime-global, which re-enters this guest
+	// inside the assigning statement. See curveupg.go.
+	settleCurveMode()
 	// One tick's worth of "who built what" is spent. The notes were filled by
 	// the events of the PREVIOUS tick and read by the drain above; anything
 	// after this belongs to the next one. The tick's NEW PART TILES go with them

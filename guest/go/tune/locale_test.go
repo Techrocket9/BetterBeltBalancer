@@ -250,49 +250,59 @@ func TestTheHandRolledSettingsAreNamedAndDescribed(t *testing.T) {
 	}
 }
 
-// TestTheGrandfatherMessageQuotesTheRealMenuLabel is the third, and it is the
+// TestEveryMessageThatNamesASettingNamesARealOne is the third, and it is the
 // one no checker anywhere could make, because it is about two entries agreeing
 // with each other rather than about either one existing.
 //
-// The 2.0 grandfather warning tells a player to turn a setting off and quotes
-// the menu label mid-sentence, so that they can find the row. Rename the row
-// and the sentence sends them looking for an entry that is not there -- which
-// is the same defect as an `Unknown key`, one level out, and invisible to
-// everything: both entries exist, both render, and the mod loads.
+// TWO MESSAGES ASK IT NOW AND THEY ASK IT FROM OPPOSITE SIDES. The 2.0
+// grandfather warning tells a player to turn a setting OFF and quotes the menu
+// label mid-sentence so that they can find the row; the curved-exit message
+// tells them a setting HAS BEEN turned off for their save and quotes the same
+// kind of label so that they can turn it back on. Either way, rename the row and
+// the sentence sends them looking for an entry that is not there -- which is the
+// same defect as an `Unknown key`, one level out, and invisible to everything:
+// both entries exist, both render, and the mod loads.
 //
-// The label is quoted rather than pinned as a literal here, so the check is
-// that the message names WHAT THE MENU SAYS. A prefix rather than an equality
-// because the menu label carries a parenthetical the sentence has no room for
-// ("(Factorio 2.0 only)"), and quoting a prefix of the row's name is still a
-// row a player can find.
-func TestTheGrandfatherMessageQuotesTheRealMenuLabel(t *testing.T) {
+// The label is quoted rather than pinned as a literal here, so the check is that
+// the message names WHAT THE MENU SAYS. A PREFIX rather than an equality because
+// a menu label may carry a parenthetical the sentence has no room for
+// ("(Factorio 2.0 only)"), and quoting a prefix of the row's name is still a row
+// a player can find.
+func TestEveryMessageThatNamesASettingNamesARealOne(t *testing.T) {
 	sec := localeSections(t)
-	msg := sec["bbb"]["single-edge-grandfathered"]
-	if strings.TrimSpace(msg) == "" {
-		t.Fatal("no [bbb] single-edge-grandfathered: the 2.0 grandfather pass " +
-			"has nothing to say to the player it just decided for")
-	}
-	label := sec["mod-setting-name"][SettingMultiEdgeParts]
-	if strings.TrimSpace(label) == "" {
-		// TestTheHandRolledSettingsAreNamedAndDescribed reports the
-		// absence itself.
-		return
-	}
+	for _, c := range []struct{ msgKey, setting string }{
+		{"single-edge-grandfathered", SettingMultiEdgeParts},
+		{"curved-exits-kept", SettingCurvedExits},
+	} {
+		msg := sec["bbb"][c.msgKey]
+		if strings.TrimSpace(msg) == "" {
+			t.Errorf("no [bbb] %s: the pass that decides for the player has "+
+				"nothing to say to them", c.msgKey)
+			continue
+		}
+		label := sec["mod-setting-name"][c.setting]
+		if strings.TrimSpace(label) == "" {
+			// TestTheHandRolledSettingsAreNamedAndDescribed reports the
+			// absence itself.
+			continue
+		}
 
-	_, rest, ok := strings.Cut(msg, `"`)
-	if !ok {
-		t.Fatalf("[bbb] single-edge-grandfathered quotes no menu label, and it "+
-			"has to name the row it is asking the player to turn off: %q", msg)
-	}
-	quoted, _, ok := strings.Cut(rest, `"`)
-	if !ok {
-		t.Fatalf("[bbb] single-edge-grandfathered opens a quote and never "+
-			"closes it: %q", msg)
-	}
-	if !strings.HasPrefix(label, quoted) {
-		t.Errorf("[bbb] single-edge-grandfathered tells the player to turn off "+
-			"%q and the row in the menu is called %q: the message names an "+
-			"entry that is not there", quoted, label)
+		_, rest, ok := strings.Cut(msg, `"`)
+		if !ok {
+			t.Errorf("[bbb] %s quotes no menu label, and it has to name the row "+
+				"it is telling the player about: %q", c.msgKey, msg)
+			continue
+		}
+		quoted, _, ok := strings.Cut(rest, `"`)
+		if !ok {
+			t.Errorf("[bbb] %s opens a quote and never closes it: %q", c.msgKey, msg)
+			continue
+		}
+		if !strings.HasPrefix(label, quoted) {
+			t.Errorf("[bbb] %s names %q and the row in the menu is called %q: "+
+				"the message names an entry that is not there",
+				c.msgKey, quoted, label)
+		}
 	}
 }
 

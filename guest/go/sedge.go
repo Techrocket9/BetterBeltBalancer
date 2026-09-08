@@ -104,6 +104,16 @@ const (
 	msgGrandfathered     = "bbb.single-edge-grandfathered"
 )
 
+// What this file's own summaries call themselves in the log, handed to
+// `tellAffected` rather than written inside it -- see that function's header.
+// Three assertion scripts match this heading and this noun (`assert-mig.py`,
+// `assert-mig21.py`, `assert-flip.py`), so the two halves are byte for byte what
+// they have always been.
+const (
+	sedgeHeading = "single-edge: "
+	sedgeWhat    = "balancers built to the multi-edge rule"
+)
+
 // ---------------------------------------------------------------------------
 // The two halves of the rule, and the anchor that remembers which one won
 // ---------------------------------------------------------------------------
@@ -524,7 +534,7 @@ func edgesOnTile(surf fkapi.LuaSurface, k key, force uint32) int {
 		if _, ok := index[key{k.s, nx, ny}]; ok {
 			continue
 		}
-		if _, found := classifySide(surf, k.s, nx, ny, dirOf[d]); found {
+		if _, found, _ := classifySide(surf, k.s, nx, ny, dirOf[d]); found {
 			n++
 		}
 	}
@@ -990,7 +1000,7 @@ func grandfatherMultiEdge(n uint32) {
 	// complaint the 2.1 summary's pings were added for. Requested from a live
 	// session on 2026-08-24, after a flip-off veto named twenty balancers and
 	// pointed at none of them.
-	tellAffected(msgGrandfathered, true)
+	tellAffected(msgGrandfathered, true, sedgeHeading, sedgeWhat)
 }
 
 // requeueEveryCluster puts every standing cluster back on the build queue and
@@ -1032,7 +1042,7 @@ func tellMigrated(n uint32, stood bool) {
 		logS(" on their belts are where they were")
 	}
 	logEnd()
-	tellAffected(msgKey, true)
+	tellAffected(msgKey, true, sedgeHeading, sedgeWhat)
 }
 
 // ---------------------------------------------------------------------------
@@ -1083,13 +1093,21 @@ const chartMargin = 8
 // what it names; the two shapes cannot mix in any save this repository has, and
 // the direction the OR errs in is the honest one -- it never claims a spill that
 // did not happen.
-func gatherAffected() (uint32, bool) {
+func gatherAffected() (uint32, bool) { return gatherAnnounced(sedgeAnnounce) }
+
+// gatherAnnounced is the whole of the above over a note list the caller names.
+//
+// A PARAMETER RATHER THAN A SECOND COPY, because the curved-exit pass keeps its
+// own notes (curveupg.go) and needs the same dedup, the same ordering and the
+// same per-force split -- and the pings and the charting hang off `affected`,
+// which is filled here and nowhere else.
+func gatherAnnounced(notes []annNote) (uint32, bool) {
 	affected = affected[:0]
 	affForces = affForces[:0]
 	stood := false
 	gen++
-	for i := range sedgeAnnounce {
-		r := sedgeAnnounce[i].root
+	for i := range notes {
+		r := notes[i].root
 		if int(r) >= len(alive) || !alive[r] {
 			continue
 		}
@@ -1098,7 +1116,7 @@ func gatherAffected() (uint32, bool) {
 			continue
 		}
 		mark[r] = gen
-		stood = stood || sedgeAnnounce[i].stood
+		stood = stood || notes[i].stood
 		k := ppos[r]
 		f := pforce[r]
 		affected = append(affected, affCluster{
@@ -1162,7 +1180,15 @@ func boxAffected() {
 // ping loop is where a cluster is decided to be pinged at all, so the two have
 // to happen together or the second pass would have to re-derive which clusters
 // the first one accepted -- two copies of the cap rule, one edit apart.
-func tellAffected(msgKey string, withPings bool) {
+//
+// `heading` AND `what` ARE THE CALLER'S, because the log line below is not this
+// function's statement -- it is the producer's, and there are two of them now.
+// It said `single-edge: ... balancers built to the multi-edge rule` whoever
+// called it, which was true while the only callers were the migration summary
+// and the grandfather pass and is a lie the moment the curved-exit pass speaks
+// (curveupg.go). What is shared is the resolve, the cap, the pings, the charting
+// and the counts; what is not is the sentence.
+func tellAffected(msgKey string, withPings bool, heading, what string) {
 	for i := range affForces {
 		f := affForces[i]
 		// Which cluster this force's message is addressed FROM. The first of its
@@ -1220,11 +1246,13 @@ func tellAffected(msgKey string, withPings bool) {
 		// realistically fail behind it is resolving a LuaForce from a force INDEX
 		// and the LocalisedString crossing the boundary, and both are on this side
 		// of it.
-		logStart("single-edge: told force ")
+		logStart(heading)
+		logS("told force ")
 		logU(f)
 		logS(" about ")
 		logU(count)
-		logS(" balancers built to the multi-edge rule")
+		logS(" ")
+		logS(what)
 		if withPings {
 			// HOW MANY PINGS REALLY WENT OUT, beside how many balancers were
 			// named. The two are equal until a base has more affected balancers

@@ -69,6 +69,16 @@ guest/go/                the Go guest, its own module (//go:wasmimport is
                          rather than a refusal, and its network's contents
                          reach the ground because a machine that no longer
                          exists is a removal ("The curve rule is a setting"),
+                         curveupg.go is what an UPGRADE has to do about that
+                         setting: the first load of a save built before the
+                         rule existed turns it OFF for that save, so a factory
+                         somebody already had keeps the reading it was built
+                         to. The signature is an adoption failure of one exact
+                         shape -- lifecycle.go's comparison asked a second
+                         time without the curve arm's own edges -- and there
+                         is no heap anchor, because a save that has been
+                         decided cannot produce a curve edge to be asked
+                         about again ("A save from before the curve rule"),
                          globalsetting.go is `settings.global` read and
                          written, the ten lines both runtime-global bools
                          share -- sedge.go keeps the capability gate on its
@@ -2355,9 +2365,9 @@ Both packages from `make clean`, 2026-09-07, shipped config (`--persist=packed -
 
 **The curve rule changes what a STANDING factory means, so it is behind a map setting a player can turn off.** A belt line that merely started beside a balancer part was nothing at all before 0.3.3 -- the incumbent's accepted limitation, inherited -- and is that part's output now. So an update gives somebody ports they never laid, and on 2.1 a part that was already serving a belt is then asked for a second one and the whole balancer is refused until the line is taken away. That is a real cost paid by a player who was not asking for the feature; `bbb-curved-exits` is what they turn off, and with it off such a belt is left unconnected exactly as it was.
 
-**THE DEFAULT IS THE NEW BEHAVIOUR.** The feature was asked for, the one shape it declines is the one that would half-fill a port, and a default that shipped off would be a feature nobody found.
+**THE DEFAULT IS THE NEW BEHAVIOUR, AND THE FIRST LOAD OF AN OLDER SAVE TURNS IT OFF.** The feature was asked for, the one shape it declines is the one that would half-fill a port, and a default that shipped off would be a feature nobody found -- so a new save gets the rule. A save that predates it does not: the load that rebuilds the registry from the world finds every cluster whose standing network is the one the classifier would have built WITHOUT the curve arm, adopts each of them on that reading, writes `bbb-curved-exits = false` for that save and says so once per force with a ping per balancer. So the DEFAULT is what a player chooses into and what a fresh world gets, and an existing factory is left exactly as it was until its owner asks otherwise. "A save from before the curve rule keeps the reading it was built to" is that pass, and it carries what happens without it -- including the 2.0 case where a curve turned one balancer into a multi-edge one and tripped the OTHER rule's grandfather.
 
-`guest/go/curve.go` is the policy and its header is the long form; `guest/go/globalsetting.go` is the mechanics it shares with `bbb-multi-edge-parts`.
+`guest/go/curve.go` is the policy and its header is the long form; `guest/go/curveupg.go` is the upgrade; `guest/go/globalsetting.go` is the mechanics it shares with `bbb-multi-edge-parts`.
 
 ### Where it differs from the mod's other runtime-global
 
@@ -2368,6 +2378,7 @@ Both packages from `make clean`, 2026-09-07, shipped config (`--persist=packed -
 | what it is about | what the ENGINE permits, which 2.1 changed | what THIS MOD decides a belt at a face means |
 | the write's gate | the `bbb-can-stack` marker, because writing an undefined key raises | **none, and none is needed** |
 | a flip with balancers standing | VETOED, and the setting goes straight back on | **honoured**, and the save re-classifies |
+| what the first load of an older save does | writes it ON, so the save keeps working | **writes it OFF**, so the save keeps working |
 | driveable by a suite | on 2.0 alone | **on either**, which `m2` uses |
 
 **HAND-ROLLED RATHER THAN DECLARED THROUGH FkRecipes, AND THAT IS FORCED.** The library has a `LegacyBoolSetting` that would carry the name across verbatim, and it emits `setting_type = "startup"` for every setting it declares (`go/settings.go`) with no way to ask for another kind. A startup setting can be neither flipped mid-save nor written by a script, so it is not this setting. It is declared beside the other hand-rolled bool in `guest/go/data/settings.go`, BEFORE that file's engine gate rather than after it, and `guest/go/tune`'s `HandRolledSettings` is what tells the library's locale checker that both exist.
@@ -2436,6 +2447,69 @@ Both packages from `make clean`, 2026-09-07, shipped config (`--persist=packed -
 121 bytes of the zip's delta is the changelog entry, which is in the package. **`fk_api_gen.lua` is BYTE-IDENTICAL either side**, which is the strongest form of "no new member": the same 57 members, at the same ids. Everything the setting needs was already bound for the multi-edge one, and the remote method is a third id in a switch this guest already had.
 
 **`mod_settings_sha256` MOVES AND `data_raw_sha256` DOES NOT**, on both mod sets and on every engine. A setting PROTOTYPE lives in the settings stage's own Lua state, so it reaches `mod-settings-dump.json` and never `data-raw-dump.json`, and the engine's own prototype list checksum does not move either. Re-captured on the 2.0 arm, which is where a 2.0 golden can be taken: **`196275f867f7f8b5` -> `cc79d368f2711dd6`** on `base` and on `incumbent` alike -- one hash, because a settings dump carries no per-mod-set content -- with `data_raw` at `414aa4796d21afaf` and `f67c4bf8544a9010` unmoved and the checksums at 3427049257 and 223071962 unmoved. That arm now carries FOUR settings, two startup cost dropdowns and two runtime-global bools; the 2.1 arm carries three.
+
+## A save from before the curve rule keeps the reading it was built to
+
+**The curve rule changed what a WORLD means and not only what an edit means, so the first load after the update classifies a factory somebody else built under a rule it was not built to.** The setting above is what a player turns off; this is what happens to a player who has not been asked yet. `guest/go/curveupg.go` is the pass and its header is the long form.
+
+**What it does to a save that predates it**, measured by a throwaway spike on 2026-09-07, Factorio 2.0.77, over one save created by the guest that had no curve arm and loaded by the guest that has it:
+
+| the rig | what the load did to it |
+|---|---|
+| a curve-eligible belt beside an EDGELESS part | the balancer is rebuilt **1 -> 2**. Its real output HALVES -- **712 items over a window, then 355** -- and **347** go onto a line the player never meant as an output |
+| the same belt beside a part that already carries its one belt | two edges on one tile. The standing network is CONDEMNED, torn down and refused: **12 items on the ground**, and on 2.1 the balancer is dead for good |
+| no such belt anywhere | adopts exactly as it stood |
+
+**AND ON 2.0 THE SECOND ROW THEN TRIPS THE MULTI-EDGE GRANDFATHER**, which is the part of this worth writing down because nothing about it is obvious and it will be rediscovered otherwise. `refuseSingleEdge` announces, `settleEdgeMode` asks `GrandfatherNeeded`, the count is non-zero, and the mod writes `bbb-multi-edge-parts = true` and tells the force it has kept multiple belts per part working -- **for a save that never used multiple belts per part in its life**. The chain is correct at every link: the tile really does carry two edges under the new rule, and the grandfather pass carries no provenance by design ("The fold is asked the same question whatever made the clusters"). One rule's change reaching another rule's migration is what a per-cluster count buys and it is the price of that design, not a defect in it.
+
+Neither row is a defect in the classifier either. The classifier is right about what those belts now mean; it is the player who has not been asked.
+
+### The signature is an adoption failure of one exact shape
+
+`rebuildFromWorld` already compares the edge list it re-derives against the interfaces standing (`inspectNetwork`), and **a cluster built under the old rule fails that comparison by exactly the edges the curve arm produced and by nothing else**. So the comparison is asked twice -- `adoptMatches(edges)` factored out so both readings go through one implementation -- and a cluster that matches the second, curve-free reading is ADOPTED on it, its fingerprint recorded over that reading, and a note taken.
+
+It is not "there is a curve-shaped belt near a balancer", which would fire on a save that always had one. It is "the network standing in this world is the one the classifier would have built WITHOUT the curve arm", which nothing but an old-rule save can be: a genuinely edited cluster matches neither reading.
+
+**What it cannot tell apart, said plainly**: a player who laid one of these belts while the mod was uninstalled, meaning it as an output, and updated in the same step. That world is byte for byte an old-rule world and gets curves turned off; they turn them back on. It is the benign direction and it is the only one available, because nothing in a save records what a belt was FOR.
+
+### Where each half runs, and the two that had to move
+
+**THE MODE MOVES AT THE END OF THE SCAN AND THE WRITE WAITS FOR THE INFORMED FLUSH**, and the three call sites are not interchangeable:
+
+- **the decision is taken per cluster, inside the comparison**, before `rebuildFromWorld`'s own flush, because that flush is what does the damage: by the time anything at the tail of it could speak, the 1 -> 2 has been built and the condemned network is on the ground;
+- **the classifier moves once, after the inspection loop** (`curveScanDone`). Moving it per cluster is the obvious reading and it makes the COUNT wrong by construction: with the rule off the curve arm produces no edge, so the second old-rule cluster in the same rebuild adopts on the first comparison, is never noted, and a save with two of them tells the player about one and pings one. The scan has to read the whole save under the classifier the save was built with, and the flush that follows has to compile under the rule it is keeping. **It moves a FLAG and not the cache**, which is measured rather than reasoned: `curveRecheck` runs from three load hooks and `fk_migrate` and `fk_on_configuration_changed` BOTH fire on this load, so a primed cache is thrown away between the scan and the flush that writes. `curveForcedOff` is what `curvedExitsAllowed` answers on until the setting itself carries the answer;
+- **the write and the message run where `settleEdgeMode`'s do**: `flush()`, after `endCarry()`, never from inside the rebuild. The write raises `on_runtime_mod_setting_changed` synchronously, and the rebuild may not address a player at all (`refuseAdmit`, the wake race).
+
+**AND A REBUILD THAT ADOPTS EVERYTHING HAS TO ASK FOR THAT FLUSH.** This pass fires only on loads where every affected cluster WAS adopted, so there is no arm of it that leaves work behind to provoke a flush of its own -- `rebuildFromWorld` requests one when the curve scan found anything, exactly as it does for `sedgeAnnounce` and for the same reason. Without it the setting goes unwritten and the player untold until the next thing they happen to build near a balancer.
+
+**AND THE ANCHOR IS WRITTEN IMMEDIATELY BEFORE THE SETTING**, which is `grandfatherMultiEdge`'s ordering exactly and is the second half of the same finding. `onCurvedExitsSettingChanged` reads the cached value before invalidating it and returns when the two agree, so a cache put to Off in the statement above the write makes the write's own synchronous re-entry a no-op.
+
+**Anywhere earlier is too early, and the first passing run of this suite is where that was measured.** With the decision held in the cache and primed by the scan, `fk_on_configuration_changed`'s `curveRecheck` cleared it before the flush, `before` was therefore "not asked yet", and the handler acted on the guest's own write:
+
+    [BBB] curved exits: a belt across a balancer's face is left unconnected;
+    3 clusters re-queued, and every one whose edges did not move skips
+
+A player told they had changed something they had not, and a whole-save re-queue from inside the flush that was settling it. Every cluster skipped on the fingerprint it never lost, so the run was green and every number in it was right -- which is what makes it worth writing down. `assert-curve.py` asserts that line is ABSENT now.
+
+### The latch is the signature, and it needs no anchor
+
+Once the setting is off the classifier and the standing networks agree, so the next rebuild adopts on the first reading and finds nothing. If the player turns curves back ON, the flip handler re-queues, every cluster recompiles WITH the curve edges, and from then on the standing network matches the curve-on reading exactly. Either way the comparison that fires this can never fire twice. **A save created fresh is covered by the same sentence from the other end**: it has no adopted network at all, so there is nothing for an adoption to fail at.
+
+**`edgemode.CurveKeepNeeded`'s `SettingOff` arm is a SHAPE GUARD and not that latch**, which is worth saying because it reads like one. A note is recorded only for an edge the curve arm produced, and the curve arm is behind `curvedExitsAllowed` -- so a save whose setting is already off produces no curve edge, no failed adoption and no note, and the count is zero before the fold is reached. It is there so the fold agrees with the gate rather than resting on it, which is the same standing this repo gives `tune`'s unknown-option arm. `go test ./edgemode/` proves all six states.
+
+### What the player is told
+
+One message per owning force, once, with a `[gps=]` per balancer and the map charted around each one -- the third producer of that shape after the 2.1 migration summary and the 2.0 grandfather warning:
+
+    [BBB] curved exits: kept the old reading for this save -- 2 balancers have
+    a belt across a face that was not an output when they were built;
+    settings.global bbb-curved-exits = false
+    [BBB] curved exits: told force 1 about 2 balancers built before a belt
+    could turn as it left one, 2 pings, charted 2 from ...
+
+**`tellAffected` TAKES ITS HEADING AND ITS NOUN FROM THE CALLER SINCE THIS PASS**, and that is a fix rather than plumbing: the line was `single-edge: ... balancers built to the multi-edge rule` whoever called it, which was true while the only callers were single-edge's two and is a lie the moment a third rule speaks. What is shared is the force resolve, the ping cap, the charting and the counts; what is not is the sentence. The three assertion scripts that match the old wording (`assert-mig.py`, `assert-mig21.py`, `assert-flip.py`) match it byte for byte still, because `sedgeHeading` and `sedgeWhat` are the strings they always were.
+
+The locale entry names the menu row verbatim so the player can turn the rule on if they want it, and `go test ./tune/` checks that the row it quotes is a row that exists -- the same check the grandfather warning gets, now table-driven over both messages, because both are entries that can be perfectly present and still disagree with each other.
 
 ## Fast replace — a part goes over a belt, and a belt goes over a part
 
@@ -3326,6 +3400,7 @@ Design fixed 2026-07-31: **compile, don't interpret** -- balancer clusters compi
 | **...and a part clicks over a belt like a splitter does, and a belt over ANY part** | `fast_replaceable_group = "transport-belt"` on the part, which is base's own group: a balancer can be dropped straight into a belt line you already have, and the belt goes to the player. The group is symmetric, so a belt laid on a part replaces it too — and the engine raises NO event for the part it destroys, which is the whole of `guest/go/fastreplace.go`. Since 0.3.3 the same group is on `bbb-linked-belt`, so the reverse gesture reaches the EDGE parts too: a part carrying an edge holds two colliding entities and the engine wants both of them in the group, which is why the mod portal's report was that a part goes over a belt and a belt does not go over a part. One prototype field, measured as one line of the engine's own dump. What it costs a player is written down rather than hidden: on 2.1 the belt may hand the neighbouring part a second belt and the balancer is then refused, and no balancer is immune to a belt drag any more. "Fast replace" |
 | **...and a belt may TURN as it leaves one** | A belt laid across a part's free face with nothing behind it is that part's output, and the engine bends it towards the interface: a corner no longer needs a tile of straight belt first, and it carries both lanes. `agents/design.md`'s inherited limitation, *a belt curving away at the edge is not an output*, is retired. A belt that something else already feeds is still declined, deliberately -- it would be a half-lane port, and a half-lane port breaks the exact balance everything here rests on. Measured: a 2->2 whose two outputs are both corners delivers **1.998x one belt at 0.15% spread** with both lanes occupied on every sample, and the side-load beside it takes **exactly 0**. Nothing on any hot path moves, and the `mar` suite gained a leg to say so. "A belt that turns as it leaves" |
 | **...and a player who did not want that can turn it off** | The curve rule changes what a STANDING factory means, so it is behind `bbb-curved-exits`, a map setting defaulting to ON and defined on both engines -- unlike `bbb-multi-edge-parts`, because what a belt at a face means is this mod's decision rather than the engine's. The flip needs no restart and re-classifies the whole save: every cluster is re-queued and each one skips on the fingerprint it never lost. Measured on the `m2` suite over a running world: with the rule off the two corners of a 2->2 take **16 and 19 items against a live port's 300** and the audit reads `nets=22` of 23 clusters with `unbuilt` and `refused` still 0 -- a cluster with no outputs is a half-built state, not a refusal -- and turning it back on rebuilds that one network and delivers **300 and 300, 1.000x each at 0.00% spread**. One teardown, one spill and one compile over both flips. With the rule off `classifySide` makes neither of the probe's host calls, which leg H holds at **384 B/iter either way**. "The curve rule is a setting" |
+| **...and a factory that already existed is not changed under its owner** | The curve rule changed what a WORLD means, so the first load of a save built before it turns the setting OFF for that save. The signature is exact rather than heuristic: `rebuildFromWorld` already compares the edge list it re-derives against the interfaces standing, and an old-rule cluster fails that comparison by exactly the edges the curve arm produced -- so the comparison is asked a second time without them, and a cluster that matches THAT reading is adopted on it. No heap anchor, because a save that has been decided cannot produce a curve edge to be asked about again. Without it, measured on 2.0.77: a balancer with a curve-eligible belt beside a spare part is rebuilt 1 -> 2 and its real output halves (**712 items over a window, then 355**, with **347** onto a line nobody meant as one); one beside an occupied part is condemned, torn down and refused with **12 items on the ground** -- and on 2.0 that refusal then trips the MULTI-EDGE grandfather into writing `bbb-multi-edge-parts = true` for a save that never used it. "A save from before the curve rule keeps the reading it was built to" |
 | **A Belt Balancer 2 or 3 save becomes one of ours** | Uninstall the incumbent and every `balancer-part` it left standing becomes one of this mod's, at load, once per save: 31 parts across 3 surfaces and 2 forces into 9 clusters, **at the health and the quality they were standing at**, of which the ones laid ONE BELT PER PART deliver 2.000x and 3.997x one belt and the ones laid the incumbent's way are refused on Factorio 2.1 -- their geometry cannot function there under any design, so what a player gets is their parts, their items and a rebuild checklist, with the items on the belts conserved exactly (48 copper before and after), the item stacks surviving and placing our parts, and the technology granted. Nothing at all happens while the incumbent is installed, or while any other mod owns the name -- **including an incumbent that arrives AFTER this mod, on a save this mod has already converted**, where the balancers we own keep running and a `balancer-part` the newcomer places stays theirs. All four incumbent names are exercised, and so is the stranger being uninstalled in his turn. Proved against the real Belt Balancer 2 as well as the harness stand-in. "Adopting a Belt Balancer 2 or 3 save" |
 | **...and the compatibility item it leaves behind does not hang anybody** | The stub `balancer-part` item places the stub ENTITY, which the next flush swaps for a real part. Pointing it at `bbb-balancer-part` instead put the two names into each other's engine-derived `items_to_place_this`, and a neighbour that walks that graph while mutating its own table froze a player's game permanently -- no crash, no log line, reproduced headlessly at 97-99% of a core on his own save and mod set. Four candidate shapes were measured in the engine before one was picked. The dump gate asserts the graph on both mod sets now and the `mig` suite reads the engine's own list instead of a `place_result` that stopped moving. "The two-element cycle that froze a game" |
 | **A part at any quality is a part** | Every place the guest asks the world for one of its own entities by name is quality-blind since 2026-08-20 -- `findOnTile`, one helper for all five sites, after the migration pass found `find_entity` resolves a bare name as normal quality only. An uncommon balancer draws its shape, balances at 2.000x with 0.00% spread, is refused past the port limit WITH the refusal delivered, and survives a scripted colliding belt without losing a registry entry. The tenth suite (`qual`) is every part of that, red-proven against the pre-fix guest in one run. "A part at uncommon quality is a part" |
