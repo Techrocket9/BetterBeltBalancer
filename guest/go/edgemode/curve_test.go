@@ -32,9 +32,12 @@ func TestCurveKeepNeeded(t *testing.T) {
 	}
 }
 
-// A FRESH SAVE IS COVERED BY THE COUNT AND NOT BY A SPECIAL CASE. It has no
-// adopted network, so no adoption can fail, so the count is zero -- which is the
-// same state as a save that has nothing built to the old reading.
+// A SAVE AT THE CURRENT STATE RUNG IS COVERED BY THE COUNT AND NOT BY A SPECIAL
+// CASE. Its load is never undecided, so no classification in it is ever read as
+// evidence, so the count is zero -- which is the same state as a save that
+// predates the rule and has no curve belt anywhere in it. A fourth Setting for
+// "already decided" would be a second place to keep that in step with
+// curveupg.go's watermark; there is none.
 func TestAFreshSaveIsNeverFlipped(t *testing.T) {
 	for _, s := range []Setting{SettingAbsent, SettingOn, SettingOff} {
 		if CurveKeepNeeded(s, 0) {

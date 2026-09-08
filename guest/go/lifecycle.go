@@ -681,12 +681,6 @@ func rebuildFromWorld() {
 		markLive(r)
 	}
 
-	// THE CURVED-EXIT DECISION, taken now that every cluster in the save has
-	// been read under the classifier the save was built with, and taken BEFORE
-	// the flush below because that flush compiles everything the scan could not
-	// adopt. See curveupg.go, curveScanDone.
-	curveScanDone()
-
 	sweepOrphanSlots()
 	flush()
 	rebuildingFromWorld = false
@@ -711,14 +705,16 @@ func rebuildFromWorld() {
 	if len(sedgeAnnounce) > 0 {
 		requestFlush()
 	}
-	// AND THE SAME FOR THE CURVED-EXIT SCAN, WHICH NEEDS IT MORE RATHER THAN
-	// LESS. Adopting on the curve-free reading is what that pass DOES, so the
-	// load it fires on is by construction one where every affected cluster was
-	// adopted and nothing at all is queued -- there is no arm of it that leaves
-	// work behind to provoke a flush. Without this the setting would go
-	// unwritten and the player untold until the next thing they happened to
-	// build near a balancer. See curveupg.go, settleCurveMode.
-	if curveWriteOwed {
+	// AND THE SAME FOR THE CURVED-EXIT WINDOW, WHICH NEEDS IT MORE RATHER THAN
+	// LESS, AND NEEDS IT WHETHER OR NOT ANYTHING WAS FOUND. A save deciding to
+	// keep the old reading is by construction one where every affected cluster
+	// was ADOPTED, so there is no arm of it that leaves work behind to provoke a
+	// flush of its own -- and without one the setting goes unwritten and the
+	// player untold until the next thing they happen to build near a balancer.
+	// A save that found NOTHING still needs the flush, to CLOSE the window: a
+	// belt the player lays a minute later is an output and must not be read as
+	// evidence about how the world was built. See curveupg.go, settleCurveMode.
+	if curveUndecided || curveWriteOwed {
 		requestFlush()
 	}
 	registryReady = true
@@ -881,33 +877,18 @@ func inspectNetwork(root uint32) (slot uint32, exact bool, multi bool) {
 	if adoptMatches(edges) {
 		return slot, true, multi
 	}
-
-	// THE CURVE-FREE READING, and the one thing this comparison is asked twice.
-	//
-	// A belt across a face was nothing before 0.3.3 and is an output now, so a
-	// network built by an older build of this mod has no interface for it and
-	// fails the comparison above by exactly those edges and by nothing else.
-	// Asking again without them is therefore not a second guess -- it is the
-	// question "is this the network the classifier would have built under the
-	// rule this world WAS built to", and only an old-rule save can answer yes.
-	// See curveupg.go, which is where the decision that follows lives.
-	if base, removed := curveFreeEdges(edges); removed > 0 && adoptMatches(base) {
-		noteCurveLegacy(root)
-		nets[root] = netInfo{fp: fingerprint(base), slot: slot, surf: si, force: force,
-			x0: x0, y0: y0, x1: x1, y1: y1, ents: uint32(len(base))}
-		// RECOMPUTED RATHER THAN REUSED: `multi` above describes the reading
-		// WITH the curve edges, and the second belt on a tile may be exactly
-		// the one just declined. curveupg.go's multiOver says why.
-		return slot, true, multiOver(base)
-	}
 	return slot, false, multi
 }
 
 // adoptMatches reports whether the interfaces inspectNetwork found standing are
 // in one-to-one correspondence with an edge list.
 //
-// Split out of inspectNetwork so that the curve retry above asks the SAME
-// question of a second list rather than a second implementation of it.
+// Split out of inspectNetwork because the curved-exit pass used to ask it of a
+// SECOND, curve-free edge list -- a signature three ordinary shapes of old-rule
+// save failed (curveupg.go). The reading moved into classifyEdges, so the second
+// list is gone and this has one caller again; it stays a function because a
+// comparison this long inside a function that long is where the next reader
+// looks for it.
 func adoptMatches(edges []plan.Edge) bool {
 	if len(edges) != len(adoptPos) {
 		return false

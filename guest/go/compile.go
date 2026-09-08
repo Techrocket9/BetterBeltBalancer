@@ -257,7 +257,7 @@ var (
 
 	// edgeCurved is index-parallel to edgeBuf: whether each edge was produced by
 	// the curve arm. Package level and high-water for edgeBuf's own reason, and
-	// read by exactly one caller (curveupg.go's curveFreeEdges).
+	// read by exactly one caller (curveupg.go's curveDecide).
 	edgeCurved []bool
 
 	searchPos   fkapi.MapPosition
@@ -597,6 +597,15 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 				sedgeWorst = onTile
 			}
 		}
+	}
+	// A SAVE THAT PREDATES THE CURVED EXIT DECIDES HERE, at the first curve edge
+	// any classification in its load produces, and this list is the one it is
+	// applied to -- so everything downstream (the fingerprint, the adoption
+	// comparison, the per-tile counts just taken, the port bound, the build)
+	// reads the world under the rule the save was written to. One bool test on
+	// every classification of every save this is not about. See curveupg.go.
+	if curveUndecided {
+		curveDecide(tiles)
 	}
 	return edgeBuf
 }
@@ -1815,12 +1824,22 @@ func flush() {
 	// does. After the drain there is no drain to re-enter and no transaction to
 	// file a claim against. One length test on an empty slice in every save that
 	// was built under the rule it is running under. See sedge.go.
-	settleEdgeMode()
-	// AND THE CURVED-EXIT DECISION, for all three of the reasons above and in
-	// the same place. It is a different setting and a different sentence; what
-	// it shares is that it writes a runtime-global, which re-enters this guest
+	// THE CURVED-EXIT DECISION, for all three of the reasons above and in the
+	// same place. It is a different setting and a different sentence; what it
+	// shares is that it writes a runtime-global, which re-enters this guest
 	// inside the assigning statement. See curveupg.go.
+	//
+	// IT GOES FIRST BECAUSE THE ANSWERS DEPEND THAT WAY ROUND -- a tile whose
+	// second edge is a curve is not a tile carrying two belts in a save that is
+	// keeping the old reading -- AND IT IS NOT WHAT PROTECTS ANYTHING. Measured:
+	// swapping these two lines back moves not one number in the `curv` suite,
+	// because the decision is taken inside classifyEdges, upstream of both, so
+	// there is no curve edge left for a multi-edge count to have seen by the
+	// time either runs. What does protect it is curveupg.go's
+	// recountEdgesPerTile, and dropping THAT writes `bbb-multi-edge-parts = true`
+	// for a world with one belt on every part.
 	settleCurveMode()
+	settleEdgeMode()
 	// One tick's worth of "who built what" is spent. The notes were filled by
 	// the events of the PREVIOUS tick and read by the drain above; anything
 	// after this belongs to the next one. The tick's NEW PART TILES go with them

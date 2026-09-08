@@ -329,6 +329,9 @@ func onMigrate(oldVersion uint32) {
 	logEnd()
 	edgeModeRecheck()
 	curveRecheck()
+	// WHICH RULES THE SAVE WAS WRITTEN UNDER, asked before anything reads the
+	// world, because the answer decides how the world is read. See curveupg.go.
+	curveVersionArrived(oldVersion)
 	ensureRegistry()
 	// A fresh heap knows nothing about a migration it may already have done, so
 	// the decision is taken again from the world. It is cheap and it is correct:
@@ -336,6 +339,19 @@ func onMigrate(oldVersion uint32) {
 	// says nothing.
 	legacyRecheck(legTrigMigrate)
 }
+
+// fk_state_version is this guest's own state-format version, and it is the
+// WATERMARK a load compares itself against rather than a build stamp or a mod
+// version.
+//
+// FkLua writes what this returns into the save beside the build id
+// (`storage.fk_state`, runtime/lua/fk_mod.lua) and hands the SAVED one back to
+// `fk_migrate`. A save written by a guest that never exported the hook reads 0,
+// which is what makes it usable as a watermark at all: the number nobody wrote
+// is the number every build before it wrote. The rung table is stateversion.go.
+//
+//go:wasmexport fk_state_version
+func stateVersionOf() uint32 { return stateVersion }
 
 // fk_on_deferred drains one tick's worth of accumulated recompiles.
 //

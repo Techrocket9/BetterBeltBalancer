@@ -181,9 +181,18 @@ func GrandfatherNeeded(marker bool, s Setting, multiEdgeClusters uint32) bool {
 // what it needs is a test, not a package.
 //
 // The count carries no provenance, exactly as GrandfatherNeeded's does: a
-// cluster is counted when the network standing in the world is the one the
-// classifier would have built with the curve arm switched off, which is the
-// signature curveupg.go describes and the only thing that can produce it.
+// cluster is counted when its classification produced a curve edge on a load
+// that was reading a world written before there were any, which curveupg.go
+// decides from the state version FkLua hands `fk_migrate` and from nothing in
+// the world.
+//
+// THE COUNT'S MEANING MOVED AND THIS FOLD DID NOT, which is worth saying because
+// the temptation is to add an arm for it. It used to mean "the network standing
+// here is the one the classifier would have built with the curve arm off", a
+// signature three ordinary shapes of old-rule save failed; it means "this
+// cluster has a belt across a face on a save that predates the rule" now. Both
+// are counts of balancers to keep as they are, and what to do with a non-zero
+// one is the same either way.
 //
 // SettingOff is already the answer, so a save decided on an earlier load asks
 // for nothing -- and that arm is a SHAPE GUARD rather than a live path, for the

@@ -32,59 +32,123 @@
 // player's belts now mean; it is the player who has not been asked.
 //
 // ---------------------------------------------------------------------------
-// THE ANSWER, WHICH IS THE GRANDFATHER PASS WITH THE SIGN REVERSED
+// THE TRIGGER IS THE SAVE'S OWN STATE VERSION
 // ---------------------------------------------------------------------------
 //
-// sedge.go's grandfather takes a save that predates a rule and writes the
-// setting that keeps it working. This is the same shape: the first load that can
-// SEE the old rule in the standing networks writes `bbb-curved-exits = false`
-// for that save, so an existing factory keeps working and the player opts in.
+// `fk_state_version` (main.go, stateversion.go) is stamped into every save
+// beside the build id and handed back to `fk_migrate`. Every build up to 0.3.2
+// exported none, so their saves read 0; 0.3.3 reports 1. So the question "was
+// this world built before a belt could turn as it left a balancer" is one
+// integer compare against a number the ENGINE carried, rather than a shape this
+// guest has to recognise in the world.
 //
-// THE SIGNATURE IS AN ADOPTION FAILURE OF ONE PARTICULAR SHAPE, and it is exact
-// rather than heuristic. rebuildFromWorld compares the edge list it re-derives
-// against the interfaces actually standing (lifecycle.go, inspectNetwork). A
-// cluster built under the old rule fails that comparison by EXACTLY the edges the
-// curve arm produced and by nothing else -- so removing them and comparing again
-// is the whole test. It is not "there is a curve-shaped belt near a balancer",
-// which would fire on a save that always had one; it is "the network standing in
-// this world is the one the classifier would have built WITHOUT the curve arm",
-// which nothing but an old-rule save can be.
+// THAT REPLACED A SIGNATURE, AND THE SIGNATURE WAS WRONG. It was an adoption
+// failure of one exact shape: re-derive the edge list, drop the edges the curve
+// arm produced, and adopt if the result is in one-to-one correspondence with the
+// interfaces standing. A cluster the mod itself compiled and nobody has touched
+// since does answer that. Anything else does not -- and "anything else" is not
+// exotic. Measured on 2.0.77, three shapes an old-rule save can perfectly well
+// contain, every one of which failed BOTH readings and was therefore recompiled
+// under the new rule as though it had been built to it:
 //
-// WHAT IT CANNOT TELL APART, said plainly: a player who laid one of these belts
-// while the mod was uninstalled, meaning it as an output, and updated in the same
-// step. That world is byte for byte an old-rule world and gets curves turned off;
-// they turn them back on. It is the benign direction and it is the only one
-// available -- nothing in a save records what a belt was FOR.
+//	a HALF-BUILT cluster (inputs, no output) with a belt running past it.
+//	  inspectNetwork returns at `len(ents) == 0` before it compares anything, so
+//	  no reading was ever taken: the load compiled it 1 -> 1 and 807 items went
+//	  into a chest the player never connected.
+//	an old-rule cluster whose OUTPUT BELT WAS MINED while the mod was
+//	  uninstalled. The standing interfaces describe a belt that is gone, so
+//	  neither reading is a bijection: torn down and recompiled onto the curve
+//	  belt, 819 items misrouted.
+//	an old-rule cluster with one extra INPUT laid while the mod was uninstalled,
+//	  whose curve belt lands on the tile that already carries its output. Neither
+//	  reading matches, so the curve edge survives, the tile carries two, the
+//	  standing network is condemned and refused, 12 items reach the ground -- and
+//	  on 2.0 `settleEdgeMode` then writes `bbb-multi-edge-parts = true` and tells
+//	  the force it has kept multiple belts per part working, for a save that never
+//	  used them.
 //
-// THE LATCH IS THE SIGNATURE ITSELF and needs no anchor. Once the setting is off
-// the classifier and the standing networks agree, so the next rebuild adopts and
-// finds nothing; and if the player turns curves back ON, the flip handler
-// requeues, every cluster recompiles WITH the curve edges, and from then on the
-// standing network matches the curve-on reading exactly. Either way the
-// comparison that fires this can never fire twice. A save created fresh on 0.3.3
-// is covered by the same sentence from the other end: it has no adopted network
-// at all, so there is nothing for an adoption to fail at.
+// One clean old-rule cluster anywhere else in the save rescues all three, which
+// is why the first `curv` suite was green: the decision is per SAVE, so one
+// cluster that does match is enough to write the setting, and the setting is
+// what the other three then get. A save whose every affected cluster is one of
+// the shapes above takes no decision on any load.
 //
-// WHERE THE DECISION IS TAKEN IS THE DESIGN. It is taken per cluster INSIDE the
-// adoption comparison, before rebuildFromWorld's own flush, because that flush is
-// what does the damage: by the time anything at the tail of it could speak, the
-// 1 -> 2 has been built and the condemned network is on the ground. Adopting on
-// the curve-free reading is not a special case bolted on -- it is what the
-// rebuild is for, which is to keep what is standing.
+// ---------------------------------------------------------------------------
+// THE SIGNATURE THE WATERMARK LEAVES, AND WHY IT IS COMPLETE
+// ---------------------------------------------------------------------------
+//
+// While a load is UNDECIDED the signature is "this cluster's classification
+// contains at least one curve edge", whatever else is true of the cluster --
+// half-built, drifted, refused, adopted, or never compiled at all. At the moment
+// that save was written no such belt could have been an output, because the
+// build that wrote it had no way to read one; so the reading is complete rather
+// than heuristic, and it needs no comparison against what is standing.
+//
+// ITS ONE FALSE POSITIVE IS THE ONE THE OLD SIGNATURE HAD: a player who laid one
+// of these belts while the mod was uninstalled, meaning it as an output, and
+// updated in the same step. They turn the rule back on. It is the benign
+// direction and it is the only one available, because nothing in a save records
+// what a belt was FOR.
+//
+// ---------------------------------------------------------------------------
+// A CLUSTER WITH NO CURVE EDGE IS IDENTICAL UNDER BOTH RULES
+// ---------------------------------------------------------------------------
+//
+// ...which is what lets the decision be taken at the FIRST curve edge any
+// classification in the load produces, wherever that happens -- the rebuild's
+// inspection, a legacy conversion's flush, or an ordinary compile in the same
+// dispatch. There is no ordering problem to solve: a cluster classified earlier
+// in this load had no curve edge, or the decision would already have been taken,
+// and a cluster with no curve edge reads the same either way. Nothing has to be
+// re-done.
+//
+// So `curveDecide` drops the curve edges from the list it was handed and every
+// later classification in the load runs with the rule off, which is what makes
+// adoption, the port limit, the one-belt-per-part count and the compile itself
+// all see the world the save was written to -- by construction rather than by a
+// second reading passed around between them. `inspectNetwork`'s curve-free retry
+// and the `multiOver` recount it needed are DELETED with it.
+//
+// THE PROBE STAYS ON FOR THE REST OF THE WINDOW, THOUGH, and that is the one
+// place the decision and its consequence are separate. What the probe finds is
+// also what the player is HANDED: a save with five affected balancers has to
+// name five and ping five, so switching the probe off at the first would trade a
+// checklist for two host calls per face on one load in the history of a save.
+// curve.go, curvedExitsAllowed.
+//
+// ---------------------------------------------------------------------------
+// WHERE THE WINDOW OPENS AND CLOSES
+// ---------------------------------------------------------------------------
+//
+// It opens in `fk_migrate` when the save's stamp is older than this guest's
+// rung, and in `legacyScan` when a conversion actually converted something --
+// see curveUndecideForLegacy. It closes at the first flush of the load that
+// settles, which is `settleCurveMode`. That flush is guaranteed:
+// `rebuildFromWorld` asks for one whenever the window is open, exactly as it
+// does for `sedgeAnnounce`.
+//
+// CLOSING IT IS AS LOAD-BEARING AS OPENING IT. A belt a player lays afterwards
+// arrives as an event, in an ordinary flush, and is an OUTPUT -- which is the
+// feature. A window left open would read that belt as evidence about a world
+// that was built before the rule.
 //
 // AND THE WRITE AND THE MESSAGE RUN WHERE settleEdgeMode's DO: flush(), after
 // endCarry, and never from inside the rebuild. The write raises
 // on_runtime_mod_setting_changed synchronously, so it re-enters this guest; and
 // the rebuild may not address a player at all (limit.go, refuseAdmit).
+//
+// It runs BEFORE settleEdgeMode, which reads in the direction the answers depend
+// -- a tile whose second edge is a curve is not a multi-edge tile in a save that
+// is keeping the old reading -- and which protects nothing on its own: the
+// decision is taken in classifyEdges, upstream of both. compile.go's flush()
+// carries the measurement. What keeps one rule's migration from speaking for
+// another's is recountEdgesPerTile below.
 package main
 
-import (
-	"github.com/Techrocket9/BetterBeltBalancer/guest/go/edgemode"
-	"github.com/Techrocket9/BetterBeltBalancer/guest/go/plan"
-)
+import "github.com/Techrocket9/BetterBeltBalancer/guest/go/edgemode"
 
 // curveSettingNow is the stored value as the fold wants it: an explicit Off is
-// what says an earlier load already decided.
+// what says a player, or an earlier load, has already answered.
 func curveSettingNow() edgemode.Setting {
 	on, present := readGlobalBool(CurvedExitsSetting)
 	switch {
@@ -111,6 +175,24 @@ const (
 	curveWhat    = "balancers built before a belt could turn as it left one"
 )
 
+// curveUndecided is the window: this load is reading a world written before the
+// curve rule existed and has not settled what to do about it.
+//
+// It is NOT persistent state and there is nothing in the save that corresponds
+// to it. What persists is the state version FkLua stamps and the setting this
+// pass may write, and both of those are answers rather than flags -- which is
+// the whole difference between this and a `bbb-curve-decided` setting nobody has
+// to keep in step with anything.
+//
+// THE ONE THING THAT COSTS, stated: FkLua republishes the stamp in the same
+// dispatch as `fk_migrate`, and the flush that settles this is the NEXT tick's.
+// A save quit inside that one tick comes back stamped at this rung with the
+// decision unwritten, and is then read with curves on. `fk_migrate` fires at the
+// first outermost dispatch, which is inside a tick of a running game, so getting
+// there means loading and quitting between two ticks; the outcome is the
+// behaviour of the build before this pass, and it is not worth a mechanism.
+var curveUndecided bool
+
 // curveLegacy is the roots this load found standing to the old rule. It is what
 // the informed flush speaks about, and it is package level rather than returned
 // because the rebuild that fills it may not speak.
@@ -119,31 +201,52 @@ var curveLegacy []annNote
 // curveWriteOwed is set with the first note and cleared by the flush that acts.
 var curveWriteOwed bool
 
-// curveForcedOff is the decision this load took, held between the scan that took
-// it and the write that records it.
+// curveForcedOff is the decision this load took, held between the classification
+// that took it and the write that records it.
 //
-// A SECOND FLAG RATHER THAN THE CACHE, AND THAT IS MEASURED. `curveScanDone`
-// primed `curveCache` and the cache does not survive the dispatch: `fk_migrate`
-// and `fk_on_configuration_changed` BOTH fire on the load this pass runs on, and
-// the second of them calls `curveRecheck` -- so between the scan and the flush
-// that writes, the classifier went back to reading a setting that still says
-// true. Observed on 2.0.77 as the flip handler announcing a flip nobody made and
-// re-queueing the whole save, on the very run this suite passed.
+// A SEPARATE FLAG RATHER THAN THE CACHE, AND THAT IS MEASURED. Priming
+// `curveCache` was the first cut, and the cache does not survive the dispatch:
+// `fk_migrate` and `fk_on_configuration_changed` BOTH fire on the load this pass
+// runs on, and the second of them calls `curveRecheck` -- so between the decision
+// and the flush that writes, the classifier went back to reading a setting that
+// still says true. Observed on 2.0.77 as the flip handler announcing a flip
+// nobody made and re-queueing the whole save, on the very run this suite passed.
 //
-// It is read by `curvedExitsAllowed` and it is false in every save this pass is
-// not about, which is every save built on 0.3.3 or later.
+// It is false in every save this pass is not about, which is every save built on
+// 0.3.3 or later.
 var curveForcedOff bool
 
-// noteCurveLegacy records one cluster adopted on its curve-free reading.
+// curveVersionArrived opens the window when the save is older than this guest's
+// rung. `fk_migrate` is the only caller; see stateversion.go for the rungs.
+func curveVersionArrived(oldVersion uint32) {
+	if oldVersion < stateVersion {
+		curveUndecided = true
+	}
+}
+
+// curveUndecideForLegacy opens the same window for a Belt Balancer world this
+// mod has just converted.
 //
-// IT DOES NOT TOUCH THE CLASSIFIER, and that is the whole of the count. The
-// first cut moved the cache here, which reads as obvious -- the decision is
-// taken, so honour it from now on -- and it makes the answer wrong by
-// construction: with the rule off the curve arm produces no edge, so the SECOND
-// old-rule cluster in the same rebuild adopts on the first comparison, is never
-// noted, and a save with two of them tells the player about one and pings one.
-// The scan has to read the whole save under the classifier the save was BUILT
-// with, which is what curveScanDone is for.
+// THERE IS NO WATERMARK TO READ ON THAT PATH AND THERE CANNOT BE. A mod being
+// ADDED to an existing save reaches `fk_on_init`, and Factorio raises no
+// configuration change for a guest that was not there before -- so no
+// `fk_migrate` fires and no `oldVersion` exists. What decides instead is what
+// was converted: the incumbent shared this mod's own old limitation, a belt
+// curving away from one of its parts was not an output either, and the balancers
+// this scan has just taken over were laid to that reading.
+//
+// It is called only when something was actually converted, so a save with no
+// incumbent in its history never opens the window -- and a conversion whose
+// world has no curve belt in it decides nothing, because the window is opened
+// and the decision is not the same act.
+//
+// AND IT IS RIGHT ON A 0.3.3 SAVE TOO, which is why it does not ask the
+// watermark even where one exists: what those parts were built to is a fact
+// about the INCUMBENT and not about which of our builds wrote the save.
+func curveUndecideForLegacy() { curveUndecided = true }
+
+// noteCurveLegacy records one cluster whose classification produced a curve edge
+// while the load was undecided.
 func noteCurveLegacy(root uint32) {
 	curveWriteOwed = true
 	for i := range curveLegacy {
@@ -154,56 +257,134 @@ func noteCurveLegacy(root uint32) {
 	curveLegacy = append(curveLegacy, annNote{root: root})
 }
 
-// curveScanDone moves the classifier, once, at the end of the rebuild's
-// inspection loop.
+// curveDecide is the whole of the reading, applied to one classification.
 //
-// THE MODE MOVES HERE AND THE SETTING WAITS FOR THE FLUSH, and the two halves
-// have different reasons. The MODE has to move before rebuildFromWorld's own
-// flush, because that flush is what compiles every cluster the scan could not
-// adopt and it must compile them under the rule this save is keeping. The WRITE
-// may not happen here at all: it raises `on_runtime_mod_setting_changed`
-// synchronously, and a rebuild's write would land that handler inside the
-// rebuild's own drain.
+// Called from classifyEdges and from nowhere else, which is what makes it
+// unmissable: every path that asks the world what a cluster's edges are goes
+// through that one function, so there is no call site to forget on the day
+// somebody adds a fifth.
 //
-// IT SETS A FLAG AND NOT THE CACHE, and that is the one thing about this that
-// was measured rather than reasoned. See curveForcedOff.
-func curveScanDone() {
-	if curveWriteOwed {
-		curveForcedOff = true
+// IT TAKES THE DECISION AND APPLIES IT IN ONE ACT, which is why the strip is
+// here rather than at the caller. The caller is holding `edgeBuf` and is about
+// to fingerprint it, compare it against what is standing, count its edges per
+// tile or build from it; handing any of them the reading with the curve edges
+// still in would be handing them the world under the other rule.
+func curveDecide(tiles []key) {
+	found := false
+	for i := range edgeCurved {
+		if edgeCurved[i] {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return
+	}
+	curveForcedOff = true
+	if id, ok := index[tiles[0]]; ok {
+		noteCurveLegacy(find(id))
+	} else {
+		// A classification of tiles the registry does not hold cannot happen --
+		// every caller got them from collectCluster -- but the write is what the
+		// player's save depends on and it may not be lost to a lookup.
+		curveWriteOwed = true
+	}
+	n := 0
+	for i := range edgeBuf {
+		if edgeCurved[i] {
+			continue
+		}
+		edgeBuf[n], edgeCurved[n] = edgeBuf[i], false
+		n++
+	}
+	edgeBuf, edgeCurved = edgeBuf[:n], edgeCurved[:n]
+	recountEdgesPerTile()
+}
+
+// recountEdgesPerTile rebuilds sedge.go's two per-tile numbers over the edge
+// list as it now stands.
+//
+// classifyEdges counts them in the walk that produces the edges, which costs
+// nothing and is wrong the moment an edge is taken back out: a tile whose second
+// edge was a curve is not a tile carrying two belts in a save that is keeping the
+// old reading, and reporting it as one condemns a working machine and hands the
+// player the multi-edge grandfather's sentence about a rule they never used.
+//
+// AND IT IS A RECOUNT RATHER THAN A CLEAR, WHICH IS WHAT KEEPS THE 2.1 MIGRATION
+// HONEST. That migration's whole question is whether a tile carries two belts,
+// asked of a save the engine has already pruned; a load can be undecided about
+// curves and be reading such a save at the same time, and the two answers must
+// not be confused. A tile whose only second edge was the curve stops counting,
+// which is right -- the save is keeping the reading under which that belt is
+// nothing. A tile with two STRAIGHT edges goes on counting whatever the curve
+// decision was, so the remnant is still condemned and the player still told.
+// `mig21` asserts the other half from the other side: neither of its fixtures
+// has a belt across a face, so no load of them may decide anything at all.
+//
+// Quadratic in an edge list bounded by plan.MaxPorts, and it runs only for a
+// cluster that had a curve edge on the one load in a save's history that decides.
+func recountEdgesPerTile() {
+	sedgeWorst, sedgeTiles = 0, 0
+	for i := range edgeBuf {
+		n, first := uint32(0), true
+		for j := range edgeBuf {
+			if edgeBuf[j].TileX != edgeBuf[i].TileX || edgeBuf[j].TileY != edgeBuf[i].TileY {
+				continue
+			}
+			n++
+			if j < i {
+				// Counted from that tile's first edge and no other, or a tile
+				// with three edges would be counted three times.
+				first = false
+			}
+		}
+		if !first || n < 2 {
+			continue
+		}
+		sedgeTiles++
+		if n > sedgeWorst {
+			sedgeWorst = n
+		}
 	}
 }
 
-// settleCurveMode writes the setting and says so, once, from the informed flush.
+// settleCurveMode closes the window, writes the setting and says so, once, from
+// the informed flush.
 //
 // It is beside settleEdgeMode in flush() and for the same three reasons: the
 // write re-enters this guest synchronously, the drain is over, and the carry
 // transaction has closed. One bool test on every flush of every save this is not
 // about, which is every save built on 0.3.3 or later.
 func settleCurveMode() {
-	if !curveWriteOwed || rebuildingFromWorld {
+	if rebuildingFromWorld {
+		// The rebuild runs a flush of its own and this is not it. Closing the
+		// window there would close it before the conversion, the requeue and the
+		// compiles that follow in the same load have been classified at all.
+		return
+	}
+	curveUndecided = false
+	if !curveWriteOwed {
 		return
 	}
 	curveWriteOwed = false
 	n, _ := gatherAnnounced(curveLegacy)
 	curveLegacy = curveLegacy[:0]
 	// n IS ZERO ONLY IF EVERY NOTED CLUSTER WAS DESTROYED IN THE ONE TICK
-	// between the rebuild and this flush, and then the classifier stays off for
+	// between the decision and this flush, and then the classifier stays off for
 	// the rest of the session with nothing written. That is the direction that
 	// cannot surprise a standing machine -- there is none left to surprise --
-	// and the next load reads the setting fresh, finds nothing to detect, and
-	// comes up with the rule on.
-	// THE FOLD IS ASKED EVEN THOUGH THE CACHE HAS ALREADY MOVED, and the two are
-	// not the same question: `curveCache` is what the classifier used for the
-	// rest of the rebuild, and this is whether the SAVE has to be told.
+	// and the next load reads the setting fresh, finds no curve edge to decide
+	// on, and comes up with the rule on.
 	//
-	// ITS SettingOff ARM IS A SHAPE GUARD AND NOT THE LATCH, which is worth
-	// saying because it reads like the latch. A note is recorded only for an
-	// edge the CURVE ARM produced, and the curve arm is behind
-	// `curvedExitsAllowed` -- so a save whose setting is already Off produces no
-	// curve edges, no failed adoption and no note, and `n` is zero before this
-	// fold is reached at all. The latch is one level up, in the classifier gate,
-	// and the fold agreeing with it is what keeps the two from drifting. Every
-	// state of it is proved by go test ./edgemode/.
+	// THE FOLD IS ASKED EVEN THOUGH THE DECISION IS ALREADY TAKEN, and the two
+	// are not the same question: `curveForcedOff` is what the classifier used for
+	// the rest of the load, and this is whether the SAVE has to be told.
+	//
+	// ITS SettingOff ARM IS A SHAPE GUARD AND NOT A LATCH. A note is recorded
+	// only for an edge the CURVE ARM produced, and the curve arm is behind the
+	// setting -- so a save whose setting is already Off produces no curve edge,
+	// no note, and `n` is zero before this fold is reached at all. Every state of
+	// it is proved by go test ./edgemode/.
 	if n == 0 || !edgemode.CurveKeepNeeded(curveSettingNow(), n) {
 		return
 	}
@@ -239,55 +420,4 @@ func settleCurveMode() {
 	logS(" = false")
 	logEnd()
 	tellAffected(msgCurvesKept, true, curveHeading, curveWhat)
-}
-
-// ---------------------------------------------------------------------------
-// The curve-free reading
-// ---------------------------------------------------------------------------
-
-// edgeBase is the edge list with every curve-produced edge taken out.
-//
-// A SECOND BUFFER RATHER THAN A FILTER IN PLACE: `edgeBuf` is what the caller is
-// still holding, and the comparison below needs both readings at once. High
-// water like every other buffer here, so it costs nothing after the first load
-// that uses it and nothing at all in a save that never does.
-var edgeBase []plan.Edge
-
-// curveFreeEdges is the edge list without the edges the curve arm produced, and
-// how many were taken out.
-func curveFreeEdges(edges []plan.Edge) ([]plan.Edge, int) {
-	edgeBase = edgeBase[:0]
-	removed := 0
-	for i := range edges {
-		if i < len(edgeCurved) && edgeCurved[i] {
-			removed++
-			continue
-		}
-		edgeBase = append(edgeBase, edges[i])
-	}
-	return edgeBase, removed
-}
-
-// multiOver is "does any tile in this edge list carry two edges", asked of a
-// list rather than read out of classifyEdges' own counters.
-//
-// It has to be recomputed rather than reused: the counters describe the reading
-// WITH the curve edges in it, and a cluster adopted on the curve-free reading
-// would otherwise be announced as multi-edge when the second belt on that tile is
-// exactly the one this pass has just declined to see. The loop is quadratic in an
-// edge list bounded by plan.MaxPorts and it runs once per adopted cluster on one
-// load in the history of a save.
-func multiOver(edges []plan.Edge) bool {
-	for i := range edges {
-		n := 0
-		for j := range edges {
-			if edges[j].TileX == edges[i].TileX && edges[j].TileY == edges[i].TileY {
-				n++
-			}
-		}
-		if n > 1 {
-			return true
-		}
-	}
-	return false
 }

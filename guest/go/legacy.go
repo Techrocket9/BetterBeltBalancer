@@ -436,6 +436,13 @@ func legacyScan() {
 	// legacyRoots.
 	noteLegacyRoots()
 
+	// AND BEFORE THE FLUSH FOR THE CURVED EXIT TOO, because that flush is where
+	// these clusters are classified for the first time. What was just converted
+	// was laid to the incumbent's reading, and the incumbent shared this mod's
+	// own old limitation: a belt curving away from one of its parts was not an
+	// output there either. See curveupg.go, curveUndecideForLegacy.
+	curveUndecideForLegacy()
+
 	flush()
 
 	// How many balancers those parts turned out to be, counted after the flush

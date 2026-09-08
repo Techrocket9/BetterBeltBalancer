@@ -111,9 +111,28 @@ func curvedExitsAllowed() bool {
 	// A LOAD THAT HAS DECIDED AND HAS NOT YET WRITTEN answers off whatever the
 	// cache and the setting say, because the setting has not been asked yet and
 	// the cache cannot survive the dispatch. See curveupg.go, curveForcedOff.
-	if curveForcedOff {
+	//
+	// AND NOT WHILE THAT LOAD IS STILL DECIDING, which is the second term and is
+	// about the CHECKLIST rather than about the edges. The probe is what finds an
+	// affected balancer, so switching it off at the first one would name one
+	// machine to a player whose save has five. The edges it goes on producing are
+	// dropped by classifyEdges, which is where the decision is applied.
+	if curveForcedOff && !curveUndecided {
 		return false
 	}
+	return curveSettingOn()
+}
+
+// curveSettingOn is the SETTING alone: what the save says, cached per heap and
+// with none of this load's own state in it.
+//
+// Split out so that the cache is populated by every path that asks a question
+// about the rule. It was not, and the flip handler is what noticed: it compares
+// `curveCache` before and after, and a `curvedExitsAllowed` that returned early
+// on `curveForcedOff` left the cache reading "not asked yet" -- which compares
+// equal to neither answer, so a flip to false announced a change nobody made and
+// a flip to TRUE was reported as "left unconnected" and then ignored.
+func curveSettingOn() bool {
 	if curveCache == curveUnchecked {
 		curveCache = curveOn
 		if on, present := readGlobalBool(CurvedExitsSetting); present && !on {
@@ -158,6 +177,14 @@ func onCurvedExitsSettingChanged(name string) {
 	// nothing has asked about yet is a save-wide fingerprint skip.
 	before := curveCache
 	curveRecheck()
+	// AND THE LOAD-TIME DECISION IS SUPERSEDED, because somebody has now said
+	// what they want. `curveForcedOff` is this load's answer held between the
+	// scan that took it and the write that records it, and the only way it
+	// survives a settle is a write that FAILED -- after which a player turning
+	// the rule back on would otherwise be read as turning it off. Our own write
+	// clears it one statement earlier and reaches here with the cache already
+	// agreeing, so this changes nothing on that path.
+	curveForcedOff = false
 	on := curvedExitsAllowed()
 	if curveCache == before {
 		return
