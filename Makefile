@@ -388,7 +388,11 @@ interactive-install: $(OBS_IACT_DIR)
 # --- test --------------------------------------------------------------------
 
 test: mod observers
-	FACTORIO_BIN="$(FACTORIO_BIN)" test/run.sh $(SUITES)
+	@# FKLUA travels beside FACTORIO_BIN for the reason `datastage-check` sends
+	@# it: one suite writes a mod-settings.dat and `fklua modsettings write` is
+	@# what writes it. Without this line a `make FKLUA=... test` would package
+	@# with one binary and configure the curv suite with another.
+	FACTORIO_BIN="$(FACTORIO_BIN)" FKLUA="$(FKLUA)" test/run.sh $(SUITES)
 
 # --- the test observers ------------------------------------------------------
 #
@@ -503,6 +507,7 @@ OBS_MAR_DIR   := $(OBS_DIST)/bbb-marathon-test_0.1.0
 OBS_MIG21_DIR := $(OBS_DIST)/bbb-mig21-observer_0.1.0
 OBS_QUAL_DIR  := $(OBS_DIST)/bbb-qual-test_0.1.0
 OBS_FLIP_DIR  := $(OBS_DIST)/bbb-flip-test_0.1.0
+OBS_CURV_DIR  := $(OBS_DIST)/bbb-curv-test_0.1.0
 OBS_MIX_DIR   := $(OBS_DIST)/bbb-mix-test_0.1.0
 OBS_PLAT_DIR  := $(OBS_DIST)/bbb-plat-test_0.1.0
 OBS_MIG_DIR   := $(OBS_DIST)/bbb-mig-test_0.1.0
@@ -530,7 +535,7 @@ OBS_BENCH_DIR   := $(OBS_DIST)/bbb-bench-setup_0.1.0
 
 observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR) $(OBS_MAR_DIR) $(OBS_MIG21_DIR) \
            $(OBS_QUAL_DIR) $(OBS_MIX_DIR) $(OBS_PLAT_DIR) $(OBS_MIG_DIR) \
-           $(OBS_FLIP_DIR) \
+           $(OBS_FLIP_DIR) $(OBS_CURV_DIR) \
            $(OBS_M2_DIR) $(OBS_M3_DIR) $(OBS_EDGE_DIR) $(OBS_IACT_DIR) \
            $(OBS_BB2_DIR) $(OBS_FOREIGN_DIR) $(OBS_BENCH_DIR)
 
@@ -636,6 +641,24 @@ $(OBS_FLIP_DIR): $(DIST)/obs-flip.wasm $(DIST)/obs-flipdata.wasm Makefile
 	  --name bbb-flip-test --version 0.1.0 \
 	  --title "BBB multi-edge setting flip verification" \
 	  --description "Drives \`bbb-multi-edge-parts\` -- the runtime-global setting that exists on Factorio 2.0 only -- through every transition it has: refused at the false default, flipped ON so the refused clusters compile, a multi-edge balancer built while it is on, flipped OFF with those balancers standing and full (which the mod VETOES), and flipped OFF again once nothing multi-edge is left (which sticks). Asserts nothing itself." \
+	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
+	  -o .
+
+# The curve-upgrade suite. Its world is the only one in the estate that is built
+# to a rule the guest building it no longer has: the rigs compile, an audit
+# marker forces them into the save, and only then are the curve belts laid with
+# no `raise_built` at all -- so what the save carries is three networks the
+# classifier would have built with the curve arm switched off. `base >= 2.0.0`
+# like every other suite's, clamped by test/run.sh's stamp_engine on the newer
+# engine.
+$(OBS_CURV_DIR): $(DIST)/obs-curv.wasm $(DIST)/obs-curvdata.wasm Makefile
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-curv.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-curvdata.wasm) \
+	  --name bbb-curv-test --version 0.1.0 \
+	  --title "BBB curved-exit upgrade verification" \
+	  --description "Builds balancers whose networks were compiled before a belt could turn as it left one, then hands the save to a guest that has the rule -- which must keep every one of them exactly as it stood and turn the setting off for that save. Asserts nothing itself." \
 	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
 	  -o .
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless verification. Fourteen suites, all real Factorio runs, not models:
+# Headless verification. Fifteen suites, all real Factorio runs, not models:
 #
 #   M1  do balancer parts merge and split correctly?
 #   M2  does the compiled hidden network actually balance?
@@ -74,7 +74,7 @@
 #         the geometry intended, or any refusal at all -- the gestures create
 #         the refusals and the staging must not
 #
-# THIRTEEN OF THE FOURTEEN RUN ON EITHER ENGINE, and three of them ANSWER
+# FOURTEEN OF THE FIFTEEN RUN ON EITHER ENGINE, and three of them ANSWER
 # DIFFERENTLY on each. The estate was rebuilt for the one-belt-per-part rule in
 # four tranches and `mig` was the last of them, because it is the only suite
 # whose ANSWER the rule changed rather than whose geometry -- see the SUITES line
@@ -210,7 +210,7 @@ MOD_SERIES="$(sed -n 's/.*"factorio_version": *"\([^"]*\)".*/\1/p' "$MOD_DIR/inf
   echo "-- or run the binary this one was built for." >&2
   exit 1; }
 
-# THE DEFAULT IS ALL THIRTEEN, and getting there took four tranches of estate
+# THE DEFAULT IS ALL OF THEM, and getting there took four tranches of estate
 # work rather than a manifest token. What each suite needed is recorded in
 # agents/single-edge.md's phase sections; the short form, because it is the
 # reason the list reads the way it does:
@@ -247,7 +247,7 @@ MOD_SERIES="$(sed -n 's/.*"factorio_version": *"\([^"]*\)".*/\1/p' "$MOD_DIR/inf
 #   INTERACTIVE checklist stages. It runs here because a rig that stopped
 #   landing, or one this mod refuses, costs a human a session to discover and
 #   costs this a single `--create` to catch.
-SUITES="${*:-m1 sedge mig21 flip m2 m3 mar upg edge mix plat qual mig iact}"
+SUITES="${*:-m1 sedge mig21 flip m2 m3 mar upg curv edge mix plat qual mig iact}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.
@@ -403,6 +403,79 @@ bump_build() {
   grep -q 'build = "' "$f" || { echo "no build stamp in $f" >&2; exit 1; }
   perl -pi -e 's/build = "[^"]+"/build = "m3-upgrade-test"/' "$f"
   echo "==> mod version and guest build stamp bumped: this is an upgrade"
+}
+
+# curve_setting_off <workdir> -- write a mod-settings.dat turning the curved-exit
+# rule off before the map is created.
+#
+# THE FIRST mod-settings.dat ANY SUITE HAS EVER WRITTEN, and it is what makes the
+# `curv` suite's second leg a different SAVE rather than a different observer.
+# Every other suite runs on the state a missing file produces -- the engine
+# supplies each prototype's declared default -- and that is what the curve rule
+# being ON in all of them rests on. Here one leg needs a save that has already
+# been decided, and the alternative is a second copy of the world in a second
+# observer package.
+#
+# `fklua modsettings write` IS THE WRITER, and it is the toolchain's rather than
+# this repository's: the compiler that builds this mod owns Factorio's
+# PropertyTree format, so nothing here transcribes it. tools/mod-settings.py
+# stood here when this suite was written and was deleted on trunk in the sync
+# pass of 2026-09-08; bench/run.sh and test/check-datastage.py moved to the same
+# command, and this is the third caller.
+#
+# THE DOCUMENT CARRIES ALL THREE SECTIONS AND THE VERSION, which is the shape the
+# writer takes; `runtime-global` is the section a MAP setting lives in, and the
+# engine supplies every key this file leaves out from the prototype's own
+# declared default, which is exactly what the other fourteen suites run on. The
+# JSON is written BESIDE the mods directory rather than into it, so the only
+# file this puts in front of the engine's mod loader is the .dat itself.
+#
+# THE TOOLCHAIN IS PROBED BEFORE THIS LEG'S ENGINE RUN, which is later than
+# bench/run.sh probes and is deliberate: this is the only leg of the only suite
+# that needs the command, so hoisting the guard to file scope would refuse a
+# `test/run.sh m1` over a toolchain m1 never asks for. The stderr TEXT decides
+# rather than the exit code: an fklua with the subcommand answers a bare
+# `fklua modsettings` with its usage and exits 1, one without it says
+# `unknown command "modsettings"` and exits 2, so the code alone would not tell a
+# usage line from a refusal. A leg whose settings file was never written is not a
+# skipped leg here, it is a leg measuring the DEFAULT world twice and asserting
+# the wrong save, so this refuses by name rather than carrying on. The probe's
+# own stderr goes in the WORKDIR, which `stage` has already made: a redirect into
+# a directory that is not there fails, `|| true` would swallow it, and `grep -q`
+# over a missing file answers 2, which reads exactly like a toolchain that has
+# the command.
+FKLUA="${FKLUA:-$ROOT/../FkLua/bin/fklua}"
+
+curve_setting_off() {
+  { [ -f "$FKLUA" ] && [ -x "$FKLUA" ]; } || {
+    echo "NOT RUN: no executable fklua at $FKLUA" >&2
+    echo "  the curv suite's second leg needs a mod-settings.dat and \`fklua modsettings write\` writes it" >&2
+    echo "  set FKLUA, or build one: cd \"$ROOT/../FkLua\" && go build -o bin/fklua ./cmd/fklua" >&2
+    exit 1; }
+  [ -d "$1" ] || { echo "no workdir at $1; stage runs before curve_setting_off" >&2; exit 1; }
+  "$FKLUA" modsettings >/dev/null 2>"$1/fklua-modsettings.err" || true
+  if grep -q 'unknown command "modsettings"' "$1/fklua-modsettings.err"; then
+    echo "NOT RUN: the fklua at $FKLUA has no \`modsettings\` command" >&2
+    echo "  the curv suite's second leg is a SAVE with the curve rule already off, and that command writes it" >&2
+    echo "  it is FkLua c21ff07 or later: cd \"$ROOT/../FkLua\" && go build -o bin/fklua ./cmd/fklua" >&2
+    echo "  or set FKLUA to a checkout that has it" >&2
+    exit 1
+  fi
+  python3 - "$1/mod-settings.json" "$ENGINE_SERIES" <<SETTINGS || { echo "could not build the curv suite's settings document" >&2; exit 1; }
+import json, sys
+maj, minor = (int(x) for x in sys.argv[2].split("."))
+doc = {"version": [maj, minor, 0, 0], "startup": {},
+       "runtime-global": {"bbb-curved-exits": False},
+       "runtime-per-user": {}}
+with open(sys.argv[1], "w") as fh:
+    json.dump(doc, fh)
+SETTINGS
+  "$FKLUA" modsettings write --from "$1/mod-settings.json" \
+    --out "$1/mods/mod-settings.dat" >/dev/null || {
+    echo "\`$FKLUA modsettings write\` refused $1/mod-settings.json" >&2
+    echo "  its own line above says why; the one key in it is bbb-curved-exits" >&2
+    exit 1; }
+  echo "==> bbb-curved-exits written OFF into $1/mods/mod-settings.dat"
 }
 
 # --- the mig suite's staging -------------------------------------------------
@@ -704,7 +777,7 @@ guest_gate() {
   # A SEPARATE TAG FROM THE MOD'S OWN. `[BBB] error:` above means one narrow
   # thing -- a compile produced no network -- and is the mod under test speaking.
   # This is the HARNESS speaking, about the world it was asked to build, and one
-  # tag serves all fourteen observers whichever half of the port they are in.
+  # tag serves every observer whichever half of the port it was in.
   if grep -qE "\[BBB-OBS\] error:" "$@"; then
     echo "the test observer could not build its world:" >&2
     grep -hE "\[BBB-OBS\] error:" "$@" | head -20 >&2; exit 1
@@ -825,6 +898,39 @@ for suite in $SUITES; do
       echo "==> asserting the rebuild, then M2's own numbers over it"
       python3 "$ROOT/test/assert-upgrade.py" "$TMP/upg/create.log" "$TMP/upg/run.log"
       python3 "$ROOT/test/assert-m2.py" "$TMP/upg/create.log" "$TMP/upg/run.log"
+      ;;
+    curv)
+      # A SAVE BUILT BEFORE THE CURVED EXIT, HANDED TO THE GUEST THAT HAS IT.
+      # `upg`'s shape -- one guest creates, another loads -- plus the one thing
+      # that suite has no reason to do: the observer lays the curve belts with
+      # NO EVENT after the audit has compiled the networks, so what the save
+      # carries is three networks the classifier would have built with the curve
+      # arm switched off. That is what a save from before 0.3.3 is.
+      #
+      # ITS OWN SUITE RATHER THAN A SECOND OBSERVER INSIDE `upg`, and the reason
+      # is readability rather than cost: a benchmark phase is a whole Factorio
+      # run either way, and every other arm of this case is one world, one
+      # observer and one assertion script. `upg` also re-runs M2's entire
+      # assertion set over its own logs, which is a statement about the M2 world
+      # and would have to be threaded around a second one.
+      echo "=== curv: a save from before the curved exit keeps the reading it was built to ==="
+      stage "$TMP/curv" bbb-curv-test
+      BETWEEN=bump_build run "$TMP/curv" "${BBB_CURV_TICKS:-1200}"
+      unset BETWEEN
+      echo "==> asserting the upgrade, the write and the fresh-world negative"
+      python3 "$ROOT/test/assert-curve.py" "$TMP/curv/create.log" "$TMP/curv/run.log"
+      # THE SECOND LEG IS THE SAME WORLD ON A SAVE ALREADY DECIDED. With the
+      # setting off from the first byte the curve arm produces no edge at all,
+      # so the adoption comparison matches on its first reading and this pass
+      # never runs -- which is the negative that says it cannot fire twice.
+      echo "=== curv: ... and does nothing at all to a save that already decided ==="
+      stage "$TMP/curvoff" bbb-curv-test
+      curve_setting_off "$TMP/curvoff"
+      BETWEEN=bump_build run "$TMP/curvoff" "${BBB_CURV_TICKS:-1200}"
+      unset BETWEEN
+      echo "==> asserting that nothing happened"
+      python3 "$ROOT/test/assert-curve.py" --leg off \
+        "$TMP/curvoff/create.log" "$TMP/curvoff/run.log"
       ;;
     plat)
       echo "=== Space Age: a space platform surface, and belt stacking ==="
