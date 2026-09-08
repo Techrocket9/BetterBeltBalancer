@@ -63,7 +63,7 @@ a machine with different DLC produces a different hash for a mod that is
 perfectly fine. A golden line whose engine does not match the binary is a SKIP
 with a message, never a failure.
 
-...AND SEVEN VARIANT ARMS AND A SPEED ARM, WHICH ARE NOT HASHED.
+...AND TEN VARIANT ARMS AND A SPEED ARM, WHICH ARE NOT HASHED.
 
 0.3.1 made the recipe's cost, the research's cost and the hidden network's belt
 speed depend on things a golden cannot hold still. A hash is the right
@@ -79,6 +79,14 @@ never make easy. So:
   time, and a TARGETED assertion: the recipe's exact ingredient list, or the
   technology's exact unit and prerequisite. Nothing else in the dump is looked
   at, because everything else is the golden's business.
+
+  the RECIPE CUSTOMIZER gets three more (0.3.3), because its states are not
+  values of the dropdown alone: `custom` with the text untouched, `custom` with
+  a recipe written into the text, and an edited text under a preset. The last
+  two also assert a line of the LIBRARY'S OWN LOG, which is the only thing in
+  this file that is not read out of a dump -- what the library does with a text
+  under a preset is by design invisible in the prototypes, so the sentence is
+  the whole of the evidence. See RECIPE_CUSTOM_ARMS.
 
   the SPEED derivation gets an arm with a mod in it that defines a faster belt,
   because no mod set this machine can otherwise install has one -- vanilla tops
@@ -223,6 +231,7 @@ def staged_mod(name: str) -> Path:
 # ---------------------------------------------------------------------------
 
 RECIPE_SETTING = "bbb-recipe-cost"
+RECIPE_TEXT_SETTING = "bbb-recipe-ingredients"
 TECH_SETTING = "bbb-tech-cost"
 
 RECIPE_VARIANTS = {
@@ -239,6 +248,73 @@ RECIPE_VARIANTS = {
 # as by the golden: an arm that wrote NO mod-settings.dat and one that wrote the
 # default must produce the same recipe, or the writer is doing something.
 RECIPE_DEFAULT = [("iron-plate", 4), ("iron-gear-wheel", 2), ("transport-belt", 2)]
+
+# ---------------------------------------------------------------------------
+# THE CUSTOMIZER'S ARMS, which are the seventh value of `bbb-recipe-cost` and
+# the text setting beside it.
+#
+# THREE ARMS FOR THREE STATES, and none of them is reachable from the six above:
+# the dropdown on `custom` with the text left alone, the dropdown on `custom`
+# with a recipe written into the text, and a text EDITED while the dropdown is
+# still on a preset -- which is the state where nothing must happen and the log
+# has to say so.
+#
+# TWO OF THEM ALSO ASSERT A LOG LINE, and that is the one thing in this file
+# that is not a prototype. What the library does about a text under a preset is
+# by design invisible in the dump -- the preset applies, exactly as it would
+# with the field untouched -- so the ONLY evidence that the text was read and
+# deliberately not used is the sentence, and a player who edits a field and sees
+# nothing happen is what that sentence exists to prevent. The line is compared
+# from `fkrecipes:` onward, never including the engine's own timestamp in front
+# of it.
+#
+# ANTI-VACUITY, AND IT IS NOT SPREAD EVENLY ACROSS THE THREE. A .dat that was
+# ignored or malformed leaves every setting at its declared default, which is
+# the recipe `RECIPE_DEFAULT` names -- so the arms that prove the file was read
+# at all are the two whose expectation is something else. `recipe-custom` is
+# one: `3 iron-plate, 1 splitter` is a list no preset produces, and its log line
+# says the text was taken. `recipe-ignored` is the other: cheap's list, where a
+# text that had been applied would give one iron plate rather than two, plus its
+# own line.
+#
+# `recipe-custom-default` CARRIES NONE OF THAT WEIGHT and is here as coverage of
+# the documented path -- `custom` with the field never touched. MEASURED on
+# Factorio 2.0.77 with the packaged mod: the run with NO .dat at all and the run
+# with {bbb-recipe-cost: custom} produce the same ingredient list and no
+# `fkrecipes:` line in either, so nothing this arm observes tells a .dat that
+# was read from one that was ignored. It stays because picking `custom` and
+# typing nothing is a state a player reaches and this gate should visit; what
+# makes the section a measurement is the two arms above it.
+#
+# The text is written as a plain string by tools/mod-settings.py, which is what
+# a player's own settings screen stores.
+# ---------------------------------------------------------------------------
+
+RECIPE_CUSTOM_ARMS = [
+    # `custom` with the text as it ships: the reserved word `default`, which the
+    # library resolves to the mod's own declared list WITH its ladders. So this
+    # is the vanilla recipe, and no line at all is expected about it -- the
+    # library's rule for the word is that it takes the pre-existing path and
+    # says nothing.
+    ("recipe-custom-default", {RECIPE_SETTING: "custom"}, RECIPE_DEFAULT, None),
+    # `custom` with a recipe written into the field. `splitter` is a base item
+    # no other arm of this file emits, so the list cannot be confused with a
+    # preset's, and the amounts are the player's rather than any plan's.
+    ("recipe-custom",
+     {RECIPE_SETTING: "custom", RECIPE_TEXT_SETTING: "3 iron-plate, 1 splitter"},
+     [("iron-plate", 3), ("splitter", 1)],
+     "fkrecipes: bbb-balancer-part takes its ingredients from "
+     "bbb-recipe-ingredients: 3 iron-plate, 1 splitter"),
+    # A text edited while the dropdown says `cheap`. The preset wins, and the
+    # expected list is cheap's: the text names the SAME item at a different
+    # amount, so an implementation that took it would fail the list comparison
+    # and not only the line.
+    ("recipe-ignored",
+     {RECIPE_SETTING: "cheap", RECIPE_TEXT_SETTING: "1 iron-plate"},
+     RECIPE_VARIANTS["cheap"],
+     "fkrecipes: bbb-recipe-ingredients is edited, but bbb-recipe-cost is not "
+     "on custom, so the text is ignored"),
+]
 
 # The non-default technologies. The expected UNIT is not written out, because
 # the claim is not "20 automation science" -- it is "whatever base charges for
@@ -488,6 +564,20 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
             "mods": [mod_name] + extra_names,
             "data_raw_sha256": normalised_sha(so / "data-raw-dump.json", keep_raw),
             "mod_settings_sha256": normalised_sha(so / "mod-settings-dump.json", keep_set),
+            # WHAT THE LIBRARY SAID, for the arms whose behaviour is a sentence
+            # rather than a prototype. FkRecipes routes its log lines through
+            # fkdata into the engine's own log, and the engine stamps each one
+            # with a time AND the Lua file and line it came from (measured on
+            # 2.0.77: `   0.399 Script @__better-belt-balancer__/fk_data.lua:609:
+            # fkrecipes: ...`). Both halves of that stamp move on their own --
+            # the seconds every run, the line number whenever the emitted Lua
+            # shifts -- so what is kept is the text from `fkrecipes:` onward,
+            # which is the convention test/assert-upgrade.py already uses for
+            # the guest's own `[BBB]` lines: match from the tag, never on what
+            # the engine printed in front of it.
+            "fkrecipes_lines": [line[line.index("fkrecipes:"):]
+                                for line in text.splitlines()
+                                if "fkrecipes:" in line],
             # A SMOKE TEST AND LABELLED AS ONE. It is over the prototype LIST, so
             # it is order-insensitive (convenient) and blind to field values
             # (disqualifying). Recorded because a move in it localises a failure
@@ -653,12 +743,14 @@ def main() -> int:
     book = json.loads(GOLDENS.read_text()) if GOLDENS.exists() else {}
 
     if args.capture:
-        # THE PROBE IS NOT A GOLDEN. check_legacy_stub compares it against a rule
-        # written down in this file, so recording it would invite the one thing a
-        # golden must never make easy -- re-capturing the answer instead of
-        # reading it. Only the hashes and the checksum are the engine's to record.
+        # THE PROBE IS NOT A GOLDEN, AND NEITHER IS THE LOG. check_legacy_stub
+        # and the customizer's arms compare them against rules written down in
+        # this file, so recording either would invite the one thing a golden
+        # must never make easy -- re-capturing the answer instead of reading it.
+        # Only the hashes and the checksum are the engine's to record.
         book.setdefault(version_full, {}).update(
-            {a: {k: v for k, v in g.items() if k != "probe"} for a, g in got.items()})
+            {a: {k: v for k, v in g.items() if k not in ("probe", "fkrecipes_lines")}
+             for a, g in got.items()})
         # setdefault, not assignment: an engine's note is its own provenance
         # story, often hand-corrected after the capture -- a recapture must not
         # overwrite it with a generic one.
@@ -758,7 +850,8 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
 
     Returns True on a failure, which is the shape main() already counts in.
     """
-    print(f"==> the cost settings, {len(RECIPE_VARIANTS) + len(TECH_VARIANTS) + 1} "
+    print(f"==> the cost settings, "
+          f"{len(RECIPE_VARIANTS) + len(TECH_VARIANTS) + len(RECIPE_CUSTOM_ARMS) + 1} "
           f"variant arm(s)")
     bad = False
 
@@ -779,6 +872,26 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
                   f"{'':>5}  and `{value}` should be {want}")
         else:
             print(f"  ok   {arm:<26} {got}")
+
+    # THE CUSTOMIZER, three arms, each driving the real settings through the
+    # same writer. See RECIPE_CUSTOM_ARMS for what each state is and why the
+    # log line is part of two of them.
+    for arm, startup, want, want_line in RECIPE_CUSTOM_ARMS:
+        got = run_arm(arm, factorio, series, mod_dir, None,
+                      startup=startup, probe=ingredients_of)
+        ings, lines = got["probe"], got["fkrecipes_lines"]
+        if ings != want:
+            bad = True
+            print(f"FAIL {arm}: the recipe is {ings}\n"
+                  f"{'':>5}  and {startup} should be {want}")
+            continue
+        if want_line is not None and want_line not in lines:
+            bad = True
+            print(f"FAIL {arm}: the library's log lines are {lines}\n"
+                  f"{'':>5}  and one of them has to be {want_line!r}")
+            continue
+        print(f"  ok   {arm:<26} {ings}"
+              + (f"\n{'':>5}  said {want_line!r}" if want_line else ""))
 
     for value in TECH_VARIANTS:
         arm = f"tech-{value}"

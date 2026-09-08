@@ -26,12 +26,39 @@ import (
 // fixture does not with a panic naming itself, so the NEXT question costs
 // nothing until a plan of this mod's actually asks it.
 //
-// FluidExists IS LEFT TO THAT PANIC, DELIBERATELY. Nothing this mod declares
-// is a fluid ingredient -- [RecipePlan]'s six plans name items and only items
-// -- so the library never asks, and an answer written here would be a fixture
-// modelling a question no test drives. The day an ingredient becomes a fluid,
-// `fkrecipes: World.FluidExists is not implemented by this fixture` names the
-// method to write, which is better than a `false` that silently drops it.
+// FluidExists WAS LEFT TO THAT PANIC AND THE CUSTOMIZER TOOK IT AWAY. Nothing
+// this mod DECLARES is a fluid -- [RecipePlan]'s six plans name items and only
+// items -- so while every ingredient came from those six the library never
+// asked. `bbb-recipe-ingredients` is a text field a player writes anything
+// into, and the language looks a bare name up among the ITEMS and then among
+// the FLUIDS (FkRecipes go/ingredientlist.go:1074 and :1077), so every refusal
+// path a typed name can take asks this question.
+//
+// THE OLD COMMENT'S PREDICTION HELD, AND IT WAS RE-MEASURED RATHER THAN
+// ASSUMED. With this method deleted again,
+// [TestACustomTextTheGameCannotAnswerIsRefused] answers
+// `panic: fkrecipes: World.FluidExists is not implemented by this fixture`
+// (go/world.go:168), through `resolveName` at go/ingredientlist.go:1077 --
+// which is better than the `false` an unwritten stub would have returned.
+//
+// THE LIST STOCKS `water`, AND THE REFUSAL IT BUYS IS THE LIBRARY'S OWN. This
+// mod's recipe declares no `Category`, so it is `crafting`, and
+// `categoryTakesItemsOnly` (FkRecipes go/ingredientlist.go:110-127) is the
+// engine's rule written down on the library's side of the boundary: a fluid
+// under that category is refused at the list, by category name
+// (go/ingredientlist.go:705), before any prototype is built. MEASURED on
+// Factorio 2.0.77 with the packaged mod at `bbb-recipe-cost = custom` and
+// `bbb-recipe-ingredients = "1 water"`, the load fails with `fkrecipes:
+// bbb-recipe-ingredients, entry 1 ("1 water"): water is a fluid, and a recipe
+// in the crafting category takes items only` -- the library's sentence, naming
+// the setting and the entry, and not the engine's prototype error.
+//
+// SO THE FLUID IS STOCKED RATHER THAN WITHHELD, because every real game has
+// `water` and a player who reaches for it is likelier than one who invents a
+// name no mod defines. It is what lets
+// [TestACustomTextTheGameCannotAnswerIsRefused] pin that sentence; with the
+// list empty the name would fall out of `resolveName` as `no item or fluid is
+// named water` and the category rule would be a branch no test here reaches.
 //
 // EVERY ANSWER IS A LIST RATHER THAN A MAP, and `TechNames` sorts a copy. The
 // World contract says that method returns SORTED names and the library's cycle
@@ -65,6 +92,11 @@ type fixtureWorld struct {
 	entities []string
 	recipes  []string
 	tools    []string
+	// fluids is what a name the items do not have is looked up in next, and
+	// only a name a PLAYER typed ever gets that far. See the header for why
+	// `water` is stocked: a recipe in the `crafting` category takes items
+	// only, and the refusal that says so is the library's.
+	fluids []string
 
 	// The technologies, with the unit each one carries. A technology with a
 	// nil unit is present and unit-less, which is the research_trigger shape
@@ -158,6 +190,11 @@ func (w fixtureWorld) RecipeExists(name string) bool { return has(w.recipes, nam
 // ladder is the only thing in this mod's plan that asks it.
 func (w fixtureWorld) ToolExists(name string) bool { return has(w.tools, name) }
 
+// FluidExists is asked only about a name a PLAYER typed into
+// `bbb-recipe-ingredients`, and only after the items answered no. See the
+// header for what the one stocked fluid is for.
+func (w fixtureWorld) FluidExists(name string) bool { return has(w.fluids, name) }
+
 func (w fixtureWorld) tech(name string) (fixtureTech, bool) {
 	for _, t := range w.techs {
 		if t.name == name {
@@ -203,9 +240,10 @@ func unitOf(count, seconds float64, pack string, amount float64) *fkrecipes.Valu
 }
 
 // everythingWorld is a game that has every name any ladder in this package can
-// reach, the two science packs its research can be priced in, the three
-// logistics technologies with DISTINCT units, the balancer part entity, and
-// both dropdowns answering their defaults.
+// reach, the two science packs its research can be priced in, `water` for the
+// one refusal a fluid earns, the three logistics technologies with DISTINCT
+// units, the balancer part entity, and all three settings answering their
+// declared defaults.
 //
 // THE THREE UNITS DIFFER ON PURPOSE. What `CostBy` promises is that the unit
 // comes from the source the setting names, and three identical units would be
@@ -215,6 +253,7 @@ func everythingWorld() fixtureWorld {
 		modName:  ModName,
 		items:    ladderVocabulary(),
 		tools:    []string{"automation-science-pack", "logistic-science-pack"},
+		fluids:   []string{"water"},
 		entities: []string{PartName},
 		techs: []fixtureTech{
 			{name: TechLogistics, unit: unitOf(20, 15, "automation-science-pack", 1)},
@@ -223,9 +262,18 @@ func everythingWorld() fixtureWorld {
 			{name: TechLogistics3, prereqs: []string{TechLogistics2},
 				unit: unitOf(300, 15, "logistic-science-pack", 2)},
 		},
+		// ALL THREE SETTINGS ANSWER, THE TEXT ONE WITH THE RESERVED WORD, which
+		// is what a real game hands the planner: Factorio stores every
+		// setting's current value in mod-settings.dat, untouched defaults
+		// included (measured by the library, FkRecipes go/lib.go:230), so a
+		// player who never opened the settings screen still answers `default`
+		// here. A fixture that left it absent would model the hand-edited file
+		// instead, which is [TestAnUnreadableCustomTextTakesTheDeclaredList]'s
+		// world and is reached through `withoutStartup`.
 		startup: map[string]string{
-			SettingRecipeCost: RecipeDefault(),
-			SettingTechCost:   TechDefault(),
+			SettingRecipeCost:        RecipeDefault(),
+			SettingRecipeIngredients: theDefaultWord,
+			SettingTechCost:          TechDefault(),
 		},
 	}
 }
@@ -238,6 +286,22 @@ func (w fixtureWorld) withStartup(name, value string) fixtureWorld {
 		next[k] = v
 	}
 	next[name] = value
+	w.startup = next
+	return w
+}
+
+// withoutStartup makes one setting answer ABSENT, which is what a hand-edited
+// mod-settings.dat missing a row hands the planner and the one thing
+// `withRawStartup` cannot express: a present value of the wrong type is refused
+// for a text setting, where an absent one degrades to the declared default with
+// a line saying so.
+func (w fixtureWorld) withoutStartup(name string) fixtureWorld {
+	next := map[string]string{}
+	for k, v := range w.startup {
+		if k != name {
+			next[k] = v
+		}
+	}
 	w.startup = next
 	return w
 }

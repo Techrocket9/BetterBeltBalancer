@@ -1,6 +1,7 @@
 package tune
 
-// THE RECIPE COST, as six named plans behind one startup setting.
+// THE RECIPE COST, as six named plans and one text field behind one startup
+// setting.
 //
 // Asked for on the mod portal: the vanilla recipe is iron plates, gears and
 // yellow belts, which is right for a mod whose whole pitch is that a balancer
@@ -22,8 +23,15 @@ package tune
 // nothing else. `ResolveRecipe` walked them against a caller's predicate and is
 // deleted; the library walks them now, as one `IngredientChoice` per option
 // built by [Plan]. See the package doc.
+//
+// AND SINCE ROUND THREE THERE IS A SEVENTH VALUE WITH NO PLAN UNDER IT.
+// `custom` hands the ingredients to `bbb-recipe-ingredients`, which the player
+// writes in the language FkRecipes' docs/ingredient-list.md documents. It is a
+// value of the dropdown and NOT an option of this file: [RecipePlan] answers
+// for the six, [RecipeValues] is the seven the setting allows, and the library
+// refuses the two lists disagreeing in either direction.
 
-// The allowed values of `bbb-recipe-cost`, in menu order.
+// The allowed values of `bbb-recipe-cost` that name a plan, in menu order.
 //
 // THE FIRST IS THE DEFAULT, by construction rather than by a second constant --
 // Factorio's `allowed_values` and `default_value` are separate fields and a
@@ -52,8 +60,46 @@ func RecipeOptions() []string {
 	}
 }
 
+// RecipeCustom is the seventh value of `bbb-recipe-cost`, and the only one with
+// no plan behind it: it hands the ingredients to `bbb-recipe-ingredients`, the
+// text setting the player writes.
+//
+// IT IS DELIBERATELY NOT IN [RecipeOptions]. The library takes the presets and
+// the custom value as two separate lists and refuses them overlapping -- "gives
+// custom a preset as well as a Custom arm; name the arm's value with
+// CustomValue" (FkRecipes go/customize.go:327) -- because a value that is both
+// would be a plan and a text field claiming the same row. So [RecipePlan],
+// [recipeChoices] and every test that iterates the PRESETS keep reading the six,
+// and only the dropdown's declaration reads [RecipeValues].
+//
+// The spelling is the library's own default for the arm, which is why
+// `IngredientChoices.CustomValue` is left empty in [Plan]: that field exists for
+// a mod whose dropdown ALREADY ships a preset called `custom`, and this one does
+// not.
+const RecipeCustom = "custom"
+
+// RecipeValues is every value `bbb-recipe-cost` allows, in the order the
+// dropdown shows them: the six presets, then the custom arm.
+//
+// THE SIX KEEP THEIR SPELLING AND THEIR POSITIONS AND THE SEVENTH IS LAST,
+// which is the whole migration. Factorio keys a stored startup choice by its
+// VALUE STRING in mod-settings.dat, so every player who had chosen
+// `belt-express` still reads `belt-express` after the update; the only row that
+// is new is the one nobody has stored. The library checks this list against
+// [recipeChoices] and refuses a mismatch in either direction, with the custom
+// value taken out of the comparison first: FkRecipes go/data.go:235 drops it,
+// and the comparison itself is `matchesAllowedValues` (go/data.go:1281),
+// called from go/data.go:241.
+func RecipeValues() []string {
+	return append(RecipeOptions(), RecipeCustom)
+}
+
 // RecipeDefault is what the setting defaults to, and it is the head of
 // [RecipeOptions] rather than a constant beside it.
+//
+// THE HEAD OF THE PRESETS AND NOT OF [RecipeValues], which is the same
+// statement read from the other end: the default has to be a value a plan
+// answers for, and the custom arm is the one value that is not.
 func RecipeDefault() string { return RecipeOptions()[0] }
 
 // RecipePlan is one option's ingredients, before any of them is checked against

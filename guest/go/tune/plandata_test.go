@@ -225,6 +225,11 @@ func TestTheRecipeIsTheOneThatShipped(t *testing.T) {
 // of the thing under test. The gate drives the same six values through a real
 // `mod-settings.dat` and a real engine; this drives them through a fixture in
 // milliseconds and says WHICH ingredient moved.
+//
+// SIX AND NOT THE DROPDOWN'S SEVEN. `custom` is a value with no plan behind it,
+// so there is nothing here for it to be compared against; the gate's own recipe
+// loop stops at the same six for the same reason, and the customizer's arms are
+// their own, in both places.
 func TestEveryRecipeOptionIsTheListTheGateAsserts(t *testing.T) {
 	for _, tc := range []struct {
 		option string
@@ -762,6 +767,240 @@ func TestAnUnreadableSettingTakesTheDeclaredDefault(t *testing.T) {
 		t.Errorf("the unreadable setting was not reported; the log stream is %v\n"+
 			" want it to carry %q", logs, want)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// THE CUSTOMIZER: the seventh value, and the text field behind it.
+//
+// `bbb-recipe-cost` gained one value and `bbb-recipe-ingredients` arrived
+// beside it, so a player who wants a recipe none of the six presets is can
+// write one. Five behaviours are pinned below, and every sentence a PLAYER can
+// be shown is compared word for word rather than by substring: a refusal that
+// stops the load is the only thing they are given to fix it with, so its
+// wording is as much this mod's surface as the recipe is.
+// ---------------------------------------------------------------------------
+
+// theDefaultWord is FkRecipes' reserved word for "the mod's own declared list,
+// with its ladders". The library keeps it unexported (go/ingredientlist.go:86,
+// `defaultWord`) and documents it in docs/ingredient-list.md, so a consumer
+// writes it out; it is written out ONCE here, because the fixture, these tests
+// and the engine gate all have to say the same seven letters.
+const theDefaultWord = "default"
+
+// vanillaLadderList is what the vanilla plan resolves to in a game that has
+// every rung, transcribed rather than read off [RecipePlan] for the reason
+// every expectation in this file is transcribed. It is what BOTH untouched
+// paths of the customizer must produce: the word `default`, and a text the
+// planner could not read at all.
+func vanillaLadderList() []ingredientPair {
+	return []ingredientPair{
+		{"iron-plate", 4}, {"iron-gear-wheel", 2}, {"transport-belt", 2}}
+}
+
+// TestTheDefaultWordUnderCustomIsTheVanillaLadder is the state a player reaches
+// by picking `custom` and typing nothing.
+//
+// THE WORD IS NOT A LIST AND THAT IS THE WHOLE DESIGN. `bbb-recipe-ingredients`
+// ships holding `default`, and the library resolves that to the DECLARED list
+// with its ladders rather than to a rendering of it -- so a player who switches
+// to `custom` and never edits gets exactly what `vanilla` gives them, in this
+// release and in every later one, and in a modpack missing a rung
+// (FkRecipes go/customize.go:697, the isDefault arm of resolveIngredientsFrom).
+//
+// AND IT DRAWS NO LOG LINE, which is the library's stated rule for this arm:
+// "the word default: the AUTHOR's declared list with its ladders, which is the
+// pre-existing resolution path and gets no line of its own"
+// (go/customize.go:649). So the assertion is the EMPTY log stream rather than
+// the absence of one particular sentence: a line here would be the library
+// narrating an untouched field on every load of every game.
+//
+// THE THREE SPELLINGS ARE THE LANGUAGE'S, not this mod's guesses. Surrounding
+// space is trimmed and one trailing comma is tolerated, so " default " and
+// "default," are the marker too -- which matters beyond tidiness, because
+// [TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo] asks the SAME function
+// what "edited" means: a spelling read as an edit would tell a player their
+// untouched field was ignored.
+func TestTheDefaultWordUnderCustomIsTheVanillaLadder(t *testing.T) {
+	for _, text := range []string{theDefaultWord, " default ", "default,"} {
+		w := everythingWorld().
+			withStartup(SettingRecipeCost, RecipeCustom).
+			withStartup(SettingRecipeIngredients, text)
+		protos, logs := extendsOf(t, dataOps(t, w))
+		for _, line := range logs {
+			t.Errorf("the text %q is the default marker and the plan said "+
+				"something about it: %s", text, line)
+		}
+		checkIngredients(t, "custom on "+strconv.Quote(text),
+			protoOf(t, protos, "recipe", PartName), vanillaLadderList())
+	}
+}
+
+// TestAnUnreadableCustomTextTakesTheDeclaredList is the OTHER untouched path,
+// and it is not the same one.
+//
+// A setting the planner cannot read AT ALL is a hand-edited mod-settings.dat
+// with the row missing: the engine writes every setting's current value into
+// that file, untouched defaults included, so no player produces this. The
+// library degrades to the declared list and SAYS SO, with the sentence it uses
+// for every unreadable setting -- and that line is the whole difference between
+// this arm and the word above. One is a player's choice; the other is a file
+// somebody edited by hand, and it should not pass in silence.
+//
+// THE FIXTURE HAS TO ANSWER THE FULL NAME FOR THIS TO MEAN ANYTHING.
+// `bbb-recipe-ingredients` is declared Legacy, so the name the library asks
+// `StartupSetting` for is the unprefixed one a player's file carries. A fixture
+// keyed on anything else would answer absent for every arm of the customizer,
+// and this is the one test that would still pass.
+func TestAnUnreadableCustomTextTakesTheDeclaredList(t *testing.T) {
+	w := everythingWorld().
+		withStartup(SettingRecipeCost, RecipeCustom).
+		withoutStartup(SettingRecipeIngredients)
+	protos, logs := extendsOf(t, dataOps(t, w))
+
+	checkIngredients(t, "an unreadable text",
+		protoOf(t, protos, "recipe", PartName), vanillaLadderList())
+	// THE SENTENCE IS A LITERAL, not the constants spliced together: this
+	// section compares every line a player is shown word for word, and a
+	// renamed constant has to fail this test rather than travel through it.
+	checkExactlyOneLog(t, logs,
+		"fkrecipes: the setting bbb-recipe-ingredients was not readable, "+
+			"so its default applies")
+}
+
+// TestTheCustomValueTakesItsIngredientsFromTheText is the feature, stated as
+// the recipe a player gets.
+//
+// THE ORDER IS THE TYPED ORDER, which is why the comparison is a slice: the
+// list a player writes is the list they see in the crafting tooltip, and a
+// planner that sorted it would be quietly rewriting their recipe.
+//
+// THE LOG LINE IS PINNED WORD FOR WORD, AND IT IS THE CANONICAL RENDERING
+// RATHER THAN THE TEXT AS TYPED: a player who wrote `iron-plate x3` reads back
+// `3 iron-plate` and learns the form the library would have written
+// (FkRecipes go/customize.go:709). It names the RECIPE and the SETTING by their
+// EMITTED names, both unprefixed here because both are Legacy, so the line
+// points at the row in the menu a player would go and edit.
+func TestTheCustomValueTakesItsIngredientsFromTheText(t *testing.T) {
+	w := everythingWorld().
+		withStartup(SettingRecipeCost, RecipeCustom).
+		withStartup(SettingRecipeIngredients, "3 iron-plate, 1 splitter")
+	protos, logs := extendsOf(t, dataOps(t, w))
+
+	checkIngredients(t, "a written recipe", protoOf(t, protos, "recipe", PartName),
+		[]ingredientPair{{"iron-plate", 3}, {"splitter", 1}})
+	checkExactlyOneLog(t, logs,
+		"fkrecipes: bbb-balancer-part takes its ingredients from "+
+			"bbb-recipe-ingredients: 3 iron-plate, 1 splitter")
+}
+
+// TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo is the shape a pair of
+// settings must not have: a field the player edits where nothing happens.
+//
+// The two rows are not both live. The text applies only while the dropdown says
+// `custom`, and on any preset the preset wins -- so the library says out loud
+// that it read the text and is not using it, which is the entire reason it
+// parses a text it has no intention of applying.
+//
+// WHAT MAKES THIS NOT VACUOUS is the ingredient list beside the line. `cheap`
+// and the text name the same item at different amounts, so an implementation
+// that quietly took the text would emit one iron plate and fail the comparison
+// rather than only losing a sentence in the log.
+func TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo(t *testing.T) {
+	w := everythingWorld().
+		withStartup(SettingRecipeCost, RecipeCheap).
+		withStartup(SettingRecipeIngredients, "1 iron-plate")
+	protos, logs := extendsOf(t, dataOps(t, w))
+
+	checkIngredients(t, "an edited text under cheap",
+		protoOf(t, protos, "recipe", PartName),
+		[]ingredientPair{{"iron-plate", 2}, {"transport-belt", 1}})
+	// A literal for the reason the unreadable arm's is: a renamed constant
+	// must fail this sentence rather than be carried by it.
+	checkExactlyOneLog(t, logs,
+		"fkrecipes: bbb-recipe-ingredients is edited, but bbb-recipe-cost "+
+			"is not on custom, so the text is ignored")
+}
+
+// TestACustomTextTheGameCannotAnswerIsRefused pins the three refusals a player
+// is likeliest to see, WORD FOR WORD, because a refusal is a mod that does not
+// load and the sentence is all they are given to fix it with.
+//
+// NOTHING IS SUBSTITUTED FOR A TYPED NAME, which is the deliberate asymmetry
+// with this package's ladders: a ladder is the AUTHOR saying "any of these will
+// do", and a typed name is a player naming one thing. Guessing at it would hand
+// them a recipe they did not ask for.
+//
+// THE SECOND ARM IS THE ONE THIS MOD CAUSED. Its dropdown labels spell DISPLAY
+// names ("Default: 4 iron plates, 2 gears, ..."), so a player copying the label
+// they were on into the field types `iron plates` -- and the language answers
+// with the internal name rather than with advice about commas. That fold exists
+// in FkRecipes because this mod's labels were the example in its design review;
+// keeping the labels as they are is the decision recorded in
+// mod-data/locale/en/better-belt-balancer.cfg, and this is what makes keeping
+// them safe.
+func TestACustomTextTheGameCannotAnswerIsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want string
+	}{
+		{
+			// A name no mod in this game defines. The fixture stocks every rung
+			// of every ladder and nothing else, which is what makes it absent.
+			text: "3 tungsten-plate",
+			want: `fkrecipes: bbb-recipe-ingredients, entry 1 ("3 tungsten-plate"): ` +
+				`no item or fluid is named tungsten-plate`,
+		},
+		{
+			// The display name off this mod's own dropdown label.
+			text: "2 iron plates",
+			want: `fkrecipes: bbb-recipe-ingredients, entry 1 ("2 iron plates"): ` +
+				`no item or fluid is named "iron plates"; did you mean iron-plate`,
+		},
+		{
+			// A NAME THE GAME HAS, WHICH IS THE THIRD SHAPE AND NOT A TYPO AT
+			// ALL. This mod's recipe declares no `Category`, so it is
+			// `crafting`, and the library refuses a fluid there at the list
+			// rather than letting the engine refuse the prototype later
+			// (FkRecipes go/ingredientlist.go:110-127, and the sentence at
+			// :705). Every real game has `water`, so this is the refusal a
+			// player reaches after "no item or fluid is named": the field
+			// takes an ingredient, water IS one, and the reason it cannot be
+			// used names the category rather than the spelling.
+			text: "1 water",
+			want: `fkrecipes: bbb-recipe-ingredients, entry 1 ("1 water"): ` +
+				`water is a fluid, and a recipe in the crafting category takes items only`,
+		},
+	} {
+		w := everythingWorld().
+			withStartup(SettingRecipeCost, RecipeCustom).
+			withStartup(SettingRecipeIngredients, tc.text)
+		_, err := Plan().PlanData(w)
+		if err == nil {
+			t.Errorf("the text %q planned cleanly: a list the language "+
+				"refuses reached a prototype, which is a load failure with "+
+				"this mod's name on it in somebody else's pack", tc.text)
+			continue
+		}
+		if err.Error() != tc.want {
+			t.Errorf("the text %q is refused with\n got  %q\n want %q",
+				tc.text, err.Error(), tc.want)
+		}
+	}
+}
+
+// checkExactlyOneLog is the assertion the customizer's three log arms share:
+// the line is there word for word, and it is the ONLY thing the plan said.
+//
+// The second half is what a substring search would miss. A plan that emitted
+// the right line beside a dropped ingredient, or beside a second copy of
+// itself, is not the plan this mod wants -- and in a game that has everything,
+// any other line is a degradation with no cause.
+func checkExactlyOneLog(t *testing.T, logs []string, want string) {
+	t.Helper()
+	if len(logs) == 1 && logs[0] == want {
+		return
+	}
+	t.Errorf("the plan's log stream is %q\n want exactly one line, %q", logs, want)
 }
 
 // TestEveryAmountIsAWholeNumber is what plan.go's int64 conversion rests on.

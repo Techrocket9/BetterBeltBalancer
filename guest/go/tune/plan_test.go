@@ -1,6 +1,7 @@
 package tune
 
 import (
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -45,6 +46,17 @@ type planWorld struct{}
 func (planWorld) ModName() string { return ModName }
 
 // wantSetting is one expected prototype: every field, transcribed.
+//
+// THE FIELD SET IS PART OF THE TRANSCRIPTION since the customizer landed. Three
+// settings of two shapes carry three different field lists, so `fields` names
+// what each one may have rather than one list covering all of them, and it is
+// derived from the transcription below rather than from the plan: a dropdown
+// has `allowed_values`, a text setting has `auto_trim`, and a
+// `localised_description` appears on the two the library composes one for. The
+// emission order is FkRecipes go/settings.go's, whose own note puts the
+// description last "because it is the bulkiest field and because it is composed
+// out of everything above it"; the comparison is order-insensitive, so what is
+// checked here is the SET.
 type wantSetting struct {
 	settingType  string
 	name         string
@@ -52,6 +64,25 @@ type wantSetting struct {
 	defaultValue string
 	order        string
 	allowed      []string
+	autoTrim     bool
+	// description is the composed localised_description, or the zero Value for
+	// a setting the library composes none for.
+	description fkrecipes.Value
+}
+
+// fields is every key this prototype may carry, from what was transcribed.
+func (w wantSetting) fields() []string {
+	out := []string{"type", "name", "setting_type", "default_value", "order"}
+	if w.allowed != nil {
+		out = append(out, "allowed_values")
+	}
+	if w.autoTrim {
+		out = append(out, "auto_trim")
+	}
+	if w.description.Kind != fkrecipes.KindNil {
+		out = append(out, "localised_description")
+	}
+	return out
 }
 
 func wantSettings() []wantSetting {
@@ -62,10 +93,49 @@ func wantSettings() []wantSetting {
 			settingType:  "startup",
 			defaultValue: "vanilla",
 			order:        "a",
+			// SEVEN VALUES, THE SIX THAT SHIPPED IN THEIR ORDER AND `custom`
+			// LAST. Factorio keys a stored startup choice by this string, so a
+			// value that moved or changed spelling is a player's preference
+			// silently discarded; the seventh is the only row nobody can have
+			// stored.
 			allowed: []string{
 				"vanilla", "cheap", "belt-fast", "belt-express",
-				"splitter", "splitter-express",
+				"splitter", "splitter-express", "custom",
 			},
+			// THE COMPOSED DESCRIPTION, transcribed rung by rung: this mod's own
+			// description key, then one line per PRESET -- the value's own
+			// locale entry followed by that preset's list in the language the
+			// text field takes. No line for `custom`, which has no preset behind
+			// it. Each preset shows the FIRST rung of every ladder, because the
+			// settings stage has no data.raw to walk one with.
+			description: fkrecipes.Arr(
+				fkrecipes.Str(""),
+				localeKey("mod-setting-description.bbb-recipe-cost"),
+				presetLine("vanilla", "4 iron-plate, 2 iron-gear-wheel, 2 transport-belt"),
+				presetLine("cheap", "2 iron-plate, 1 transport-belt"),
+				presetLine("belt-fast", "4 iron-plate, 2 iron-gear-wheel, 2 fast-transport-belt"),
+				presetLine("belt-express", "4 steel-plate, 2 iron-gear-wheel, 2 express-transport-belt"),
+				presetLine("splitter", "1 splitter, 2 iron-plate"),
+				presetLine("splitter-express", "1 express-splitter, 2 steel-plate"),
+			),
+		},
+		{
+			// THE CUSTOMIZER'S TEXT FIELD. `default_value` is the WORD and not
+			// the list: the engine stores every setting's current value,
+			// untouched defaults included, so a rendered list would freeze a
+			// silent player's recipe at the version they installed. The list is
+			// in the description instead, after this mod's own key.
+			kind:         "string-setting",
+			name:         "bbb-recipe-ingredients",
+			settingType:  "startup",
+			defaultValue: "default",
+			order:        "aa",
+			autoTrim:     true,
+			description: fkrecipes.Arr(
+				fkrecipes.Str(""),
+				localeKey("mod-setting-description.bbb-recipe-ingredients"),
+				fkrecipes.Str("\ndefault: 4 iron-plate, 2 iron-gear-wheel, 2 transport-belt"),
+			),
 		},
 		{
 			kind:         "string-setting",
@@ -74,8 +144,30 @@ func wantSettings() []wantSetting {
 			defaultValue: "logistics",
 			order:        "b",
 			allowed:      []string{"logistics", "logistics-2", "logistics-3"},
+			// NO DESCRIPTION FIELD, which is the assertion that this dropdown
+			// did NOT get a custom arm: the library composes one only for a
+			// dropdown that has one, so a stray `Custom` on the research setting
+			// would show up here as a field this mod never asked for.
 		},
 	}
+}
+
+// localeKey is a localised string that is nothing but a key, `{"section.key"}`,
+// which is how one locale entry is referenced from inside another.
+func localeKey(key string) fkrecipes.Value {
+	return fkrecipes.Arr(fkrecipes.Str(key))
+}
+
+// presetLine is one preset's line of the dropdown's composed description: a
+// newline, the VALUE'S OWN locale entry (the label the player sees in the
+// menu, not the raw key), then the list written out.
+func presetLine(value, list string) fkrecipes.Value {
+	return fkrecipes.Arr(
+		fkrecipes.Str(""),
+		fkrecipes.Str("\n"),
+		localeKey("string-mod-setting.bbb-recipe-cost-"+value),
+		fkrecipes.Str(": "+list),
+	)
 }
 
 // planOps runs the plan and insists it produced ops at all, so every test below
@@ -90,7 +182,7 @@ func planOps(t *testing.T) []fkrecipes.Op {
 	return ops
 }
 
-func TestTheSettingsPlanIsTwoExtendsAndNothingElse(t *testing.T) {
+func TestTheSettingsPlanIsThreeExtendsAndNothingElse(t *testing.T) {
 	ops := planOps(t)
 	if len(ops) != len(wantSettings()) {
 		t.Fatalf("the settings stage emits %d op(s) and this mod has %d settings "+
@@ -99,8 +191,8 @@ func TestTheSettingsPlanIsTwoExtendsAndNothingElse(t *testing.T) {
 	for i, op := range ops {
 		// An OpSet would be a write into somebody else's prototype and an OpLog
 		// a degradation notice; neither belongs in a plan that declares two
-		// dropdowns, and either would mean the library was asked for something
-		// this mod did not ask for.
+		// dropdowns and a text field, and either would mean the library was
+		// asked for something this mod did not ask for.
 		if op.Kind != fkrecipes.OpExtend {
 			t.Errorf("op %d is kind %d and every op of a settings plan is an "+
 				"OpExtend (%d)", i, op.Kind, fkrecipes.OpExtend)
@@ -113,7 +205,7 @@ func TestEverySettingPrototypeIsTheOneThatShipped(t *testing.T) {
 	want := wantSettings()
 	if len(ops) != len(want) {
 		t.Fatalf("%d op(s) against %d expected setting(s); "+
-			"TestTheSettingsPlanIsTwoExtendsAndNothingElse says which", len(ops), len(want))
+			"TestTheSettingsPlanIsThreeExtendsAndNothingElse says which", len(ops), len(want))
 	}
 	for i, w := range want {
 		got := fieldsOf(t, ops[i].Proto)
@@ -122,16 +214,28 @@ func TestEverySettingPrototypeIsTheOneThatShipped(t *testing.T) {
 		checkStr(t, w.name, got, "setting_type", w.settingType)
 		checkStr(t, w.name, got, "default_value", w.defaultValue)
 		checkStr(t, w.name, got, "order", w.order)
-		checkAllowed(t, w.name, got, w.allowed)
+		if w.allowed != nil {
+			checkAllowed(t, w.name, got, w.allowed)
+		}
+		if w.autoTrim {
+			checkBool(t, w.name, got, "auto_trim", true)
+		}
+		if w.description.Kind != fkrecipes.KindNil {
+			if !reflect.DeepEqual(got["localised_description"], w.description) {
+				t.Errorf("%s's localised_description is\n got  %s\n want %s",
+					w.name, showValue(got["localised_description"]),
+					showValue(w.description))
+			}
+		}
 
-		// SIX FIELDS AND NO SEVENTH. A field this mod did not ask for is a
+		// THESE FIELDS AND NO OTHER. A field this mod did not ask for is a
 		// field in the dump, so it moves the golden hash and it reaches the
 		// player's settings menu; the failure names it rather than saying a
-		// count is wrong.
+		// count is wrong. What each setting may carry is transcribed with it,
+		// so a text setting growing an `allowed_values` (a free-text field
+		// turned into a picker) fails here rather than in a menu.
 		for _, key := range sortedKeys(got) {
-			switch key {
-			case "type", "name", "setting_type", "default_value", "order", "allowed_values":
-			default:
+			if !has(w.fields(), key) {
 				t.Errorf("%s carries an unexpected field %q", w.name, key)
 			}
 		}

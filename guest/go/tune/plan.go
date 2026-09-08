@@ -10,11 +10,12 @@ import (
 // in pure Go, the library plans it into an ordered stream of ops, and the emit
 // layer executes that stream against fkdata. This mod's two startup dropdowns
 // have been declared here and nowhere else since 2026-09-01; its item, its
-// recipe and its technology joined them in round two, and everything else this
-// mod emits at a data stage is still hand-rolled in guest/go/data.
+// recipe and its technology joined them in round two, the recipe customizer's
+// text setting in round three, and everything else this mod emits at a data
+// stage is still hand-rolled in guest/go/data.
 //
 // ---------------------------------------------------------------------------
-// WHY THE `Legacy` CONSTRUCTORS, WHICH IS THE ONE DECISION IN THIS FILE
+// WHY THE `Legacy` CONSTRUCTORS, WHICH IS THE FIRST DECISION IN THIS FILE
 // ---------------------------------------------------------------------------
 //
 // Factorio persists a player's startup choices in mod-settings.dat keyed by the
@@ -71,6 +72,48 @@ import (
 // that keep the default honest.
 //
 // ---------------------------------------------------------------------------
+// WHY THE CUSTOMIZER'S TEXT SETTING IS `Legacy` TOO, WHICH IS THE SECOND
+// DECISION AND THE ONE THAT DEVIATES FROM THE LIBRARY'S OWN DOCUMENTATION
+// ---------------------------------------------------------------------------
+//
+// `bbb-recipe-ingredients` has never shipped, so no stored value forces its
+// hand: [fkrecipes.Lib.IngredientsSetting] would take a bare name, prefix it,
+// and derive its order from the declaration index -- which is exactly what
+// FkRecipes' docs/migration.md writes in the worked example for THIS MOD
+// ("balancer-part-ingredients"), and what
+// [fkrecipes.Lib.LegacyIngredientsSetting]'s own comment says the Legacy form is
+// not for ("a name this mod ALREADY SHIPS"). It is declared Legacy anyway, and
+// the reason is MEASURED IN THE LIBRARY rather than argued.
+//
+// `orderString(i)` (FkRecipes go/settings.go) derives a generated setting's
+// order from its DECLARATION INDEX as two base-26 letters, `'a'+i/26` and
+// `'a'+i%26`: index 0 is "aa", index 1 "ab", index 2 "ac". THE INDEX IS THE
+// ONLY THING THAT DECIDES WHERE ONE LANDS among this mod's two legacy orders,
+// "a" and "b" -- indices 0 through 25 ("aa" through "az") sort between them,
+// and from index 26 ("ba") on they sort past "b", neither of which the
+// consumer chose. Factorio sorts a mod's settings by `order` and then by name,
+// and this plan declares nowhere near twenty-six, so every generated setting
+// it could hold lands between the recipe dropdown and the research dropdown.
+//
+// FOR THIS ONE SETTING THAT HAPPENS TO BE WHERE IT BELONGS, and that is not the
+// point. The research customizer is three more settings -- packs, count,
+// seconds -- and generated orders put all three there too: recipe, ingredients,
+// packs, count, seconds, research. The research dropdown would sit BELOW its own
+// custom fields, and no ordering of the declarations can fix it, because the
+// letters come from the index rather than from where the line is written. The
+// Legacy constructor takes an EXPLICIT order, "aa" sorts between "a" and "b",
+// and [TestEverySettingPrototypeIsTheOneThatShipped] is what pins the three
+// order strings.
+//
+// THE NAME IS THE COST AND IT IS PAID DELIBERATELY. A generated one would read
+// `better-belt-balancer-recipe-ingredients`, beside two rows spelled `bbb-`;
+// one settings namespace with a seam in it is a thing a player can see, and
+// nothing is lost by choosing the historical prefix for a name before anybody
+// has stored it. The friction is the library's and is filed as such: a consumer
+// holding legacy orders cannot CHOOSE where a generated setting lands relative
+// to them, because the declaration index picks the letters.
+//
+// ---------------------------------------------------------------------------
 // TWO HOOKS, AND EACH NAMES THE HALF IT RUNS
 // ---------------------------------------------------------------------------
 //
@@ -97,15 +140,37 @@ import (
 func Plan() *fkrecipes.Lib {
 	lib := fkrecipes.New()
 
-	// Declaration order is menu order, and the explicit "a" and "b" are what
-	// the two settings have always shipped. Both are STARTUP, which is not a
+	// Declaration order agrees with menu order here, but it is not what
+	// DECIDES it: all three of these carry an explicit order string, so "a",
+	// "aa" and "b" are the sort and the lines below are only written to match.
+	// "a" and "b" are what the two dropdowns have always shipped; "aa" is the
+	// customizer's, argued in the header. All three are STARTUP, which is not a
 	// choice made here: FkRecipes emits `setting_type = "startup"` for every
 	// setting it declares, because what this library exists to decide are
 	// prototypes and a prototype is built before a map exists. The one setting
 	// of this mod's that is runtime-global is hand-rolled in
 	// guest/go/data/settings.go for exactly that reason.
 	recipeCost := lib.LegacyDropdownSettingNeedingLocale(
-		SettingRecipeCost, RecipeDefault(), RecipeOptions(), "a")
+		SettingRecipeCost, RecipeDefault(), RecipeValues(), "a")
+
+	// THE TEXT THE PLAYER WRITES, and its declared default IS the vanilla plan.
+	//
+	// The library never emits that list as the setting's `default_value`: a text
+	// setting ships holding the word `default`, and the word keeps meaning "this
+	// mod's own list, with its ladders" across releases, because the engine
+	// stores every setting's current value including untouched defaults -- a
+	// rendered default would freeze a silent player's recipe at the day they
+	// installed the mod (FkRecipes go/lib.go:230, IngredientsSetting). What the
+	// declaration buys is two things: the word resolves to THIS list, ladders
+	// and all, and the list is written out in the setting's description so the
+	// player can copy it and edit it.
+	//
+	// BUILT THROUGH THE SAME CONVERSION [recipeChoices] USES, from
+	// `RecipePlan(RecipeVanilla)`, so `default` in the field and `vanilla` in
+	// the dropdown are one list rather than two transcriptions that can drift.
+	recipeIngredients := lib.LegacyIngredientsSetting(
+		SettingRecipeIngredients, asIngredients(RecipePlan(RecipeVanilla)), "aa")
+
 	techCost := lib.LegacyDropdownSettingNeedingLocale(
 		SettingTechCost, TechDefault(), TechOptions(), "b")
 
@@ -145,10 +210,22 @@ func Plan() *fkrecipes.Lib {
 	// is a choice of INGREDIENTS here and one second is what shipped. The
 	// library emits it as `energy_required` and omits the field entirely at
 	// zero, so the 1 has to be said.
+	//
+	// `Custom` IS THE SEVENTH VALUE AND `CustomValue` IS LEFT EMPTY, which the
+	// library reads as the word `custom` -- the field exists for a mod whose
+	// dropdown already ships a preset by that name, and none of the six is one.
+	// On any preset the text is not read: it is parsed only to decide whether
+	// the player EDITED it, and an edit under a preset draws one line saying so
+	// rather than changing anything (FkRecipes go/customize.go:730,
+	// noteIgnoredText).
 	recipe := lib.LegacyRecipe(part, PartName, fkrecipes.RecipeSpec{
-		CraftTime:     1,
-		Order:         PartOrder,
-		IngredientsBy: &fkrecipes.IngredientChoices{Setting: recipeCost, Choices: recipeChoices()},
+		CraftTime: 1,
+		Order:     PartOrder,
+		IngredientsBy: &fkrecipes.IngredientChoices{
+			Setting: recipeCost,
+			Choices: recipeChoices(),
+			Custom:  recipeIngredients,
+		},
 	})
 
 	// THE TECHNOLOGY, whose cost the player chooses.
@@ -222,7 +299,13 @@ func Plan() *fkrecipes.Lib {
 }
 
 // recipeChoices turns [RecipePlan] into the library's shape, one choice per
-// allowed value IN MENU ORDER.
+// PRESET value IN MENU ORDER.
+//
+// SIX AND NOT SEVEN. `custom` is a value of the dropdown with no plan behind
+// it, and the library takes it as the `Custom` arm instead; a choice covering
+// it as well would be refused by name ("gives custom a preset as well as a
+// Custom arm"). So this walks [RecipeOptions] and the dropdown is declared
+// with [RecipeValues], and the library checks the two against each other.
 //
 // BUILT FROM THE LADDERS RATHER THAN BESIDE THEM. The library checks a choice
 // list against its dropdown's allowed values and refuses a mismatch by name, so
@@ -234,17 +317,29 @@ func recipeChoices() []fkrecipes.IngredientChoice {
 	options := RecipeOptions()
 	out := make([]fkrecipes.IngredientChoice, 0, len(options))
 	for _, option := range options {
-		plan := RecipePlan(option)
-		ings := make([]fkrecipes.Ingredient, 0, len(plan))
-		for _, item := range plan {
-			// The amount crosses through int64 because that is the width the
-			// library takes, and every amount in this package is a small whole
-			// number -- 1, 2 or 4. [TestEveryAmountIsAWholeNumber] is what says
-			// so rather than the reader.
-			ings = append(ings, fkrecipes.IngredientNamed(
-				int64(item.Amount), item.Ladder[0], item.Ladder[1:]...))
-		}
-		out = append(out, fkrecipes.IngredientChoice{Value: option, Ingredients: ings})
+		out = append(out, fkrecipes.IngredientChoice{
+			Value: option, Ingredients: asIngredients(RecipePlan(option))})
+	}
+	return out
+}
+
+// asIngredients is the ONE conversion from this package's [Item] to the
+// library's ingredient, and it is one function because it has two callers that
+// must not disagree: every preset's choice list, and the DECLARED DEFAULT of
+// `bbb-recipe-ingredients`, which is vanilla's plan.
+//
+// If those were two transcriptions, the word `default` in the text field and
+// the value `vanilla` in the dropdown could come to mean different recipes, and
+// nothing outside a dump would ever say so.
+func asIngredients(plan []Item) []fkrecipes.Ingredient {
+	out := make([]fkrecipes.Ingredient, 0, len(plan))
+	for _, item := range plan {
+		// The amount crosses through int64 because that is the width the
+		// library takes, and every amount in this package is a small whole
+		// number -- 1, 2 or 4. [TestEveryAmountIsAWholeNumber] is what says
+		// so rather than the reader.
+		out = append(out, fkrecipes.IngredientNamed(
+			int64(item.Amount), item.Ladder[0], item.Ladder[1:]...))
 	}
 	return out
 }
