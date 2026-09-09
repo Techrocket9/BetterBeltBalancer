@@ -41,7 +41,7 @@ import (
 //	one key, which the old TestNoAllowedValueCollidesWithAnother did by hand and
 //	the library now does over the whole plan.
 //
-// WHAT THE LIBRARY DELIBERATELY DOES NOT DO IS BELOW, as three tests of this
+// WHAT THE LIBRARY DELIBERATELY DOES NOT DO IS BELOW, as four tests of this
 // mod's own. Its header says so in as many words: a description is optional
 // there, because the engine's failure for a missing one is a lost tooltip
 // rather than an `Unknown key` in the player's face, and the hand-rolled list
@@ -277,5 +277,89 @@ func TestTheGrandfatherMessageQuotesTheRealMenuLabel(t *testing.T) {
 		t.Errorf("[bbb] single-edge-grandfathered tells the player to turn off "+
 			"%q and the row in the menu is called %q: the message names an "+
 			"entry that is not there", quoted, label)
+	}
+}
+
+// TestEveryCustomDropdownDescriptionNamesTheCustomOption is the fourth, and it
+// is the only thing anywhere that reads a WORD of a description.
+//
+// THE WORDING OF THESE ENTRIES IS OTHERWISE UNGATED, and that is measured
+// rather than assumed. `--dump-data` does not read locale, so the settings dump
+// carries the KEY (`["mod-setting-description.bbb-recipe-cost"]`) and never the
+// string: editing this entry and re-running the gate leaves
+// `mod_settings_sha256` where it was, so `make datastage-check` cannot see a
+// syllable of the .cfg. [TestEverySettingThisPlanDeclaresIsDescribed] above
+// checks the entry is non-empty and nothing else. Every other sentence in the
+// six tooltips is read by a human or it is not read.
+//
+// ONE PROPERTY IS WORTH MORE THAN THAT, and it is the one round three added. A
+// dropdown that gained a Custom value has a text field under it that does
+// nothing at all until the dropdown is on Custom, so a description that never
+// mentions Custom leaves the field with no route to it: a player reads what the
+// presets do, types a recipe into the box below, restarts, and gets the preset
+// they were already on. That is not hypothetical -- `bbb-recipe-cost` shipped
+// 0.2.2's sentence unchanged through the round that added the option, which is
+// `agents/migration-assessment.md` finding 6, and this is what would have said
+// so.
+//
+// THE PROPERTY IT GATES IS "THE OPENING SENTENCE NAMES THE OPTION", AND THAT
+// NARROWNESS IS ITSELF MEASURED. A first draft demanded the word anywhere in
+// the entry, and an adversarial review broke it in one edit: delete the only
+// clause that tells a player the field exists ("or Custom to write the recipe
+// yourself in the setting below") and the entry still says "Custom" three
+// sentences later, in "Every option but Custom is safe in an overhaul pack", so
+// the check passed on a description that had lost exactly the route it claims
+// to guard. Cutting the entry at its FIRST full stop and demanding the word
+// there closes that: the opening sentence is where the twin `bbb-tech-cost`
+// names it, where a player who reads one line of a tooltip will see it, and it
+// is a standard this file holds itself to rather than a claim that a later
+// mention would be useless. A rewording that moves the word out of the first
+// sentence therefore FIRES, and is meant to.
+//
+// WHAT IT STILL DOES NOT GATE, stated so the comment does not outrun the code:
+// that the entry explains what Custom does, that it says where the field is, or
+// that the rest of the entry is true. Those are a human's to judge, and pinning
+// them would be a transcription that fails on every rewording.
+//
+// IT IS A TWO-ENTRY CHECK RATHER THAN A PINNED LITERAL, the shape
+// [TestTheGrandfatherMessageQuotesTheRealMenuLabel] above is: the word demanded
+// of the description is taken from the MENU's own label for that value, read
+// out of `[string-mod-setting]`, and it is everything before that label's first
+// colon rather than a word in any dictionary sense, so a label whose readable
+// half itself held a colon would demand only the part before it. Renaming the
+// option renames what the tooltip has to say, and neither entry can drift away
+// from the other.
+func TestEveryCustomDropdownDescriptionNamesTheCustomOption(t *testing.T) {
+	sec := localeSections(t)
+	for _, dropdown := range []struct{ setting, custom string }{
+		{SettingRecipeCost, RecipeCustom},
+		{SettingTechCost, TechCustom},
+	} {
+		value := dropdown.setting + "-" + dropdown.custom
+		label := strings.TrimSpace(sec["string-mod-setting"][value])
+		if label == "" {
+			// TestTheLocaleFileSatisfiesThePlan reports the absence itself,
+			// and it reports it as the `Unknown key` render that it is.
+			continue
+		}
+		word := label
+		if head, _, ok := strings.Cut(word, ":"); ok {
+			word = strings.TrimSpace(head)
+		}
+		// Everything before the first full stop. An entry with no full stop at
+		// all is read whole, which is the only reading that can be right for a
+		// one-clause description.
+		opening := sec["mod-setting-description"][dropdown.setting]
+		if head, _, ok := strings.Cut(opening, "."); ok {
+			opening = head
+		}
+		if !strings.Contains(opening, word) {
+			t.Errorf("[mod-setting-description] %s does not say %q in its "+
+				"FIRST SENTENCE, and %q is what the menu calls the value that "+
+				"switches the text field under it on: a player who reads the "+
+				"opening line of this tooltip is never told the field is "+
+				"there. The first sentence reads %q",
+				dropdown.setting, word, value, opening)
+		}
 	}
 }
