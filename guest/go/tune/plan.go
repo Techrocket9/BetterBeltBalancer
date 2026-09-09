@@ -167,7 +167,7 @@ func Plan() *fkrecipes.Lib {
 	// mod's own list, with its ladders" across releases, because the engine
 	// stores every setting's current value including untouched defaults -- a
 	// rendered default would freeze a silent player's recipe at the day they
-	// installed the mod (FkRecipes go/lib.go:230, IngredientsSetting). What the
+	// installed the mod (FkRecipes go/lib.go:378, IngredientsSetting). What the
 	// declaration buys is two things: the word resolves to THIS list, ladders
 	// and all, and the list is written out in the setting's description so the
 	// player can copy it and edit it.
@@ -208,7 +208,7 @@ func Plan() *fkrecipes.Lib {
 	// WHY A MAXIMUM IS DECLARED AT ALL, since neither bound is a balance
 	// opinion. The engine RESETS a stored number outside its own bounds to the
 	// default rather than clamping it (measured by the library, FkRecipes
-	// go/customize.go:342), so the declared range is exactly the set of values
+	// go/customize.go:443), so the declared range is exactly the set of values
 	// the data stage can ever read -- and the library refuses a `CustomCost`
 	// whose count can be below 1 or whose seconds can be 0, because the engine
 	// refuses a unit with either. The minima are therefore load-bearing and the
@@ -261,7 +261,7 @@ func Plan() *fkrecipes.Lib {
 	// dropdown already ships a preset by that name, and none of the six is one.
 	// On any preset the text is not read: it is parsed only to decide whether
 	// the player EDITED it, and an edit under a preset draws one line saying so
-	// rather than changing anything (FkRecipes go/customize.go:730,
+	// rather than changing anything (FkRecipes go/customize.go:880,
 	// noteIgnoredText).
 	recipe := lib.LegacyRecipe(part, PartName, fkrecipes.RecipeSpec{
 		CraftTime: 1,
@@ -302,7 +302,7 @@ func Plan() *fkrecipes.Lib {
 	// hand-rolled version loaded and copied logistics' own unit. FkRecipes
 	// c7a806e answered the ask: "THE FALLBACK IS RESOLVED ONLY HERE, which is
 	// the point: its packs are probed when the fallback is what applies, and
-	// never when a source answered" (go/data.go:598), so a game with no science
+	// never when a source answered" (go/data.go:615), so a game with no science
 	// pack at all loads as long as a source carries a unit, and
 	// [TestAnUnreachedFallbacksPackIsNeverProbed] is that half. The fallback's
 	// NUMBERS are still checked eagerly, in the plan walk and with no question
@@ -332,10 +332,15 @@ func Plan() *fkrecipes.Lib {
 	// `Custom` IS THE FOURTH VALUE AND `CustomValue` IS LEFT EMPTY, which the
 	// library reads as the word `custom` -- the field exists for a mod whose
 	// dropdown already ships a preset by that name, and none of the three tiers
-	// is one. On any tier the three fields are not read at all, except that an
-	// EDITED pack text draws one line saying it is ignored (FkRecipes
-	// go/data.go:558, noteIgnoredText), which is the same courtesy the recipe's
-	// text gets.
+	// is one. On any tier none of the three fields ENTERS THE UNIT, which is
+	// copied from the source; all three are still read to say whether the
+	// player moved them, and each one that was draws one line saying it is
+	// ignored, the count, then the seconds, then the pack text (FkRecipes
+	// go/data.go:573 to 575, noteIgnoredNumber twice and noteIgnoredText once;
+	// a number at its declared default draws nothing, since 9754f49). It is
+	// the same courtesy the recipe's text gets, and
+	// [TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo] pins all three
+	// against the defaults declared here.
 	//
 	// `Position` IS WHY A CUSTOM COST STILL LANDS SOMEWHERE IN THE TREE. Under
 	// every tier the prerequisite moves with the unit because a source
@@ -343,7 +348,7 @@ func Plan() *fkrecipes.Lib {
 	// own ladder and the library takes the FIRST rung the game has as the sole
 	// prerequisite ("the first technology the game has becomes the sole
 	// prerequisite, exactly as a chosen tier's source would", FkRecipes
-	// go/customize.go:805, customPrereqs), or no prerequisite at all with a line
+	// go/customize.go:990, customPrereqs), or no prerequisite at all with a line
 	// saying so.
 	//
 	// IT STARTS AT `logistics-3` RATHER THAN AT `logistics`, WHICH IS THE ONE

@@ -31,22 +31,22 @@ import (
 // items -- so while every ingredient came from those six the library never
 // asked. `bbb-recipe-ingredients` is a text field a player writes anything
 // into, and the language looks a bare name up among the ITEMS and then among
-// the FLUIDS (FkRecipes go/ingredientlist.go:1074 and :1077), so every refusal
+// the FLUIDS (FkRecipes go/ingredientlist.go:1077 and :1080), so every refusal
 // path a typed name can take asks this question.
 //
 // THE OLD COMMENT'S PREDICTION HELD, AND IT WAS RE-MEASURED RATHER THAN
 // ASSUMED. With this method deleted again,
 // [TestACustomTextTheGameCannotAnswerIsRefused] answers
 // `panic: fkrecipes: World.FluidExists is not implemented by this fixture`
-// (go/world.go:168), through `resolveName` at go/ingredientlist.go:1077 --
+// (go/world.go:168), through `resolveName` at go/ingredientlist.go:1080 --
 // which is better than the `false` an unwritten stub would have returned.
 //
 // THE LIST STOCKS `water`, AND THE REFUSAL IT BUYS IS THE LIBRARY'S OWN. This
 // mod's recipe declares no `Category`, so it is `crafting`, and
-// `categoryTakesItemsOnly` (FkRecipes go/ingredientlist.go:110-127) is the
+// `categoryTakesItemsOnly` (FkRecipes go/ingredientlist.go:114-128) is the
 // engine's rule written down on the library's side of the boundary: a fluid
 // under that category is refused at the list, by category name
-// (go/ingredientlist.go:705), before any prototype is built. MEASURED on
+// (go/ingredientlist.go:707), before any prototype is built. MEASURED on
 // Factorio 2.0.77 with the packaged mod at `bbb-recipe-cost = custom` and
 // `bbb-recipe-ingredients = "1 water"`, the load fails with `fkrecipes:
 // bbb-recipe-ingredients, entry 1 ("1 water"): water is a fluid, and a recipe
@@ -285,7 +285,7 @@ func everythingWorld() fixtureWorld {
 		// ALL SIX SETTINGS ANSWER, THE TWO TEXT ONES WITH THE RESERVED WORD,
 		// which is what a real game hands the planner: Factorio stores every
 		// setting's current value in mod-settings.dat, untouched defaults
-		// included (measured by the library, FkRecipes go/lib.go:230), so a
+		// included (measured by the library, FkRecipes go/lib.go:378), so a
 		// player who never opened the settings screen still answers `default`
 		// here. A fixture that left it absent would model the hand-edited file
 		// instead, which is [TestAnUnreadableCustomTextTakesTheDeclaredList]'s
@@ -299,7 +299,7 @@ func everythingWorld() fixtureWorld {
 		// THE TWO NUMBERS CANNOT GO IN THE MAP ABOVE, which is why they are
 		// here rather than beside their siblings: `startup` produces a string
 		// and the library reads a research count through `KindNum`
-		// (FkRecipes go/customize.go:825, readNumber), so a string would be
+		// (FkRecipes go/customize.go:1004, readNumber), so a string would be
 		// UNREADABLE and every custom arm would carry a degradation line and
 		// the declared default. These are the declared defaults said in the
 		// kind the engine stores them in.

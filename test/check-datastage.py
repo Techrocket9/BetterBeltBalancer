@@ -92,10 +92,10 @@ never make easy. So:
   the RESEARCH CUSTOMIZER gets three more (0.3.3): two assert the PAIR a
   written cost decides, the unit and the prerequisite, because a cost the
   player wrote has no source technology and the tree position comes from the
-  plan's own ladder rather than from the unit it copied; the third is a pack
-  text edited under a tier, which is `recipe-ignored` for the research and
-  asserts the tier's own unit beside the library's line. See TECH_CUSTOM_ARMS
-  and TECH_IGNORED_ARMS.
+  plan's own ladder rather than from the unit it copied; the third is all three
+  fields edited under a tier, which is `recipe-ignored` for the research and
+  asserts the tier's own unit beside the library's three lines, whole and in
+  order. See TECH_CUSTOM_ARMS and TECH_IGNORED_ARMS.
 
   the SPEED derivation gets an arm with a mod in it that defines a faster belt,
   because no mod set this machine can otherwise install has one -- vanilla tops
@@ -400,27 +400,43 @@ TECH_CUSTOM_ARMS = [
      "count 50, time 20, packs 1 automation-science-pack, 1 logistic-science-pack"),
 ]
 
-# THE PACK TEXT EDITED UNDER A TIER, which is `recipe-ignored` for the research
-# and the one state of the three fields the arms above cannot visit: all three
+# ALL THREE FIELDS EDITED UNDER A TIER, which is `recipe-ignored` for the
+# research and the one state of them the arms above cannot visit: all three
 # moved while the dropdown still names a tier. The tier wins, so the expected
 # unit is the SOURCE TECHNOLOGY'S OWN, read out of the same dump exactly as
-# TECH_VARIANTS reads it, and the prerequisite is that tier; the library's line
-# is the only evidence the text was read and deliberately not used.
+# TECH_VARIANTS reads it, and the prerequisite is that tier; the library's lines
+# are the only evidence the three were read and deliberately not used.
+#
+# THERE ARE THREE LINES AND THE ORDER IS THE LIBRARY'S -- the count, the
+# seconds, then the pack text, which is the order go/data.go calls
+# noteIgnoredNumber twice and noteIgnoredText once -- so the whole stream is
+# compared against this list rather than searched for one line at a time. A
+# containment check is passed by a library that says the same sentence twice or
+# says the seconds' before the count's, and the order is the one a player reads
+# down.
+#
+# A NUMBER EQUAL TO ITS DECLARED DEFAULT DRAWS NO LINE, which is why the values
+# below are 50 and 20 and not the declared 20 and 15. A numeric setting has no
+# reserved word standing for "untouched" the way the pack text's `default` does,
+# so the library compares the stored number against the declared one and a match
+# is silence; guest/go/tune's
+# TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo drives both halves on
+# the host, and this arm drives the edited one through the real .dat.
 #
 # ANTI-VACUITY: the three values are ones logistics-2 does not charge -- two
 # automation packs where it charges one of each, 50 units where it charges 200,
 # 20 seconds where it charges 30 -- so a planner that took any one of them under
-# a tier fails the unit comparison by that field, and not only the line. The
-# two numbers are written into the .dat as well, and draw no line of their own:
-# under a tier no number of this mod's enters the unit, so there is nothing to
-# report about them, which is the claim guest/go/tune's
-# TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo makes on the host.
+# a tier fails the unit comparison by that field, and not only the lines.
 TECH_IGNORED_ARMS = [
     ("tech-ignored", "logistics-2",
      {TECH_SETTING: "logistics-2", TECH_PACKS_SETTING: "2 automation-science-pack",
       TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20},
-     "fkrecipes: bbb-tech-packs is edited, but bbb-tech-cost is not on custom, "
-     "so the text is ignored"),
+     ["fkrecipes: bbb-tech-count is edited, but bbb-tech-cost is not on custom, "
+      "so the number is ignored",
+      "fkrecipes: bbb-tech-seconds is edited, but bbb-tech-cost is not on "
+      "custom, so the number is ignored",
+      "fkrecipes: bbb-tech-packs is edited, but bbb-tech-cost is not on custom, "
+      "so the text is ignored"]),
 ]
 
 # ---------------------------------------------------------------------------
@@ -1053,9 +1069,10 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
               f"{[p[0] for p in u['ingredients']]}, after {want_after[0]}\n"
               f"{'':>5}  said {want_line!r}")
 
-    # THE PACK TEXT EDITED UNDER A TIER. See TECH_IGNORED_ARMS: the tier's own
-    # unit and prerequisite, read the way the tier arms read them, plus the line.
-    for arm, tier, startup, want_line in TECH_IGNORED_ARMS:
+    # ALL THREE FIELDS EDITED UNDER A TIER. See TECH_IGNORED_ARMS: the tier's
+    # own unit and prerequisite, read the way the tier arms read them, plus the
+    # whole log stream in the library's order.
+    for arm, tier, startup, want_lines in TECH_IGNORED_ARMS:
         def tier_probe(dump: Path, src=tier):
             return project(dump, '{ours: .technology["bbb-balancer"], '
                                  'src: .technology["%s"]}' % src)
@@ -1079,14 +1096,16 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
             print(f"FAIL {arm}: the prerequisite is {ours.get('prerequisites')}, "
                   f"not [{tier}]")
             continue
-        if want_line not in lines:
+        if lines != want_lines:
             bad = True
             print(f"FAIL {arm}: the library's log lines are {lines}\n"
-                  f"{'':>5}  and one of them has to be {want_line!r}")
+                  f"{'':>5}  and the whole stream, in order, has to be "
+                  f"{want_lines}")
             continue
         u = ours["unit"]
-        print(f"  ok   {arm:<26} {u['count']} x {u['time']}s, after {tier}\n"
-              f"{'':>5}  said {want_line!r}")
+        print(f"  ok   {arm:<26} {u['count']} x {u['time']}s, after {tier}")
+        for line in lines:
+            print(f"{'':>5}  said {line!r}")
     return bad
 
 

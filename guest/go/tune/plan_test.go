@@ -168,17 +168,32 @@ func wantSettings() []wantSetting {
 			// from the recipe dropdown's. A research preset has no list to
 			// render -- what it costs is whatever the game charges for that
 			// technology, which the settings stage has no data.raw to read -- so
-			// the library writes the SOURCE it would copy from
-			// (FkRecipes go/customize.go:575, costPresetText). Each is the FIRST
-			// rung of that option's ladder, which is the tier the player asked
-			// for; where a ladder steps down is a fact about their mod set and
-			// is not knowable here.
+			// the library writes the SOURCE it would copy from, and names it by
+			// the technology's LOCALISED name rather than by its internal one:
+			// the tail is `": cost of "` followed by
+			// `{"technology-name.<source>"}` where it used to be one string
+			// ending in the bare name (FkRecipes go/customize.go:725,
+			// costPresetTail). Each source is the FIRST rung of that option's
+			// ladder in [TechLadder] -- `logistics`, `logistics-2` and
+			// `logistics-3` are each their own tier's head -- which is the tier
+			// the player asked for; where a ladder steps down is a fact about
+			// their mod set and is not knowable here.
+			//
+			// AND THE TRADE IS THIS MOD'S LADDER TO ORDER, which the library
+			// says out loud rather than hiding it. `technology-name.<source>`
+			// is the GAME's entry, for a technology base or some other mod
+			// declared, so nothing new is owed to the locale checker; but where
+			// the technology or its entry is missing the engine renders
+			// `Unknown key: "technology-name.<source>"` in the tooltip, where
+			// the bare internal name used to stand. All three sources here are
+			// base's own, so the marker takes a pack that removed a logistics
+			// tier outright.
 			description: fkrecipes.Arr(
 				fkrecipes.Str(""),
 				localeKey("mod-setting-description.bbb-tech-cost"),
-				presetLine("bbb-tech-cost", "logistics", "cost of logistics"),
-				presetLine("bbb-tech-cost", "logistics-2", "cost of logistics-2"),
-				presetLine("bbb-tech-cost", "logistics-3", "cost of logistics-3"),
+				costPresetLine("bbb-tech-cost", "logistics", "logistics"),
+				costPresetLine("bbb-tech-cost", "logistics-2", "logistics-2"),
+				costPresetLine("bbb-tech-cost", "logistics-3", "logistics-3"),
 			),
 		},
 		{
@@ -235,15 +250,45 @@ func localeKey(key string) fkrecipes.Value {
 // newline, the VALUE'S OWN locale entry (the label the player sees in the
 // menu, not the raw key), then what that preset means written out.
 //
-// THE SETTING IS A PARAMETER because both dropdowns compose one now, and the
-// key is `<setting>-<value>` in a flat namespace: a line built under the wrong
-// setting would point the player's tooltip at another row's label.
+// THE SETTING IS A PARAMETER even though only the recipe dropdown's lines are
+// built here now (the research dropdown's have a shape of their own, below),
+// because the key is `<setting>-<value>` in a flat namespace: a line built
+// under the wrong setting would point the player's tooltip at another row's
+// label, and the argument is what makes that mistake writable and therefore
+// failable.
 func presetLine(setting, value, text string) fkrecipes.Value {
 	return fkrecipes.Arr(
 		fkrecipes.Str(""),
 		fkrecipes.Str("\n"),
 		localeKey("string-mod-setting."+setting+"-"+value),
 		fkrecipes.Str(": "+text),
+	)
+}
+
+// costPresetLine is one research tier's line of `bbb-tech-cost`'s description,
+// and it is a second helper rather than a `presetLine` argument because the
+// LINE'S SHAPE differs: a recipe preset's line ends in one string this mod's
+// language rendered, and a cost preset's ends in TWO, the words and then the
+// game's own entry for the technology. Both sit BESIDE the label at the same
+// level rather than under it, so a cost line carries four parameters after its
+// empty format string where a recipe preset's carries three.
+//
+// THE NAME IS NOT `costLine`, which two tests in plandata_test.go already use
+// as a local const for a pinned sentence: a package-level function of that name
+// would be shadowed inside them, which compiles and reads as a mistake.
+//
+// THE SOURCE IS A PARAMETER BESIDE THE VALUE even though this mod spells them
+// the same. [TechOptions]' strings ARE the base technology names, so `logistics`
+// names both the dropdown row and the technology, and folding the two into one
+// argument would make a description that named the wrong technology under the
+// right row unwritable here and therefore unfailable.
+func costPresetLine(setting, value, source string) fkrecipes.Value {
+	return fkrecipes.Arr(
+		fkrecipes.Str(""),
+		fkrecipes.Str("\n"),
+		localeKey("string-mod-setting."+setting+"-"+value),
+		fkrecipes.Str(": cost of "),
+		localeKey("technology-name."+source),
 	)
 }
 

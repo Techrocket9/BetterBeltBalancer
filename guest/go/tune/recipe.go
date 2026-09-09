@@ -67,7 +67,7 @@ func RecipeOptions() []string {
 // IT IS DELIBERATELY NOT IN [RecipeOptions]. The library takes the presets and
 // the custom value as two separate lists and refuses them overlapping -- "gives
 // custom a preset as well as a Custom arm; name the arm's value with
-// CustomValue" (FkRecipes go/customize.go:327) -- because a value that is both
+// CustomValue" (FkRecipes go/customize.go:425) -- because a value that is both
 // would be a plan and a text field claiming the same row. So [RecipePlan],
 // [recipeChoices] and every test that iterates the PRESETS keep reading the six,
 // and only the dropdown's declaration reads [RecipeValues].
@@ -88,7 +88,7 @@ const RecipeCustom = "custom"
 // is new is the one nobody has stored. The library checks this list against
 // [recipeChoices] and refuses a mismatch in either direction, with the custom
 // value taken out of the comparison first: FkRecipes go/data.go:235 drops it,
-// and the comparison itself is `matchesAllowedValues` (go/data.go:1281),
+// and the comparison itself is `matchesAllowedValues` (go/data.go:1300),
 // called from go/data.go:241.
 func RecipeValues() []string {
 	return append(RecipeOptions(), RecipeCustom)
@@ -115,7 +115,7 @@ func RecipeDefault() string { return RecipeOptions()[0] }
 // than answering with no plan -- "A STORED VALUE THE DROPDOWN DOES NOT OFFER IS
 // REFUSED. ... What it used to do was worse than a refusal: the choice lookup
 // found no plan, the recipe came out made of nothing, and no line said so. This
-// is the pilot's own finding, closed." (go/data.go:1298). The refusal names the
+// is the pilot's own finding, closed." (go/data.go:1317). The refusal names the
 // setting as a player's mod-settings.dat carries it, this mod's two being
 // Legacy and therefore unprefixed:
 //

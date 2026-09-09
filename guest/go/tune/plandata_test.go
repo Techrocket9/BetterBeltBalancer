@@ -344,7 +344,7 @@ func TestAGameWithNoIngredientsIsAnEmptyRecipeRatherThanAnInventedOne(t *testing
 // THAT DAY IS 2026-09-07. FkRecipes c7a806e resolves the fallback at the one
 // point it applies -- "THE FALLBACK IS RESOLVED ONLY HERE, which is the point:
 // its packs are probed when the fallback is what applies, and never when a
-// source answered" (go/data.go:598) -- and the design record calls it the
+// source answered" (go/data.go:615) -- and the design record calls it the
 // answer to this mod's ask by name, in a row of FkRecipes'
 // agents/customizer-design.md whose decision ends: the Fallback is resolved
 // only when used. The fallback's NUMBERS are still checked eagerly, in the plan
@@ -805,12 +805,12 @@ func vanillaLadderList() []ingredientPair {
 // with its ladders rather than to a rendering of it -- so a player who switches
 // to `custom` and never edits gets exactly what `vanilla` gives them, in this
 // release and in every later one, and in a modpack missing a rung
-// (FkRecipes go/customize.go:697, the isDefault arm of resolveIngredientsFrom).
+// (FkRecipes go/customize.go:847, the isDefault arm of resolveIngredientsFrom).
 //
 // AND IT DRAWS NO LOG LINE, which is the library's stated rule for this arm:
 // "the word default: the AUTHOR's declared list with its ladders, which is the
 // pre-existing resolution path and gets no line of its own"
-// (go/customize.go:649). So the assertion is the EMPTY log stream rather than
+// (go/customize.go:800). So the assertion is the EMPTY log stream rather than
 // the absence of one particular sentence: a line here would be the library
 // narrating an untouched field on every load of every game.
 //
@@ -877,7 +877,7 @@ func TestAnUnreadableCustomTextTakesTheDeclaredList(t *testing.T) {
 // THE LOG LINE IS PINNED WORD FOR WORD, AND IT IS THE CANONICAL RENDERING
 // RATHER THAN THE TEXT AS TYPED: a player who wrote `iron-plate x3` reads back
 // `3 iron-plate` and learns the form the library would have written
-// (FkRecipes go/customize.go:709). It names the RECIPE and the SETTING by their
+// (FkRecipes go/customize.go:861). It names the RECIPE and the SETTING by their
 // EMITTED names, both unprefixed here because both are Legacy, so the line
 // points at the row in the menu a player would go and edit.
 func TestTheCustomValueTakesItsIngredientsFromTheText(t *testing.T) {
@@ -961,8 +961,8 @@ func TestACustomTextTheGameCannotAnswerIsRefused(t *testing.T) {
 			// ALL. This mod's recipe declares no `Category`, so it is
 			// `crafting`, and the library refuses a fluid there at the list
 			// rather than letting the engine refuse the prototype later
-			// (FkRecipes go/ingredientlist.go:110-127, and the sentence at
-			// :705). Every real game has `water`, so this is the refusal a
+			// (FkRecipes go/ingredientlist.go:114-128, and the sentence at
+			// :707). Every real game has `water`, so this is the refusal a
 			// player reaches after "no item or fluid is named": the field
 			// takes an ingredient, water IS one, and the reason it cannot be
 			// used names the category rather than the spelling.
@@ -1057,7 +1057,7 @@ func checkUnit(t *testing.T, what string, got map[string]fkrecipes.Value, want f
 // library's rule and not a shortcut: "THE COUNT AND THE SECONDS ARE ALWAYS
 // READ, on both text paths. They are separate settings and the player may have
 // moved them whether or not they touched the pack list" (FkRecipes
-// go/customize.go:750). So the log line reports all three even here, where
+// go/customize.go:926). So the log line reports all three even here, where
 // nothing was written -- one line, and it is the only thing the plan says.
 //
 // AND THE PREREQUISITE IS `logistics-3`, which is the [Plan] `Position`
@@ -1163,7 +1163,7 @@ func TestThePositionLadderStepsDownAndThenLetsGo(t *testing.T) {
 			showValue(v))
 	}
 	// THE ORDER IS THE COST AND THEN THE PLACEMENT, which is the library's own
-	// ("what it costs, then where it hangs", FkRecipes go/data.go:548) and is
+	// ("what it costs, then where it hangs", FkRecipes go/data.go:551) and is
 	// asserted rather than tolerated: a transcript a maintainer reads top to
 	// bottom is the only place these two lines are ever seen together.
 	if !reflect.DeepEqual(logs, []string{
@@ -1250,7 +1250,7 @@ func TestAPackTextTheGameCannotAnswerIsRefused(t *testing.T) {
 //
 // A player who typed nothing gets the DECLARED pack list, whose ladder is
 // walked through `ToolExists` and whose rungs are DROPPED rather than refused
-// when the game has none of them (FkRecipes go/data.go:1070,
+// when the game has none of them (FkRecipes go/data.go:1088,
 // resolvePackLadders) -- the same tolerance every ingredient ladder in this
 // package has.
 //
@@ -1288,34 +1288,77 @@ func TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused(t *testing.T) {
 }
 
 // TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo is the research side
-// of [TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo], and it pins one
-// claim more than that one does: that under a tier NONE of the three fields is
-// read. The pack text draws the library's one line saying it was read and not
-// used (FkRecipes go/data.go:558, noteIgnoredText, which runs on the tier path
-// alone); the count and the seconds are moved as well and draw nothing, because
-// under a tier the unit is copied from the source and no number of this mod's
-// enters it.
+// of [TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo], and it pins two
+// claims more than that one does: that under a tier NONE of the three fields
+// enters the unit, and that each one the player moved SAYS SO. Each of the two
+// numbers draws
+// noteIgnoredNumber's sentence (FkRecipes go/customize.go:913, called at
+// go/data.go:573 and 574) and the pack text draws noteIgnoredText's
+// (go/customize.go:880, called at go/data.go:575), in the order the library
+// calls them: the count, then the seconds, then the text. Under a tier the unit
+// is copied from the source and no number of this mod's enters it, and a player
+// who drags the count slider, sees the research unchanged and finds nothing in
+// the log has been told their edit landed when it did not.
 //
-// WHAT MAKES THIS NOT VACUOUS is the unit beside the line. The three fields are
-// set to 50, 20 and two automation packs, none of which logistics-2 charges, so
-// a planner that took any one of them under a tier would fail the unit
-// comparison by that field and not only lose a sentence in the log.
+// EDITED MEANS "NOT THE DECLARED DEFAULT" FOR A NUMBER, and that is the half
+// this mod is on the hook for rather than the library. A numeric setting has no
+// reserved word standing for the author's answer the way a text field's
+// `default` does, so the library compares the stored number against the
+// DECLARED one -- and the number it compares against is the one [Plan] writes
+// down, 20 for the count and 15 for the seconds (plan.go:219 and 220). A field
+// sitting at its declared default is indistinguishable from an untouched one
+// and draws no line, which is why the three-line arm drives 50 and 20 and not
+// 20 and 15.
+//
+// THE STREAM IS ASSERTED WHOLE AND IN ORDER on every arm. "One of these is
+// somewhere in the log" would be passed by a library that emitted the count's
+// line twice, or the seconds' before the count's, and the order is the one a
+// player reads down.
+//
+// WHAT MAKES THIS NOT VACUOUS is the unit beside the lines. Every value driven
+// here is one the fixture's logistics-2 does not charge -- it charges 200 units
+// of 30 seconds and one logistic science pack (world_test.go's everythingWorld;
+// the real game's charges one of each, which is what the gate's arm drives
+// against), against 50 or 20 units, 20 or 15 seconds and two automation packs,
+// so the two declared defaults are not that tier's numbers either, and the
+// arms that park a field at its default lose no teeth:
+// a planner that took any one of these under a tier fails the unit comparison
+// by that field, and not only loses a sentence in the log.
 func TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo(t *testing.T) {
-	w := everythingWorld().
-		withStartup(SettingTechCost, TechLogistics2).
-		withStartup(SettingTechPacks, "2 automation-science-pack").
-		withNumberStartup(SettingTechCount, 50).
-		withNumberStartup(SettingTechSeconds, 20)
-	l2, _ := w.tech(TechLogistics2)
-	protos, logs := extendsOf(t, dataOps(t, w))
-	got := protoOf(t, protos, "technology", TechName)
+	// Literals, for the reason every pinned sentence in this file is one.
+	const (
+		countLine = "fkrecipes: bbb-tech-count is edited, but bbb-tech-cost " +
+			"is not on custom, so the number is ignored"
+		secondsLine = "fkrecipes: bbb-tech-seconds is edited, but bbb-tech-cost " +
+			"is not on custom, so the number is ignored"
+		packsLine = "fkrecipes: bbb-tech-packs is edited, but bbb-tech-cost " +
+			"is not on custom, so the text is ignored"
+	)
+	for _, tc := range []struct {
+		name           string
+		count, seconds float64
+		want           []string
+	}{
+		{"both numbers moved", 50, 20, []string{countLine, secondsLine, packsLine}},
+		{"the count at its declared default", 20, 20, []string{secondsLine, packsLine}},
+		{"the seconds at its declared default", 50, 15, []string{countLine, packsLine}},
+	} {
+		w := everythingWorld().
+			withStartup(SettingTechCost, TechLogistics2).
+			withStartup(SettingTechPacks, "2 automation-science-pack").
+			withNumberStartup(SettingTechCount, tc.count).
+			withNumberStartup(SettingTechSeconds, tc.seconds)
+		l2, _ := w.tech(TechLogistics2)
+		protos, logs := extendsOf(t, dataOps(t, w))
+		got := protoOf(t, protos, "technology", TechName)
 
-	checkUnit(t, "edited fields under logistics-2", got, *l2.unit)
-	checkPrereqs(t, "edited fields under logistics-2", got, TechLogistics2)
-	// A literal, for the reason every pinned sentence in this file is one.
-	checkExactlyOneLog(t, logs,
-		"fkrecipes: bbb-tech-packs is edited, but bbb-tech-cost is not on "+
-			"custom, so the text is ignored")
+		checkUnit(t, tc.name+" under logistics-2", got, *l2.unit)
+		checkPrereqs(t, tc.name+" under logistics-2", got, TechLogistics2)
+		if !reflect.DeepEqual(logs, tc.want) {
+			t.Errorf("%s: the plan's log stream is\n got  %q\n want the "+
+				"ignored fields in the library's order, %q", tc.name, logs, tc.want)
+		}
+	}
 }
 
 // TestAnUnreadableResearchNumberTakesTheDeclaredDefault is the two numbers'
@@ -1324,7 +1367,7 @@ func TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo(t *testing.T) {
 // MISSING from a hand-edited mod-settings.dat, and a row PRESENT under the
 // wrong type, which is what another mod redefining this mod's setting as text
 // would hand the planner. The library reads both through one function
-// (FkRecipes go/customize.go:822, readNumber) and both take the declared
+// (FkRecipes go/customize.go:1004, readNumber) and both take the declared
 // default with one sentence, which is pinned here word for word.
 //
 // THE STREAM IS ASSERTED WHOLE, two lines in order: the degradation first,
