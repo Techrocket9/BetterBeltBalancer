@@ -31,23 +31,23 @@ import (
 // items -- so while every ingredient came from those six the library never
 // asked. `better-belt-balancer-recipe-ingredients` is a text field a player
 // writes anything into, and the language looks a bare name up among the ITEMS
-// and then among the FLUIDS (FkRecipes go/ingredientlist.go:1077 and :1080),
-// so every refusal
-// path a typed name can take asks this question.
+// and then among the FLUIDS (FkRecipes go/ingredientlist.go:1199 and :1202),
+// so every path a typed name the game cannot answer can take asks this
+// question.
 //
 // THE OLD COMMENT'S PREDICTION HELD, AND IT WAS RE-MEASURED RATHER THAN
 // ASSUMED. With this method deleted again,
-// [TestACustomTextTheGameCannotAnswerIsRefused] answers
+// [TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo] answers
 // `panic: fkrecipes: World.FluidExists is not implemented by this fixture`
-// (go/world.go:168), through `resolveName` at go/ingredientlist.go:1080 --
+// (go/world.go:168), through `resolveName` at go/ingredientlist.go:1202 --
 // which is better than the `false` an unwritten stub would have returned.
 //
-// THE LIST STOCKS `water`, AND THE REFUSAL IT BUYS IS THE LIBRARY'S OWN. This
+// THE LIST STOCKS `water`, AND THE SENTENCE IT BUYS IS THE LIBRARY'S OWN. This
 // mod's recipe declares no `Category`, so it is `crafting`, and
-// `categoryTakesItemsOnly` (FkRecipes go/ingredientlist.go:114-128) is the
+// `categoryTakesItemsOnly` (FkRecipes go/ingredientlist.go:145-159) is the
 // engine's rule written down on the library's side of the boundary: a fluid
-// under that category is refused at the list, by category name
-// (go/ingredientlist.go:707), before any prototype is built. MEASURED on
+// under that category is rejected at the list, by category name
+// (go/ingredientlist.go:826), before any prototype is built. MEASURED on
 // Factorio 2.0.77 with the packaged mod at `bbb-recipe-cost = custom` and
 // `bbb-recipe-ingredients = "1 water"`, the load failed with `fkrecipes:
 // bbb-recipe-ingredients, entry 1 ("1 water"): water is a fluid, and a recipe
@@ -57,20 +57,27 @@ import (
 // setting is `better-belt-balancer-recipe-ingredients` now and the sentence's
 // shape is what the measurement was about.
 //
+// AND WHAT THAT SENTENCE DOES HAS MOVED, WHICH THE MEASUREMENT ABOVE DOES NOT
+// COVER. Since FkRecipes 2e5f779 it is a LOG line and not a refusal: the typed
+// text is set aside, this mod's declared list applies and the load completes.
+// The sentence itself is unchanged, which is why the run above is still the
+// reading this fixture rests on; what changed is what surrounds it, and
+// [TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo] is where that is
+// pinned.
+//
 // SO THE FLUID IS STOCKED RATHER THAN WITHHELD, because every real game has
 // `water` and a player who reaches for it is likelier than one who invents a
-// name no mod defines. It is what lets
-// [TestACustomTextTheGameCannotAnswerIsRefused] pin that sentence; with the
+// name no mod defines. It is what lets that test pin the sentence; with the
 // list empty the name would fall out of `resolveName` as `no item or fluid is
 // named water` and the category rule would be a branch no test here reaches.
 //
 // THE PACK FIELD HAS ITS OWN FLUID RULE AND THE SAME STOCKED NAME PINS IT.
 // A pack list is looked up among the tools, then the items, then the fluids,
-// and a fluid there is refused with `water is a fluid, and research takes
-// science packs only` (the library's sentence, not the category one), which
-// [TestAPackTextTheGameCannotAnswerIsRefused] pins; un-stock `water` and that
-// row degrades to `no science pack is named water`, which is what says the
-// fluid is load-bearing for it too.
+// and a fluid there answers `water is a fluid, and research takes science
+// packs only` (the library's sentence, not the category one), which
+// [TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo] pins; un-stock `water`
+// and that row degrades to `no science pack is named water`, which is what
+// says the fluid is load-bearing for it too.
 //
 // EVERY ANSWER IS A LIST RATHER THAN A MAP, and `TechNames` sorts a copy. The
 // World contract says that method returns SORTED names and the library's cycle
@@ -305,7 +312,7 @@ func everythingWorld() fixtureWorld {
 		// THE TWO NUMBERS CANNOT GO IN THE MAP ABOVE, which is why they are
 		// here rather than beside their siblings: `startup` produces a string
 		// and the library reads a research count through `KindNum`
-		// (FkRecipes go/customize.go:1004, readNumber), so a string would be
+		// (FkRecipes go/customize.go:1302, readNumber), so a string would be
 		// UNREADABLE and every custom arm would carry a degradation line and
 		// the declared default. These are the declared defaults said in the
 		// kind the engine stores them in.

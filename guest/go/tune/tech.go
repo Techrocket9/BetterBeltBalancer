@@ -48,7 +48,7 @@ func TechOptions() []string {
 // [RecipeOptions] and for the same library rule: a value covered by a preset
 // choice AND by a Custom arm is refused by name -- "gives custom a preset as
 // well as a Custom arm; name the arm's value with CustomValue"
-// (FkRecipes go/customize.go:425, `customArmValues`). So [TechLadder],
+// (FkRecipes go/customize.go:440, `customArmValues`). So [TechLadder],
 // [techChoices] and every test that iterates the TIERS keep reading the three,
 // and only the dropdown's declaration reads [TechValues].
 //

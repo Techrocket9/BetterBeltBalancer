@@ -69,7 +69,7 @@ func RecipeOptions() []string {
 // IT IS DELIBERATELY NOT IN [RecipeOptions]. The library takes the presets and
 // the custom value as two separate lists and refuses them overlapping -- "gives
 // custom a preset as well as a Custom arm; name the arm's value with
-// CustomValue" (FkRecipes go/customize.go:425) -- because a value that is both
+// CustomValue" (FkRecipes go/customize.go:440) -- because a value that is both
 // would be a plan and a text field claiming the same row. So [RecipePlan],
 // [recipeChoices] and every test that iterates the PRESETS keep reading the six,
 // and only the dropdown's declaration reads [RecipeValues].
@@ -89,9 +89,9 @@ const RecipeCustom = "custom"
 // `belt-express` still reads `belt-express` after the update; the only row that
 // is new is the one nobody has stored. The library checks this list against
 // [recipeChoices] and refuses a mismatch in either direction, with the custom
-// value taken out of the comparison first: FkRecipes go/data.go:235 drops it,
-// and the comparison itself is `matchesAllowedValues` (go/data.go:1300),
-// called from go/data.go:241.
+// value taken out of the comparison first: FkRecipes go/data.go:247 drops it,
+// and the comparison itself is `matchesAllowedValues` (go/data.go:1461),
+// called from go/data.go:253.
 func RecipeValues() []string {
 	return append(RecipeOptions(), RecipeCustom)
 }
@@ -117,7 +117,7 @@ func RecipeDefault() string { return RecipeOptions()[0] }
 // than answering with no plan -- "A STORED VALUE THE DROPDOWN DOES NOT OFFER IS
 // REFUSED. ... What it used to do was worse than a refusal: the choice lookup
 // found no plan, the recipe came out made of nothing, and no line said so. This
-// is the pilot's own finding, closed." (go/data.go:1317). The refusal names the
+// is the pilot's own finding, closed." (go/data.go:1478). The refusal names the
 // setting as a player's mod-settings.dat carries it, this mod's two being
 // Legacy and therefore unprefixed:
 //
@@ -177,12 +177,46 @@ func RecipePlan(option string) []Item {
 	}
 	// vanilla, and every unknown string.
 	//
-	// The three ladders have a fallback rung each even though this is the plan
+	// THE THREE LADDERS HAVE A FALLBACK RUNG EACH even though this is the plan
 	// that must not change, and that costs nothing where the names exist: on any
 	// game with `iron-gear-wheel` and `transport-belt` in it -- which is every
 	// game this mod has ever been measured in -- the first rung wins and the
-	// output is the literal that shipped. What the rungs buy is a pack that
-	// removed one of them, where today's mod fails the load outright.
+	// output is the literal that shipped.
+	//
+	// WHAT THE RUNGS BUY IS A SUBSTITUTION, AND A SUBSTITUTION ONTO A NAME THIS
+	// LIST ALREADY CARRIES IS MERGED. Remove the item `transport-belt` and the
+	// third ladder lands on `iron-plate`, which the first entry already names;
+	// FkRecipes 696387f adds the second landing into the first and writes one
+	// line, `fkrecipes: bbb-balancer-part: iron-plate is in the list twice after
+	// the fallbacks, so the amounts are added: 4 plus 2 is 6`. A player in that
+	// pack crafts a balancer part from `6 iron-plate, 2 iron-gear-wheel`, and
+	// THE ENGINE ACCEPTS IT: measured on Factorio 2.0.77 (build 84539) with a
+	// synthetic `bbbt-remover` deleting that item ahead of this mod,
+	// `--dump-data` exits 0 and the dump carries exactly that list and that
+	// line. `test/check-datastage.py`'s `check_remover` is that run, kept as a
+	// gate arm. The stock game is untouched by any of it: all six presets emit
+	// what they always did.
+	//
+	// SO THE RUNGS ARE KEPT, AND THE MERGE IS WHAT MAKES THEM LEGAL. [Item]'s
+	// doc comment is the reason: the amount does not move down the ladder,
+	// because a fallback is a substitute for a thing the game does not have and
+	// not a re-costing of the recipe. Two belts substituted for at the same
+	// amount ARE two more plates, and adding them is the only arithmetic that
+	// says so; the engine refuses one item named twice in a list, so without the
+	// merge the substitution the ladder always promised was unrepresentable.
+	// Dropping the terminal rung instead would DELETE the ingredient rather than
+	// substitute for it -- `4 iron-plate, 2 iron-gear-wheel`, 8 plate-equivalent
+	// against the stock game's 11 where the merge charges 10 -- and it would
+	// break [TestEveryLadderTerminates] six times over.
+	//
+	// THE SENTENCE THIS REPLACES WAS MEASURED FALSE. It said the rungs buy "a
+	// pack that removed one of them, where today's mod fails the load outright",
+	// and until 696387f the rungs bought that pack a DIFFERENT load failure, on
+	// the default preset, for a player who never opened the Startup tab: `Error
+	// while running setup for recipe prototype "bbb-balancer-part" (recipe):
+	// Duplicate item ingredients are not allowed (iron-plate exists 2 or more
+	// times).`, exit 1, no dump, no `fkrecipes:` line and no setting named
+	// (agents/migration-assessment.md, finding 1).
 	return []Item{
 		{Ladder: []string{"iron-plate"}, Amount: 4},
 		{Ladder: []string{"iron-gear-wheel", FallbackName}, Amount: 2},

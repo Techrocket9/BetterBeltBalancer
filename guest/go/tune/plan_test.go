@@ -146,11 +146,15 @@ func wantSettings() []wantSetting {
 			defaultValue: fkrecipes.Str("default"),
 			order:        "aab",
 			autoTrim:     true,
-			description: fkrecipes.Arr(
+			// FOUR PARAMETERS SINCE FkRecipes 0077f3c, and only the first two
+			// are this mod's: its own description key, then the declared list
+			// rendered in the language the field takes, then the library's own
+			// two sentences. See [textFieldLines].
+			description: fkrecipes.Arr(append([]fkrecipes.Value{
 				fkrecipes.Str(""),
 				localeKey("mod-setting-description.better-belt-balancer-recipe-ingredients"),
 				fkrecipes.Str("\ndefault: 4 iron-plate, 2 iron-gear-wheel, 2 transport-belt"),
-			),
+			}, textFieldLines()...)...),
 		},
 		{
 			kind:         "string-setting",
@@ -172,7 +176,7 @@ func wantSettings() []wantSetting {
 			// the technology's LOCALISED name rather than by its internal one:
 			// the tail is `": cost of "` followed by
 			// `{"technology-name.<source>"}` where it used to be one string
-			// ending in the bare name (FkRecipes go/customize.go:725,
+			// ending in the bare name (FkRecipes go/customize.go:821,
 			// costPresetTail). Each source is the FIRST rung of that option's
 			// ladder in [TechLadder] -- `logistics`, `logistics-2` and
 			// `logistics-3` are each their own tier's head -- which is the tier
@@ -207,11 +211,14 @@ func wantSettings() []wantSetting {
 			defaultValue: fkrecipes.Str("default"),
 			order:        "bad",
 			autoTrim:     true,
-			description: fkrecipes.Arr(
+			// The recipe text field's four parameters again, with this mod's
+			// own rendered default in the middle and the library's same two
+			// sentences after it.
+			description: fkrecipes.Arr(append([]fkrecipes.Value{
 				fkrecipes.Str(""),
 				localeKey("mod-setting-description.better-belt-balancer-tech-packs"),
 				fkrecipes.Str("\ndefault: 1 automation-science-pack"),
-			),
+			}, textFieldLines()...)...),
 		},
 		{
 			// THE UNIT COUNT. An int setting, so `default_value` is a NUMBER,
@@ -250,6 +257,17 @@ func localeKey(key string) fkrecipes.Value {
 // newline, the VALUE'S OWN locale entry (the label the player sees in the
 // menu, not the raw key), then what that preset means written out.
 //
+// IT IS TWO LINES PER PRESET SINCE FkRecipes 0077f3c, NOT ONE. The separator
+// between the label and the list was `": "` and is `"\n  type: "`, so the label
+// keeps its own line and the copyable internal list is indented under it. The
+// reason is the consumer's own dropdown labels: this mod's are 35 to 65
+// characters and the closed widget truncates at about 37, so on the old
+// one-line shape the list a player was meant to copy began past the fold. What
+// it costs is vertical space -- the recipe dropdown's composed description is 13
+// lines where it was 7, which is 1 + 6 x 2 against 1 + 6, measured off the
+// engine's own mod-settings dump -- and neither ceiling is near: 7 top-level
+// parameters of 20, depth 3 of 19.
+//
 // THE SETTING IS A PARAMETER even though only the recipe dropdown's lines are
 // built here now (the research dropdown's have a shape of their own, below),
 // because the key is `<setting>-<value>` in a flat namespace: a line built
@@ -261,8 +279,44 @@ func presetLine(setting, value, text string) fkrecipes.Value {
 		fkrecipes.Str(""),
 		fkrecipes.Str("\n"),
 		localeKey("string-mod-setting."+setting+"-"+value),
-		fkrecipes.Str(": "+text),
+		fkrecipes.Str("\n  type: "+text),
 	)
+}
+
+// textFieldLines is the two sentences the LIBRARY appends to every text setting
+// it composes a description for, since FkRecipes 0077f3c.
+//
+// TRANSCRIBED FROM THE ENGINE'S OWN DUMP rather than from the test failure or
+// from the library's source. `test/check-datastage.py`'s `run_arm` over the
+// built mod at `dist/better-belt-balancer_0.3.3` writes a
+// `mod-settings-dump.json`, and these are the third and fourth parameters of
+// `better-belt-balancer-recipe-ingredients`' `localised_description` in it, byte
+// for byte; the same two are the third and fourth of
+// `better-belt-balancer-tech-packs`'. The mod-settings golden moved on this and
+// on the preset separator above, and on nothing else.
+//
+// ONE HELPER RATHER THAN TWO COPIES, which is the one place this file derives
+// where it otherwise transcribes, and the reason is what these two sentences
+// ARE: the LIBRARY'S, identical on both text settings by construction, so two
+// hand-written spellings of one sentence would be exactly the drift the
+// library's own corpus exists to prevent. What could differ between the two
+// settings is the `\ndefault: ...` line ABOVE them, which is this mod's own
+// rendering and IS written out twice below.
+//
+// THE SECOND SENTENCE IS THE FALLBACK, ANNOUNCED WHERE THE PLAYER TYPES.
+// FkRecipes 2e5f779 stopped refusing a text this mod cannot use: it is set
+// aside, this mod's declared list applies, and the reason goes to the log. The
+// clause "or in the load error if the load stops anyway" is the library saying
+// the fallback is NOT total, which is
+// [TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo]'s subject.
+func textFieldLines() []fkrecipes.Value {
+	return []fkrecipes.Value{
+		fkrecipes.Str("\nWrite internal names, as the default line above does, " +
+			"in at most 2000 characters."),
+		fkrecipes.Str("\nA text this mod cannot use is set aside and that default " +
+			"applies instead; the reason is in the log, or in the load error if " +
+			"the load stops anyway."),
+	}
 }
 
 // costPresetLine is one research tier's line of `bbb-tech-cost`'s description,
@@ -401,6 +455,23 @@ func settingProto(t *testing.T, ops []fkrecipes.Op, name string) map[string]fkre
 // what is checked there is the RENDERING -- that the declared pack reaches the
 // player's tooltip as `1 automation-science-pack`, which is the text they copy
 // to start from.
+//
+// # "ENDS WITH" WAS THE PREDICATE AND STOPPED BEING THE RIGHT ONE
+//
+// The rendered default was the LAST parameter of the composed description until
+// FkRecipes 0077f3c, so "the description ends with it" said what this test
+// means. It is the THIRD of five now, because the library appends two sentences
+// of its own after it ([textFieldLines]). Reading `Arr[len-3]` instead would
+// keep the shape of the old check and none of its meaning: it would pass on a
+// library that appended a third sentence and moved this mod's line, and fail on
+// one that appended a fourth while rendering the same list.
+//
+// SO THE PREDICATE IS "EXACTLY ONE PARAMETER IS A `\ndefault: ` LINE, AND IT IS
+// THIS ONE", which is positional in nothing and is STRICTER than the old check
+// in one way that matters: a description carrying two such lines -- the drift
+// this test exists to catch, the declared default transcribed a second time
+// somewhere -- failed "ends with" only if the second one came last, and fails
+// this always.
 func TestTheCustomResearchDefaultsAreTheFallbackUnit(t *testing.T) {
 	unit := FallbackUnit()
 	ops := planOps(t)
@@ -416,10 +487,29 @@ func TestTheCustomResearchDefaultsAreTheFallbackUnit(t *testing.T) {
 	}
 	want := fkrecipes.Str("\ndefault: " + strings.Join(rendered, ", "))
 	desc := settingProto(t, ops, SettingTechPacks)["localised_description"]
-	if len(desc.Arr) == 0 || !reflect.DeepEqual(desc.Arr[len(desc.Arr)-1], want) {
-		t.Errorf("%s's description ends with %s and the fallback unit's packs "+
-			"render as %s", SettingTechPacks, showValue(desc), showValue(want))
+	var defaults []fkrecipes.Value
+	for _, param := range desc.Arr {
+		if param.Kind == fkrecipes.KindStr &&
+			strings.HasPrefix(param.Str, "\ndefault: ") {
+			defaults = append(defaults, param)
+		}
 	}
+	if len(defaults) != 1 || !reflect.DeepEqual(defaults[0], want) {
+		t.Errorf("%s's description carries %d \"\\ndefault: \" line(s), %s, and "+
+			"the fallback unit's packs render as %s; the whole description is %s",
+			SettingTechPacks, len(defaults), showValues(defaults),
+			showValue(want), showValue(desc))
+	}
+}
+
+// showValues renders a slice of values for a failure message, which the one
+// caller above needs because what it found may be none of them or two.
+func showValues(vs []fkrecipes.Value) string {
+	out := make([]string, 0, len(vs))
+	for _, v := range vs {
+		out = append(out, showValue(v))
+	}
+	return "[" + strings.Join(out, ", ") + "]"
 }
 
 // generatedSettingNames is the four names [Plan] lets the LIBRARY build, as the

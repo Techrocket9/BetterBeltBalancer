@@ -63,8 +63,8 @@ a machine with different DLC produces a different hash for a mod that is
 perfectly fine. A golden line whose engine does not match the binary is a SKIP
 with a message, never a failure.
 
-...AND FOURTEEN VARIANT ARMS (ONE OF THEM THE VANILLA CONTROL) AND A SPEED ARM,
-WHICH ARE NOT HASHED.
+...AND FOURTEEN VARIANT ARMS (ONE OF THEM THE VANILLA CONTROL), A SPEED ARM AND
+A MERGE ARM, WHICH ARE NOT HASHED.
 
 0.3.1 made the recipe's cost, the research's cost and the hidden network's belt
 speed depend on things a golden cannot hold still. A hash is the right
@@ -101,6 +101,14 @@ never make easy. So:
   because no mod set this machine can otherwise install has one -- vanilla tops
   out at turbo, 0.125, which is HALF this mod's floor, so on every other arm the
   correct behaviour and a derivation that does nothing at all are the same dump.
+
+  the LADDER MERGE gets an arm with a mod in it that DELETES an item, for the
+  same reason turned around: no mod set this machine can install is missing
+  `transport-belt`, and that is the pack where the vanilla ladder's fallback
+  lands on a name the list already carries. What it proves is the half no host
+  test can reach -- that the ENGINE accepts the merged list -- and it runs on
+  the prototype's own default, no `mod-settings.dat` at all, because the player
+  it is about never opened the Startup tab. See REMOVER_LUA and check_remover.
 
 ...AND THE SIX STARTUP SETTINGS' `order` STRINGS, ON BOTH GOLDEN ARMS, WHICH
 ARE INSIDE THE HASH AND ARE ASSERTED ANYWAY. Four of the six are GENERATED names
@@ -518,6 +526,141 @@ HIDDEN_BELTS = [
 # transcribed for the same reason the ingredient lists are.
 SPEED_FLOOR = 0.25
 
+# ---------------------------------------------------------------------------
+# THE MERGE ARM'S FIXTURE, and it is a Lua mod rather than a compiled guest.
+#
+# WHAT IT IS FOR. Every ladder in guest/go/tune ends at `iron-plate` and the
+# vanilla list names `iron-plate` at the top, so a pack that removes the item
+# `transport-belt` makes the third ladder land on a name the list already
+# carries. Until FkRecipes 696387f that reached the engine as two `iron-plate`
+# entries and refused the load -- `Duplicate item ingredients are not allowed
+# (iron-plate exists 2 or more times).`, exit 1, no dump, no `fkrecipes:` line
+# and no setting named -- on the DEFAULT preset, for a player who never opened
+# the Startup tab (agents/migration-assessment.md, finding 1). The library
+# merges the second landing into the first now. THE HALF THAT NEEDS AN ENGINE
+# is whether the engine ACCEPTS the merged list, and no host test can observe
+# it: guest/go/tune's own arm asserts the plan, and this asserts the load.
+#
+# WHY LUA AND NOT A `build_fixture` GUEST. It has to run at the DATA stage
+# BEFORE this mod, and a plain `data.lua` is the only thing that can be written
+# that cheaply -- no tinygo, no `fklua mod`, no compile at all. Written out at
+# run time rather than committed under test/fixtures/ because its whole content
+# is one name list, and a committed directory would be sixty-seven lines of Lua
+# nobody reads beside a constant somebody edits. SIXTY-SEVEN IS MEASURED, off
+# `REMOVER_LUA` itself and off the engine, which prints
+# `Script @__bbbt-remover__/data.lua:67` on every run of this arm.
+#
+# THE NAME SORTS BEFORE `better-belt-balancer`, which is how it comes to run
+# first, and the arm ASSERTS that rather than trusting it: Factorio's data-stage
+# ordering is measured here (`bbbt-remover` at 0.261 against this mod at 0.266
+# on 2.0.77) and was not found documented. `bbbt-fastbelt` already depends on
+# the same ordering.
+#
+# ITS `pairs` WALKS ARE NOT AN ITERATION-ORDER DEPENDENCE, which this
+# repository's determinism rule would otherwise refuse. Every one of them
+# DELETES a set of keys, or rebuilds a list in `ipairs` order, so what it
+# leaves behind is a function of the set and not of the order it was walked
+# in; nothing it computes reaches a prototype field whose value could differ
+# between two clients. There is no ordered output here to be a desync.
+#
+# IT CLEARS `minable` AND `next_upgrade` TOGETHER, WHICH IS A MEASURED TRAP.
+# Clearing the first alone refuses the load with `Error while running setup for
+# entity prototype "transport-belt": Entity must be minable when next_upgrade is
+# set. (was fast-transport-belt)`. The entity is KEPT rather than deleted for a
+# second measured reason: deleting it breaks this mod unconditionally (`Error in
+# assignID: entity with name 'transport-belt' does not exist`), which is a
+# different defect and not this arm's.
+# ---------------------------------------------------------------------------
+
+REMOVER_NAME = "bbbt-remover"
+REMOVER_VERSION = "0.0.1"
+REMOVER_ITEM = "transport-belt"
+
+# A NAME THE FIXTURE MUST NOT TOUCH, asked through the SAME jq path as
+# REMOVER_ITEM and asserted PRESENT. "The item is gone" is satisfied by a path
+# that went stale and answers null for everything, which is the opposite of
+# what `check_speed`'s anti-vacuity does: that one asserts the fixture's own
+# positive values first. This is the positive half here, and it costs one more
+# key on a projection the arm already runs.
+REMOVER_ALIVE = "iron-plate"
+
+# What this mod's recipe comes out as once that item is gone, and the line the
+# library writes on the way. TRANSCRIBED, like every other expectation in this
+# file: 4 iron plates plus the two the belt ladder falls back to.
+REMOVER_RECIPE = [("iron-plate", 6), ("iron-gear-wheel", 2)]
+REMOVER_LINE = ("fkrecipes: bbb-balancer-part: iron-plate is in the list twice "
+                "after the fallbacks, so the amounts are added: 4 plus 2 is 6")
+
+REMOVER_LUA = '''\
+-- bbbt-remover: a pack that removed an item, at the data stage and before
+-- better-belt-balancer's. Written out by test/check-datastage.py; never
+-- shipped. The ITEM and every recipe naming it go; the ENTITY stays, because
+-- deleting it breaks this mod for a different reason.
+local REMOVE = { %s }
+local gone = {}
+for _, n in ipairs(REMOVE) do gone[n] = true end
+
+local ITEM_CLASSES = {"item", "tool", "module", "capsule", "gun", "ammo",
+  "armor", "repair-tool", "rail-planner", "item-with-entity-data",
+  "spidertron-remote", "space-platform-starter-pack"}
+for _, cls in ipairs(ITEM_CLASSES) do
+  local t = data.raw[cls]
+  if t then for n in pairs(gone) do t[n] = nil end end
+end
+
+local dead_recipes = {}
+for rname, r in pairs(data.raw.recipe or {}) do
+  local hit = gone[rname] or false
+  for _, ing in pairs(r.ingredients or {}) do
+    if gone[ing.name] or gone[ing[1]] then hit = true end
+  end
+  for _, res in pairs(r.results or {}) do
+    if gone[res.name] or gone[res[1]] then hit = true end
+  end
+  if hit then dead_recipes[rname] = true end
+end
+for rname in pairs(dead_recipes) do data.raw.recipe[rname] = nil end
+
+for _, tech in pairs(data.raw.technology or {}) do
+  if tech.effects then
+    local keep = {}
+    for _, e in ipairs(tech.effects) do
+      if not (e.type == "unlock-recipe" and dead_recipes[e.recipe]) then
+        keep[#keep+1] = e
+      end
+    end
+    tech.effects = keep
+  end
+end
+
+for _, cls in pairs(data.raw) do
+  if type(cls) == "table" then
+    for _, ent in pairs(cls) do
+      if type(ent) == "table" then
+        local m = ent.minable
+        local hit = m and (gone[m.result] or
+          (m.results and #m.results > 0 and gone[m.results[1].name]))
+        -- An entity that cannot be mined may not name a next_upgrade
+        -- (MEASURED: "Entity must be minable when next_upgrade is set"), so
+        -- the two are cleared together or neither is.
+        if hit then ent.minable = nil; ent.next_upgrade = nil end
+        if ent.place_result and gone[ent.place_result] then
+          ent.place_result = nil
+        end
+        if ent.placeable_by and ent.placeable_by.item and
+           gone[ent.placeable_by.item] then
+          ent.placeable_by = nil
+        end
+        if ent.next_upgrade and gone[ent.next_upgrade] then
+          ent.next_upgrade = nil
+        end
+      end
+    end
+  end
+end
+log("bbbt-remover: removed " .. #REMOVE .. " item name(s)")
+'''
+
 
 def engine_version(factorio: str) -> str:
     out = subprocess.run([factorio, "--version"], capture_output=True, text=True).stdout
@@ -715,6 +858,41 @@ def build_fixture(series: str, out: Path) -> Path:
     return out / f"{FIXTURE_NAME}_{FIXTURE_VERSION}"
 
 
+def build_remover(series: str, out: Path) -> Path:
+    """Write the bbbt-remover fixture into a staged mod directory.
+
+    NO TOOLCHAIN AT ALL, which is the whole difference between this and
+    build_fixture: no tinygo, no fklua, no compile. It is an info.json and a
+    data.lua, and its content is REMOVER_ITEM.
+    """
+    d = out / f"{REMOVER_NAME}_{REMOVER_VERSION}"
+    d.mkdir(parents=True)
+    (d / "info.json").write_text(json.dumps({
+        "name": REMOVER_NAME,
+        "version": REMOVER_VERSION,
+        "title": "BBB item-remover fixture",
+        "author": "BetterBeltBalancer",
+        "factorio_version": series,
+        "description": "Deletes a named item at the data stage, for the merge "
+                       "arm of test/check-datastage.py. Never shipped.",
+        "dependencies": [f"base >= {series}.0"],
+    }, indent=2) + "\n")
+    # A LIST OF ONE, because the fixture takes a list. WHAT IS GENERAL HERE IS
+    # THE LUA AND NOT THE NAME: this arm is measured on `transport-belt` and on
+    # nothing else, and REMOVER_ITEM is not a knob. MEASURED on Factorio 2.0.77
+    # (build 84539) with `iron-gear-wheel` in its place: both data stages run
+    # and the merge line is written, and then the engine exits 1 on `Error in
+    # assignID: recipe with name 'steam-engine' does not exist. It was removed
+    # by bbbt-remover. Source: electric-network (tips-and-tricks-item).` --
+    # which run_arm turns into a `sys.exit`, so the whole gate stops rather
+    # than one arm printing FAIL. The fixture deletes recipes without pruning
+    # the tips-and-tricks entries that name them; another item costs that
+    # prune and whatever else its removal dangles, and this comment rather
+    # than the constant is where that starts.
+    (d / "data.lua").write_text(REMOVER_LUA % json.dumps(REMOVER_ITEM))
+    return d
+
+
 def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
             keep: Path | None, extras: list[Path] | None = None,
             startup: dict | None = None, probe=None) -> dict:
@@ -804,6 +982,17 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
             "fkrecipes_lines": [line[line.index("fkrecipes:"):]
                                 for line in text.splitlines()
                                 if "fkrecipes:" in line],
+            # WHICH MODS RAN THE DATA STAGE, IN THE ORDER THE ENGINE RAN THEM,
+            # for the one arm whose whole premise is that another mod went
+            # FIRST. `check_remover` stages a mod that deletes an item ahead of
+            # this one, and Factorio's data-stage order is not something this
+            # repository found documented anywhere -- it is measured, once,
+            # here, on every run of that arm. Without it a reordered engine
+            # would make the arm pass by removing nothing at all, which is
+            # `check_speed`'s own anti-vacuity lesson met a second time. The
+            # names only: the times move every run and the versions move every
+            # release.
+            "load_order": re.findall(r"Loading mod (\S+) \S+ \(data\.lua\)", text),
             # A SMOKE TEST AND LABELLED AS ONE. It is over the prototype LIST, so
             # it is order-insensitive (convenient) and blind to field values
             # (disqualifying). Recorded because a move in it localises a failure
@@ -1024,7 +1213,7 @@ def main() -> int:
     ap.add_argument("--arm", choices=sorted(ARMS), action="append",
                     help="run one golden arm (default: all of them)")
     ap.add_argument("--golden-only", action="store_true",
-                    help="skip the variant and speed arms, which are not hashed")
+                    help="skip the variant, speed and merge arms, which are not hashed")
     args = ap.parse_args()
 
     # BEFORE THE ENGINE IS ASKED ANYTHING, because a gate that cannot write a
@@ -1060,13 +1249,15 @@ def main() -> int:
     book = json.loads(GOLDENS.read_text()) if GOLDENS.exists() else {}
 
     if args.capture:
-        # THE PROBE IS NOT A GOLDEN, AND NEITHER IS THE LOG. check_legacy_stub
-        # and the customizer's arms compare them against rules written down in
-        # this file, so recording either would invite the one thing a golden
-        # must never make easy -- re-capturing the answer instead of reading it.
-        # Only the hashes and the checksum are the engine's to record.
+        # THE PROBE IS NOT A GOLDEN, AND NEITHER IS THE LOG OR THE LOAD ORDER.
+        # check_legacy_stub, the customizer's arms and check_remover compare
+        # them against rules written down in this file, so recording any of
+        # them would invite the one thing a golden must never make easy --
+        # re-capturing the answer instead of reading it. Only the hashes and
+        # the checksum are the engine's to record.
         book.setdefault(version_full, {}).update(
-            {a: {k: v for k, v in g.items() if k not in ("probe", "fkrecipes_lines")}
+            {a: {k: v for k, v in g.items()
+                 if k not in ("probe", "fkrecipes_lines", "load_order")}
              for a, g in got.items()})
         # setdefault, not assignment: an engine's note is its own provenance
         # story, often hand-corrected after the capture -- a recapture must not
@@ -1090,8 +1281,8 @@ def main() -> int:
         # gate's primary instrument, and a run that measured nothing must not
         # exit 0 -- that is this repository's own "a check that skips is a
         # check that passed", met in the gate that was written to answer a
-        # question no suite can ask. The variant and speed arms still run
-        # below (they need no golden), so the report stays one report; the
+        # question no suite can ask. The variant, speed and merge arms still
+        # run below (they need no golden), so the report stays one report; the
         # exit code says the engine's golden is owed.
         bad = True
         want = {}
@@ -1149,13 +1340,15 @@ def main() -> int:
         else:
             print("\nre-run with --diff to keep the normalised dumps")
 
-    # THE VARIANT ARMS RUN EVEN WHEN A GOLDEN MOVED, deliberately. A default
-    # that drifted moves the hash AND every arm downstream of it, and the hash
-    # alone does not say which prototype -- so stopping here would throw away
-    # the eight lines that name it. One report, one exit code.
+    # THE VARIANT, SPEED AND MERGE ARMS RUN EVEN WHEN A GOLDEN MOVED,
+    # deliberately. A default that drifted moves the hash AND every arm
+    # downstream of it, and the hash alone does not say which prototype -- so
+    # stopping here would throw away the lines that name it. One report, one
+    # exit code.
     if not args.golden_only:
         bad |= check_variants(factorio, series, mod_dir)
         bad |= check_speed(factorio, series, mod_dir)
+        bad |= check_remover(factorio, series, mod_dir)
 
     if bad:
         return 1
@@ -1349,6 +1542,87 @@ def check_speed(factorio: str, series: str, mod_dir: Path) -> bool:
     print(f"  ok   speed{'':<22} all four hidden prototypes at {FIXTURE_SPEED}, "
           f"from an underground belt")
     return False
+
+
+def check_remover(factorio: str, series: str, mod_dir: Path) -> bool:
+    """A pack that removed `transport-belt`, and the engine takes the merge.
+
+    THE ARM THE ASSESSMENT'S FINDING 1 IS ABOUT, and the only one that can
+    answer it: the host suite proves what the PLAN emits, and what refused the
+    load was the ENGINE, on a recipe naming one item twice. See REMOVER_LUA's
+    block above for the fixture and why it is Lua.
+
+    NO mod-settings.dat, DELIBERATELY. The arm runs on the prototype's own
+    `default_value`, `bbb-recipe-cost = vanilla`, which is the configuration of
+    the player the finding is about: one who never opened the Startup tab.
+    """
+    print("==> the ladder merge, 1 arm with an item taken out from under it")
+    work = Path(tempfile.mkdtemp(prefix="bbb-remover-"))
+    try:
+        fixture = build_remover(series, work)
+        got = run_arm("remover", factorio, series, mod_dir, None,
+                      extras=[fixture],
+                      probe=lambda d: project(d, '{item: .item["%s"], '
+                                                 'alive: .item["%s"], '
+                                                 'ingredients: .recipe["%s"]'
+                                                 '.ingredients}'
+                                              % (REMOVER_ITEM, REMOVER_ALIVE,
+                                                 OUR_PART)))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+    # ANTI-VACUITY FIRST, AND IT IS THREE QUESTIONS. Factorio's data-stage
+    # ordering is not something this repository found documented, so the arm
+    # measures it rather than resting on the alphabet; and a fixture that
+    # loaded first and removed nothing would leave the vanilla recipe, which is
+    # also what a library that stopped merging would emit on the FIRST of its
+    # three ladders. None of the three is asked of the dump's recipe, so all
+    # three come first.
+    #
+    # THE ITEM QUESTION IS ASKED IN BOTH DIRECTIONS, POSITIVE FIRST. `is not
+    # None` alone would be satisfied by a jq path that stopped matching
+    # anything, so a stale probe would read as a removal that never happened;
+    # asking the same path for a name that must SURVIVE is what tells an absent
+    # item from a dead projection.
+    order, ours = got["load_order"], got["mods"][0]
+    if REMOVER_NAME not in order or ours not in order or \
+            order.index(REMOVER_NAME) > order.index(ours):
+        print(f"FAIL remover: the data stages ran {order}, and this arm needs "
+              f"{REMOVER_NAME} before {ours}; it removed nothing this mod "
+              f"could have seen and proves nothing")
+        return True
+    if got["probe"]["alive"] is None:
+        print(f"FAIL remover: `{REMOVER_ALIVE}` is not in the item table "
+              f"either, and the fixture never touches it: the probe reads "
+              f"nothing, so the question below cannot tell a removed item "
+              f"from a stale path")
+        return True
+    if got["probe"]["item"] is not None:
+        print(f"FAIL remover: `{REMOVER_ITEM}` is still in the item table "
+              f"after the fixture ran, so nothing was taken away and this arm "
+              f"proves nothing")
+        return True
+
+    # THE CLAIM, AND IT IS BOTH HALVES. The list alone would pass on a library
+    # that dropped the belt ingredient instead of merging it, and the line
+    # alone would pass on one that said the right thing and emitted something
+    # else -- which is why RECIPE_CUSTOM_ARMS asserts both too.
+    bad = False
+    ings = [(i["name"], i["amount"]) for i in got["probe"]["ingredients"]]
+    if ings != REMOVER_RECIPE:
+        bad = True
+        print(f"FAIL remover: with no `{REMOVER_ITEM}` in the game the recipe "
+              f"is {ings}\n{'':>5}  and the fallback merged into the first "
+              f"entry has to make it {REMOVER_RECIPE}")
+    if got["fkrecipes_lines"] != [REMOVER_LINE]:
+        bad = True
+        print(f"FAIL remover: the library's log lines are "
+              f"{got['fkrecipes_lines']}\n{'':>5}  and the whole stream has to "
+              f"be [{REMOVER_LINE!r}]")
+    if not bad:
+        print(f"  ok   remover{'':<20} {ings}, and the engine loaded it")
+        print(f"{'':>5}  said {REMOVER_LINE!r}")
+    return bad
 
 
 if __name__ == "__main__":
