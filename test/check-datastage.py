@@ -125,11 +125,21 @@ hangs on it. See check_legacy_stub.
 
 A VARIANT ARM DRIVES THE REAL SETTING, through a `mod-settings.dat` this script
 writes into the staged mods directory. That file is Factorio's own binary
-property tree -- an eight-byte version, a bool, and a three-key dictionary of
-`{value = ...}` wrappers -- and `write_mod_settings` below is a writer for it,
-verified by round-tripping the engine's own file before it was used. There is no
-Lua anywhere in this and there must not be: a settings stage cannot be asked a
-question from outside except through this file.
+property tree, and THE TOOLCHAIN OWNS THE WRITER: `write_mod_settings` below
+builds a JSON document and hands it to `fklua modsettings write --from FILE.json
+--out mod-settings.dat`, which encodes it and reads its own bytes back before it
+writes them. This repository transcribed the format itself until the toolchain
+answered it, and a format with one writer inside the compiler this mod is built
+with does not get a second one here. There is no Lua anywhere in this and there
+must not be: a settings stage cannot be asked a question from outside except
+through this file.
+
+THE TYPE OF A NUMBER IS ITS SPELLING, which is what the arm tables below have to
+get right. A JSON integer is written as the property tree's signed 64-bit type
+and a JSON float as its double, and that is the ENGINE'S OWN typing: the engine
+rewrites mod-settings.dat after a load with the values it settled on, and an int
+setting comes back from it as the signed 64-bit type. So a count is written `50`
+and a seconds `20.0`, each as the type its own setting prototype declares.
 
 Its anti-vacuity is structural rather than added. If the .dat were ignored, or
 malformed enough to be skipped, every variant arm would read back the DEFAULT
@@ -167,6 +177,27 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 GOLDENS = ROOT / "test" / "datastage-goldens.json"
+
+# THE COMPILER, and this gate needs it for two different things: `modsettings
+# write`, which is where every variant arm's .dat comes from, and `mod`, which
+# packages the speed arm's fixture. The default is the Makefile's own, so a bare
+# run of this script and `make datastage-check` look at the same binary.
+#
+# ABSOLUTE, AND THAT IS NOT COSMETIC. The Makefile's own FKLUA is the relative
+# `../FkLua/bin/fklua` and it passes it in; `build_fixture` runs the packager
+# with cwd set to a temporary directory (it must, or the fixture would be
+# packaged with this mod's asset tree merged in), so a relative path there
+# resolves against a directory that has no FkLua next to it. Measured the first
+# time this variable was passed through: `FileNotFoundError: [Errno 2] No such
+# file or directory: '../FkLua/bin/fklua'`. Resolved against THIS process's
+# working directory, which is where a relative path a caller wrote means what
+# the caller meant.
+#
+# `or` RATHER THAN A DEFAULT ARGUMENT, so an EMPTY `FKLUA=` in the environment
+# defaults too (measured: `FKLUA= test/check-datastage.py` reached the probe
+# with the empty string, which `os.access` read as the working directory).
+FKLUA = os.path.abspath(
+    os.environ.get("FKLUA") or str(ROOT.parent / "FkLua" / "bin" / "fklua"))
 
 DEFERRED_OTHER_FLAVOUR = """\
 THE 2.0-FLAVOUR GOLDEN IS NOT CAPTURED, and it cannot be on this binary: the
@@ -307,8 +338,8 @@ RECIPE_DEFAULT = [("iron-plate", 4), ("iron-gear-wheel", 2), ("transport-belt", 
 # typing nothing is a state a player reaches and this gate should visit; what
 # makes the section a measurement is the two arms above it.
 #
-# The text is written as a plain string by tools/mod-settings.py, which is what
-# a player's own settings screen stores.
+# The text is written as a plain string, which is what a player's own settings
+# screen stores.
 # ---------------------------------------------------------------------------
 
 RECIPE_CUSTOM_ARMS = [
@@ -373,14 +404,17 @@ TECH_VARIANTS = ["logistics-2", "logistics-3"]
 # charges, and both assert the library's own log line, which no tier emits at
 # all.
 #
-# `better-belt-balancer-tech-count` IS AN INT SETTING AND tools/mod-settings.py
-# WRITES EVERY NUMBER AS A PROPERTY-TREE DOUBLE (type 2). FkRecipes measured on
-# this same engine that an int setting reads a type-2 double and a type-6 signed
-# int alike (agents/customizer-design.md, the mod-settings.dat table: "the int
+# `better-belt-balancer-tech-count` IS AN INT SETTING AND ITS NUMBER IS WRITTEN
+# AS ONE: the toolchain encodes a JSON integer as the property tree's signed
+# 64-bit type (type 6), which is the type the engine itself writes an int
+# setting back as. `better-belt-balancer-tech-seconds` is a double setting, so
+# its value is spelled `20.0` and lands as a double (type 2). The engine reads
+# either encoding as the same number (FkRecipes measured both on this same
+# engine: agents/customizer-design.md, the mod-settings.dat table, "the int
 # written as type 6 and as type 2 | both read as the same number"), and the
-# second arm is where that is confirmed rather than assumed: a count the engine
-# had rejected or reset would read back as the default 20 and fail the unit
-# comparison by the one field it moved.
+# second arm is where the READ is confirmed rather than assumed: a count the
+# engine had rejected or reset would read back as the default 20 and fail the
+# unit comparison by the one field it moved.
 # ---------------------------------------------------------------------------
 
 TECH_PACKS_SETTING = "better-belt-balancer-tech-packs"
@@ -405,7 +439,7 @@ TECH_CUSTOM_ARMS = [
     ("tech-custom",
      {TECH_SETTING: "custom",
       TECH_PACKS_SETTING: "1 automation-science-pack, 1 logistic-science-pack",
-      TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20},
+      TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20.0},
      {"count": 50, "time": 20,
       "ingredients": [["automation-science-pack", 1], ["logistic-science-pack", 1]]},
      ["logistics-3"],
@@ -444,7 +478,7 @@ TECH_CUSTOM_ARMS = [
 TECH_IGNORED_ARMS = [
     ("tech-ignored", "logistics-2",
      {TECH_SETTING: "logistics-2", TECH_PACKS_SETTING: "2 automation-science-pack",
-      TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20},
+      TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20.0},
      ["fkrecipes: better-belt-balancer-tech-count is edited, but bbb-tech-cost "
       "is not on custom, so the number is ignored",
       "fkrecipes: better-belt-balancer-tech-seconds is edited, but "
@@ -551,20 +585,83 @@ def normalised_sha(path: Path, out: Path | None) -> str:
     return hashlib.sha256(blob).hexdigest()
 
 
-# THE mod-settings.dat WRITER LIVES IN tools/ NOW, because it grew a second
-# caller with a different question.
+# THE mod-settings.dat WRITER IS THE TOOLCHAIN'S, and what is left here is the
+# document it reads.
 #
-# `bench/run.sh` configures the bench harness's setup mod through startup
-# settings since that mod became a compiled guest -- a Go guest cannot require
-# the `config.lua` the harness used to rewrite -- so the PropertyTree writer is
-# shared rather than transcribed. Its header carries the format and the
-# round-trip that verified it; what is imported here is the same function this
-# file used to define, with one optional argument added that this caller does
-# not pass.
-sys.path.insert(0, str(ROOT / "tools"))
-from importlib import import_module as _import_module
+# `fklua modsettings write --from FILE.json --out mod-settings.dat` is the
+# writer for Factorio's property tree, and this repository used to hold one too:
+# a transcription of the format under tools/, verified against a round trip of
+# the engine's own file, with two callers -- this one and bench/run.sh. A second
+# implementation of a format the compiler this mod is built with already writes
+# is a second answer the day the two disagree, so it is deleted rather than
+# kept in step -- which is what host.go, the layout check and the tinygo.wasm
+# vet tag each got for the same reason.
+#
+# THE NAME AND THE SIGNATURE ARE AN INTERFACE and are kept: a scratch driver
+# that replaces `write_mod_settings` by name, to INSTALL a .dat instead of
+# writing one, is how a release-against-head comparison drives this file, and it
+# binds to this name and these four arguments.
+#
+# NUMBERS KEEP THE TYPE PYTHON GIVES THEM. json.dump writes an `int` without a
+# decimal point and a `float` with one, and the toolchain reads the first as the
+# signed 64-bit type and the second as the double, so the arm tables spell each
+# number as its own setting's type.
+def write_mod_settings(path: Path, version: str, startup: dict,
+                       runtime_global: dict | None = None) -> None:
+    """Write one mod-settings.dat.
 
-write_mod_settings = _import_module("mod-settings").write_mod_settings
+    `version` is the FULL `X.Y.Z` the file stamps, which callers derive from the
+    engine series they are staging for.
+    """
+    maj, minor, patch = (int(x) for x in version.split(".")[:3])
+    doc = {
+        "version": [maj, minor, patch, 0],
+        "startup": startup,
+        "runtime-global": runtime_global or {},
+        "runtime-per-user": {},
+    }
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+        json.dump(doc, fh)
+        src = fh.name
+    try:
+        cmd = [FKLUA, "modsettings", "write", "--from", src, "--out", str(path)]
+        done = subprocess.run(cmd, capture_output=True, text=True)
+        if done.returncode != 0:
+            # LOUDLY, AND WITH THE COMMAND. The writer refuses rather than
+            # guesses -- it names the key it cannot encode -- so its stderr is
+            # the whole diagnosis and swallowing it would turn a sentence about
+            # one setting into an engine run that measured the defaults.
+            sys.exit(f"`{' '.join(cmd)}` exited {done.returncode}\n"
+                     f"{done.stderr.strip()}")
+    finally:
+        os.unlink(src)
+
+
+# THE WRITER IS PROBED ONCE, BEFORE THE ENGINE IS ASKED ANYTHING.
+#
+# A skipped gate reads exactly like a pass, and the shape that could skip here
+# is a toolchain from before the writer landed: `fklua modsettings` is a command
+# this repository's own build already depends on the binary for, and an older
+# one answers `unknown command "modsettings"` on stderr. Both that and a binary
+# that is not there refuse with the remedy, so the variant arms are never
+# quietly dropped from a run that otherwise looks green.
+#
+# THE EXIT CODE AND THE STDERR ARE READ DIRECTLY. A shell pipeline would report
+# the last command's status, and what is being read here is the first's.
+def check_toolchain() -> None:
+    remedy = ("      an FkLua checkout at c21ff07 or later, built with\n"
+              "      `cd ../FkLua && go build -o bin/fklua ./cmd/fklua`, or FKLUA=<path>")
+    need = ("every variant arm of this gate drives its setting through "
+            "`fklua modsettings write`")
+    # A FILE that is executable: a directory passes os.X_OK (it is searchable)
+    # and then fails inside subprocess with a traceback rather than this line.
+    if not (os.path.isfile(FKLUA) and os.access(FKLUA, os.X_OK)):
+        sys.exit(f"NOT RUN: no executable fklua at {FKLUA}, and {need}.\n{remedy}")
+    done = subprocess.run([FKLUA, "modsettings"], capture_output=True, text=True)
+    if 'unknown command "modsettings"' in done.stderr:
+        sys.exit(f"NOT RUN: the fklua at {FKLUA} has no `modsettings` command "
+                 f"(it exited {done.returncode} saying "
+                 f'`unknown command "modsettings"`), and {need}.\n{remedy}')
 
 
 def build_fixture(series: str, out: Path) -> Path:
@@ -581,7 +678,7 @@ def build_fixture(series: str, out: Path) -> Path:
     round it. The control module is optional when the mod has a data one now, so
     the workaround is deleted and the package is what it says: prototypes.
     """
-    fklua = os.environ.get("FKLUA", str(ROOT.parent / "FkLua" / "bin" / "fklua"))
+    fklua = FKLUA
     if not os.access(fklua, os.X_OK):
         sys.exit(f"fklua not found at {fklua} (set FKLUA); the speed arm needs it "
                  f"to build test/fixtures/fastbelt")
@@ -929,6 +1026,11 @@ def main() -> int:
     ap.add_argument("--golden-only", action="store_true",
                     help="skip the variant and speed arms, which are not hashed")
     args = ap.parse_args()
+
+    # BEFORE THE ENGINE IS ASKED ANYTHING, because a gate that cannot write a
+    # .dat has nothing to say about a setting and must not spend a Factorio run
+    # finding that out.
+    check_toolchain()
 
     factorio = os.environ.get(
         "FACTORIO_BIN",

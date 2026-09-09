@@ -1647,7 +1647,9 @@ out of `settings.startup` at `fk_on_init`.
   verified then by round-tripping the engine's own `mod-settings.dat`. Both
   callers produce byte-identical output through one function, and
   `make datastage-check` is green over all eight of its variant arms, which is
-  the engine agreeing with the refactor rather than this paragraph.
+  the engine agreeing with the refactor rather than this paragraph. (Retired in
+  the sync pass of 2026-09-08 for `fklua modsettings write`, the toolchain's own
+  writer, with both callers moved; agents/fkrecipes-migration.md, "Sync pass".)
 - **STARTUP rather than runtime-global**, because a cell is two Factorio
   processes: `--create` and `--benchmark` read the same file directly, with no
   state carried in the save between them.

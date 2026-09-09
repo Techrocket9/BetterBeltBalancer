@@ -16,6 +16,11 @@ BENCH="$ROOT/bench"
 TMP="${BENCH_TMP:-$BENCH/tmp}"
 
 FACTORIO="${FACTORIO_BIN:-$HOME/Library/Application Support/Steam/steamapps/common/Factorio/factorio.app/Contents/MacOS/factorio}"
+# The compiler, which a cell needs for the same reason it needs the engine: it
+# is what writes the mod-settings.dat that configures the setup mod. Same
+# default as the Makefile's FKLUA, so `make bench-setup` and this write with one
+# binary.
+FKLUA="${FKLUA:-$ROOT/../FkLua/bin/fklua}"
 # Where third-party balancer mod zips live. Never inside the repo.
 MODS_SRC="${BB_MODS_SRC:-/Users/$USER/Library/Application Support/factorio/mods}"
 
@@ -56,7 +61,7 @@ Options:
   --part-name NAME the balancer mod's part prototype     (default: per --mod)
   --note TEXT      free-text note recorded in the TSV
   --keep-save      do not delete the generated save
-Env: FACTORIO_BIN, BB_MODS_SRC, BENCH_TMP, BENCH_VERBOSE_TIMINGS, BENCH_NO_BUILD
+Env: FACTORIO_BIN, FKLUA, BB_MODS_SRC, BENCH_TMP, BENCH_VERBOSE_TIMINGS, BENCH_NO_BUILD
 EOF
 }
 
@@ -203,6 +208,31 @@ write-data=$WORK/userdir
 INI
 FCONF=(-c "$WORK/config.ini")
 
+# THE COMPILER IS PROBED BEFORE ANYTHING IS BUILT OR STAGED, and it is the
+# stderr TEXT that decides rather than the exit code: an fklua with the
+# subcommand answers a bare `fklua modsettings` with its usage and exits 1, one
+# without it says `unknown command "modsettings"` and exits 2, so the code alone
+# would not tell a usage line from a refusal (measured on b88965d and a1fcd04).
+# A cell whose settings file was never written is not a failed cell: every key
+# reads back as its own declared default and the harness measures a plausible
+# world nobody asked for. The BENCH-SETUP comparison below would catch that;
+# this catches it before `make bench-setup` and the engine run, and says what to
+# do about it. A directory passes `-x` (it is searchable), so the guard asks for
+# a file.
+{ [ -f "$FKLUA" ] && [ -x "$FKLUA" ]; } || { echo "no executable fklua at $FKLUA" >&2
+  echo "  a cell is configured through a mod-settings.dat and \`fklua modsettings write\` writes it" >&2
+  echo "  set FKLUA, or build one: cd \"$ROOT/../FkLua\" && go build -o bin/fklua ./cmd/fklua" >&2
+  exit 1; }
+MS_PROBE="$WORK/fklua-modsettings.err"
+"$FKLUA" modsettings >/dev/null 2>"$MS_PROBE" || true
+if grep -q 'unknown command "modsettings"' "$MS_PROBE"; then
+  echo "the fklua at $FKLUA has no \`modsettings\` command" >&2
+  echo "  a cell is configured through a mod-settings.dat and that command writes it" >&2
+  echo "  it is FkLua c21ff07 or later: cd \"$ROOT/../FkLua\" && go build -o bin/fklua ./cmd/fklua" >&2
+  echo "  or set FKLUA to a checkout that has it" >&2
+  exit 1
+fi
+
 # --- stage the mod directory -------------------------------------------------
 # THE SETUP MOD IS A COMPILED GO GUEST (guest/go/obs/bench), staged out of the
 # package `make bench-setup` writes. There is no hand-written Lua in this
@@ -221,29 +251,46 @@ stamp_engine "$MODDIR/bbb-bench-setup"
 # THE CONFIGURATION CHANNEL. This used to be a `config.lua` written into the
 # staged copy of the mod and `require`d by it; a Go guest cannot require a Lua
 # file, so the eight keys are STARTUP SETTINGS the mod's own settings stage
-# defines and this writes into a mod-settings.dat. tools/mod-settings.py is the
-# PropertyTree writer and its header carries the format; guest/go/obs/protos
-# holds the key names, which are the one thing the mod's two wasm modules have
-# to agree about.
+# defines and this writes into a mod-settings.dat. `fklua modsettings write` is
+# the PropertyTree writer -- the compiler that builds this mod owns the format,
+# so nothing here transcribes it -- and guest/go/obs/protos holds the key names,
+# which are the one thing the mod's two wasm modules have to agree about.
 #
-# JSON carries the three types the tree needs without the shell declaring them,
-# which is what makes an int arrive as a number and --hitch as a bool.
-python3 - "$MODDIR/mod-settings.dat" "$ENGINE_SERIES.0" <<PY || { echo "could not write mod-settings.dat" >&2; exit 1; }
-import json, subprocess, sys
-doc = {"startup": {
-  "bbb-bench-scenario":  "$SCENARIO",
-  "bbb-bench-n":         $N,
-  "bbb-bench-k":         $K,
-  "bbb-bench-tier":      "$TIER",
-  "bbb-bench-item":      "$ITEM",
-  "bbb-bench-part-name": "$PART_NAME",
-  "bbb-bench-meter":     $METER,
-  "bbb-bench-hitch":     $([ "$HITCH" -eq 1 ] && echo True || echo False),
-}}
-subprocess.run([sys.executable, "$ROOT/tools/mod-settings.py",
-                "--out", sys.argv[1], "--factorio-version", sys.argv[2]],
-               input=json.dumps(doc), text=True, check=True)
+# JSON carries the types the tree needs without the shell declaring them, and
+# the SPELLING of a number is its type: an int-setting's value is written
+# without a decimal point and lands as the signed 64-bit type, which is what the
+# engine itself stores an int setting as. The eight declarations are in
+# guest/go/obs/benchdata: scenario and tier are dropdowns and item and part-name
+# free text (string-setting), n, k and meter are int-setting, hitch is
+# bool-setting.
+#
+SETTINGS_JSON="$WORK/mod-settings.json"
+python3 - "$SETTINGS_JSON" "$ENGINE_SERIES" <<PY || { echo "could not build the settings document" >&2; exit 1; }
+import json, sys
+maj, minor = (int(x) for x in sys.argv[2].split("."))
+doc = {
+  "version": [maj, minor, 0, 0],
+  "startup": {
+    "bbb-bench-scenario":  "$SCENARIO",
+    "bbb-bench-n":         $N,
+    "bbb-bench-k":         $K,
+    "bbb-bench-tier":      "$TIER",
+    "bbb-bench-item":      "$ITEM",
+    "bbb-bench-part-name": "$PART_NAME",
+    "bbb-bench-meter":     $METER,
+    "bbb-bench-hitch":     $([ "$HITCH" -eq 1 ] && echo True || echo False),
+  },
+  "runtime-global": {},
+  "runtime-per-user": {},
+}
+with open(sys.argv[1], "w") as fh:
+    json.dump(doc, fh)
 PY
+"$FKLUA" modsettings write --from "$SETTINGS_JSON" --out "$MODDIR/mod-settings.dat" >/dev/null || {
+  echo "\`$FKLUA modsettings write\` refused this cell's settings document, $SETTINGS_JSON" >&2
+  echo "  its own line above says why (a key it cannot encode, a document it cannot read);" >&2
+  echo "  the keys and their types are guest/go/obs/benchdata's, written on every cell" >&2
+  exit 1; }
 
 MOD_ENTRIES=""
 if [ -n "$MOD_ZIP" ]; then

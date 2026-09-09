@@ -15,7 +15,10 @@
 #                 agents/single-edge.md.
 #   make check    the generated bindings and the lock are current
 #   make datastage-check
-#                 the data stage's own gate: Factorio's --dump-data, hashed
+#                 the data stage's own gate: Factorio's --dump-data, hashed. It
+#                 needs BOTH binaries -- the engine to run the stages, and an
+#                 fklua whose `modsettings write` puts a chosen setting in front
+#                 of them for the variant arms
 #
 # `fklua mod` GENERATES the control stage (control.lua, info.json, fk_abi.lua,
 # fk_api_gen.lua, fk_module.lua) and REPLACES its output directory each time, so
@@ -257,11 +260,36 @@ $(DATA_WASM): $(DATA_GUEST_SRC)
 PRUNE_LOG    := $(DIST)/.fklua-mod.log
 PRUNE_GIVEUP := was not a compile-time constant
 
+# ...AND THE PACKAGER'S REPORT BESIDE THE LOG, which is the same figures in a
+# shape a tool can read.
+#
+# `--report FILE` writes ONE JSON document: the pruning verdicts, the pin and
+# signature outcomes, the wired hooks, the outputs, and a `jumps` object per
+# module. It is written on SUCCESS AND ON REFUSAL (`ok` and `refusal.kind` say
+# which), so a build that failed leaves the same document a build that worked
+# does, and stdout is unchanged to the byte -- the log above is what it always
+# was.
+#
+# The relay's figures are read out of it:
+#
+#     jq -c .jumps.data $(DIST)/.fklua-mod.report.json
+#
+# which is the widest jump span before and after the relay, the number of
+# stations, the widest block and its room, and one entry per relayed function
+# (`.relayed_functions[0].widest_block_bytes` and the rest). `.jumps.control` is
+# the control guest's own.
+#
+# NOTHING IN THE BUILD READS IT. The pruning tripwire below greps the LOG,
+# which is where that line has always been; the report is here so a figure in a
+# working note can be quoted from the build that shipped rather than from a
+# scratch repackaging that has to be trusted to have been the same.
+MOD_REPORT   := $(DIST)/.fklua-mod.report.json
+
 # $(call fklua_mod,<extra flags>)
 define fklua_mod
 	@mkdir -p $(DIST)
-	@echo "$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) $(1)"
-	@$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) $(1) > $(PRUNE_LOG) 2>&1; \
+	@echo "$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) --report $(MOD_REPORT) $(1)"
+	@$(FKLUA) mod $(WASM) --persist=$(PERSIST) $(FKLUA_GC) --report $(MOD_REPORT) $(1) > $(PRUNE_LOG) 2>&1; \
 	  st=$$?; cat $(PRUNE_LOG); exit $$st
 	@if grep -q '$(PRUNE_GIVEUP)' $(PRUNE_LOG); then \
 	  echo ""; \
@@ -885,8 +913,12 @@ check:
 # module since phase 6 of the estate port -- so this gate needs that ONE package
 # built. Not `observers`: nothing else here stages a test mod, and relinking
 # twelve of them to hash a data dump would be a worse trade than naming the one.
+# FKLUA IS PASSED BESIDE FACTORIO_BIN because the gate needs BOTH binaries: the
+# engine runs the stages, and `fklua modsettings write` is what puts a player's
+# chosen value in front of them. The script's own default is this variable's, so
+# the pass-through matters exactly when this Makefile was told something else.
 datastage-check: mod $(OBS_BB2_DIR)
-	FACTORIO_BIN="$(FACTORIO_BIN)" test/check-datastage.py
+	FACTORIO_BIN="$(FACTORIO_BIN)" FKLUA="$(FKLUA)" test/check-datastage.py
 
 clean:
 	rm -rf $(DIST) test/tmp

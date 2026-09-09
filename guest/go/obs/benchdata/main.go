@@ -9,7 +9,9 @@
 // WHAT IT IS FOR is the configuration channel, and the whole of the argument is
 // in `protos`' own header: `bench/run.sh` used to REWRITE a `config.lua` inside
 // the staged copy of the mod, which a Go guest cannot read. These eight settings
-// are that file, and `tools/mod-settings.py` is the writer.
+// are that file, and `fklua modsettings write` is the writer (the toolchain's,
+// since the sync pass of 2026-09-08; this repository's own transcription of the
+// format is deleted).
 //
 // EVERY ONE OF THEM IS STARTUP. Nothing here shapes a prototype -- this stage
 // does not read a single one of them -- so the choice is about WHO reads them

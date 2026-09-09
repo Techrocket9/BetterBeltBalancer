@@ -12,6 +12,7 @@ One invocation is one matrix cell and appends one row to [`baselines/results.tsv
 
 - A Factorio install. `run.sh` looks for the binary at the default Steam location on macOS; set `FACTORIO_BIN` otherwise. Which series it is is an input rather than an assumption: see "Which Factorio is running" below.
 - The setup mod, which is a compiled guest. `run.sh` runs `make bench-setup` before every cell unless `BENCH_NO_BUILD` is set; that target builds one package and relinks nothing else.
+- An FkLua checkout beside this one with `bin/fklua` built from c21ff07 or later: `run.sh` writes each cell's `mod-settings.dat` with `fklua modsettings write`, and refuses the cell, naming the remedy, when the binary lacks the command. Set `FKLUA` to use another binary.
 - For `--mod bbb`, a built BetterBeltBalancer: `run.sh` runs `make zip` first (see the top-level [README](../README.md) for the build prerequisites), unless `BENCH_NO_BUILD` is set.
 - For `--mod bb2` and `--mod bb3`, the incumbents' zips (`belt-balancer-2_2.0.9.zip`, `belt-balancer-3_*.zip`) in a directory named by `BB_MODS_SRC`. Third-party zips are never copied into the repository; they are staged into `bench/tmp/`, which is ignored by git.
 
@@ -29,7 +30,7 @@ Space Age, quality and elevated-rails are disabled explicitly in `mod-list.json`
 
 ### How a cell is configured
 
-The setup mod's eight knobs are Factorio **startup settings**, which its own settings stage defines and `run.sh` writes into the staged `mod-settings.dat` before creating the save. `tools/mod-settings.py` is the writer; the keys are `bbb-bench-scenario`, `-n`, `-k`, `-tier`, `-item`, `-part-name`, `-meter` and `-hitch`, and every one of them is echoed back on the `BENCH-SETUP` line of the create log, so a misconfigured cell is visible in its own output.
+The setup mod's eight knobs are Factorio **startup settings**, which its own settings stage defines and `run.sh` writes into the staged `mod-settings.dat` before creating the save. `fklua modsettings write` is the writer, from an FkLua checkout at c21ff07 or later; the keys are `bbb-bench-scenario`, `-n`, `-k`, `-tier`, `-item`, `-part-name`, `-meter` and `-hitch`, and every one of them is echoed back on the `BENCH-SETUP` line of the create log, so a misconfigured cell is visible in its own output.
 
 Startup rather than map settings because a cell is two Factorio processes: `--create` and `--benchmark` read the same file directly, with no state carried in the save between them.
 
@@ -176,7 +177,7 @@ BENCH_TMP=/tmp/bbb-mega BENCH_VPROF_TICKS=3600 MEGA=1 REPS=3 bench/matrix.sh
 --keep-save      do not delete the generated save
 ```
 
-Environment: `FACTORIO_BIN`, `BB_MODS_SRC` (where the third-party zips live; the default is your Factorio `mods` directory), `BENCH_TMP` (default `bench/tmp`), `BENCH_VPROF_TICKS` (length of the verbose pass; 0 disables it), `BENCH_VPROF_EXTRA` (extra `--benchmark-verbose` counters for that pass, for example `luaGarbageIncremental`), `BENCH_VPROF_FORCE` (run the verbose pass on an engine where it is known to crash), `BENCH_NO_BUILD` (skip the builds that `--mod bbb` and the setup mod run).
+Environment: `FACTORIO_BIN`, `FKLUA` (the fklua that writes each cell's settings file; default `../FkLua/bin/fklua`), `BB_MODS_SRC` (where the third-party zips live; the default is your Factorio `mods` directory), `BENCH_TMP` (default `bench/tmp`), `BENCH_VPROF_TICKS` (length of the verbose pass; 0 disables it), `BENCH_VPROF_EXTRA` (extra `--benchmark-verbose` counters for that pass, for example `luaGarbageIncremental`), `BENCH_VPROF_FORCE` (run the verbose pass on an engine where it is known to crash), `BENCH_NO_BUILD` (skip the builds that `--mod bbb` and the setup mod run).
 
 `--mod bb2` resolves to `$BB_MODS_SRC/belt-balancer-2_2.0.9.zip` and `--mod bb3` to `$BB_MODS_SRC/belt-balancer-3_*.zip`. `--mod bbb` is this repository: it runs `make zip` (a real file target, so it rebuilds only when something changed) and uses `dist/<name>_<version>.zip`, named from `fklua.toml`. Any other value is a path to a mod zip.
 

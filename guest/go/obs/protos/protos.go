@@ -106,7 +106,8 @@ const PlatStackSize = 4
 // `bench/run.sh` REWROTE per matrix cell -- eight keys in a table the mod
 // `require`d. A Go guest cannot require a Lua file, so the channel is
 // STARTUP SETTINGS: `obs/benchdata` defines one per key, `bench/run.sh` writes
-// them into a `mod-settings.dat` it composes per cell (tools/mod-settings.py),
+// them into a `mod-settings.dat` it composes per cell (`fklua modsettings write`,
+// the toolchain's writer since the sync pass of 2026-09-08),
 // and `obs/bench` reads them out of `settings.startup` at `fk_on_init`.
 //
 // STARTUP RATHER THAN RUNTIME-GLOBAL, and the reason is the two-phase shape of
