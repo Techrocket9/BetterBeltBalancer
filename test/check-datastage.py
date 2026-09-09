@@ -398,19 +398,31 @@ TECH_VARIANTS = ["logistics-2", "logistics-3"]
 #
 # AND THE PREREQUISITE IS ASSERTED BESIDE IT, because a written cost has no
 # source technology for the tree position to move with. It comes from the plan's
-# `Position` ladder -- logistics-3, then logistics-2, then logistics -- and in a
-# base game that is `logistics-3`, which is also what makes the first arm below
-# a measurement rather than coverage.
+# `Position` ladder, which since the ladder's flip IS `TechOptions()` -- the
+# tier list itself, logistics, then logistics-2, then logistics-3 -- so in a
+# base game it is `logistics`, this mod's own default tier. That is the point of
+# the flip and it is what the first arm below now measures: picking Custom and
+# typing nothing moves NOTHING, the price or the place.
 #
-# ANTI-VACUITY, AND BOTH ARMS CARRY IT, unlike the recipe customizer's three.
-# A .dat that was ignored or malformed leaves `bbb-tech-cost` at `logistics`,
-# whose unit in a stock game is 20 automation science over 15 seconds -- the
-# SAME THREE NUMBERS the untouched custom arm expects, because the defaults are
-# base's own logistics unit on purpose. What separates them is the
-# PREREQUISITE: `logistics` for a .dat that did not arrive, `logistics-3` for
-# one that did. The second arm separates them a second way, on numbers no tier
-# charges, and both assert the library's own log line, which no tier emits at
-# all.
+# ANTI-VACUITY, AND THE FLIP TOOK THE OLD ONE AWAY, so read this before moving
+# an assertion. A .dat that was ignored or malformed leaves `bbb-tech-cost` at
+# `logistics`, whose unit in a stock game is 20 automation science over 15
+# seconds -- the SAME THREE NUMBERS the untouched custom arm expects, because
+# the defaults are base's own logistics unit on purpose. What used to separate
+# them was the PREREQUISITE, `logistics` for a .dat that did not arrive and
+# `logistics-3` for one that did; the flip makes both `logistics`, so the unit
+# and the prerequisite together are now exactly what a .dat that never reached
+# the engine produces.
+#
+# WHAT PROVES THE FILE WAS READ IS THE LIBRARY'S OWN LOG LINE, and it is
+# asserted FIRST for that reason, before either claim, which is `check_speed`'s
+# discipline. `fkrecipes: bbb-balancer takes its research cost from
+# better-belt-balancer-tech-packs: ...` is written only where the dropdown is on
+# `custom`; a tier emits no line at all, and a run of this package with no .dat
+# at all records ZERO `fkrecipes:` lines, measured on 2.0.77. RED-PROVEN by
+# running this arm with `startup=None`: it fails on that assertion, and on that
+# assertion alone, with `the library's log lines are []`. The second arm
+# separates them a second way as well, on numbers and a pack no tier charges.
 #
 # `better-belt-balancer-tech-count` IS AN INT SETTING AND ITS NUMBER IS WRITTEN
 # AS ONE: the toolchain encodes a JSON integer as the property tree's signed
@@ -433,10 +445,14 @@ TECH_CUSTOM_ARMS = [
     # `custom` with all three fields as they ship: the reserved word `default`
     # in the pack list, and the two numbers at the values the settings declare.
     # That is [FallbackUnit] in guest/go/tune, which is base's own `logistics`
-    # cost, so picking Custom and typing nothing changes the price of nothing.
+    # cost, so picking Custom and typing nothing changes the price of nothing --
+    # and since the ladder's flip it changes the PLACE of nothing either, which
+    # is why the prerequisite below is `logistics`. Whole-dump measurement on
+    # 2.0.77: this arm's normalised data-raw dump hashes `1e1fcf4f56f5ef22`, the
+    # same as the base golden's, so not one prototype in the table moved.
     ("tech-custom-default", {TECH_SETTING: "custom"},
      {"count": 20, "time": 15, "ingredients": [["automation-science-pack", 1]]},
-     ["logistics-3"],
+     ["logistics"],
      "fkrecipes: bbb-balancer takes its research cost from "
      "better-belt-balancer-tech-packs: count 20, time 15, "
      "packs 1 automation-science-pack"),
@@ -450,7 +466,7 @@ TECH_CUSTOM_ARMS = [
       TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20.0},
      {"count": 50, "time": 20,
       "ingredients": [["automation-science-pack", 1], ["logistic-science-pack", 1]]},
-     ["logistics-3"],
+     ["logistics"],
      "fkrecipes: bbb-balancer takes its research cost from "
      "better-belt-balancer-tech-packs: count 50, time 20, "
      "packs 1 automation-science-pack, 1 logistic-science-pack"),
@@ -1444,6 +1460,18 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
         got = run_arm(arm, factorio, series, mod_dir, None, startup=startup,
                       probe=lambda d: project(d, '.technology["bbb-balancer"]'))
         ours, lines = got["probe"], got["fkrecipes_lines"]
+        # ANTI-VACUITY FIRST. Since the `Position` ladder starts at this mod's
+        # own default tier, the unit AND the prerequisite below are what a
+        # `mod-settings.dat` that never reached the engine produces, so neither
+        # of them can say the stored value was read. This line can: the library
+        # writes it only under `custom`, and a tier writes nothing.
+        if want_line not in lines:
+            bad = True
+            print(f"FAIL {arm}: the library's log lines are {lines}\n"
+                  f"{'':>5}  and one of them has to be {want_line!r}: without it "
+                  f"the dropdown was not on custom, so the unit and the "
+                  f"prerequisite below are the default tier's and prove nothing")
+            continue
         if ours["unit"] != want_unit:
             bad = True
             print(f"FAIL {arm}: the research unit is {ours['unit']}\n"
@@ -1454,11 +1482,6 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
             print(f"FAIL {arm}: the prerequisite is {ours.get('prerequisites')}, "
                   f"not {want_after} -- a written cost is placed by the plan's "
                   f"own ladder, and nothing else places it")
-            continue
-        if want_line not in lines:
-            bad = True
-            print(f"FAIL {arm}: the library's log lines are {lines}\n"
-                  f"{'':>5}  and one of them has to be {want_line!r}")
             continue
         u = ours["unit"]
         print(f"  ok   {arm:<26} {u['count']} x {u['time']}s in "

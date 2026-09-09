@@ -36,6 +36,14 @@ const (
 // technology, cheapest first. The strings ARE the base technology names, which
 // is why there is no mapping table under this: the option a player picks is the
 // technology they get.
+//
+// AND SINCE FIX ROUND 1 IT IS THE CUSTOM ARM'S `Position` LADDER TOO. A written
+// cost names no source technology, so [Plan] places it by a ladder of its own,
+// and that ladder is THIS LIST rather than a slice spelled out beside it: the
+// head is [TechDefault] by construction, so an untouched Custom hangs where the
+// default tier already hangs. THE ORDER HERE IS THEREFORE LOAD-BEARING TWICE
+// OVER -- it is the menu order the dropdown shows AND the order the custom arm
+// walks -- and `plan.go`'s comment on that field carries the measurement.
 func TechOptions() []string {
 	return []string{TechLogistics, TechLogistics2, TechLogistics3}
 }
@@ -75,6 +83,14 @@ func TechValues() []string {
 //
 // THE HEAD OF THE TIERS AND NOT OF [TechValues]: the default has to be a value
 // a ladder answers for, and the custom arm is the one value that is not.
+//
+// AND THE CUSTOM ARM'S PLACEMENT IS THIS FUNCTION'S ANSWER TOO, which is the
+// other end of the coupling [TechOptions] above describes: `Position` is that
+// list, so its head is whatever this returns, and an editor who moves the
+// default tier moves where a Custom research hangs in the same stroke. That is
+// the property fix round 1 rests on and it is ASSERTED IN THOSE TERMS rather
+// than against the literal `logistics`, by
+// [TestTheCustomArmTakesItsPlaceFromTheDefaultTier].
 func TechDefault() string { return TechOptions()[0] }
 
 // TechLadder is the technologies to try for one option, most preferred first.

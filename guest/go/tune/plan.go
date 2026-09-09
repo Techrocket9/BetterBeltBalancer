@@ -416,16 +416,59 @@ func Plan() *fkrecipes.Lib {
 	// go/customize.go:1282, customPrereqs), or no prerequisite at all with a
 	// line saying so.
 	//
-	// IT STARTS AT `logistics-3` RATHER THAN AT `logistics`, WHICH IS THE ONE
-	// CHOICE IN THIS ARM. A player writing their own cost is pricing the
-	// research themselves, and the science they are likeliest to charge is the
-	// science the highest logistics tier already gates -- so the position that
-	// does not surprise them is the top of the chain rather than the bottom,
-	// where a blue-science cost would sit at a red-science place in the tree.
-	// The ladder then steps DOWN for the same reason [TechLadder] does: a pack
-	// without `logistics-3` still places the research, and a game with no
-	// logistics chain at all leaves it unattached rather than naming a
-	// technology nobody defined.
+	// IT IS [TechOptions] ITSELF, CHEAPEST FIRST, SO THE HEAD OF THE LADDER IS
+	// THIS MOD'S OWN DEFAULT TIER BY CONSTRUCTION rather than by a second
+	// transcription: [TechDefault] is that list's head, and a `Position`
+	// spelled out again here is a copy that can drift from it. That is the one
+	// choice in this arm and it is a measurement. The three fields ship at
+	// [FallbackUnit], base's own `logistics` unit, so that IN A GAME THAT HAS
+	// `logistics` picking Custom and typing nothing changes nothing -- and with
+	// the ladder headed here that promise is true of the WHOLE PROTOTYPE TABLE
+	// and not only of the price. Measured on Factorio 2.0.77 through the gate's
+	// own `run_arm`, base's own mod set: `bbb-tech-cost = custom` with nothing
+	// else stored gives a normalised data-raw dump hashing `1e1fcf4f56f5ef22`,
+	// BYTE-IDENTICAL to the default dump, where a ladder headed at
+	// `logistics-3` hashes `afb19d7fa0cfd0a5` and the one field that differs is
+	// `prerequisites`.
+	//
+	// THAT CONDITION IS THE HEAD'S PRESENCE AND IT IS NOT A HEDGE. Take
+	// `logistics` away and the two readings PART, because a tier's ladder is
+	// [TechLadder] and the default tier's is that one name, where this one has
+	// two rungs under it. Measured on the host in a game holding `logistics-2`
+	// and `logistics-3` and nothing below them (`cd guest/go && go test ./tune/
+	// -run TestTheCustomArmTakesItsPlaceFromTheDefaultTier`): the DEFAULT tier
+	// emits no `prerequisites` field at all and says so (`no source for the
+	// logistics cost carries a unit, so the fallback cost applies and the
+	// technology has no prerequisite`), while Custom untouched emits
+	// `["logistics-2"]`, both on the same [FallbackUnit]. So picking Custom
+	// THERE does move the research, from nowhere to Logistics 2 -- which is a
+	// legal place and the nearest one, and is the whole reason the ladder has
+	// rungs under its head at all. It is also why every sentence a player reads
+	// says "does not move" of a game that has Logistics and states the
+	// without-Logistics case as its own clause.
+	//
+	// THE ARGUMENT THAT STOOD HERE GOT THE RULE RIGHT AND THE STATE WRONG. The
+	// rule is this section's own and it does not move: a cost and a place in
+	// the tree that disagree is the defect, and a blue-science price at a
+	// red-science place is the shape of it. What the argument reasoned about
+	// was the state a player is ABOUT TO REACH, the numbers they are likeliest
+	// to write; a ladder decides the state they are IN. Untouched, they are
+	// paying 20 red science, and `logistics-3` put that behind base 2.0.77's
+	// own gate on that technology, `["production-science-pack", "lubricant"]`
+	// read out of the same dump: the mismatch this section argues against, with
+	// the sign flipped, for as long as the player has not typed. The expensive
+	// case the old argument protected gates itself anyway: a player who writes
+	// 300 units of four packs has stated the gate in the cost. THAT LAST STEP
+	// IS REASONING AND NOT A PROBE, and is marked so rather than dropped
+	// because it is what the choice between the two errors turns on: a cost
+	// gates SOFTLY, since an unaffordable research is still reachable by
+	// playing on, where a prerequisite gates HARD, since a walled one is not
+	// reachable at all until the wall is. NOT MEASURED on the engine.
+	//
+	// The ladder then steps UP the tiers for the same reason [TechLadder] steps
+	// down them: a pack without `logistics` still places the research, and a
+	// game with no logistics chain at all leaves it unattached rather than
+	// naming a technology nobody defined.
 	lib.LegacyTechnology(TechName, fkrecipes.TechSpec{
 		Icon:     PartIcon,
 		IconSize: 64,
@@ -439,7 +482,7 @@ func Plan() *fkrecipes.Lib {
 				Packs:    techPacks,
 				Count:    techCount,
 				Seconds:  techSeconds,
-				Position: []string{TechLogistics3, TechLogistics2, TechLogistics},
+				Position: TechOptions(),
 			},
 		},
 	})

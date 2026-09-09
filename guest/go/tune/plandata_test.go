@@ -1295,9 +1295,19 @@ func checkUnit(t *testing.T, what string, got map[string]fkrecipes.Value, want f
 // go/customize.go:1217). So the log line reports all three even here, where
 // nothing was written -- one line, and it is the only thing the plan says.
 //
-// AND THE PREREQUISITE IS `logistics-3`, which is the [Plan] `Position`
-// ladder's first rung: a written cost has no source technology to move with, so
-// the arm carries its own placement.
+// AND THE PREREQUISITE IS `logistics`, which is the [Plan] `Position` ladder's
+// first rung and, because that ladder IS [TechOptions], this mod's own default
+// tier: a written cost has no source technology to move with, so the arm
+// carries its own placement, and the placement it carries is the one the player
+// already had. That is what makes the no-op above whole rather than true of the
+// price alone -- on the engine, `bbb-tech-cost = custom` untouched now produces
+// a data-raw dump byte-identical to the default one.
+//
+// SO THE PREREQUISITE NO LONGER SEPARATES THIS ARM FROM A TIER, AND THE LOG
+// LINE DOES. On `logistics` the unit and the prerequisite here are what a
+// planner that never read the dropdown would emit; the line below is not, and
+// [checkExactlyOneLog] demands it. The gate's `tech-custom-default` arm carries
+// the same property and asserts the line FIRST for that reason.
 func TestTheCustomResearchCostUntouchedIsTheFallbackUnit(t *testing.T) {
 	w := everythingWorld().withStartup(SettingTechCost, TechCustom)
 	protos, logs := extendsOf(t, dataOps(t, w))
@@ -1305,7 +1315,7 @@ func TestTheCustomResearchCostUntouchedIsTheFallbackUnit(t *testing.T) {
 
 	checkUnit(t, "custom untouched", got,
 		customUnit(20, 15, ingredientPair{"automation-science-pack", 1}))
-	checkPrereqs(t, "custom untouched", got, TechLogistics3)
+	checkPrereqs(t, "custom untouched", got, TechLogistics)
 	checkExactlyOneLog(t, logs,
 		"fkrecipes: bbb-balancer takes its research cost from "+
 			"better-belt-balancer-tech-packs: count 20, time 15, "+
@@ -1343,7 +1353,7 @@ func TestTheCustomResearchCostIsTheThreeSettings(t *testing.T) {
 	checkUnit(t, "a written research cost", got, customUnit(50, 20,
 		ingredientPair{"automation-science-pack", 1},
 		ingredientPair{"logistic-science-pack", 1}))
-	checkPrereqs(t, "a written research cost", got, TechLogistics3)
+	checkPrereqs(t, "a written research cost", got, TechLogistics)
 	// A LITERAL, not the constants spliced together: this section compares
 	// every line a player is shown word for word, and a renamed constant has to
 	// fail this test rather than travel through it.
@@ -1353,8 +1363,15 @@ func TestTheCustomResearchCostIsTheThreeSettings(t *testing.T) {
 			"packs 1 automation-science-pack, 1 logistic-science-pack")
 }
 
-// TestThePositionLadderStepsDownAndThenLetsGo is the placement half of the
+// TestThePositionLadderStepsUpAndThenLetsGo is the placement half of the
 // custom arm, driven through every rung.
+//
+// IT STEPS UP WHERE [TechLadder] STEPS DOWN, and that is the whole of the
+// difference between the two ladders. A tier's ladder starts at the tier the
+// player asked for and walks toward cheaper ones; this one is [TechOptions]
+// itself, cheapest first, so its head is this mod's default tier and a game
+// missing that tier gets the next one UP rather than a place a player on the
+// untouched setting never had.
 //
 // THE COST DOES NOT MOVE WITH IT, which is the difference from
 // [TestALadderStepsDownAndTakesThePrerequisiteWithIt] and the reason both
@@ -1366,10 +1383,10 @@ func TestTheCustomResearchCostIsTheThreeSettings(t *testing.T) {
 // technology nobody defined is a load error rather than a cost, so the library
 // emits none and says so -- and this mod's research still exists, still costs
 // what the player wrote, and simply hangs off nothing.
-func TestThePositionLadderStepsDownAndThenLetsGo(t *testing.T) {
+func TestThePositionLadderStepsUpAndThenLetsGo(t *testing.T) {
 	base := everythingWorld().withStartup(SettingTechCost, TechCustom)
-	l1, _ := base.tech(TechLogistics)
 	l2, _ := base.tech(TechLogistics2)
+	l3, _ := base.tech(TechLogistics3)
 	want := customUnit(20, 15, ingredientPair{"automation-science-pack", 1})
 	const costLine = "fkrecipes: bbb-balancer takes its research cost from " +
 		"better-belt-balancer-tech-packs: count 20, time 15, " +
@@ -1380,8 +1397,8 @@ func TestThePositionLadderStepsDownAndThenLetsGo(t *testing.T) {
 		world fixtureWorld
 		after string
 	}{
-		{"logistics-3 absent", base.withTechs(l1, l2), TechLogistics2},
-		{"only logistics is left", base.withTechs(l1), TechLogistics},
+		{"logistics absent", base.withTechs(l2, l3), TechLogistics2},
+		{"only logistics-3 is left", base.withTechs(l3), TechLogistics3},
 	} {
 		protos, logs := extendsOf(t, dataOps(t, tc.world))
 		got := protoOf(t, protos, "technology", TechName)
@@ -1406,12 +1423,88 @@ func TestThePositionLadderStepsDownAndThenLetsGo(t *testing.T) {
 	// bottom is the only place these two lines are ever seen together.
 	if !reflect.DeepEqual(logs, []string{
 		costLine,
-		"fkrecipes: bbb-balancer: none of logistics-3, logistics-2, logistics " +
+		"fkrecipes: bbb-balancer: none of logistics, logistics-2, logistics-3 " +
 			"is present, so the technology has no prerequisite",
 	}) {
 		t.Errorf("the plan's log stream is %q\n want the cost and then the "+
 			"dropped ladder", logs)
 	}
+}
+
+// TestTheCustomArmTakesItsPlaceFromTheDefaultTier states fix round 1's central
+// property IN THE TERMS THE ARGUMENT USES, which no other test in this file
+// does.
+//
+// WHY IT EXISTS BESIDE TESTS THAT ALREADY PASS. The flip made [Plan]'s
+// `Position` field [TechOptions] itself so that the head of the Custom arm's
+// ladder would be [TechDefault] BY CONSTRUCTION. Every other assertion of that
+// placement names the literal [TechLogistics] --
+// [TestTheCustomResearchCostUntouchedIsTheFallbackUnit] here, `TechDefault() ==
+// TechLogistics` over in `tune_test.go` -- so the two ends of the coupling sit
+// in different files and a change that pulled them apart would show up as one
+// unrelated-looking failure. This one compares the two ends to each other, so
+// it fails FOR THE PROPERTY: a `Position` spelled out again as a literal, or a
+// [TechDefault] that stops being `TechOptions()[0]`, reddens the first two
+// assertions by name whatever the tier list happens to hold.
+//
+// REORDERING [TechOptions] IS THE CONTROL AND IT LEAVES THE FIRST HALF GREEN,
+// which is the claim: the menu order, the default and the Custom arm's head
+// move together, so the property survives a reorder rather than depending on
+// today's spelling.
+//
+// THE SECOND HALF IS THE MOD SET WHERE THE TWO PART, and it is the one the
+// player-facing texts scope their promise away from. It is written against the
+// literal tier names on purpose: it is a statement about a particular game,
+// `logistics-2` and `logistics-3` present and `logistics` absent, and not about
+// whatever list [TechOptions] holds. There the DEFAULT tier has nothing to hang
+// off -- [TechLadder] for `logistics` is that one name -- so the plan emits no
+// `prerequisites` field at all, while Custom untouched steps up to
+// `logistics-2`. Both pay the same unit. So picking Custom in that game MOVES
+// the research, from nowhere to Logistics 2, and every sentence a player reads
+// (`mod-data/changelog.txt`, the `bbb-tech-cost` locale entry, README's
+// research paragraph) says "does not move" only of a game that has Logistics.
+func TestTheCustomArmTakesItsPlaceFromTheDefaultTier(t *testing.T) {
+	full := everythingWorld()
+
+	protos, _ := extendsOf(t, dataOps(t, full.withStartup(SettingTechCost, TechCustom)))
+	got := protoOf(t, protos, "technology", TechName)
+	checkPrereqs(t, "custom untouched hangs off TechDefault()", got, TechDefault())
+
+	// AND THE DEFAULT TIER ANSWERS THE SAME NAME IN THE SAME GAME, which is
+	// what makes the equality above a NO-OP rather than a coincidence: the two
+	// dropdown values a player moves between produce one prerequisite.
+	protos, _ = extendsOf(t, dataOps(t, full))
+	got = protoOf(t, protos, "technology", TechName)
+	checkPrereqs(t, "the default tier hangs off TechDefault()", got, TechDefault())
+
+	// THE GAME WITH NO `logistics`, both readings, the same fallback unit.
+	l2, _ := full.tech(TechLogistics2)
+	l3, _ := full.tech(TechLogistics3)
+	noHead := full.withTechs(l2, l3)
+	want := customUnit(20, 15, ingredientPair{"automation-science-pack", 1})
+
+	protos, logs := extendsOf(t, dataOps(t, noHead))
+	got = protoOf(t, protos, "technology", TechName)
+	if v, ok := got["prerequisites"]; ok {
+		t.Errorf("without logistics the default tier carries prerequisites %s"+
+			"\n want none: its ladder is that one technology and the game has "+
+			"not got it", showValue(v))
+	}
+	checkUnit(t, "without logistics the default tier", got, want)
+	checkExactlyOneLog(t, logs,
+		"fkrecipes: bbb-balancer: no source for the logistics cost carries a "+
+			"unit, so the fallback cost applies and the technology has no "+
+			"prerequisite")
+
+	protos, logs = extendsOf(t, dataOps(t,
+		noHead.withStartup(SettingTechCost, TechCustom)))
+	got = protoOf(t, protos, "technology", TechName)
+	checkPrereqs(t, "without logistics custom untouched", got, TechLogistics2)
+	checkUnit(t, "without logistics custom untouched", got, want)
+	checkExactlyOneLog(t, logs,
+		"fkrecipes: bbb-balancer takes its research cost from "+
+			"better-belt-balancer-tech-packs: count 20, time 15, "+
+			"packs 1 automation-science-pack")
 }
 
 // TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo is the recipe field's
@@ -1435,7 +1528,7 @@ func TestThePositionLadderStepsDownAndThenLetsGo(t *testing.T) {
 // reports the fallback first and the cost it went on to charge second, which is
 // the transcript a maintainer reads top to bottom: what went wrong, then what
 // the player got. The stream is compared WHOLE for
-// [TestThePositionLadderStepsDownAndThenLetsGo]'s reason -- that is the only
+// [TestThePositionLadderStepsUpAndThenLetsGo]'s reason -- that is the only
 // place two lines are ever seen together -- and it is what keeps the pair from
 // being satisfied by a plan that logged the error and then charged something
 // else.
@@ -1727,7 +1820,7 @@ func TestAnUnreadableResearchNumberTakesTheDeclaredDefault(t *testing.T) {
 		protos, logs := extendsOf(t, dataOps(t, tc.world))
 		got := protoOf(t, protos, "technology", TechName)
 		checkUnit(t, tc.name, got, want)
-		checkPrereqs(t, tc.name, got, TechLogistics3)
+		checkPrereqs(t, tc.name, got, TechLogistics)
 		if !reflect.DeepEqual(logs, []string{tc.line, costLine}) {
 			t.Errorf("%s: the plan's log stream is %q\n want the degradation "+
 				"and then the cost, %q", tc.name, logs, []string{tc.line, costLine})
