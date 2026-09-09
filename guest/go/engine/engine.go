@@ -28,7 +28,7 @@
 // STATE LIVES ON IS ONE THIS MACHINE CANNOT RUN. Trunk targets 2.1, so the
 // `true` arm -- the collision flag, the marker and the setting -- is unreachable
 // from any dump this repository can take, and the `--dump-data` golden for it
-// is deferred to the `release/2.0` recut (test/check-datastage.py). Written
+// is deferred to wherever a 2.0 BINARY is (test/check-datastage.py). Written
 // inside the data guest this would be a branch nothing could execute and
 // nothing could test, because a package that imports fkdata cannot be built by
 // a host toolchain at all: //go:wasmimport is rejected outside GOARCH=wasm.

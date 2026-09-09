@@ -32,8 +32,10 @@ STAMPING IS A NO-OP ON THE ARM THAT SHIPS, AND IT IS KEPT FOR THE ONE THAT DOES
 NOT. Trunk targets 2.1 and the binary here is 2.1, so the staged manifests are
 already right and nothing is rewritten -- the primary path is unstamped, and
 stamp_engine says so by only writing a file it actually had to change. What it
-is for is the `release/2.0` recut, where a 2.1-pinned tree has to be dumped by a
-2.0 binary to capture the other flavour's golden.
+is for is capturing the OTHER flavour's golden: this 2.1-pinned tree, dumped by
+a 2.0 binary, with the staged info.json clamped down so the binary will load it.
+That route is trunk's, not the `release/2.0` recut's, and it is how every 2.0
+re-capture since the first has been taken.
 
 That is legitimate HERE and is refused in run.sh, and the asymmetry is the
 point: run.sh gates the packaged mod because the control guest's bindings are
@@ -160,8 +162,8 @@ version-gated branches key on the RUNNING ENGINE (`mods["base"]` is 2.0.x or it
 is not), so a 2.1 binary can only ever produce the 2.1 flavour: no
 `not_colliding_with_itself` on the linked belt, no `bbb-can-stack` marker, no
 `bbb-multi-edge-parts` setting. The 2.0 flavour -- all three PRESENT -- is
-unreachable here and is captured wherever a 2.0 binary is, which is the
-`release/2.0` recut. See DEFERRED_OTHER_FLAVOUR below.
+unreachable here and is captured wherever a 2.0 BINARY is, from this tree
+through the stamped path above. See DEFERRED_OTHER_FLAVOUR below.
 
 The branch itself does not wait for that. `guest/go/data/engine.go` is ordinary
 Go and `go test ./data/` proves every arm of it -- 2.0.x true, 2.1.x false, and
@@ -210,8 +212,9 @@ FKLUA = os.path.abspath(
 DEFERRED_OTHER_FLAVOUR = """\
 THE 2.0-FLAVOUR GOLDEN IS NOT CAPTURED, and it cannot be on this binary: the
 branch keys on the RUNNING ENGINE, so a 2.1 binary produces the 2.1 flavour
-whatever the manifest says. Wherever a Factorio 2.0 binary is -- which is the
-`release/2.0` recut:
+whatever the manifest says. Wherever a Factorio 2.0 BINARY is, from this tree,
+because stamping makes the manifest loadable and the manifest is not what the
+branch reads:
 
     make mod && FACTORIO_BIN=/path/to/2.0/factorio ./test/check-datastage.py --capture
 

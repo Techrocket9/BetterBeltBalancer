@@ -8,10 +8,12 @@ description = "Belt balancers that click together into arbitrary shapes. Highly 
 # TRUNK TARGETS 2.1, and it is one value per release: the portal serves the
 # right release per game version, so the 2.0 arm is a `release/2.0` branch
 # carrying this key, the 2.0.77 api pin and its generated bindings, and nothing
-# hand-written. The mod-data tree is IDENTICAL on both branches -- the
-# engine-version guard in guest/go/engine is what makes one tree correct
-# on both engines. See agents/single-edge.md, "Packaging: one tree, two
-# releases".
+# hand-written. The mod-data tree is identical on both branches AT A RECUT --
+# the engine-version guard in guest/go/engine is what makes one tree correct on
+# both engines, so there is nothing to fork. Between releases the branch is
+# BEHIND trunk, because it carries the last 2.0 release rather than head, and
+# `test/check-release-arm.sh` is what says its source is still trunk's. See
+# agents/single-edge.md, "Packaging: one tree, two releases".
 factorio_version = "2.1"
 # The mod's ASSETS -- graphics, locale, changelog, thumbnail, and since the
 # data-stage purge NOTHING ELSE. `fklua mod` generates the control stage and

@@ -7,8 +7,8 @@ import "testing"
 // what the data guest EMITS by hashing Factorio's own `--dump-data`, and it can
 // only ever prove the flavour of the binary it runs on -- trunk's is 2.1, so the
 // `true` arm's prototypes (the collision flag, the `bbb-can-stack` marker, the
-// `bbb-multi-edge-parts` setting) have no dump golden until the release/2.0
-// recut takes one.
+// `bbb-multi-edge-parts` setting) have no dump golden until a 2.0 BINARY takes
+// one, from this tree through the cross-series stamped path.
 //
 // What is NOT deferred is the decision, and it is the half that could be wrong
 // in a way nobody would notice: a version match that answered `true` on 2.1

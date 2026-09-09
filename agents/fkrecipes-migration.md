@@ -880,6 +880,168 @@ Factorio 2.0.77 (build 84539, mac-arm64, steam), the binary re-asked its version
 
 **`test/datastage-goldens.json` IS UNTOUCHED, AND FOR THIS COMMIT THAT IS THE POINT.** Everything it changes is locale text, a changelog and a Go test, and the settings dump holds locale KEYS rather than strings. A moved `mod_settings_sha256` here would have meant something in the commit was not a locale change, and the golden would have been the wrong thing to re-capture.
 
+### Commit 4: the 2.0 release arm is honest, and the sentence about it was not
+
+Item 5 of the fix round, which is [`agents/migration-assessment.md`](agents/migration-assessment.md)'s finding 11: `Makefile`'s OBS_TAGS block said "trunk and the release/2.0 recut carry identical source", and `git merge-base master release/2.0` is `cf5a78e`, the 0.3.2 trunk commit. The finding reads that as the BRANCH being the defect. Re-taken blob by blob, it is not.
+
+**THE BLOB-PROVENANCE TABLE, re-taken 2026-09-09 at `master` 760d618 and `release/2.0` 4b9f597.** For each of the 14 paths `git diff --name-only cf5a78e 4b9f597` reports, the question asked was whether the blob at `4b9f597` is byte-identical to that path's blob at SOME commit reachable from `master`:
+
+    for p in $(git diff --name-only cf5a78e 4b9f597); do
+      git rev-list master -- "$p" | sed "s|\$|:$p|" \
+        | git cat-file --batch-check='%(objectname)' | grep -c "^$(git rev-parse "4b9f597:$p")$"
+    done
+
+| path | on master? | commits touching it |
+|---|---|---|
+| `FKLUA-GAPS.md` | **`cb89891`** | 15 |
+| `guest/go/data/legacy.go` | **`cb89891`** | 2 |
+| `guest/go/obs/bb2data/main.go` | **`cb89891`** | 2 |
+| `guest/go/obs/harness/harness.go` | **`cb89891`** | 5 |
+| `guest/go/obs/mig/main.go` | **`cb89891`** | 2 |
+| `test/assert-mig.py` | **`cb89891`** | 10 |
+| `test/check-datastage.py` | **`cb89891`** | 14 |
+| `test/datastage-goldens.json` | **`cb89891`** | 10 |
+| `fklua.toml` | no match | 14 |
+| `fklua.lock` | no match | 11 |
+| `guest/go/fkapi/fkapi.go` | no match | 9 |
+| `mod-data/changelog.txt` | no match | 9 |
+| `CLAUDE.md` | no match | 68 |
+| `README.md` | no match | 22 |
+
+`cb89891` is TRUNK'S OWN freeze-fix commit. The four in the middle are exactly the documented four-file recut stamp. The last two are the working notes, and they cannot match by construction: a BACKPORT carries trunk's paragraph into an older surrounding document, so the blob differs while not one sentence is new, which the diff of either file against the cut point shows directly. **So the branch is trunk 0.3.2's source with a trunk fix backported file for file, which is what a 2.0 hotfix arm should be, and nothing a 2.0 player would receive was written on the branch.**
+
+**WHAT IS WRONG IS THE CLAIM, in two places.** `Makefile`'s sentence, and `4b9f597`'s own commit message, which says "the guest source is trunk 0.3.3's to the byte ... so the cherry-pick touched only the version and the changelog". Both halves are false, measured: `cb89891` IS the first trunk commit whose `fklua.toml` says 0.3.3 (walked forward from `cf5a78e`), and `git diff --name-only cb89891 4b9f597` excluding the four stamp files and the two notes is TWENTY FILES, which is the whole customizer, `guest/go/tune`, the data guest and `go.mod`. Against `50c0db3`, the trunk head of the day the branch was cut and also 0.3.3, `git diff --stat 4b9f597 50c0db3 -- guest/go ':(exclude)guest/go/fkapi/fkapi.go' mod-data` is 20 files, 2880 insertions and 726 deletions. What the branch carries is trunk 0.3.2's guest source with `cb89891`'s EIGHT freeze-fix files backported onto it, which is exactly what the provenance table above shows -- eight rows, not seven -- and is not what that sentence says. Re-counted: `git show --name-only --format= cb89891` is twelve paths and all eight matched rows (`FKLUA-GAPS.md`, `guest/go/data/legacy.go`, the three `guest/go/obs` mains, `test/assert-mig.py`, `test/check-datastage.py`, `test/datastage-goldens.json`) are among them. History here is linear and is not rewritten, so that correction lives in this note naming the commit; the changelog `Info:` line the branch ships, "The Factorio 2.0 release, carrying the same fix 0.3.3 brings to Factorio 2.1", is TRUE as written and is not a claim to carry trunk 0.3.3's source.
+
+**THE GATE IS `test/check-release-arm.sh` AND ITS INVARIANT IS PROVENANCE, NOT IDENTITY.** Identity is true for the few hours around a release and false the moment trunk lands a commit, so a recut refreshes the misstatement instead of removing it and a gate on it would be red between releases, which is how a real failure gets ignored. What holds continuously is that every path the branch changed since its cut point carries a blob some commit reachable from `master` also carries. A recut satisfies that; so does a backport file for file; a line typed on the branch does not. It is git plumbing over two REFS and never reads the working tree.
+
+**WHAT THAT PROVES IS PER-FILE, AND THE SCRIPT'S HEADER NOW SAYS SO RATHER THAN LEAVING THE OK LINE TO BE READ AS A TREE CLAIM.** The unit is the FILE, so no LINE on the branch is a line trunk never had; it is not a claim that the matched blobs ever COEXISTED on trunk, that the commit each came from was not later REVERTED (`rev-list` walks everything reachable and a reverted commit stays reachable), or that the branch holds trunk's LATEST value for a path rather than an older one. None of the three is reachable on today's branch, where all eight land on the single commit `cb89891`, which is strictly stronger than the gate asks, and each would still be a backport somebody made rather than a line typed here. The invariant also rests on the house rule that nothing is ever MERGED into trunk: a merged branch's own commits become reachable from `master` and every file it wrote would then match itself.
+
+**IT ADDS ONLY `git` TO WHAT `make check` ALREADY NEEDS, and that is checked rather than assumed.** `make check` needs a Go toolchain, `gofmt` and the sibling `fklua` (`FKLUA ?= ../FkLua/bin/fklua`), and no Factorio and no network. The script runs `git rev-parse`, `git merge-base`, `git show`, `git rev-list`, `git diff` and `git cat-file`, plus the shell builtins `printf`, `sed` and `case`; there is no other executable in it. What was written here at first, "a git repository has `git` by construction", is the wrong direction and is dropped: the failure that matters is a missing BINARY, not a missing repository, and with `git` off PATH the script used to print the EXPORT's skip line at exit 0 -- an internal error wearing a skip's clothes, with the wrong diagnosis. `command -v git` is now the first probe and its absence is a FAILURE at exit 1.
+
+**THE EXCLUSIONS ARE NAMED IN THE SCRIPT WITH THEIR REASONS AND THERE IS NO SILENT SKIP LIST.** The four stamp files are excluded because by construction they hold the 2.0 values trunk does not have, and because each has a CONTENT check of its own on the branch's own gates: `fklua gen-bindings --check` and `fklua lock --check` for the bindings and the lock, `check-changelog.py` for the changelog, and the manifest is three of the keys those read (`git show cf5a78e:Makefile` carries all three lines, so the branch runs them). `CLAUDE.md` and `README.md` are the WEAKER statement the item asked to be decided: they are REPORTED on every run and not gated, because they are not source (`make mod` packages `mod-data/` and the built wasm, and neither file reaches the package) and because failing them would be a permanently red gate on a legitimate hotfix arm. The justification is that a backport NEED NOT make them match, not that it cannot: the script said "cannot" and its own counterexample sat two lines below, which is `FKLUA-GAPS.md`, a human-facing document too, deliberately NOT excluded, whose blob on the branch IS trunk's. That is the measurement saying a document can survive a backport untouched rather than an assumption that it will, and it is exactly why the pair is a decision about REPORTING rather than a claim about what a backport can do. One more thing the next recut will meet: `test/datastage-goldens.json` is not excluded either, so a 2.0 golden re-captured ON THE BRANCH fails by name -- the right answer, since the row is trunk's emission, but a surprise better met in this note than in a red gate. The list names files rather than a directory, because an exception that names files is auditable and one that names a directory grows without anybody deciding to.
+
+**GREEN FIRST, on the branch as it stands**, because a check that has never been green proves nothing:
+
+    release-arm: ok -- release/2.0 0.2.3 carries no line `master` never had.
+    release-arm:   14 path(s) differ from the cut point cf5a78e (trunk 0.3.2); master is 21 ahead, which is normal between releases.
+    release-arm:   8 carry a blob some commit on `master` carries byte for byte.
+    release-arm:   4 are the recut's stamp: fklua.toml fklua.lock guest/go/fkapi/fkapi.go mod-data/changelog.txt
+    release-arm:   2 are the recut's own working notes, reported and not gated: CLAUDE.md README.md
+    exit=0
+
+The `8` is the anti-vacuity: a gate that checked nothing would say `0`.
+
+**COST: 0.23 s**, `/usr/bin/time -p`, ten consecutive runs spanning 0.22 to 0.24, and 0.22 to 0.25 over five runs in a fresh `--no-hardlinks` clone. A bare "0.20 s" was what three sites said before; it was the mode in the repository it was taken in rather than a ceiling, and the guards have since added about 0.02 s to it, so all three now carry the band. The bound is two git processes per path that differs, over that path's own commits and no others, and what the 0.2 s IS is process spawn rather than history: everything before the loop is twelve git spawns and 0.09 s, the widest walk of a CHECKED path (`FKLUA-GAPS.md`, 15 commits) is under 0.01 s, and 16 bare `git rev-parse HEAD` calls on this machine are 0.10 s, so 28 spawns for 8 checked paths is the number. The 8 run over 2 to 15 commits each. Batching the whole loop into three processes would buy about 0.13 s and cost the per-path diagnosis that names the offending file, which against a `make check` running six Go test packages and three wasm vets is not where that trade goes. It is linear in the number of paths a recut moved, which is four when the branch is healthy.
+
+**A MISSING BRANCH IS A SKIP AT EXIT 0, PROVED AGAINST A REAL CLONE rather than reasoned about.** `git clone --no-hardlinks --single-branch --branch master` of this repository, which has only `master` and `origin/master`:
+
+    release-arm: SKIP -- no `release/2.0` in this clone, so the two arms cannot be compared.
+    release-arm:   This is a single-branch clone, not drift.
+    release-arm:   `git fetch origin release/2.0:release/2.0` to gate it.
+    exit=0
+
+and the remedy line was then run VERBATIM in that clone, which fetched the branch and turned the same invocation green, so the instruction is measured and not plausible. An EXPORT with no repository at all (`git archive master | tar -x`) skips the same way, exit 0, naming what it is.
+
+**IT NEVER READS THE WORKING TREE, proved three ways in the clone, each byte-identical to the run on `master`**: from `release/2.0` itself; from a detached worktree (`git rev-parse --abbrev-ref HEAD` is `HEAD`); and with `guest/go/data/legacy.go` deliberately dirty in the working tree with a line that exists on no commit anywhere, which the gate does not see because it compares refs.
+
+**THREE RED PROOFS AND ONE CONTROL, all in a `git clone --no-hardlinks` under $SCRATCH so no object was ever written into the real repository, and nothing in the real repository was reverted because nothing there was broken.** Each injection was confirmed present (a `git diff --stat` and a moved branch tip) before the gate was asked.
+
+- **A LINE TYPED STRAIGHT ONTO THE BRANCH.** `package main` in `guest/go/data/legacy.go` given a trailing comment, committed on `release/2.0`:
+
+      release-arm: FAIL -- `release/2.0` 0.2.3 carries source no commit on `master` ever had.
+      release-arm:   written on the branch, or cherry-picked from somewhere that is not trunk:
+      release-arm:     guest/go/data/legacy.go
+      release-arm:   The 2.0 arm is trunk's source with a four-file stamp on it, so every other
+      release-arm:   line it carries has to exist on trunk. Two ways out: land the change on
+      release-arm:   trunk and recut the branch from the trunk commit that carries it, or take
+      release-arm:   it off the branch. See agents/single-edge.md, "Packaging: one tree, two
+      release-arm:   releases", and the Makefile's OBS_TAGS block.
+      exit=1
+
+- **A CHERRY-PICK FROM A BRANCH THAT IS NOT TRUNK.** `git checkout verify/0.3.3-2.0 -- test/assert-edge.py guest/go/edgemode` onto `release/2.0`, three files moved. The gate names the three whose content matches no master commit, and `guest/go/edgemode/edgemode_test.go`, which that branch carries at trunk's own blob, is correctly NOT among them:
+
+      release-arm:   written on the branch, or cherry-picked from somewhere that is not trunk:
+      release-arm:     guest/go/edgemode/curve_test.go
+      release-arm:     guest/go/edgemode/edgemode.go
+      release-arm:     test/assert-edge.py
+      exit=1
+
+- **A FILE TAKEN OFF THE BRANCH.** `git rm test/check-sprites.py` on `release/2.0`, which is the arm a recut cannot produce, because a recut copies trunk's tree:
+
+      release-arm:   deleted on the branch, and the cut point cf5a78e has it:
+      release-arm:     test/check-sprites.py
+      exit=1
+
+- **THE CONTROL, which proves the exclusion is live and deliberate rather than an accident.** The same kind of edit appended to `CLAUDE.md` on the branch and committed leaves the gate at the green line above, exit 0. That is the designed behaviour and it is what the "reported and not gated" wording in the ok line is for.
+
+**AND THE SECOND RED PROOF FOUND A REAL DEFECT IN THE GATE, which is the reason this note names it rather than the reason it hides it.** The first draft read the branch's own blob and trunk's candidates out of ONE `git cat-file` batch and separated them by stripping up to the first newline. That is a no-op when there is no newline, and a file trunk NEVER HAD has no `rev-list` output at all, so its one-line batch left the branch's blob standing in for trunk's candidates and it compared equal to itself. The cherry-pick of three files was reported as two, and the one that got through was `guest/go/edgemode/curve_test.go`, the file trunk does not have. The guard is explicit now (`case $seen in *newline*) rest=...;; *) rest= ;; esac`) and the type is what tells a blob from a missing path, because length alone would not: `release/2.0:` plus a 20-character path plus ` missing` is also 40 characters. Re-taken, all three reds and the control read as above.
+
+**THE CLAIMS REWRITTEN, all of them re-verified with `git grep -n "release/2\.0"` at HEAD rather than taken from the deep dive's line numbers.**
+
+| where | was | is |
+|---|---|---|
+| `Makefile`, the OBS_TAGS block | "trunk and the release/2.0 recut carry identical source" | the tag reasoning is unchanged and correct; the recut is trunk's source with a four-file stamp, the branch is BEHIND trunk between releases and that is normal, and `test/check-release-arm.sh` is what refuses a branch carrying something trunk never had. Points at `agents/single-edge.md`, "Packaging: one tree, two releases" |
+| `agents/single-edge.md`, "Packaging: one tree, two releases" | "Kept rebased on master per house rule" | recut from master AT RELEASE TIME and otherwise behind; the mod-data tree is identical AT A RECUT; a commit written on the branch is a gate failure, and which gate. The correction is dated in place |
+| `agents/single-edge.md`, the status block at the top | the setting-flip legs and the multi-edge regression run "belong on the `release/2.0` branch" | they need a 2.0 BINARY and phase 9 ran them on one, from THIS tree, with the manifest flipped as a local uncommitted state and `test/run.sh` stamping every staged copy. Dated in place. Found by the adversarial review, and it is the same route misdescription as the four below. Phase 9's own dated section keeps its own wording, which is this file's habit: present-tense preamble describes head, a dated section describes its day |
+| `fklua.toml` | "The mod-data tree is IDENTICAL on both branches" | identical AT A RECUT, and behind trunk between releases, with the gate named |
+| `guest/go/data/settings.go` | "the `release/2.0` recut carries these two identically" | carries these two NAMES unchanged, because it carries this file unchanged; what it offers under them is whatever trunk release it was cut from offered |
+| `guest/go/engine/engine.go` | the 2.0 golden "is deferred to the `release/2.0` recut" | deferred to wherever a 2.0 BINARY is |
+| `guest/go/engine/engine_test.go` | "have no dump golden until the release/2.0 recut takes one" | until a 2.0 BINARY takes one, from this tree through the cross-series stamped path |
+| `test/check-datastage.py`, three sites | the stamped path is "for the `release/2.0` recut"; the 2.0 flavour "is captured wherever a 2.0 binary is, which is the `release/2.0` recut"; `DEFERRED_OTHER_FLAVOUR`'s "Wherever a Factorio 2.0 binary is -- which is the `release/2.0` recut" | all three say the ROUTE: this 2.1-pinned tree, dumped by a 2.0 binary, with the staged info.json clamped down. That route is trunk's and it is how every re-capture since the first was taken |
+| `Makefile`'s check target | the same "deferred to the release/2.0 recut" | deferred to wherever a 2.0 BINARY is |
+
+`Makefile`'s two other mentions are untouched and were re-read to be sure: the `OBS_BASE_DEP` block, where a hard-coded `base >= 2.1.0` is a mod Factorio 2.0 refuses at the loader, makes no identity claim and is a measurement.
+
+**THE 2.0 GOLDEN'S `_note` AND ITS TWIN IN `CLAUDE.md`, which the deep dive found stale and which are load-bearing.** Both opened "Captured on Factorio 2.0.77 from the release/2.0 recut at 0.2.1, which is the only place it can be taken". Only the FIRST of that row's five hashes was the recut's; the `_note`'s own chain, `196275f867f7f8b5 -> 258d44de08b43c9e -> 0bea93fa1594052e -> e5e7d159e88f4a6b -> df4d6c3fc7bf854d -> aa75497e55ce4333`, records FIVE re-captures since, every one of them TRUNK's through the cross-series stamped path, because the branch never carried the customizer at all. Five is measured rather than counted by eye, and the same five is what the golden's `_note` and `CLAUDE.md` now say: five arrows in the chain, five `RE-CAPTURED` markers, and walking the file's own history -- `git rev-list --reverse --full-history master -- ':(top)test/datastage-goldens.json'`, reading `2.0.77.base.mod_settings_sha256` out of each commit -- gives the first capture at `ca9d448` (the recut at 0.2.1) and the five moves at `50c0db3`, `6ec3937`, `33657f5`, `f3029b6` and `3fd5875`, all trunk. Both now say what is true: the row is taken wherever a 2.0 BINARY is, from this tree, because `guest/go/data/engine.go` keys on the RUNNING engine and not on the manifest; it was FIRST taken on the recut at 0.2.1; and THIS ROW IS TRUNK'S 2.0-FLAVOUR EMISSION rather than the branch's, which carries this file as TRUNK had it at `cb89891`, frozen there at 0.2.1's `196275f867f7f8b5`, with nothing comparing the two. Not "its own copy": the branch's blob for this file IS a trunk blob, which is the provenance point, and what is frozen is which trunk commit it came from. **NO HASH WAS RE-CAPTURED**: the non-`_note` content of `test/datastage-goldens.json` is identical before and after, compared key by key.
+
+**WHAT THIS COMMIT DOES NOT DO.** It creates, deletes, moves, resets and recuts no branch, commits nothing on `release/2.0` and pushes nothing. The branch's own 0.2.3 changelog entry is the one player-facing document that cannot be fixed without touching the branch, and it stands as it is until the next recut; it is TRUE as written, and the gate is what makes the claim under it checkable. Nothing here says what the MOD PORTAL serves for Factorio 2.0: `origin/release/2.0` is `f8db95f` (0.2.2) and the local 0.2.3 is unpushed, but the portal is not this git remote. NOT MEASURED.
+
+**AND FINDING 11 IS A DATED RECORD WITH ITS COMMIT NAMED, so it is corrected here and not in it**, which is this file's own habit (round one's superseded table, round three's red-proof row, and finding 6's "two rows below" under commit 3). Three corrections: the branch is honest and the claim is the defect; `git rev-list --count release/2.0..master` is 21 today where the finding says 16 (it was 17 at the assessment commit `d8dc79e` itself, so the finding's own number was taken one commit early); and `4b9f597`'s commit message carries a false sentence. Item (i) of the assessment's "what to do" list, "whichever is meant to be true, they must agree before a 2.0 release goes out", is answered by making the claim the true one and gating it, rather than by recutting a branch onto a head whose release nobody is publishing.
+
+### The adversarial review of commit 4, and the vacuous green it found in the gate
+
+**THE REVIEW FOUND ONE BLOCKING ITEM AND IT IS THE FAILURE THIS ESTATE FORBIDS BY NAME: THE GATE ITSELF COULD PRINT ITS OK BANNER HAVING CHECKED NOTHING.** `BASE=$(git merge-base "$TRUNK" "$ARM")` had no error check under `set -uo pipefail` with no `-e`, so a `merge-base` that answered nothing left `BASE` empty, `CHANGED` empty, every counter at 0, and the LAST thing printed was `ok -- ... 0 path(s) differ`, at exit 0, with git's two `fatal:` lines buried above it on stderr. Two live routes were measured, both re-taken here after the fix in a throwaway `git clone` under $SCRATCH:
+
+| route | before | after |
+|---|---|---|
+| `git clone --depth 1 --no-single-branch`, then `git branch release/2.0 origin/release/2.0` | two `fatal:` lines, then `ok ... 0 path(s) differ from the cut point  (trunk 0.3.3)`, **exit 0** | `SKIP -- this is a shallow clone, so the cut point is not in this history.` with `git fetch --unshallow` as the remedy, **exit 0** |
+| an ORPHAN `release/2.0` in a normal clone, no common ancestor | the same banner, `master is 108 ahead`, **exit 0** | `FAIL -- master and release/2.0 have no common ancestor, so release/2.0 was not cut from trunk at all`, **exit 1** |
+| `version = "9.9.9-INDEX"` staged in the shallow clone | `(trunk 9.9.9-INDEX)`, read out of the INDEX | the shallow SKIP, and in a full clone the same staging changes not one word of the green line |
+
+**AND THE SAME LINE READ THE INDEX**, which falsified the script's own headline that the working tree is never read: with `BASE` empty, `git show "$BASE:fklua.toml"` is `git show ":fklua.toml"`, which is git's spelling for stage 0 of the index. That is the sibling of the defect the implementer's own second red proof had already found in this same script -- a comparison that passed by comparing a value with itself, reaching the identical `ok` wording -- and it is why the anti-vacuity sentence in this note ("the `8` is the anti-vacuity; a gate that checked nothing would say `0`") was describing the failure mode rather than excluding it.
+
+**THE FIX IS THREE THINGS AND THEN AN AUDIT.** A shallow clone SKIPs at exit 0, probed with `git rev-parse --is-shallow-repository` BEFORE anything is asked of history, because a truncated history would also make the per-path walk report a legitimate backport as drift; no common ancestor FAILs at exit 1, because two branches with no shared history is the drift this gate exists for and not an environmental difference; and every command substitution whose emptiness could pass for an answer is guarded, six of them by an explicit non-empty check that names which answer git could not give.
+
+**THE AUDIT FOUND A THIRD INSTANCE OF THE SAME SHAPE, one level down, and it did not need a broken `merge-base` to reach.** `CHANGED=$(git diff --name-only "$BASE" "$ARM")` was unguarded too: with a perfectly good `BASE`, a `git diff` that failed for any reason would give the identical `ok ... 0 path(s) differ` at exit 0. It is guarded on status now AND asserted on: the two TREES are compared, and `0 path(s) differ` with the arm's tree differing from the cut point's is an internal failure rather than a pass. Two more calls inside the loop were unchecked in the weaker way -- a failing `git rev-list` (in a process substitution, whose status is unreadable, so it is a command substitution now) or `git cat-file` would have failed LOUDLY with the WRONG reason, naming the path as written-on-the-branch or deleted; both are guarded, and the loop's one genuinely-clean empty answer (a path trunk never had, which is the drift itself) says so at its own line.
+
+**RE-PROVEN AFTER THE FIX, all in `$SCRATCH/rv4b`, four throwaway clones, nothing written into the real repository**: the ordinary green byte for byte as before (14 / 21 / 8 / 4 / 2); the line typed onto `guest/go/data/legacy.go` still red by name at exit 1; `git rm test/check-sprites.py` still red on the deletion arm; the single-branch SKIP still exit 0 with its remedy, which fetched the branch and turned the same invocation green; the export SKIP; and two NEW red proofs of the guards themselves, by breaking the guarded code and observing the designed message -- `CHANGED` forced empty gives `FAIL -- release/2.0's tree differs from the cut point cf5a78e and yet no path came back as differing, which cannot happen. This gate checked NOTHING`, and `BASE_VER` forced empty gives `FAIL -- git could not answer the cut point's version out of fklua.toml`. Both restored, and the script `cmp`s equal to the repository's.
+
+**THE FOUR SHOULD-FIX ITEMS ARE TAKEN.** (1) Three sites of this commit disagreed on the number of golden re-captures -- "the last four", "the four re-captures recorded below", "five" -- and the honest number is FIVE, re-measured here and written into all three with the command that produces it. (2) "SEVEN freeze-fix files" contradicted this commit's own eight-row provenance table; it is EIGHT, and all eight are among `cb89891`'s twelve changed files. (3) `git diff --name-only` is config-sensitive: with `diff.relative=true` set and the gate run from a subdirectory it reported three files as branch deletions, a FALSE FAIL, measured. `--no-relative` fixes it and `-- ':(top)'` does NOT, which the review offered as an alternative and which was tested and rejected: `diff.relative` scopes the diff to the cwd as well as relativising the output, so the pathspec still comes back with three cwd-relative paths. `core.quotePath=false` went in beside it, so a non-ASCII path comes back raw rather than C-quoted. (4) With `git` off PATH the script printed the EXPORT's skip line at exit 0 -- an internal error wearing a skip's clothes, with the wrong diagnosis -- and `command -v git` is the first probe now, failing at exit 1.
+
+**THE NOTES TAKEN.** The ok line's "carries no line `master` never had" reads as a TREE claim; the limit is stated rather than the wording narrowed, in the script's header, in `CLAUDE.md` and above, because the per-LINE claim is exactly what per-file blob provenance proves and the things it does not prove (blobs that never coexisted, a blob from a reverted commit, an older trunk value) are worth naming rather than hiding. The script said a backport "cannot" make `CLAUDE.md` and `README.md` match while its own `FKLUA-GAPS.md` counterexample sat two lines below; it is "NEED NOT" now, in all three places. The next recut's surprise (`test/datastage-goldens.json` is not excluded, so a golden re-captured ON the branch fails by name) is written down. The cost was a bare "0.20 s" in three places, which was the mode in the repository it was taken in rather than a ceiling; all three carry the band now and the guards' own 0.02 s with it. `CLAUDE.md`'s dangling "See Verification" has its target and its full stop.
+
+**ONE NOTE IS RECORDED AND NOT ACTED ON.** `agents/single-edge.md:31` says the setting-flip legs and the multi-edge regression run "belong on the `release/2.0` branch", which is the same route misdescription this commit corrected in three other files, and phase 9's own record two thousand lines below says that work was done on TRUNK with the manifest flipped as a local uncommitted state. It is corrected in place, in the same dated form as that file's other correction from this commit. What is NOT touched is `test/run.sh:130`, "release/2.0 carries the same suites against a 2.0 binary", which the review checked and found correct: `git diff --name-only release/2.0 master -- test/` is two files, `check-datastage.py` and `datastage-goldens.json`, neither of them a suite.
+
+**WHAT THE REVIEW GOT WRONG, measured.** Its suggested alternative fix for the `diff.relative` finding, appending `-- ':(top)'`, does not work: run from `test/` with `diff.relative=true` it still returns the same three cwd-relative paths, because `diff.relative` limits the diff to the current directory as well as relativising it. `--no-relative` is the only one of the two that answers, and is what went in.
+
+### Commit 4's gates, at their exit codes
+
+Exit codes read directly, logs under $SCRATCH.
+
+| gate | exit | |
+|---|---|---|
+| `bash -n test/check-release-arm.sh` | 0 | |
+| `shellcheck test/check-release-arm.sh` | 0 | present at `/opt/homebrew/bin/shellcheck`, no findings |
+| `test/check-release-arm.sh` | 0 | the green line above |
+| `cd guest/go && go test ./tune/` | 0 | |
+| `make check` | 0 | the new gate included |
+| `make mod` | 0 | |
+| `make datastage-check` | 0 | eighteen arms |
+| `../FkLua/bin/fklua gen-bindings --check` | 0 | |
+| `../FkLua/bin/fklua lock --check` | 0 | |
+| the em-dash and en-dash sweep over every added line | empty | |
+| `make test`, the 2.1.16 and 2.1.17 golden rows, the client run | **NOT RUN** | unchanged from commits 1, 2 and 3 |
+
 ## The FkLua baseline
 
 The migration was measured against a freshly rebuilt fklua so that a packaging difference could not be mistaken for a library effect.

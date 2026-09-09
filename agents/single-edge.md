@@ -27,8 +27,15 @@ DONE 2026-08-24** for the five plain scenes, plus a sixth cut the same day that
 is the cross on NORMAL belts rather than a new scene; the two `-io-arrows`
 variants are still outstanding, because the capture was made with alt-mode off
 throughout.
-The setting-flip legs and the multi-edge regression run need a 2.0 binary and
-belong on the `release/2.0` branch.
+The setting-flip legs and the multi-edge regression run need a 2.0 BINARY, and
+they were run on one: phase 9 ran them from THIS tree, on an installed 2.0.77,
+with the manifest flipped to the release arm as a LOCAL, UNCOMMITTED state for
+the duration and `test/run.sh` stamping every staged copy. **Corrected
+2026-09-09**: this sentence used to say they "belong on the `release/2.0`
+branch", which is the same route misdescription commit 4 of the FkRecipes fix
+round corrected in `guest/go/engine`, `test/check-datastage.py` and the
+`Makefile`. A 2.0 binary is what they need; the branch is not where they
+happen. Phase 9's own record below says so in its own words.
 
 **The one defect the estate work found and did not fix is FIXED, as phase 8**: a
 BB2/BB3 conversion is the third producer of the migration summary now, so every
@@ -390,11 +397,20 @@ path still moves the version, which is fk_migrate's front door). Plan:
   check --to` first, to see what moves; the 2026-08-23 smoke test showed the
   control stage and guest init already come up on 2.1.14). `base >= 2.1.0`.
 - **A `release/2.0` branch** carries the pinned diffs: `factorio_version`,
-  the 2.0.77 api pin and its bindings. Kept rebased on master per house rule.
-  The mod-data tree is IDENTICAL on both branches — the engine-version guard
-  in the data stage is what makes one tree correct on both engines — so the
-  branch diff is the manifest and the generated bindings, nothing
-  hand-written.
+  the 2.0.77 api pin and its bindings. It is RECUT FROM MASTER AT RELEASE TIME
+  and is otherwise BEHIND trunk, which is normal: it carries the last 2.0
+  release rather than head, so it is not rebased forward between releases and a
+  count of commits behind is not drift. The mod-data tree is identical on both
+  branches AT A RECUT -- the engine-version guard in the data stage is what
+  makes one tree correct on both engines -- so the branch diff is the manifest
+  and the generated bindings, nothing hand-written. **A commit written on the
+  branch is a gate failure**: `test/check-release-arm.sh`, run by `make check`,
+  asks every path the branch changed since its cut point for a blob some commit
+  on master also carries, and names the file that has none. **Corrected
+  2026-09-09**: this bullet used to say "Kept rebased on master per house
+  rule", which today's branch contradicts and which is not what the branch is
+  for. See agents/fkrecipes-migration.md, "Commit 4", for the blob-by-blob
+  measurement that settled it.
 
   **RECUT AT 0.2.1 ON 2026-08-26**, from master plus one commit as before, and
   the stack is now FOUR files rather than three: `fklua.toml` (the series, the

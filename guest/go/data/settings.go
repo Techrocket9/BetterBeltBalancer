@@ -39,7 +39,11 @@ import (
 //
 // DEFINED ON BOTH ENGINES, unlike `bbb-multi-edge-parts`. What a balancer part
 // costs means the same thing on 2.0 and on 2.1, so there is no version branch
-// over them and the `release/2.0` recut carries these two identically.
+// over them: a `release/2.0` recut carries these two NAMES unchanged, because
+// it carries this file unchanged. What it offers under them is whatever the
+// trunk release it was cut from offered, which is not necessarily what head
+// offers -- the branch carries the last 2.0 release rather than head, and
+// `test/check-release-arm.sh` says which trunk source that is.
 //
 // THE ALLOWED VALUES AND THE DEFAULT STILL COME OUT OF ONE PLACE. Factorio
 // refuses a mod whose `default_value` is not a member of `allowed_values`, by

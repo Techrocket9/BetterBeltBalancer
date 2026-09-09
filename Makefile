@@ -419,9 +419,21 @@ OBS_DIST := $(DIST)/obs
 #
 # `factorio20` comes off MOD_SERIES, which is fklua.toml's `factorio_version`,
 # which is the same key that decides the api pin the bindings were generated
-# from. So the tag cannot be set independently of the description it is about,
-# and trunk and the release/2.0 recut carry identical source: only this derived
-# value differs, and it differs because the pin does.
+# from. So the tag cannot be set independently of the description it is about:
+# it moves with the pin, and it differs because the pin does.
+#
+# AND WHAT THE release/2.0 ARM IS, because this comment used to end "trunk and
+# the release/2.0 recut carry identical source", which is a property that is
+# only ever true for the few hours around a release. The recut is TRUNK'S
+# SOURCE WITH A FOUR-FILE STAMP ON IT -- fklua.toml's series, base dependency,
+# api pin and version; fklua.lock; the generated bindings; and the changelog --
+# so this derived value is the only difference the recut itself introduces.
+# BETWEEN RELEASES THE BRANCH IS BEHIND TRUNK AND THAT IS NORMAL: it carries
+# the last 2.0 release rather than head, and it is recut at release time. What
+# holds continuously is that nothing on the branch was written on the branch,
+# and `test/check-release-arm.sh` (run by `make check`) is what refuses a
+# branch carrying something trunk never had. The procedure is
+# agents/single-edge.md, "Packaging: one tree, two releases".
 #
 # It reaches `go vet` in the check target too. A tag that compiled the wasm and
 # not the vet would be a type check of the arm that is not being built.
@@ -859,7 +871,7 @@ check:
 	@# 2.0 binary can be shown. `test/check-datastage.py` hashes what the data
 	@# stage EMITS and can only ever cover the flavour of the binary it runs on,
 	@# so the DECISION is pinned here and the 2.0 emission's dump golden is
-	@# deferred to the release/2.0 recut. It is also the only shape a test can
+	@# deferred to wherever a 2.0 BINARY is. It is also the only shape a test can
 	@# reach at all: a package that imports fkdata cannot be built by a host
 	@# toolchain, because //go:wasmimport is rejected outside GOARCH=wasm.
 	cd guest/go && go test ./plan/ ./skin/ ./carry/ ./edgemode/ ./engine/ ./tune/
@@ -890,6 +902,21 @@ check:
 	@# workaround for a gen-bindings that ignored the manifest.
 	$(FKLUA) gen-bindings --check
 	$(FKLUA) lock --check
+	@# THE 2.0 RELEASE ARM, and it is pure git plumbing: no engine, no network,
+	@# no build, and the working TREE is never read, so a feature branch or a
+	@# detached worktree answers exactly as master does. What it asks is NOT that
+	@# the two arms are identical -- `release/2.0` carries the last 2.0 release
+	@# and is behind trunk between releases, which is normal and is the OBS_TAGS
+	@# block above. What it asks is PROVENANCE: every path the branch changed
+	@# since its cut point carries a blob some commit on master also carries, so
+	@# a line written on the branch, or cherry-picked from somewhere that is not
+	@# trunk, fails by name. 0.23 s. A clone that never fetched the branch SKIPs
+	@# at exit 0 and prints the fetch command, and so does a SHALLOW clone, whose
+	@# truncated history would report a legitimate backport as drift. Two things
+	@# are NOT skips: two branches with no common ancestor, and a missing git
+	@# binary. What it proves is per-FILE and not per-tree; the script's header
+	@# says exactly what that does and does not cover.
+	test/check-release-arm.sh
 	@out=$$(cd guest/go && gofmt -l . | grep -v '^fkapi/' || true); \
 	  out="$$out $$(cd test/fixtures/fastbelt && gofmt -l . || true)"; \
 	  if [ -n "$$(echo $$out)" ]; then echo "gofmt: $$out"; exit 1; fi
