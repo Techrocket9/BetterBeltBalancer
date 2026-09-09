@@ -398,7 +398,7 @@ The maintainer's checklist for the first client at hand: install `dist/better-be
 
 ### What is NOT RUN on this machine, round three
 
-Unchanged from round two: `make test` (fourteen suites) and the 2.1.16 and 2.1.17 golden rows, because the packaged mod is pinned 2.1 and the binary is 2.0.77; the 2.1 rows carry `_stale` notes naming the three moves (the stub's `place_result`, the recipe customizer's settings, the research customizer's settings) for the next 2.1 session. The `bench/` matrix, out of scope.
+Unchanged from round two: `make test` (fourteen suites) and the 2.1.16 and 2.1.17 golden rows, because the packaged mod is pinned 2.1 and the binary is 2.0.77; the 2.1 rows carry `_stale` notes naming the three moves (the stub's `place_result`, the recipe customizer's settings, the research customizer's settings) for the next 2.1 session (five on the base arm and four on the incumbent since the sync pass, below). The `bench/` matrix, out of scope.
 
 ## Sync pass, 2026-09-08: this mod on FkLua b88965d and FkRecipes 9754f49
 
@@ -428,7 +428,7 @@ Both siblings moved after round three and this is the round that puts the mod on
 
 ### Commit 1: the two moved texts are re-pinned, and the golden moves with the library
 
-`tune/plan_test.go` transcribes the research dropdown's composed description in the head's shape, through a `costPresetLine(setting, value, source)` helper beside `presetLine` (a second helper because the LINE'S SHAPE differs: a recipe preset's line ends in one rendered string, a cost preset's in two, the words and then the game's own `technology-name` entry for the first rung of that tier's ladder; the name is not `costLine` because two tests already hold a const by that name). `tune/plandata_test.go`'s `TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo` asserts the stream WHOLE and IN ORDER over three arms: both numbers moved (50, 20) gives count, seconds, packs; the count at its declared default (20) gives seconds, packs; the seconds at its declared default (15) gives count, packs. The last two are the half this mod is on the hook for: a number's "untouched" is its DECLARED default and the declaration is `plan.go`'s. `test/check-datastage.py`'s `tech-ignored` arm carries the three lines and compares the whole `fkrecipes:` stream against them in order (`lines == want_lines`), printing one `said` per line. The 2.0.77 golden is re-captured: only `mod_settings_sha256` moved, `0bea93fa1594052e` to `e5e7d159e88f4a6b` on both mod sets, both `data_raw_sha256` unmoved with the normalised dumps byte-identical either side, the `_note` and the four 2.1 `_stale` notes extended in place. Every library line citation in `guest/go/tune` (`plan.go`, `tech.go`, `recipe.go`, `world_test.go`, `plan_test.go` and `plandata_test.go`; twenty-nine citation strings in the diff's added lines by `git diff -U0 -- guest/go/tune | grep '^+' | grep -o 'go/[a-z]*\.go:[0-9]*'`, each opened on the head and confirmed to name the thing it names) is re-pinned to the head's line numbers, and one sentence of `plan.go`'s is corrected: under a tier the three custom fields are READ, to say whether the player moved them, and no longer "not read at all".
+`tune/plan_test.go` transcribes the research dropdown's composed description in the head's shape, through a `costPresetLine(setting, value, source)` helper beside `presetLine` (a second helper because the LINE'S SHAPE differs: a recipe preset's line ends in one rendered string, a cost preset's in two, the words and then the game's own `technology-name` entry for the first rung of that tier's ladder; the name is not `costLine` because two tests already hold a const by that name). `tune/plandata_test.go`'s `TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo` asserts the stream WHOLE and IN ORDER over three arms: both numbers moved (50, 20) gives count, seconds, packs; the count at its declared default (20) gives seconds, packs; the seconds at its declared default (15) gives count, packs. The last two are the half this mod is on the hook for: a number's "untouched" is its DECLARED default and the declaration is `plan.go`'s. `test/check-datastage.py`'s `tech-ignored` arm carries the three lines and compares the whole `fkrecipes:` stream against them in order (`lines == want_lines`), printing one `said` per line. The 2.0.77 golden is re-captured: only `mod_settings_sha256` moved, `0bea93fa1594052e` to `e5e7d159e88f4a6b` on both mod sets, both `data_raw_sha256` unmoved with the normalised dumps byte-identical either side, the `_note` and the four 2.1 `_stale` notes extended in place. Every library line citation in `guest/go/tune` (`plan.go`, `tech.go`, `recipe.go`, `world_test.go`, `plan_test.go` and `plandata_test.go`; twenty-nine added lines carrying a citation, 31 occurrences and 24 distinct strings, by `git diff -U0 -- guest/go/tune | grep '^+' | grep -o 'go/[a-z]*\.go:[0-9]*'`, each opened on the head and confirmed to name the thing it names) is re-pinned to the head's line numbers, and one sentence of `plan.go`'s is corrected: under a tier the three custom fields are READ, to say whether the player moved them, and no longer "not read at all".
 
 **Red-proven six times, each injected in this mod's code or test, observed, restored and the restore cmp-verified** (the implementer's five, the adversarial review's one):
 
@@ -515,7 +515,7 @@ With `ModName` set to `better-belt-balancer-x`, the locale check reports fourtee
 
 Round three's exact `dist/bbb.wasm` and `dist/bbbdata.wasm` (built 2026-09-08 08:56 and 08:30, before either sibling moved) were repackaged with the b88965d fklua before anything was relinked (`../FkLua/bin/fklua mod dist/bbb.wasm --persist=packed -o "$S/sync2/pack-r3guests" --report "$S/sync2/report-r3guests.json"`, from the repository root so `fklua.toml` supplies the identity, the data module and `gc = "collected"`), then the tree was relinked against both heads (`make mod`, `make zip`). Sizes by `wc -c` and `wc -l`, stations by `grep -c '::LT'` (two labels per station) and by the report's `stations`:
 
-| | round three (a1fcd04, c7a806e) | the same two wasm files, fklua b88965d | this commit (both heads) |
+| | round three (a1fcd04, c7a806e) | the same two wasm files, fklua b88965d | commit 1 (33657f5, both heads) |
 |---|--:|--:|--:|
 | `dist/better-belt-balancer_0.3.3.zip` | 822,248 B | not built | **817,198 B** (-0.6%) |
 | `fk_data_module.lua` | 4,904,124 B, 122,031 lines | **4,318,883 B, 108,919 lines** (-11.9% bytes, -10.7% lines) | 4,470,110 B, 112,279 lines (-8.8%, -8.0%) |
@@ -535,6 +535,80 @@ So the toolchain's three size commits take a tenth off the data module on the sa
 ```
 
 The 4,469,851 in that line is the unwrapped chunk; the file on disk is 259 bytes longer (the factory wrapper), as FkRecipes' sync pass measured.
+
+### The round's close: sizes and the relay, before and after
+
+At commit e3c0ed9, `make zip`; sizes by `ls -l` and `wc -l`, stations by `grep -c '::LT'` (two labels per station) and by the report; the `jumps` objects by `jq -c '.jumps.data, .jumps.control' dist/.fklua-mod.report.json`, which `make mod` and `make zip` write since commit 3:
+
+| | round three (FkLua a1fcd04, FkRecipes c7a806e) | the round's close (b88965d, 9754f49) | |
+|---|--:|--:|---|
+| `dist/better-belt-balancer_0.3.3.zip` | 822,248 B | **817,626 B** | -0.6% |
+| `fk_data_module.lua` | 4,904,124 B, 122,031 lines | **4,469,509 B, 112,258 lines** | -8.9% bytes, -8.0% lines |
+| `fk_module.lua` | 3,148,568 B | 3,132,893 B, 88,844 lines | -0.5% |
+| `dist/bbbdata.wasm` | 1,085,173 B | 1,097,030 B | +1.1% |
+| `dist/bbb.wasm` | 1,302,884 B | 1,302,884 B | unmoved |
+| `fk_api_gen.lua`, members pruned | 24,077 B, 56 of 4,870 | the same | unmoved (the b88965d repackaging of round three's wasm emits the same 24,077 B, and no api-generation source moved between the two FkLua heads) |
+| relay stations in the data module | 13 (26 labels by grep; no report field) | 12 (24 labels; `stations` 12) | |
+| `widest_span_bytes` before the relay | not reported at a1fcd04 | 991,183 B, 151% of the 655,355-byte limit, in `(*fkrecipes.Lib).PlanData` | |
+| `widest_span_after_relay_bytes` | | 328,136 B (50%) | |
+| `widest_block_function`, `widest_block_bytes`, `block_room_bytes` | | `fkrecipes.probeIn`, 8,858 B, **318,819 B** (97% of the 327,677-byte hop); `PlanData`'s own block 802 B with 326,875 B of room (`relayed_functions[0]`) | |
+| the control module (`jumps.control`) | | widest span 303,874 B (46%) in `main.flushLive`, no relay; widest block 11,033 B in `main.onEvent#wasmexport`, 316,644 B of room | |
+| data-module functions in the debug map | 170 | 172 | |
+
+Of the data module's 434,615 B drop, the toolchain's twelve commits, three of them the size commits, account for 585,241 B (round three's exact wasm files repackaged with the new fklua before anything was relinked: 4,318,883 B, 108,919 lines, 11 stations, the table above), and the library's eight commits with this plan's two changes put 150,626 B back. The report's `outputs.data_lua_bytes` reads 4,469,250, 259 bytes under the file, which is the factory wrapper FkRecipes' sync pass measured. Block room is the figure to watch and it is 318,819 B; the span in `PlanData` is half again over the limit and loads because the relay carries it, exactly as in round three, and the packager says so on every build now.
+
+### Every gate at its exit code, the round's close
+
+Commit e3c0ed9, Factorio 2.0.77 (build 84539, mac-arm64, steam; `"$FACTORIO_BIN" --version` re-asked before every engine run), both sibling checkouts clean at the heads named at the top, exit codes read directly:
+
+| gate | exit | |
+|---|---|---|
+| `../FkLua/bin/fklua gen-bindings --check` | 0 | the committed bindings unmoved, `go 4865 + 5, rust 4865 + 5` |
+| `../FkLua/bin/fklua lock --check` | 0 | `fklua.lock is up to date (api 2.1.17)` |
+| `cd guest/go && gofmt -l .` | prints nothing | |
+| `make check` | 0 | at every one of the round's commits |
+| `make mod`, `make zip` | 0 | the prune tripwire green, 56 members of 4,870; `--report` written beside the log |
+| `make datastage-check` | 0 | seventeen arms: both hashed mod sets at `df4d6c3fc7bf854d`, data-raw `1e1fcf4f56f5ef22` and `e7001bf98d6c6771`, the stub graph and the six orders on both, fourteen variant arms through `fklua modsettings write`, the speed arm |
+| the release-to-head proof (`sync2/prefs-head2.py`, `compare-prefs.py`) | 0 | 28 pairs at commit 1 and at commit 2, recorded above |
+| `python3 -m py_compile test/check-datastage.py`, `bash -n bench/run.sh` | 0 | |
+| one bench cell through the new writer | 0 | `BENCH-SETUP scenario=control-idle n=1 k=2 ...` asserted by the harness |
+| agents/docs-style.md's greps over bench/README.md | empty | the one human-facing file this round touched; README.md and the changelog are untouched, because nothing a player sees moved |
+| `make test`, fourteen suites | **NOT RUN** | the packaged mod is pinned 2.1 and the binary is 2.0.77; `test/run.sh` refuses at its engine gate, as in every round before |
+| the 2.1.16 and 2.1.17 golden rows | **NOT RUN** | each carries a `_stale` note naming every move since its capture (five on the base arm: the stub's `place_result`, the recipe customizer, the research customizer, the localised cost presets, the four generated names; four on the incumbent arm, which defines no stub) and the re-capture command for the next 2.1 session |
+| the client run | **NOT REACHABLE**, owed since round three | round three's checklist stands, with the six rows reading `a`, `aab`, `b`, `bad`, `bae`, `baf` |
+| the `bench/` matrix | out of scope | one cell ran as the writer's witness and its row was reverted |
+
+### Friction, graded, the sync pass
+
+Same grades: CLEAN worked as documented, AWKWARD worked but cost something, MISLED pointed the wrong way, BLOCKED needed a workaround or could not be done. **Nothing is BLOCKED or MISLED.**
+
+#### `OrderAfter`: CLEAN
+
+Recorded under commit 2. The docs' worked example is this plan, the emitted orders are what its comments say, the refusals are unreachable from one-letter legacy orders, and the one thing a consumer has to know (the prefix is captured at declaration) is in the doc comment. Round three's AWKWARD is closed.
+
+#### An edited number under a tier says so, and a cost preset names its technology by its localised name: CLEAN
+
+Recorded under commit 1. Both of round three's mild AWKWARDs are closed by da11cf5; the cost to this consumer was the transcription, the three-line pin and the golden, and the `Unknown key:` trade for a missing technology is documented and is this mod's ladder to order.
+
+#### The relay is reported: CLEAN
+
+Recorded under commit 1 and closed by FkLua 2a541a7 and b88965d; `make mod` prints it, the report carries it, and commit 3 keeps the report beside the log.
+
+#### `fklua modsettings write` and `read`: CLEAN; probing for the subcommand: AWKWARD, mild, FkLua's
+
+Recorded under commit 3, with the ask: an exit code or a `fklua meta --json` field that says which subcommands the binary carries, so a harness need not grep `unknown command "modsettings"` out of stderr.
+
+#### The library's line-number citations drift with every library commit: noted, this repository's own habit
+
+Commit 1 re-pinned the citations in `guest/go/tune` (twenty-nine added lines carrying one, 31 occurrences, 24 distinct strings); commit 1's review spent two findings on them. A function name beside a line number is what makes a stale one findable, and every citation here carries one.
+
+#### The `jumps` object's widest block is a library helper's: noted, matches FkLua's docs
+
+`probeIn` at 8,858 B rather than `PlanData` at 802 B, which is the shape FkLua's docs/lua-limits.md predicts (the block sits in a helper the optimizer did not inline into the section function) and the reason b88965d reports the module's worst block. Nothing to ask.
+
+### What this pass leaves open, and what it closes
+
+Closed: every one of round three's four AWKWARDs (the placement of a generated setting, the ignored number, the localised cost preset, the silent relay), so round three's ledger carries nothing open. Of round two's ledger, one entry is answered upstream and unrecorded until now (`PlaceResult`'s probe and the docs' "beside": FkRecipes docs/migration.md now says the entity is "extended before the `Emit` call runs"), and two stand as they were graded: `max_level` travelling with the copied unit, which docs/migration.md now documents with a workaround (a single-level source, or a written `Unit`) rather than the opt-out asked for, a documented decline; and the one-sentence ask for step 2 of the incremental path (that a recipe and the technology that unlocks it move together), still absent from docs/migration.md. Neither blocks this consumer. Corrected: round three's heading on the engine's int typing, and the count of customizer settings in the instruction that launched this pass (and in the FkRecipes follow-up brief it drew on), which said five where the plan declares four (the recipe text, the pack text, the count, the seconds). Open, unchanged from round three: the client run (the composed descriptions' line breaks, the text field's rendering, the labels as rendered, a custom recipe crafted), and the 2.1 golden rows, which only a 2.1 binary can re-capture. New and not this mod's to close: the subcommand probe above. The changelog entry for 0.3.3 is what round three wrote, because nothing a player sees moved this round: the four settings' labels and descriptions are byte for byte what they were, and their internal names have never shipped.
 
 ## The FkLua baseline
 
