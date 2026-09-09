@@ -772,10 +772,11 @@ func TestAnUnreadableSettingTakesTheDeclaredDefault(t *testing.T) {
 // ---------------------------------------------------------------------------
 // THE CUSTOMIZER: the seventh value, and the text field behind it.
 //
-// `bbb-recipe-cost` gained one value and `bbb-recipe-ingredients` arrived
-// beside it, so a player who wants a recipe none of the six presets is can
-// write one. Five behaviours are pinned below, and every sentence a PLAYER can
-// be shown is compared word for word rather than by substring: a refusal that
+// `bbb-recipe-cost` gained one value and
+// `better-belt-balancer-recipe-ingredients` arrived beside it, so a player who
+// wants a recipe none of the six presets is can write one. Five behaviours are
+// pinned below, and every sentence a PLAYER can be shown is compared word for
+// word rather than by substring: a refusal that
 // stops the load is the only thing they are given to fix it with, so its
 // wording is as much this mod's surface as the recipe is.
 // ---------------------------------------------------------------------------
@@ -800,9 +801,10 @@ func vanillaLadderList() []ingredientPair {
 // TestTheDefaultWordUnderCustomIsTheVanillaLadder is the state a player reaches
 // by picking `custom` and typing nothing.
 //
-// THE WORD IS NOT A LIST AND THAT IS THE WHOLE DESIGN. `bbb-recipe-ingredients`
-// ships holding `default`, and the library resolves that to the DECLARED list
-// with its ladders rather than to a rendering of it -- so a player who switches
+// THE WORD IS NOT A LIST AND THAT IS THE WHOLE DESIGN.
+// `better-belt-balancer-recipe-ingredients` ships holding `default`, and the
+// library resolves that to the DECLARED list with its ladders rather than to a
+// rendering of it -- so a player who switches
 // to `custom` and never edits gets exactly what `vanilla` gives them, in this
 // release and in every later one, and in a modpack missing a rung
 // (FkRecipes go/customize.go:847, the isDefault arm of resolveIngredientsFrom).
@@ -846,11 +848,11 @@ func TestTheDefaultWordUnderCustomIsTheVanillaLadder(t *testing.T) {
 // this arm and the word above. One is a player's choice; the other is a file
 // somebody edited by hand, and it should not pass in silence.
 //
-// THE FIXTURE HAS TO ANSWER THE FULL NAME FOR THIS TO MEAN ANYTHING.
-// `bbb-recipe-ingredients` is declared Legacy, so the name the library asks
-// `StartupSetting` for is the unprefixed one a player's file carries. A fixture
-// keyed on anything else would answer absent for every arm of the customizer,
-// and this is the one test that would still pass.
+// THE FIXTURE HAS TO ANSWER THE EMITTED NAME FOR THIS TO MEAN ANYTHING.
+// `better-belt-balancer-recipe-ingredients` is generated, so the name the
+// library asks `StartupSetting` for is the PREFIXED one a player's file carries.
+// A fixture keyed on anything else would answer absent for every arm of the
+// customizer, and this is the one test that would still pass.
 func TestAnUnreadableCustomTextTakesTheDeclaredList(t *testing.T) {
 	w := everythingWorld().
 		withStartup(SettingRecipeCost, RecipeCustom).
@@ -863,8 +865,8 @@ func TestAnUnreadableCustomTextTakesTheDeclaredList(t *testing.T) {
 	// section compares every line a player is shown word for word, and a
 	// renamed constant has to fail this test rather than travel through it.
 	checkExactlyOneLog(t, logs,
-		"fkrecipes: the setting bbb-recipe-ingredients was not readable, "+
-			"so its default applies")
+		"fkrecipes: the setting better-belt-balancer-recipe-ingredients was not "+
+			"readable, so its default applies")
 }
 
 // TestTheCustomValueTakesItsIngredientsFromTheText is the feature, stated as
@@ -878,8 +880,9 @@ func TestAnUnreadableCustomTextTakesTheDeclaredList(t *testing.T) {
 // RATHER THAN THE TEXT AS TYPED: a player who wrote `iron-plate x3` reads back
 // `3 iron-plate` and learns the form the library would have written
 // (FkRecipes go/customize.go:861). It names the RECIPE and the SETTING by their
-// EMITTED names, both unprefixed here because both are Legacy, so the line
-// points at the row in the menu a player would go and edit.
+// EMITTED names -- the recipe unprefixed because it is Legacy, the setting
+// prefixed because it is generated -- so the line points at the row in the menu
+// a player would go and edit.
 func TestTheCustomValueTakesItsIngredientsFromTheText(t *testing.T) {
 	w := everythingWorld().
 		withStartup(SettingRecipeCost, RecipeCustom).
@@ -890,7 +893,7 @@ func TestTheCustomValueTakesItsIngredientsFromTheText(t *testing.T) {
 		[]ingredientPair{{"iron-plate", 3}, {"splitter", 1}})
 	checkExactlyOneLog(t, logs,
 		"fkrecipes: bbb-balancer-part takes its ingredients from "+
-			"bbb-recipe-ingredients: 3 iron-plate, 1 splitter")
+			"better-belt-balancer-recipe-ingredients: 3 iron-plate, 1 splitter")
 }
 
 // TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo is the shape a pair of
@@ -917,8 +920,8 @@ func TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo(t *testing.T) {
 	// A literal for the reason the unreadable arm's is: a renamed constant
 	// must fail this sentence rather than be carried by it.
 	checkExactlyOneLog(t, logs,
-		"fkrecipes: bbb-recipe-ingredients is edited, but bbb-recipe-cost "+
-			"is not on custom, so the text is ignored")
+		"fkrecipes: better-belt-balancer-recipe-ingredients is edited, but "+
+			"bbb-recipe-cost is not on custom, so the text is ignored")
 }
 
 // TestACustomTextTheGameCannotAnswerIsRefused pins the three refusals a player
@@ -947,14 +950,15 @@ func TestACustomTextTheGameCannotAnswerIsRefused(t *testing.T) {
 			// A name no mod in this game defines. The fixture stocks every rung
 			// of every ladder and nothing else, which is what makes it absent.
 			text: "3 tungsten-plate",
-			want: `fkrecipes: bbb-recipe-ingredients, entry 1 ("3 tungsten-plate"): ` +
-				`no item or fluid is named tungsten-plate`,
+			want: `fkrecipes: better-belt-balancer-recipe-ingredients, entry 1 ` +
+				`("3 tungsten-plate"): no item or fluid is named tungsten-plate`,
 		},
 		{
 			// The display name off this mod's own dropdown label.
 			text: "2 iron plates",
-			want: `fkrecipes: bbb-recipe-ingredients, entry 1 ("2 iron plates"): ` +
-				`no item or fluid is named "iron plates"; did you mean iron-plate`,
+			want: `fkrecipes: better-belt-balancer-recipe-ingredients, entry 1 ` +
+				`("2 iron plates"): no item or fluid is named "iron plates"; ` +
+				`did you mean iron-plate`,
 		},
 		{
 			// A NAME THE GAME HAS, WHICH IS THE THIRD SHAPE AND NOT A TYPO AT
@@ -967,8 +971,9 @@ func TestACustomTextTheGameCannotAnswerIsRefused(t *testing.T) {
 			// takes an ingredient, water IS one, and the reason it cannot be
 			// used names the category rather than the spelling.
 			text: "1 water",
-			want: `fkrecipes: bbb-recipe-ingredients, entry 1 ("1 water"): ` +
-				`water is a fluid, and a recipe in the crafting category takes items only`,
+			want: `fkrecipes: better-belt-balancer-recipe-ingredients, entry 1 ` +
+				`("1 water"): water is a fluid, and a recipe in the crafting ` +
+				`category takes items only`,
 		},
 	} {
 		w := everythingWorld().
@@ -1006,9 +1011,10 @@ func checkExactlyOneLog(t *testing.T, logs []string, want string) {
 // ---------------------------------------------------------------------------
 // THE RESEARCH CUSTOMIZER: the fourth value, and the three fields behind it.
 //
-// `bbb-tech-cost` gained `custom` and `bbb-tech-packs`, `bbb-tech-count` and
-// `bbb-tech-seconds` arrived beside it, so a player who wants a research cost
-// none of the three tiers charges can write one. The same rule the recipe's
+// `bbb-tech-cost` gained `custom` and `better-belt-balancer-tech-packs`,
+// `better-belt-balancer-tech-count` and `better-belt-balancer-tech-seconds`
+// arrived beside it, so a player who wants a research cost none of the three
+// tiers charges can write one. The same rule the recipe's
 // section states holds here: every sentence a PLAYER can be shown is compared
 // word for word, because a refusal that stops the load is all they are given to
 // fix it with.
@@ -1072,8 +1078,9 @@ func TestTheCustomResearchCostUntouchedIsTheFallbackUnit(t *testing.T) {
 		customUnit(20, 15, ingredientPair{"automation-science-pack", 1}))
 	checkPrereqs(t, "custom untouched", got, TechLogistics3)
 	checkExactlyOneLog(t, logs,
-		"fkrecipes: bbb-balancer takes its research cost from bbb-tech-packs: "+
-			"count 20, time 15, packs 1 automation-science-pack")
+		"fkrecipes: bbb-balancer takes its research cost from "+
+			"better-belt-balancer-tech-packs: count 20, time 15, "+
+			"packs 1 automation-science-pack")
 
 	// NO max_level, AND IT IS AN ASSERTION RATHER THAN AN ABSENCE NOBODY
 	// LOOKED AT. Under a tier the library copies the source technology's level
@@ -1112,8 +1119,9 @@ func TestTheCustomResearchCostIsTheThreeSettings(t *testing.T) {
 	// every line a player is shown word for word, and a renamed constant has to
 	// fail this test rather than travel through it.
 	checkExactlyOneLog(t, logs,
-		"fkrecipes: bbb-balancer takes its research cost from bbb-tech-packs: "+
-			"count 50, time 20, packs 1 automation-science-pack, 1 logistic-science-pack")
+		"fkrecipes: bbb-balancer takes its research cost from "+
+			"better-belt-balancer-tech-packs: count 50, time 20, "+
+			"packs 1 automation-science-pack, 1 logistic-science-pack")
 }
 
 // TestThePositionLadderStepsDownAndThenLetsGo is the placement half of the
@@ -1135,7 +1143,8 @@ func TestThePositionLadderStepsDownAndThenLetsGo(t *testing.T) {
 	l2, _ := base.tech(TechLogistics2)
 	want := customUnit(20, 15, ingredientPair{"automation-science-pack", 1})
 	const costLine = "fkrecipes: bbb-balancer takes its research cost from " +
-		"bbb-tech-packs: count 20, time 15, packs 1 automation-science-pack"
+		"better-belt-balancer-tech-packs: count 20, time 15, " +
+		"packs 1 automation-science-pack"
 
 	for _, tc := range []struct {
 		name  string
@@ -1209,23 +1218,24 @@ func TestAPackTextTheGameCannotAnswerIsRefused(t *testing.T) {
 	}{
 		{
 			text: "1 water",
-			want: `fkrecipes: bbb-tech-packs, entry 1 ("1 water"): ` +
+			want: `fkrecipes: better-belt-balancer-tech-packs, entry 1 ("1 water"): ` +
 				`water is a fluid, and research takes science packs only`,
 		},
 		{
 			text: "1 iron-plate",
-			want: `fkrecipes: bbb-tech-packs, entry 1 ("1 iron-plate"): ` +
-				`iron-plate is an item, not a science pack`,
+			want: `fkrecipes: better-belt-balancer-tech-packs, entry 1 ` +
+				`("1 iron-plate"): iron-plate is an item, not a science pack`,
 		},
 		{
 			text: "1 automation science pack",
-			want: `fkrecipes: bbb-tech-packs, entry 1 ("1 automation science pack"): ` +
-				`no science pack is named "automation science pack"; ` +
-				`did you mean automation-science-pack`,
+			want: `fkrecipes: better-belt-balancer-tech-packs, entry 1 ` +
+				`("1 automation science pack"): no science pack is named ` +
+				`"automation science pack"; did you mean automation-science-pack`,
 		},
 		{
 			text: "none",
-			want: "fkrecipes: bbb-tech-packs: research takes at least one science pack",
+			want: "fkrecipes: better-belt-balancer-tech-packs: research takes at " +
+				"least one science pack",
 		},
 	} {
 		w := everythingWorld().
@@ -1305,7 +1315,7 @@ func TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused(t *testing.T) {
 // reserved word standing for the author's answer the way a text field's
 // `default` does, so the library compares the stored number against the
 // DECLARED one -- and the number it compares against is the one [Plan] writes
-// down, 20 for the count and 15 for the seconds (plan.go:219 and 220). A field
+// down, 20 for the count and 15 for the seconds (plan.go:284 and 285). A field
 // sitting at its declared default is indistinguishable from an untouched one
 // and draws no line, which is why the three-line arm drives 50 and 20 and not
 // 20 and 15.
@@ -1327,12 +1337,12 @@ func TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused(t *testing.T) {
 func TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo(t *testing.T) {
 	// Literals, for the reason every pinned sentence in this file is one.
 	const (
-		countLine = "fkrecipes: bbb-tech-count is edited, but bbb-tech-cost " +
-			"is not on custom, so the number is ignored"
-		secondsLine = "fkrecipes: bbb-tech-seconds is edited, but bbb-tech-cost " +
-			"is not on custom, so the number is ignored"
-		packsLine = "fkrecipes: bbb-tech-packs is edited, but bbb-tech-cost " +
-			"is not on custom, so the text is ignored"
+		countLine = "fkrecipes: better-belt-balancer-tech-count is edited, but " +
+			"bbb-tech-cost is not on custom, so the number is ignored"
+		secondsLine = "fkrecipes: better-belt-balancer-tech-seconds is edited, " +
+			"but bbb-tech-cost is not on custom, so the number is ignored"
+		packsLine = "fkrecipes: better-belt-balancer-tech-packs is edited, but " +
+			"bbb-tech-cost is not on custom, so the text is ignored"
 	)
 	for _, tc := range []struct {
 		name           string
@@ -1378,7 +1388,8 @@ func TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo(t *testing.T) {
 func TestAnUnreadableResearchNumberTakesTheDeclaredDefault(t *testing.T) {
 	want := customUnit(20, 15, ingredientPair{"automation-science-pack", 1})
 	const costLine = "fkrecipes: bbb-balancer takes its research cost from " +
-		"bbb-tech-packs: count 20, time 15, packs 1 automation-science-pack"
+		"better-belt-balancer-tech-packs: count 20, time 15, " +
+		"packs 1 automation-science-pack"
 	for _, tc := range []struct {
 		name  string
 		world fixtureWorld
@@ -1388,13 +1399,15 @@ func TestAnUnreadableResearchNumberTakesTheDeclaredDefault(t *testing.T) {
 			"the count row is missing",
 			everythingWorld().withStartup(SettingTechCost, TechCustom).
 				withoutNumberStartup(SettingTechCount),
-			"fkrecipes: the setting bbb-tech-count was not readable, so its default applies",
+			"fkrecipes: the setting better-belt-balancer-tech-count was not " +
+				"readable, so its default applies",
 		},
 		{
 			"the seconds row holds text",
 			everythingWorld().withStartup(SettingTechCost, TechCustom).
 				withRawStartup(SettingTechSeconds, fkrecipes.Str("15")),
-			"fkrecipes: the setting bbb-tech-seconds was not readable, so its default applies",
+			"fkrecipes: the setting better-belt-balancer-tech-seconds was not " +
+				"readable, so its default applies",
 		},
 	} {
 		protos, logs := extendsOf(t, dataOps(t, tc.world))

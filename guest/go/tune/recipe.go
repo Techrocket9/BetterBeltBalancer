@@ -25,9 +25,10 @@ package tune
 // built by [Plan]. See the package doc.
 //
 // AND SINCE ROUND THREE THERE IS A SEVENTH VALUE WITH NO PLAN UNDER IT.
-// `custom` hands the ingredients to `bbb-recipe-ingredients`, which the player
-// writes in the language FkRecipes' docs/ingredient-list.md documents. It is a
-// value of the dropdown and NOT an option of this file: [RecipePlan] answers
+// `custom` hands the ingredients to `better-belt-balancer-recipe-ingredients`,
+// which the player writes in the language FkRecipes' docs/ingredient-list.md
+// documents. It is a value of the dropdown and NOT an option of this file:
+// [RecipePlan] answers
 // for the six, [RecipeValues] is the seven the setting allows, and the library
 // refuses the two lists disagreeing in either direction.
 
@@ -61,8 +62,9 @@ func RecipeOptions() []string {
 }
 
 // RecipeCustom is the seventh value of `bbb-recipe-cost`, and the only one with
-// no plan behind it: it hands the ingredients to `bbb-recipe-ingredients`, the
-// text setting the player writes.
+// no plan behind it: it hands the ingredients to
+// `better-belt-balancer-recipe-ingredients`, the text setting the player
+// writes.
 //
 // IT IS DELIBERATELY NOT IN [RecipeOptions]. The library takes the presets and
 // the custom value as two separate lists and refuses them overlapping -- "gives

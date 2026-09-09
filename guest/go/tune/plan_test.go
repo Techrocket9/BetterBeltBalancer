@@ -141,14 +141,14 @@ func wantSettings() []wantSetting {
 			// silent player's recipe at the version they installed. The list is
 			// in the description instead, after this mod's own key.
 			kind:         "string-setting",
-			name:         "bbb-recipe-ingredients",
+			name:         "better-belt-balancer-recipe-ingredients",
 			settingType:  "startup",
 			defaultValue: fkrecipes.Str("default"),
-			order:        "aa",
+			order:        "aab",
 			autoTrim:     true,
 			description: fkrecipes.Arr(
 				fkrecipes.Str(""),
-				localeKey("mod-setting-description.bbb-recipe-ingredients"),
+				localeKey("mod-setting-description.better-belt-balancer-recipe-ingredients"),
 				fkrecipes.Str("\ndefault: 4 iron-plate, 2 iron-gear-wheel, 2 transport-belt"),
 			),
 		},
@@ -202,14 +202,14 @@ func wantSettings() []wantSetting {
 			// the declared list is `1 automation-science-pack`, which is
 			// [FallbackUnit]'s pack: base's own `logistics` cost.
 			kind:         "string-setting",
-			name:         "bbb-tech-packs",
+			name:         "better-belt-balancer-tech-packs",
 			settingType:  "startup",
 			defaultValue: fkrecipes.Str("default"),
-			order:        "ba",
+			order:        "bad",
 			autoTrim:     true,
 			description: fkrecipes.Arr(
 				fkrecipes.Str(""),
-				localeKey("mod-setting-description.bbb-tech-packs"),
+				localeKey("mod-setting-description.better-belt-balancer-tech-packs"),
 				fkrecipes.Str("\ndefault: 1 automation-science-pack"),
 			),
 		},
@@ -219,10 +219,10 @@ func wantSettings() []wantSetting {
 			// count (the engine refuses a unit count of 0) and the ceiling is
 			// this mod's own.
 			kind:         "int-setting",
-			name:         "bbb-tech-count",
+			name:         "better-belt-balancer-tech-count",
 			settingType:  "startup",
 			defaultValue: fkrecipes.Num(20),
-			order:        "bb",
+			order:        "bae",
 			bounds:       []float64{1, 1000000},
 		},
 		{
@@ -231,10 +231,10 @@ func wantSettings() []wantSetting {
 			// time of 0 -- and 1 second is this mod's floor rather than the
 			// library's.
 			kind:         "double-setting",
-			name:         "bbb-tech-seconds",
+			name:         "better-belt-balancer-tech-seconds",
 			settingType:  "startup",
 			defaultValue: fkrecipes.Num(15),
-			order:        "bc",
+			order:        "baf",
 			bounds:       []float64{1, 3600},
 		},
 	}
@@ -397,9 +397,10 @@ func settingProto(t *testing.T, ops []fkrecipes.Op, name string) map[string]fkre
 //
 // THE TWO NUMBERS ARE THE HALF WITH TEETH. They are literals in [Plan] and
 // literals in [FallbackUnit], so this comparison can fail. The PACK half cannot:
-// `bbb-tech-packs` is declared FROM `FallbackUnit().Packs`, and what is checked
-// there is the RENDERING -- that the declared pack reaches the player's tooltip
-// as `1 automation-science-pack`, which is the text they copy to start from.
+// `better-belt-balancer-tech-packs` is declared FROM `FallbackUnit().Packs`, and
+// what is checked there is the RENDERING -- that the declared pack reaches the
+// player's tooltip as `1 automation-science-pack`, which is the text they copy
+// to start from.
 func TestTheCustomResearchDefaultsAreTheFallbackUnit(t *testing.T) {
 	unit := FallbackUnit()
 	ops := planOps(t)
@@ -421,24 +422,68 @@ func TestTheCustomResearchDefaultsAreTheFallbackUnit(t *testing.T) {
 	}
 }
 
-// TestNoEmittedNameCarriesTheGeneratedPrefix is the whole point of the Legacy
-// constructors, stated as an assertion.
+// generatedSettingNames is the four names [Plan] lets the LIBRARY build, as the
+// BARE strings it hands the constructors.
 //
+// A LITERAL TABLE, for the reason every expectation in this file is one: the
+// constants in tune.go are built from [ModName] and these same four strings, so
+// a table that read them back would agree with a defect in them and say so
+// cheerfully. What is written out here is what FkRecipes' docs/migration.md
+// works through for this mod.
+func generatedSettingNames() []string {
+	return []string{"recipe-ingredients", "tech-packs", "tech-count", "tech-seconds"}
+}
+
+// TestEveryEmittedNameIsTheOneItsConstructorPromises is the naming half of both
+// decisions in [Plan], stated as one assertion because the two halves are the
+// same question asked of different rows.
+//
+// THE LEGACY HALF IS UNCHANGED AND IT IS THE ONE WITH A PLAYER BEHIND IT.
 // FkRecipes prefixes every generated name with the mod's own, and a prefixed
-// setting name would be a NEW setting to Factorio: mod-settings.dat is keyed by
-// name with no rename mechanism, so every player who had chosen a value would
-// silently get the default. The failure that would catch it downstream is a
-// moved golden hash, which says a hash moved and not what it means.
+// name on something already shipped would be a NEW setting to Factorio:
+// mod-settings.dat is keyed by name with no rename mechanism, so every player
+// who had chosen a value would silently get the default. The same argument with
+// a wider blast radius covers the PROTOTYPES, since round two: a prototype name
+// is held by blueprints, logistic requests, crafting queues, other mods'
+// compatibility patches and this mod's own hand-rolled entity, and the engine's
+// answer to a dangling one is not a warning but `Error in assignID: item with
+// name '...' does not exist`. Round one measured exactly that when the library
+// prefixed them. The failure that would catch either downstream is a moved
+// golden hash, which says a hash moved and not what it means.
 //
-// AND IT COVERS THE PROTOTYPES TOO SINCE ROUND TWO, where the argument is the
-// same one with a wider blast radius. A prototype name is held by blueprints,
-// logistic requests, crafting queues, other mods' compatibility patches and
-// this mod's own hand-rolled entity, and the engine's answer to a dangling one
-// is not a warning but `Error in assignID: item with name '...' does not
-// exist`. Round one measured exactly that when the library prefixed them.
-func TestNoEmittedNameCarriesTheGeneratedPrefix(t *testing.T) {
+// THE GENERATED HALF IS THE SYNC PASS'S AND IT IS AN EQUALITY, not a prefix
+// test. The four customizer fields have never shipped, so the library names
+// them -- and what it must produce is exactly [ModName], one hyphen and the bare
+// name, no more and no less. A `HasPrefix` here would pass a plan that emitted
+// `better-belt-balancer-bbb-tech-packs`, which is the shape round one measured
+// out of the prototypes and the one this test exists to make unwritable.
+func TestEveryEmittedNameIsTheOneItsConstructorPromises(t *testing.T) {
 	prefix := ModName + "-"
-	both := append(planOps(t), dataOps(t, everythingWorld())...)
+	settings := planOps(t)
+
+	// EXACTLY ONE SETTING PER GENERATED NAME. Zero says the prefix or the bare
+	// name moved; two would be a duplicate the engine refuses at load.
+	generated := map[string]bool{}
+	for _, bare := range generatedSettingNames() {
+		want := prefix + bare
+		generated[want] = true
+		found := 0
+		for _, op := range settings {
+			got := fieldsOf(t, op.Proto)
+			if name, ok := got["name"]; ok && name.Kind == fkrecipes.KindStr && name.Str == want {
+				found++
+			}
+		}
+		if found != 1 {
+			t.Errorf("%d setting(s) are emitted as %q and exactly one has to be: "+
+				"the constructor is handed the bare %q and the prefix is the "+
+				"library's, derived from the packaged mod name", found, want, bare)
+		}
+	}
+
+	// AND NOTHING ELSE THIS PLAN EMITS CARRIES THE PREFIX AT ALL, over the
+	// settings and the data plan together.
+	both := append(append([]fkrecipes.Op{}, settings...), dataOps(t, everythingWorld())...)
 	for _, op := range both {
 		if op.Kind != fkrecipes.OpExtend {
 			continue
@@ -449,12 +494,116 @@ func TestNoEmittedNameCarriesTheGeneratedPrefix(t *testing.T) {
 			t.Error("a prototype has no string `name` field")
 			continue
 		}
+		if generated[name.Str] {
+			continue
+		}
 		if strings.HasPrefix(name.Str, prefix) {
 			t.Errorf("a prototype is emitted as %q: it went through a "+
 				"prefixing constructor, and every player's saved choice or "+
 				"blueprint under the old name is discarded", name.Str)
 		}
 	}
+}
+
+// TestTheSixOrdersSortIntoTheDeclarationOrder is what `OrderAfter` was called
+// for, stated as the thing a player sees.
+//
+// FACTORIO SORTS A MOD'S SETTINGS BY `order` AND THEN BY NAME, so the menu is a
+// STRING SORT over the six and not the order the declarations are written in.
+// [TestEverySettingPrototypeIsTheOneThatShipped] compares each order string
+// field by field, and six pinned strings determine the sort, so this test adds
+// no claim that one cannot make: what it adds is a SECOND literal, written in
+// declaration order, that fails by naming the row that landed elsewhere.
+//
+// THE EXPECTED LIST IS A LITERAL and it is in DECLARATION order on purpose:
+// what is asserted is that the two agree. A plan whose generated orders landed
+// somewhere else would still pass a per-field comparison written to match them.
+//
+// AND EACH GENERATED ORDER CARRIES ITS DROPDOWN'S OWN ORDER AS A PREFIX, which
+// is the claim the transcription does not make and the reason the second table
+// exists. Sorting after `b` is what `bad` and `zzz` have in common; being
+// spelled `b` and then two letters is what says the field sits DIRECTLY under
+// the row that switches it on. What keeps a legacy order from coming between
+// them is the library's own refusal (FkRecipes go/settings.go, the placement
+// check: a legacy order that extends the prefix and sorts before the generated
+// one is refused by name), which this plan's one-letter orders never reach.
+func TestTheSixOrdersSortIntoTheDeclarationOrder(t *testing.T) {
+	// The six as [Plan] declares them, transcribed: the emitted name and the
+	// order string beside it.
+	want := []settingOrder{
+		{"bbb-recipe-cost", "a"},
+		{"better-belt-balancer-recipe-ingredients", "aab"},
+		{"bbb-tech-cost", "b"},
+		{"better-belt-balancer-tech-packs", "bad"},
+		{"better-belt-balancer-tech-count", "bae"},
+		{"better-belt-balancer-tech-seconds", "baf"},
+	}
+
+	got := settingOrdersOf(t, planOps(t))
+	sort.Slice(got, func(i, j int) bool {
+		if got[i].order != got[j].order {
+			return got[i].order < got[j].order
+		}
+		return got[i].name < got[j].name
+	})
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("the settings sort by (order, name) into\n got  %v\n want the "+
+			"declaration order, %v", got, want)
+	}
+
+	// WHICH DROPDOWN EACH FIELD SITS UNDER, transcribed: the recipe's text field
+	// under the recipe dropdown's `a`, the research's three under the research
+	// dropdown's `b`.
+	for _, tc := range []settingOrder{
+		{"better-belt-balancer-recipe-ingredients", "a"},
+		{"better-belt-balancer-tech-packs", "b"},
+		{"better-belt-balancer-tech-count", "b"},
+		{"better-belt-balancer-tech-seconds", "b"},
+	} {
+		order, emitted := "", false
+		for _, s := range got {
+			if s.name == tc.name {
+				order, emitted = s.order, true
+			}
+		}
+		if !emitted {
+			// The comparison above already reports the list it did get; this
+			// says which name it went looking for and could not find.
+			t.Errorf("no setting named %s was emitted at all, so nothing here "+
+				"says whether the row under %q is placed", tc.name, tc.order)
+			continue
+		}
+		if !strings.HasPrefix(order, tc.order) || len(order) <= len(tc.order) {
+			t.Errorf("%s carries the order %q and the dropdown it belongs to "+
+				"carries %q: a generated order that does not extend its "+
+				"dropdown's own is somewhere after it rather than under it",
+				tc.name, order, tc.order)
+		}
+	}
+}
+
+// settingOrder is one emitted setting's name and order, which is the whole of
+// what decides where its row lands.
+type settingOrder struct {
+	name  string
+	order string
+}
+
+// settingOrdersOf reads the pair off every emitted setting prototype, in
+// emission order.
+func settingOrdersOf(t *testing.T, ops []fkrecipes.Op) []settingOrder {
+	t.Helper()
+	out := make([]settingOrder, 0, len(ops))
+	for _, op := range ops {
+		got := fieldsOf(t, op.Proto)
+		name, order := got["name"], got["order"]
+		if name.Kind != fkrecipes.KindStr || order.Kind != fkrecipes.KindStr {
+			t.Fatalf("a setting prototype has no string name and order: %s",
+				showValue(op.Proto))
+		}
+		out = append(out, settingOrder{name.Str, order.Str})
+	}
+	return out
 }
 
 // fieldsOf flattens a prototype's pairs into a map, which is what makes the

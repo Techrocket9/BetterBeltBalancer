@@ -64,22 +64,55 @@ package tune
 // exists on 2.0 alone because there is nothing for it to say on 2.1. A recipe
 // cost means the same thing on either.
 //
-// THE FOUR CUSTOMIZER NAMES ARE THE ONES NOTHING HAS EVER SHIPPED, and they
-// still carry the historical `bbb-` prefix rather than the one FkRecipes would
-// generate. [Plan]'s header is where that is argued in full; the short of it is
-// that a generated setting's order comes from its DECLARATION INDEX, so this
-// mod cannot choose where such a row sits relative to the two legacy orders it
-// already ships -- and for the three research fields the index would put all
-// three ABOVE the dropdown they configure. A settings menu showing
-// `better-belt-balancer-...` on four rows and `bbb-...` on the two beside them
-// is one namespace with a seam in it as well.
+// TWO OF THE SIX ARE WRITTEN OUT AND FOUR ARE BUILT FROM [ModName], which is
+// the whole of what the sync pass changed here. The two dropdowns have shipped
+// under their historical names since long before this library existed and cross
+// VERBATIM through the Legacy constructors, because mod-settings.dat is keyed by
+// name with no rename mechanism. The four customizer fields have never shipped,
+// so nothing is stored under any name of theirs, and they go through the
+// library's ORDINARY constructors: it prefixes the bare name and derives the
+// order, and [fkrecipes.Lib.OrderAfter] is what places each of them under the
+// dropdown it belongs to.
+//
+// ROUND THREE DECLARED ALL FOUR Legacy AND THE REASON IS GONE. A generated
+// setting's order came from its DECLARATION INDEX alone, so the three research
+// fields sorted ABOVE the dropdown that switches them on and no ordering of the
+// declarations could fix it; FkRecipes b2e47b6 answered exactly that ask.
+// [Plan]'s header carries the measurement and the decision in full.
+//
+// THE SEAM IS REAL AND IT IS NOT IN THE SETTINGS SCREEN. Four rows spelled
+// `better-belt-balancer-` beside two spelled `bbb-` is visible in the library's
+// log lines and in `mod-settings.dat`, and nowhere a player looks: the menu
+// renders the localised label, which is this mod's own text on all six. Every
+// migrated mod that grows a setting carries the same seam.
 const (
 	SettingRecipeCost        = "bbb-recipe-cost"
-	SettingRecipeIngredients = "bbb-recipe-ingredients"
+	SettingRecipeIngredients = ModName + "-" + RecipeIngredientsName
 	SettingTechCost          = "bbb-tech-cost"
-	SettingTechPacks         = "bbb-tech-packs"
-	SettingTechCount         = "bbb-tech-count"
-	SettingTechSeconds       = "bbb-tech-seconds"
+	SettingTechPacks         = ModName + "-" + TechPacksName
+	SettingTechCount         = ModName + "-" + TechCountName
+	SettingTechSeconds       = ModName + "-" + TechSecondsName
+)
+
+// The four BARE names, which is what a generated constructor takes: the prefix
+// is the library's to add, derived from `fkdata.ModName()` at the settings
+// stage and from [ModName] in a host test, and there is no prefix parameter
+// anywhere in the library.
+//
+// EXPORTED BECAUSE THE TWO HALVES HAVE DIFFERENT CALLERS. [Plan] passes the
+// bare name to [fkrecipes.Lib.IngredientsSetting] and the three beside it; the
+// transcription in plan_test.go, the locale file and test/check-datastage.py
+// all name the EMITTED one, because that is what the prototype, the dump and a
+// player's mod-settings.dat carry. The const block above is the one place the
+// two are tied together.
+//
+// THE NAMES ARE THE ONES FkRecipes' docs/migration.md WORKS THROUGH for this
+// mod, which is not a coincidence: the worked example is this plan.
+const (
+	RecipeIngredientsName = "recipe-ingredients"
+	TechPacksName         = "tech-packs"
+	TechCountName         = "tech-count"
+	TechSecondsName       = "tech-seconds"
 )
 
 // SettingMultiEdgeParts is the 2.0-only runtime-global bool, which this package

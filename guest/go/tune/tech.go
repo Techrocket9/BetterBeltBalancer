@@ -18,9 +18,10 @@ package tune
 //
 // AND SINCE ROUND THREE THERE IS A FOURTH VALUE WITH NO TECHNOLOGY UNDER IT.
 // `custom` hands the research cost to three settings the player fills in --
-// `bbb-tech-packs`, `bbb-tech-count` and `bbb-tech-seconds` -- so a player who
-// wants a price none of the three tiers charges can write one. It is a value of
-// the dropdown and NOT an option of this file: [TechLadder] and [TechOptions]
+// `better-belt-balancer-tech-packs`, `better-belt-balancer-tech-count` and
+// `better-belt-balancer-tech-seconds` -- so a player who wants a price none of
+// the three tiers charges can write one. It is a value of the dropdown and NOT
+// an option of this file: [TechLadder] and [TechOptions]
 // answer for the three tiers, [TechValues] is the four the setting allows, and
 // the library refuses the two lists disagreeing in either direction.
 

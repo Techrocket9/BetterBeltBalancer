@@ -73,52 +73,78 @@ import (
 // that keep the default honest.
 //
 // ---------------------------------------------------------------------------
-// WHY THE CUSTOMIZERS' FOUR SETTINGS ARE `Legacy` TOO, WHICH IS THE SECOND
-// DECISION AND THE ONE THAT DEVIATES FROM THE LIBRARY'S OWN DOCUMENTATION
+// WHY THE CUSTOMIZERS' FOUR SETTINGS ARE GENERATED AND PLACED BY `OrderAfter`,
+// WHICH IS THE SECOND DECISION AND THE ONE THAT MOVED IN THE SYNC PASS
 // ---------------------------------------------------------------------------
 //
-// `bbb-recipe-ingredients`, `bbb-tech-packs`, `bbb-tech-count` and
-// `bbb-tech-seconds` have never shipped, so no stored value forces their hand:
+// `recipe-ingredients`, `tech-packs`, `tech-count` and `tech-seconds` have
+// never shipped, so no stored value forces their hand, and they are handed to
 // [fkrecipes.Lib.IngredientsSetting], [fkrecipes.Lib.PacksSetting],
-// [fkrecipes.Lib.IntSetting] and [fkrecipes.Lib.DoubleSetting] each take a bare
-// name, prefix it, and derive its order from the declaration index -- which is
-// exactly what FkRecipes' docs/migration.md writes in the worked example for
-// THIS MOD ("balancer-part-ingredients"), and what
-// [fkrecipes.Lib.LegacyIngredientsSetting]'s own comment says the Legacy form is
-// not for ("a name this mod ALREADY SHIPS"). All four are declared Legacy
-// anyway, and the reason is MEASURED IN THE LIBRARY rather than argued.
+// [fkrecipes.Lib.IntSetting] and [fkrecipes.Lib.DoubleSetting] as BARE names.
+// Each prefixes the name with the mod's own and derives the order from the
+// declaration index, so what the settings stage emits is
+// `better-belt-balancer-recipe-ingredients` and three more of that shape --
+// which is the path FkRecipes' docs/usage.md describes and its
+// docs/migration.md works through, in a worked example that is literally this
+// plan.
 //
-// `orderString(i)` (FkRecipes go/settings.go) derives a generated setting's
-// order from its DECLARATION INDEX as two base-26 letters, `'a'+i/26` and
-// `'a'+i%26`: index 0 is "aa", index 1 "ab", index 2 "ac". THE INDEX IS THE
-// ONLY THING THAT DECIDES WHERE ONE LANDS among this mod's two legacy orders,
-// "a" and "b" -- indices 0 through 25 ("aa" through "az") sort between them,
-// and from index 26 ("ba") on they sort past "b", neither of which the
-// consumer chose. Factorio sorts a mod's settings by `order` and then by name,
-// and this plan declares nowhere near twenty-six, so every generated setting
-// it could hold lands between the recipe dropdown and the research dropdown.
+// ROUND THREE DECLARED ALL FOUR `Legacy`, AND THE MEASUREMENT IT RESTED ON IS
+// KEPT HERE BECAUSE IT WAS A MEASUREMENT. `orderString(i)` (FkRecipes
+// go/settings.go) derives a generated setting's order from its DECLARATION
+// INDEX as two base-26 letters, `'a'+i/26` and `'a'+i%26`: index 0 is "aa",
+// index 1 "ab", index 2 "ac". THE INDEX WAS THE ONLY THING THAT DECIDED WHERE
+// ONE LANDED among this mod's two legacy orders, "a" and "b" -- indices 0
+// through 25 ("aa" through "az") sort between them, and from index 26 ("ba") on
+// they sort past "b", neither of which the consumer chose. Factorio sorts a
+// mod's settings by `order` and then by name, and this plan declares nowhere
+// near twenty-six, so every generated setting it could hold landed between the
+// recipe dropdown and the research dropdown. For the recipe's text field that
+// is where it belongs; for the research's three it is wrong, because the menu
+// would read recipe, ingredients, packs, count, seconds, research, with THE
+// RESEARCH DROPDOWN BELOW ITS OWN CUSTOM FIELDS -- three rows a player reads
+// before the row that decides whether any of them is live. No ordering of the
+// declarations could fix it, because the letters come from the index rather
+// than from where the line is written, so all four took a Legacy constructor,
+// an explicit order ("aa", "ba", "bb", "bc") and a hand-written `bbb-` name.
 //
-// FOR THE RECIPE'S TEXT FIELD THAT HAPPENS TO BE WHERE IT BELONGS, AND FOR THE
-// RESEARCH'S THREE IT IS WRONG, which is the half round three measured rather
-// than predicted. Generated orders put packs, count and seconds between the two
-// dropdowns as well, so the menu would read: recipe, ingredients, packs, count,
-// seconds, research. THE RESEARCH DROPDOWN WOULD SIT BELOW ITS OWN CUSTOM
-// FIELDS -- three rows a player reads before the row that decides whether any of
-// them is live -- and no ordering of the declarations can fix it, because the
-// letters come from the index rather than from where the line is written. The
-// Legacy constructor takes an EXPLICIT order: "aa" sorts between "a" and "b",
-// and "ba", "bb" and "bc" sort after "b", each of its three fields under the
-// dropdown that switches them on. [TestEverySettingPrototypeIsTheOneThatShipped]
-// is what pins the six order strings.
+// FkRecipes b2e47b6 ANSWERED THAT ASK EXACTLY, so the deviation has nothing
+// left to rest on. [fkrecipes.Lib.OrderAfter] gives every generated setting
+// declared after the call the named order followed by its own two letters: the
+// placement becomes the consumer's and the name stays generated. Four things
+// decide it, in the order they weigh:
 //
-// THE NAMES ARE THE COST AND IT IS PAID DELIBERATELY. Generated ones would read
-// `better-belt-balancer-recipe-ingredients` and three more of that shape, beside
-// two rows spelled `bbb-`; one settings namespace with a seam in it is a thing a
-// player can see, and nothing is lost by choosing the historical prefix for a
-// name before anybody has stored it. The friction is the library's and is filed
-// as such: a consumer holding legacy orders cannot CHOOSE where a generated
-// setting lands relative to them, because the declaration index picks the
-// letters.
+//	The deviation rested on the placement ALONE, and the placement is answered.
+//	Nothing else about the Legacy form was ever wanted for these four.
+//
+//	NOTHING HAS SHIPPED THESE NAMES, and the day 0.3.3 ships they are frozen
+//	forever: mod-settings.dat is keyed by name and the engine has no rename.
+//	This is the only moment the generated names cost nothing.
+//
+//	THIS MOD IS THE PILOT AND `OrderAfter` WAS BUILT FOR THIS PLAN. The engine
+//	has never yet loaded a three-letter order from the library, and this mod's
+//	dump gate is where it first meets one.
+//
+//	THE SEAM A READER SEES -- four rows spelled `better-belt-balancer-` beside
+//	two spelled `bbb-` -- is invisible in the settings screen, which renders the
+//	localised label. It appears in the library's log lines and in
+//	mod-settings.dat, where every migrated mod that grows a setting will carry
+//	the same seam.
+//
+// THE COST, STATED RATHER THAN HIDDEN. Round three's four custom-row extracts
+// in the scratchpad were dumped under the `bbb-` names and are reset by
+// construction, and anybody holding an unshipped 0.3.3 build with a stored
+// custom value loses it. Nobody outside this machine does; round three's
+// staging was reverted.
+//
+// THREE THINGS THE SETTINGS STAGE REFUSES IN A MIXED PLAN, AND NONE OF THEM IS
+// REACHABLE FROM THIS PLAN'S CONSTANTS: an EMPTY order given to `OrderAfter`; a
+// generated order EQUAL to a legacy one, whether or not `OrderAfter` was called;
+// and a placed order that would sort PAST a legacy order extending the one it
+// was placed after. Both of this mod's legacy orders are ONE LETTER, so no
+// three-letter generated order can equal either, and neither "a" nor "b" is
+// extended by any other legacy order of this plan's, so nothing can sort past
+// one. [TestEverySettingPrototypeIsTheOneThatShipped] pins the six order
+// strings and [TestTheSixOrdersSortIntoTheDeclarationOrder] the sort they make.
 //
 // ---------------------------------------------------------------------------
 // TWO HOOKS, AND EACH NAMES THE HALF IT RUNS
@@ -147,18 +173,35 @@ import (
 func Plan() *fkrecipes.Lib {
 	lib := fkrecipes.New()
 
-	// Declaration order agrees with menu order here, but it is not what
-	// DECIDES it: all six of these carry an explicit order string, so "a",
-	// "aa", "b", "ba", "bb" and "bc" are the sort and the lines below are only
-	// written to match. "a" and "b" are what the two dropdowns have always
-	// shipped; the other four are the customizers', argued in the header. All
-	// six are STARTUP, which is not a choice made here: FkRecipes emits
+	// Declaration order agrees with menu order here, and since the sync pass it
+	// is HALF of what decides it. The two dropdowns carry the explicit orders
+	// they have always shipped, "a" and "b"; the four customizer fields carry
+	// orders the library derives, and where those land is decided by the
+	// `OrderAfter` call in force at each declaration -- so the sort is "a",
+	// "aab", "b", "bad", "bae", "baf" and the lines below are written to match
+	// it. All six are STARTUP, which is not a choice made here: FkRecipes emits
 	// `setting_type = "startup"` for every setting it declares, because what
 	// this library exists to decide are prototypes and a prototype is built
 	// before a map exists. The one setting of this mod's that is runtime-global
 	// is hand-rolled in guest/go/data/settings.go for exactly that reason.
 	recipeCost := lib.LegacyDropdownSettingNeedingLocale(
 		SettingRecipeCost, RecipeDefault(), RecipeValues(), "a")
+
+	// EVERYTHING GENERATED FROM HERE SORTS UNDER THE RECIPE DROPDOWN. The call
+	// names an ORDER, "a", and not a setting: what follows carries "a" and then
+	// its own two letters, so it sorts after the row at "a" and before every
+	// legacy order that sorts after "a" -- which is where the text field
+	// belongs and, without this line, where it would happen to land anyway.
+	// It is written out for the research's sake as much as its own: the two
+	// calls are one decision and a plan with only the second reads like an
+	// accident.
+	//
+	// THE CALL SITS ABOVE THE DECLARATION BECAUSE THE PREFIX IS CAPTURED AT
+	// DECLARATION, not read when the plan is emitted (FkRecipes go/lib.go, the
+	// OrderAfter comment). A setting declared above this line keeps the bare
+	// two letters; the second call below moves what follows IT and leaves this
+	// one where it is.
+	lib.OrderAfter("a")
 
 	// THE TEXT THE PLAYER WRITES, and its declared default IS the vanilla plan.
 	//
@@ -175,11 +218,26 @@ func Plan() *fkrecipes.Lib {
 	// BUILT THROUGH THE SAME CONVERSION [recipeChoices] USES, from
 	// `RecipePlan(RecipeVanilla)`, so `default` in the field and `vanilla` in
 	// the dropdown are one list rather than two transcriptions that can drift.
-	recipeIngredients := lib.LegacyIngredientsSetting(
-		SettingRecipeIngredients, asIngredients(RecipePlan(RecipeVanilla)), "aa")
+	//
+	// THE NAME IS BARE AND THE ORDER IS THE LIBRARY'S: this is declaration index
+	// 1, so the two letters are "ab" and the prefix in force is "a", which makes
+	// `better-belt-balancer-recipe-ingredients` at order "aab".
+	recipeIngredients := lib.IngredientsSetting(
+		RecipeIngredientsName, asIngredients(RecipePlan(RecipeVanilla)))
 
 	techCost := lib.LegacyDropdownSettingNeedingLocale(
 		SettingTechCost, TechDefault(), TechValues(), "b")
+
+	// AND EVERYTHING GENERATED FROM HERE SORTS UNDER THE RESEARCH DROPDOWN,
+	// which is the call this whole decision was waiting for. Without it the
+	// three fields below would carry the bare "ad", "ae" and "af" -- still under
+	// "a", so a player would read the research dropdown AFTER the three rows it
+	// switches on, and no ordering of the declarations could move them, because
+	// the two letters count declaration slots rather than lines.
+	//
+	// A SECOND CALL MOVES ONLY WHAT FOLLOWS IT. The text field above keeps the
+	// "a" it was declared under, because the prefix was captured there.
+	lib.OrderAfter("b")
 
 	// THE RESEARCH COST THE PLAYER WRITES, as the three fields a Factorio unit
 	// actually has: what it is paid in, how many, and how long one takes.
@@ -215,9 +273,16 @@ func Plan() *fkrecipes.Lib {
 	// maxima are the other half of the same fence: a player who types 10^12
 	// units has not written a research, and a number the engine would hand back
 	// as a reset is better than one nothing can pay.
-	techPacks := lib.LegacyPacksSetting(SettingTechPacks, FallbackUnit().Packs, "ba")
-	techCount := lib.LegacyIntSetting(SettingTechCount, 20, fkrecipes.Between(1, 1000000), "bb")
-	techSeconds := lib.LegacyDoubleSetting(SettingTechSeconds, 15, fkrecipes.Between(1, 3600), "bc")
+	//
+	// THREE BARE NAMES AT DECLARATION INDICES 3, 4 AND 5, whose two letters are
+	// "ad", "ae" and "af" and whose prefix is the "b" in force: the settings
+	// stage emits `better-belt-balancer-tech-packs` at "bad",
+	// `better-belt-balancer-tech-count` at "bae" and
+	// `better-belt-balancer-tech-seconds` at "baf", each under the dropdown at
+	// "b" and in the order written here.
+	techPacks := lib.PacksSetting(TechPacksName, FallbackUnit().Packs)
+	techCount := lib.IntSetting(TechCountName, 20, fkrecipes.Between(1, 1000000))
+	techSeconds := lib.DoubleSetting(TechSecondsName, 15, fkrecipes.Between(1, 3600))
 
 	// THE ITEM, and every field of it is transcribed from what shipped.
 	//
@@ -410,7 +475,7 @@ func recipeChoices() []fkrecipes.IngredientChoice {
 // asIngredients is the ONE conversion from this package's [Item] to the
 // library's ingredient, and it is one function because it has two callers that
 // must not disagree: every preset's choice list, and the DECLARED DEFAULT of
-// `bbb-recipe-ingredients`, which is vanilla's plan.
+// `better-belt-balancer-recipe-ingredients`, which is vanilla's plan.
 //
 // If those were two transcriptions, the word `default` in the text field and
 // the value `vanilla` in the dropdown could come to mean different recipes, and
@@ -456,8 +521,9 @@ func techChoices() []fkrecipes.CostChoice {
 //
 // IT IS ALSO WHAT THE CUSTOM ARM'S THREE FIELDS DEFAULT TO, since round three:
 // the same unit is what a player who picks Custom and types nothing is charged,
-// so the pack list of `bbb-tech-packs` is taken from here rather than written a
-// second time. See the declarations in [Plan] for why the two numbers are not.
+// so the pack list of `better-belt-balancer-tech-packs` is taken from here
+// rather than written a second time. See the declarations in [Plan] for why the
+// two numbers are not.
 //
 // Exported so a test can compare it against the fixture's `logistics` without
 // either of them being derived from the other.

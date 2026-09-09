@@ -102,6 +102,18 @@ never make easy. So:
   out at turbo, 0.125, which is HALF this mod's floor, so on every other arm the
   correct behaviour and a derivation that does nothing at all are the same dump.
 
+...AND THE SIX STARTUP SETTINGS' `order` STRINGS, ON BOTH GOLDEN ARMS, WHICH
+ARE INSIDE THE HASH AND ARE ASSERTED ANYWAY. Four of the six are GENERATED names
+placed by FkRecipes' `OrderAfter` since the sync pass, so their order strings are
+the LIBRARY'S ARITHMETIC rather than this mod's transcription -- `a` and then two
+letters, `b` and then two letters -- and a three-letter order is a thing the
+engine had never been handed by this library before. The hash covers them and
+says nothing about them: a `mod_settings_sha256` that moved says a hash moved,
+where what a maintainer needs to read is which setting sits where. So the six
+are pinned by name against a literal table, and the SORT they make is compared
+against the declaration order, which is the whole of what a player sees in the
+Startup tab. See check_settings_order.
+
 ...AND THE LEGACY STUB'S PLACING GRAPH, ON BOTH GOLDEN ARMS, WHICH IS ALSO NOT
 HASHED AND FOR THE SAME REASON. `items_to_place_this` is not a field any data
 stage writes -- the engine derives it, from every item whose `place_result` is
@@ -240,7 +252,7 @@ def staged_mod(name: str) -> Path:
 # ---------------------------------------------------------------------------
 
 RECIPE_SETTING = "bbb-recipe-cost"
-RECIPE_TEXT_SETTING = "bbb-recipe-ingredients"
+RECIPE_TEXT_SETTING = "better-belt-balancer-recipe-ingredients"
 TECH_SETTING = "bbb-tech-cost"
 
 RECIPE_VARIANTS = {
@@ -313,7 +325,7 @@ RECIPE_CUSTOM_ARMS = [
      {RECIPE_SETTING: "custom", RECIPE_TEXT_SETTING: "3 iron-plate, 1 splitter"},
      [("iron-plate", 3), ("splitter", 1)],
      "fkrecipes: bbb-balancer-part takes its ingredients from "
-     "bbb-recipe-ingredients: 3 iron-plate, 1 splitter"),
+     "better-belt-balancer-recipe-ingredients: 3 iron-plate, 1 splitter"),
     # A text edited while the dropdown says `cheap`. The preset wins, and the
     # expected list is cheap's: the text names the SAME item at a different
     # amount, so an implementation that took it would fail the list comparison
@@ -321,8 +333,8 @@ RECIPE_CUSTOM_ARMS = [
     ("recipe-ignored",
      {RECIPE_SETTING: "cheap", RECIPE_TEXT_SETTING: "1 iron-plate"},
      RECIPE_VARIANTS["cheap"],
-     "fkrecipes: bbb-recipe-ingredients is edited, but bbb-recipe-cost is not "
-     "on custom, so the text is ignored"),
+     "fkrecipes: better-belt-balancer-recipe-ingredients is edited, but "
+     "bbb-recipe-cost is not on custom, so the text is ignored"),
 ]
 
 # The non-default technologies. The expected UNIT is not written out, because
@@ -361,19 +373,19 @@ TECH_VARIANTS = ["logistics-2", "logistics-3"]
 # charges, and both assert the library's own log line, which no tier emits at
 # all.
 #
-# `bbb-tech-count` IS AN INT SETTING AND tools/mod-settings.py WRITES EVERY
-# NUMBER AS A PROPERTY-TREE DOUBLE (type 2). FkRecipes measured on this same
-# engine that an int setting reads a type-2 double and a type-6 signed int
-# alike (agents/customizer-design.md, the mod-settings.dat table: "the int
+# `better-belt-balancer-tech-count` IS AN INT SETTING AND tools/mod-settings.py
+# WRITES EVERY NUMBER AS A PROPERTY-TREE DOUBLE (type 2). FkRecipes measured on
+# this same engine that an int setting reads a type-2 double and a type-6 signed
+# int alike (agents/customizer-design.md, the mod-settings.dat table: "the int
 # written as type 6 and as type 2 | both read as the same number"), and the
 # second arm is where that is confirmed rather than assumed: a count the engine
 # had rejected or reset would read back as the default 20 and fail the unit
 # comparison by the one field it moved.
 # ---------------------------------------------------------------------------
 
-TECH_PACKS_SETTING = "bbb-tech-packs"
-TECH_COUNT_SETTING = "bbb-tech-count"
-TECH_SECONDS_SETTING = "bbb-tech-seconds"
+TECH_PACKS_SETTING = "better-belt-balancer-tech-packs"
+TECH_COUNT_SETTING = "better-belt-balancer-tech-count"
+TECH_SECONDS_SETTING = "better-belt-balancer-tech-seconds"
 
 TECH_CUSTOM_ARMS = [
     # `custom` with all three fields as they ship: the reserved word `default`
@@ -383,8 +395,9 @@ TECH_CUSTOM_ARMS = [
     ("tech-custom-default", {TECH_SETTING: "custom"},
      {"count": 20, "time": 15, "ingredients": [["automation-science-pack", 1]]},
      ["logistics-3"],
-     "fkrecipes: bbb-balancer takes its research cost from bbb-tech-packs: "
-     "count 20, time 15, packs 1 automation-science-pack"),
+     "fkrecipes: bbb-balancer takes its research cost from "
+     "better-belt-balancer-tech-packs: count 20, time 15, "
+     "packs 1 automation-science-pack"),
     # `custom` with all three written. `logistic-science-pack` is a pack no
     # tier of this mod's charges on its own, and 50 x 20s is a cost no
     # technology in a base game has, so neither the list nor either number can
@@ -396,8 +409,9 @@ TECH_CUSTOM_ARMS = [
      {"count": 50, "time": 20,
       "ingredients": [["automation-science-pack", 1], ["logistic-science-pack", 1]]},
      ["logistics-3"],
-     "fkrecipes: bbb-balancer takes its research cost from bbb-tech-packs: "
-     "count 50, time 20, packs 1 automation-science-pack, 1 logistic-science-pack"),
+     "fkrecipes: bbb-balancer takes its research cost from "
+     "better-belt-balancer-tech-packs: count 50, time 20, "
+     "packs 1 automation-science-pack, 1 logistic-science-pack"),
 ]
 
 # ALL THREE FIELDS EDITED UNDER A TIER, which is `recipe-ignored` for the
@@ -431,12 +445,12 @@ TECH_IGNORED_ARMS = [
     ("tech-ignored", "logistics-2",
      {TECH_SETTING: "logistics-2", TECH_PACKS_SETTING: "2 automation-science-pack",
       TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20},
-     ["fkrecipes: bbb-tech-count is edited, but bbb-tech-cost is not on custom, "
-      "so the number is ignored",
-      "fkrecipes: bbb-tech-seconds is edited, but bbb-tech-cost is not on "
-      "custom, so the number is ignored",
-      "fkrecipes: bbb-tech-packs is edited, but bbb-tech-cost is not on custom, "
-      "so the text is ignored"]),
+     ["fkrecipes: better-belt-balancer-tech-count is edited, but bbb-tech-cost "
+      "is not on custom, so the number is ignored",
+      "fkrecipes: better-belt-balancer-tech-seconds is edited, but "
+      "bbb-tech-cost is not on custom, so the number is ignored",
+      "fkrecipes: better-belt-balancer-tech-packs is edited, but bbb-tech-cost "
+      "is not on custom, so the text is ignored"]),
 ]
 
 # ---------------------------------------------------------------------------
@@ -770,6 +784,92 @@ def legacy_stub_of(dump: Path) -> dict:
                    % (STUB_NAME, STUB_MARKER, OUR_PART))
 
 
+# ---------------------------------------------------------------------------
+# THE SIX STARTUP SETTINGS' ORDER STRINGS, on both golden arms.
+#
+# WRITTEN OUT HERE AND DERIVED FROM NOTHING. Two of the six are this mod's own
+# strings, hand-passed to a Legacy constructor; the other four are FkRecipes'
+# arithmetic, the order named by `OrderAfter` followed by the two letters the
+# declaration index gives them. A table that computed the second four would be a
+# gate agreeing with the library about the library, which is the one thing it
+# must not be -- so they are transcribed, and the transcription is what a
+# maintainer compares a moved dump against.
+#
+# THE LIST IS IN DECLARATION ORDER, which is the second assertion: sorted by
+# (order, name), the way Factorio sorts a mod's settings for the Startup tab,
+# the six have to come back in exactly this sequence. Each Custom field sits
+# directly under the dropdown that switches it on, which is what `OrderAfter`
+# was called for and what a per-name comparison alone cannot say.
+# ---------------------------------------------------------------------------
+
+OUR_SETTINGS_ORDERS = [
+    ("bbb-recipe-cost", "a"),
+    ("better-belt-balancer-recipe-ingredients", "aab"),
+    ("bbb-tech-cost", "b"),
+    ("better-belt-balancer-tech-packs", "bad"),
+    ("better-belt-balancer-tech-count", "bae"),
+    ("better-belt-balancer-tech-seconds", "baf"),
+]
+
+
+def settings_orders_of(dump: Path) -> dict:
+    """This mod's six startup settings' `order` strings, by name.
+
+    THE SETTINGS DUMP IS THE SIBLING FILE. `--dump-data` writes
+    data-raw-dump.json and mod-settings-dump.json side by side, and a probe is
+    handed the first, so this walks across to the second. Its shape is one
+    object per setting TYPE (`string-setting`, `int-setting`, ...), each a map
+    of name to prototype, so the projection flattens all four before picking.
+
+    A NAME THE DUMP DOES NOT CARRY COMES BACK None rather than missing, so a
+    setting that vanished is reported by check_settings_order as an order it
+    could not find rather than passing over.
+    """
+    got = project(dump.parent / "mod-settings-dump.json",
+                  "[.[] | to_entries[]] | map({key: .key, value: .value.order}) "
+                  "| from_entries")
+    return {name: got.get(name) for name, _ in OUR_SETTINGS_ORDERS}
+
+
+def golden_probe(dump: Path) -> dict:
+    """Both golden-arm probes in one pass over one Factorio run.
+
+    `run_arm` takes ONE probe, and the two questions the golden arms ask are of
+    two different dumps. Composing them here rather than adding a second probe
+    parameter keeps the arm's cost at one engine run, which is what it has
+    always been.
+    """
+    return {"stub": legacy_stub_of(dump), "orders": settings_orders_of(dump)}
+
+
+def check_settings_order(arm: str, got: dict) -> bool:
+    """Returns True on a failure, which is the shape main() already counts in."""
+    bad = False
+    for name, want in OUR_SETTINGS_ORDERS:
+        if got.get(name) != want:
+            bad = True
+            print(f"FAIL {arm}: the setting `{name}` carries the order "
+                  f"{got.get(name)!r} and has to carry {want!r}")
+
+    # THE SORT, over what the ENGINE handed back rather than over the table.
+    # Factorio orders a mod's settings by `order` and then by name, so this is
+    # the sequence of rows in the Startup tab; a missing order sorts as the
+    # empty string rather than crashing the comparison, and the loop above has
+    # already named it.
+    seen = [(name, got.get(name) or "") for name, _ in OUR_SETTINGS_ORDERS]
+    ranked = sorted(seen, key=lambda pair: (pair[1], pair[0]))
+    if ranked != seen:
+        bad = True
+        print(f"FAIL {arm}: the settings sort into "
+              f"{[n for n, _ in ranked]}\n{'':>5}  and the declaration order is "
+              f"{[n for n, _ in seen]}")
+
+    if not bad:
+        print(f"  ok   {arm} settings orders "
+              f"{', '.join(o for _, o in OUR_SETTINGS_ORDERS)}, sorted as declared")
+    return bad
+
+
 def check_legacy_stub(arm: str, got: dict) -> bool:
     """Returns True on a failure, which is the shape main() already counts in."""
     bad = False
@@ -852,7 +952,7 @@ def main() -> int:
         shutil.rmtree(keep, ignore_errors=True)
 
     print(f"==> Factorio {version_full}; --dump-data over {len(arms)} golden arm(s)")
-    got = {a: run_arm(a, factorio, series, mod_dir, keep, probe=legacy_stub_of)
+    got = {a: run_arm(a, factorio, series, mod_dir, keep, probe=golden_probe)
            for a in arms}
 
     book = json.loads(GOLDENS.read_text()) if GOLDENS.exists() else {}
@@ -932,12 +1032,13 @@ def main() -> int:
                   f"{g.get('prototype_list_checksum')} "
                   f"(a prototype appeared or vanished)")
 
-    # THE STUB'S PLACING GRAPH, PER ARM, and it runs whether or not the golden
-    # matched. A hash that moved is exactly when somebody wants to know which
-    # shape the dump is in, and this arm is the one shape a hash was never going
-    # to name on its own.
+    # THE STUB'S PLACING GRAPH AND THE SIX ORDER STRINGS, PER ARM, and both run
+    # whether or not the golden matched. A hash that moved is exactly when
+    # somebody wants to know which shape the dump is in, and these are the two
+    # shapes a hash was never going to name on its own.
     for a in arms:
-        bad |= check_legacy_stub(a, got[a]["probe"])
+        bad |= check_settings_order(a, got[a]["probe"]["orders"])
+        bad |= check_legacy_stub(a, got[a]["probe"]["stub"])
 
     if bad:
         if keep is not None:

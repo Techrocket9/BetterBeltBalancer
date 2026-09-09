@@ -29,9 +29,10 @@ import (
 // FluidExists WAS LEFT TO THAT PANIC AND THE CUSTOMIZER TOOK IT AWAY. Nothing
 // this mod DECLARES is a fluid -- [RecipePlan]'s six plans name items and only
 // items -- so while every ingredient came from those six the library never
-// asked. `bbb-recipe-ingredients` is a text field a player writes anything
-// into, and the language looks a bare name up among the ITEMS and then among
-// the FLUIDS (FkRecipes go/ingredientlist.go:1077 and :1080), so every refusal
+// asked. `better-belt-balancer-recipe-ingredients` is a text field a player
+// writes anything into, and the language looks a bare name up among the ITEMS
+// and then among the FLUIDS (FkRecipes go/ingredientlist.go:1077 and :1080),
+// so every refusal
 // path a typed name can take asks this question.
 //
 // THE OLD COMMENT'S PREDICTION HELD, AND IT WAS RE-MEASURED RATHER THAN
@@ -48,10 +49,13 @@ import (
 // under that category is refused at the list, by category name
 // (go/ingredientlist.go:707), before any prototype is built. MEASURED on
 // Factorio 2.0.77 with the packaged mod at `bbb-recipe-cost = custom` and
-// `bbb-recipe-ingredients = "1 water"`, the load fails with `fkrecipes:
+// `bbb-recipe-ingredients = "1 water"`, the load failed with `fkrecipes:
 // bbb-recipe-ingredients, entry 1 ("1 water"): water is a fluid, and a recipe
 // in the crafting category takes items only` -- the library's sentence, naming
-// the setting and the entry, and not the engine's prototype error.
+// the setting and the entry, and not the engine's prototype error. That run
+// predates the sync pass, so it names the setting as it was spelled then; the
+// setting is `better-belt-balancer-recipe-ingredients` now and the sentence's
+// shape is what the measurement was about.
 //
 // SO THE FLUID IS STOCKED RATHER THAN WITHHELD, because every real game has
 // `water` and a player who reaches for it is likelier than one who invents a
@@ -204,15 +208,17 @@ func (w fixtureWorld) RecipeExists(name string) bool { return has(w.recipes, nam
 // ToolExists is the science-pack question, and THREE things in this mod's plan
 // ask it now: a `CostBy` fallback's pack ladder, the custom arm's declared pack
 // ladder when the text is untouched, and every name a player types into
-// `bbb-tech-packs`. All three ask this and not [fixtureWorld.ItemExists], which
-// is what [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused] pins from the
+// `better-belt-balancer-tech-packs`. All three ask this and not
+// [fixtureWorld.ItemExists], which is what
+// [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused] pins from the
 // outside.
 func (w fixtureWorld) ToolExists(name string) bool { return has(w.tools, name) }
 
 // FluidExists is asked only about a name a PLAYER typed into
-// `bbb-recipe-ingredients` or `bbb-tech-packs`, and only after the items (or,
-// in a pack list, the tools and then the items) answered no. See the header for
-// what the one stocked fluid is for.
+// `better-belt-balancer-recipe-ingredients` or
+// `better-belt-balancer-tech-packs`, and only after the items (or, in a pack
+// list, the tools and then the items) answered no. See the header for what the
+// one stocked fluid is for.
 func (w fixtureWorld) FluidExists(name string) bool { return has(w.fluids, name) }
 
 func (w fixtureWorld) tech(name string) (fixtureTech, bool) {

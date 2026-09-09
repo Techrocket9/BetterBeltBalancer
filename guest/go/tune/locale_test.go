@@ -94,17 +94,28 @@ func TestTheLocaleFileSatisfiesThePlan(t *testing.T) {
 // and this is what ties it to fklua.toml, which is the ONE place the packaged
 // identity lives.
 //
-// AND FOR THIS PLAN IT IS THE ONLY THING THAT CAN CATCH A WRONG ONE, which is
-// the opposite of what a reader would assume and is why the test exists rather
-// than being left to the locale check. Every setting this mod has is either
-// LEGACY, whose name crosses verbatim and never meets the prefix, or
-// HAND-ROLLED, which `CheckLocaleWith` matches verbatim as well -- and the
-// complete-list reading takes the prefix out of the orphan scan too. So the
-// prefix reaches NOTHING here. Measured: with `ModName` set to
-// `better-belt-balancer-x`, `CheckLocaleWith` returns zero findings,
-// [TestTheLocaleFileSatisfiesThePlan] and
-// [TestNoEmittedNameCarriesTheGeneratedPrefix] both pass, and this is the one
-// test that fires.
+// IT WAS ONCE THE ONLY THING THAT COULD CATCH A WRONG ONE AND IT IS NOT ANY
+// MORE, which is what the sync pass changed here. While every setting was
+// LEGACY or HAND-ROLLED the prefix reached nothing: a legacy name crosses
+// verbatim, `CheckLocaleWith` matches a hand-rolled one verbatim as well, and
+// the complete-list reading takes the prefix out of the orphan scan too. The
+// four customizer fields are GENERATED now, so a wrong `ModName` moves four
+// emitted names and the locale file stops matching them in both directions at
+// once. MEASURED, with `ModName` set to `better-belt-balancer-x`:
+// [TestTheLocaleFileSatisfiesThePlan] reports fourteen findings, four of them
+// `the setting better-belt-balancer-x-recipe-ingredients has no
+// [mod-setting-name] entry` and its three siblings, and four more
+// `the [mod-setting-name] entry better-belt-balancer-recipe-ingredients matches
+// no setting this plan declares` and its three;
+// [TestEverySettingThisPlanDeclaresIsDescribed],
+// [TestEverySettingPrototypeIsTheOneThatShipped],
+// [TestTheSixOrdersSortIntoTheDeclarationOrder] and every pinned sentence in
+// plandata_test.go fire as well.
+//
+// THIS TEST STILL EARNS ITS PLACE, and now for the reason a reader would assume
+// rather than against it: it is the one that says WHICH of those is the cause.
+// The rest report a name that does not match; only this one names fklua.toml
+// and the value it holds.
 func TestModNameIsTheManifestName(t *testing.T) {
 	fh, err := os.Open(repoFile(t, "fklua.toml"))
 	if err != nil {
