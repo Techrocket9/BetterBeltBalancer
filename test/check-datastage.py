@@ -65,7 +65,7 @@ a machine with different DLC produces a different hash for a mod that is
 perfectly fine. A golden line whose engine does not match the binary is a SKIP
 with a message, never a failure.
 
-...AND FOURTEEN VARIANT ARMS (ONE OF THEM THE VANILLA CONTROL), A SPEED ARM AND
+...AND FIFTEEN VARIANT ARMS (ONE OF THEM THE VANILLA CONTROL), A SPEED ARM AND
 A MERGE ARM, WHICH ARE NOT HASHED.
 
 0.3.1 made the recipe's cost, the research's cost and the hidden network's belt
@@ -83,13 +83,15 @@ never make easy. So:
   technology's exact unit and prerequisite. Nothing else in the dump is looked
   at, because everything else is the golden's business.
 
-  the RECIPE CUSTOMIZER gets three more (0.3.3), because its states are not
-  values of the dropdown alone: `custom` with the text untouched, `custom` with
-  a recipe written into the text, and an edited text under a preset. The last
-  two also assert a line of the LIBRARY'S OWN LOG, which is the only thing in
-  this file that is not read out of a dump -- what the library does with a text
-  under a preset is by design invisible in the prototypes, so the sentence is
-  the whole of the evidence. See RECIPE_CUSTOM_ARMS.
+  the RECIPE CUSTOMIZER gets four more, because its states are not values of
+  the dropdown alone: three of them arrived with 0.3.3 (`custom` with the text
+  untouched, `custom` with a recipe written into the text, an edited text under
+  a preset) and the fourth is the part named as its own ingredient, which
+  asserts TWO lines where the two before it assert one. Those three are the
+  LIBRARY'S OWN LOG, which is the only thing in this file that is not read out
+  of a dump -- what the library does with a text under a preset, or with a list
+  that names the product, is by design invisible in the prototypes, so the
+  sentence is the whole of the evidence. See RECIPE_CUSTOM_ARMS.
 
   the RESEARCH CUSTOMIZER gets three more (0.3.3): two assert the PAIR a
   written cost decides, the unit and the prerequisite, because a cost the
@@ -316,29 +318,33 @@ RECIPE_DEFAULT = [("iron-plate", 4), ("iron-gear-wheel", 2), ("transport-belt", 
 # THE CUSTOMIZER'S ARMS, which are the seventh value of `bbb-recipe-cost` and
 # the text setting beside it.
 #
-# THREE ARMS FOR THREE STATES, and none of them is reachable from the six above:
+# FOUR ARMS FOR FOUR STATES, and none of them is reachable from the six above:
 # the dropdown on `custom` with the text left alone, the dropdown on `custom`
-# with a recipe written into the text, and a text EDITED while the dropdown is
-# still on a preset -- which is the state where nothing must happen and the log
-# has to say so.
+# with a recipe written into the text, a text EDITED while the dropdown is still
+# on a preset -- which is the state where nothing must happen and the log has to
+# say so -- and a text naming the balancer part as its own ingredient.
 #
-# TWO OF THEM ALSO ASSERT A LOG LINE, and that is the one thing in this file
+# THREE OF THEM ALSO ASSERT A LOG LINE, and that is the one thing in this file
 # that is not a prototype. What the library does about a text under a preset is
 # by design invisible in the dump -- the preset applies, exactly as it would
 # with the field untouched -- so the ONLY evidence that the text was read and
 # deliberately not used is the sentence, and a player who edits a field and sees
-# nothing happen is what that sentence exists to prevent. The line is compared
-# from `fkrecipes:` onward, never including the engine's own timestamp in front
-# of it.
+# nothing happen is what that sentence exists to prevent. The self-product arm
+# is the same shape one step further on: the list it asks for IS emitted, so the
+# prototype is exactly what the player typed and the sentence is all there is.
+# The line is compared from `fkrecipes:` onward, never including the engine's
+# own timestamp in front of it.
 #
-# ANTI-VACUITY, AND IT IS NOT SPREAD EVENLY ACROSS THE THREE. A .dat that was
+# ANTI-VACUITY, AND IT IS NOT SPREAD EVENLY ACROSS THE FOUR. A .dat that was
 # ignored or malformed leaves every setting at its declared default, which is
 # the recipe `RECIPE_DEFAULT` names -- so the arms that prove the file was read
-# at all are the two whose expectation is something else. `recipe-custom` is
+# at all are the three whose expectation is something else. `recipe-custom` is
 # one: `3 iron-plate, 1 splitter` is a list no preset produces, and its log line
-# says the text was taken. `recipe-ignored` is the other: cheap's list, where a
+# says the text was taken. `recipe-ignored` is another: cheap's list, where a
 # text that had been applied would give one iron plate rather than two, plus its
-# own line.
+# own line. `recipe-self-product` is the third and the sharpest of them, because
+# `bbb-balancer-part` is a name NO preset and no ladder of this mod can put in
+# an ingredient list at all.
 #
 # `recipe-custom-default` CARRIES NONE OF THAT WEIGHT and is here as coverage of
 # the documented path -- `custom` with the field never touched. MEASURED on
@@ -347,7 +353,7 @@ RECIPE_DEFAULT = [("iron-plate", 4), ("iron-gear-wheel", 2), ("transport-belt", 
 # `fkrecipes:` line in either, so nothing this arm observes tells a .dat that
 # was read from one that was ignored. It stays because picking `custom` and
 # typing nothing is a state a player reaches and this gate should visit; what
-# makes the section a measurement is the two arms above it.
+# makes the section a measurement is the three arms above it.
 #
 # The text is written as a plain string, which is what a player's own settings
 # screen stores.
@@ -377,6 +383,24 @@ RECIPE_CUSTOM_ARMS = [
      RECIPE_VARIANTS["cheap"],
      "fkrecipes: better-belt-balancer-recipe-ingredients is edited, but "
      "bbb-recipe-cost is not on custom, so the text is ignored"),
+    # `custom` with the balancer part named as its own ingredient. THE LOAD
+    # STILL COMPLETES, which is the half of this arm no host test can make:
+    # base 2.0.77 ships `kovarex-enrichment-process`, which takes 40
+    # `uranium-235` and gives back 41, so a recipe naming its own product is a
+    # shape the engine accepts and the library deliberately does not refuse.
+    # What it does now is SAY SO, and before FkRecipes 1f8e363 it did not: the
+    # load drew the ordinary "takes its ingredients from" line and stopped
+    # there, so a player got a recipe nothing can craft with no line about THAT.
+    # TWO LINES, WHOLE AND IN ORDER: the text is read first and the
+    # self-product check runs on the FINAL list, so it lands second.
+    ("recipe-self-product",
+     {RECIPE_SETTING: "custom", RECIPE_TEXT_SETTING: "2 bbb-balancer-part"},
+     [("bbb-balancer-part", 2)],
+     ("fkrecipes: bbb-balancer-part takes its ingredients from "
+      "better-belt-balancer-recipe-ingredients: 2 bbb-balancer-part",
+      "fkrecipes: bbb-balancer-part: bbb-balancer-part is in the list and is "
+      "also what this recipe makes, so nothing can craft the first one unless "
+      "something else produces it")),
 ]
 
 # The non-default technologies. The expected UNIT is not written out, because
@@ -1403,10 +1427,25 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
         else:
             print(f"  ok   {arm:<26} {got}")
 
-    # THE CUSTOMIZER, three arms, each driving the real settings through the
+    # THE CUSTOMIZER, four arms, each driving the real settings through the
     # same writer. See RECIPE_CUSTOM_ARMS for what each state is and why the
-    # log line is part of two of them.
+    # log lines are part of three of them.
     for arm, startup, want, want_line in RECIPE_CUSTOM_ARMS:
+        # A STRING IS ONE LINE THE STREAM MUST CARRY; A TUPLE IS THE WHOLE
+        # STREAM, IN ORDER. The distinction is on the TYPE and not on the
+        # length, so a tuple that ever shrinks to one line keeps the stricter
+        # rule instead of silently dropping to a membership test.
+        #
+        # The two arms that predate this one name one sentence each and
+        # tolerate whatever else the plan said, which is what they were written
+        # to do; `recipe-custom-default` names none at all. `recipe-self-product`
+        # names BOTH of its lines and is compared whole, the way `check_remover`
+        # and `tech-ignored` already are: an extra line there is a degradation
+        # with no cause in a game that has everything, and it must fail rather
+        # than be filtered out of the comparison.
+        whole = want_line is not None and not isinstance(want_line, str)
+        want_lines = ([] if want_line is None else
+                      list(want_line) if whole else [want_line])
         got = run_arm(arm, factorio, series, mod_dir, None,
                       startup=startup, probe=ingredients_of)
         ings, lines = got["probe"], got["fkrecipes_lines"]
@@ -1415,13 +1454,16 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
             print(f"FAIL {arm}: the recipe is {ings}\n"
                   f"{'':>5}  and {startup} should be {want}")
             continue
-        if want_line is not None and want_line not in lines:
+        ok = lines == want_lines if whole else all(ln in lines for ln in want_lines)
+        if not ok:
             bad = True
             print(f"FAIL {arm}: the library's log lines are {lines}\n"
-                  f"{'':>5}  and one of them has to be {want_line!r}")
+                  + (f"{'':>5}  and they have to be, whole and in order, {want_lines!r}"
+                     if whole else
+                     f"{'':>5}  and they have to carry {want_lines!r}"))
             continue
         print(f"  ok   {arm:<26} {ings}"
-              + (f"\n{'':>5}  said {want_line!r}" if want_line else ""))
+              + "".join(f"\n{'':>5}  said {ln!r}" for ln in want_lines))
 
     for value in TECH_VARIANTS:
         arm = f"tech-{value}"

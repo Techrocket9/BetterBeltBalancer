@@ -1009,6 +1009,66 @@ func TestTheCustomValueTakesItsIngredientsFromTheText(t *testing.T) {
 			"better-belt-balancer-recipe-ingredients: 3 iron-plate, 1 splitter")
 }
 
+// TestATextNamingTheBalancerPartItselfEmitsItAndSaysSo is the round-1 open item
+// closed from the library's side, pinned here as what a player now reads.
+//
+// THE SHAPE. `bbb-recipe-cost = custom` with `2 bbb-balancer-part` in the text
+// asks for a recipe whose only ingredient is the thing it makes. The library
+// resolves a typed name against an overlay that holds THIS PLAN'S OWN ITEMS on
+// top of the game's, so `bbb-balancer-part` is present and the list emits; a
+// declared LADDER cannot reach the same place, because its rungs are probed
+// against the real world where this mod's item does not exist yet.
+//
+// WHAT MOVED. Round 1 recorded this as accepted and emitted, with the ordinary
+// "takes its ingredients from" line and NOTHING SAID ABOUT THE SELF-PRODUCT
+// FACT, so the player got a recipe nothing can craft and no line about that;
+// the round's own note put the question to the library rather than to this mod.
+// FkRecipes 1f8e363 answers it with a second line, and this test is what holds
+// the library to it here.
+//
+// IT IS NOT A REFUSAL AND MUST NOT BECOME ONE. Base 2.0.77 ships
+// `kovarex-enrichment-process`, which takes 40 `uranium-235` and gives back 41,
+// so a recipe naming its own product is a shape the game itself has. The load
+// still completes, which `test/check-datastage.py`'s `recipe-self-product` arm
+// says on a real engine and this test cannot.
+//
+// THE STREAM IS COMPARED WHOLE AND IN ORDER, which is the merge arm's rule and
+// is what makes the position part of the claim: the "takes its ingredients
+// from" line is written as the text is read, and the self-product line is
+// evaluated on the FINAL list, so it lands after it. A slice comparison fails
+// on an order swap where a membership test would not.
+func TestATextNamingTheBalancerPartItselfEmitsItAndSaysSo(t *testing.T) {
+	w := everythingWorld().
+		withStartup(SettingRecipeCost, RecipeCustom).
+		withStartup(SettingRecipeIngredients, "2 "+PartName)
+	protos, logs := extendsOf(t, dataOps(t, w))
+
+	checkIngredients(t, "the part as its own ingredient",
+		protoOf(t, protos, "recipe", PartName),
+		[]ingredientPair{{PartName, 2}})
+	// LITERALS, for the reason every other sentence in this section is one: a
+	// renamed constant has to fail this test rather than travel through it.
+	// THE TWO LINES NAME THE RECIPE DIFFERENTLY AND THIS FIXTURE CANNOT TELL,
+	// which is why it is said here. The first uses EMITTED names throughout
+	// (FkRecipes go/customize.go builds it from `r.emittedName` and
+	// `s.emittedName`); the second's SUBJECT is the recipe as the author
+	// DECLARED it and only its product is emitted (go/data.go's `addRecipe`
+	// says so in as many words). Here the recipe is Legacy and so is the ITEM
+	// it produces ([PartName] for both), so all three readings land on the one
+	// string and the distinction is carried by this comment rather than by the
+	// assertion.
+	want := []string{
+		"fkrecipes: bbb-balancer-part takes its ingredients from " +
+			"better-belt-balancer-recipe-ingredients: 2 bbb-balancer-part",
+		"fkrecipes: bbb-balancer-part: bbb-balancer-part is in the list and " +
+			"is also what this recipe makes, so nothing can craft the first " +
+			"one unless something else produces it",
+	}
+	if !reflect.DeepEqual(logs, want) {
+		t.Errorf("the plan's log stream is\n got  %q\n want %q", logs, want)
+	}
+}
+
 // TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo is the shape a pair of
 // settings must not have: a field the player edits where nothing happens.
 //
@@ -1222,8 +1282,12 @@ func TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 	}
 }
 
-// checkExactlyOneLog is the assertion the customizer's three log arms share:
-// the line is there word for word, and it is the ONLY thing the plan said.
+// checkExactlyOneLog is the shorthand for a whole-stream comparison against ONE
+// sentence: the line is there word for word, and it is the only thing the plan
+// said. It is not the only way that claim is made in this file -- an arm
+// expecting more than one line compares the slice with [reflect.DeepEqual]
+// instead, and so do some that expect exactly one -- so a test using this
+// helper and a test comparing a one-element slice are saying the same thing.
 //
 // The second half is what a substring search would miss. A plan that emitted
 // the right line beside a dropped ingredient, or beside a second copy of
