@@ -1808,6 +1808,147 @@ Every break reverted, and each catches something a different one does not.
 - **`make datastage-check`'s WALL TIME at twenty-one arms is NOT RE-TAKEN in this subsection**, and it is owed to the close. The last figure anywhere is the re-adoption leg's nineteen-arm pair, real 41.30 and 46.96 on 2026-09-13; two more engine runs are two more of the gate's roughly three seconds each, but that is arithmetic and not a measurement and is not written down as one.
 - **The client run**, which is not this round's to close and which this commit does not touch.
 
+### The round's fifth commit: a recipe prototype cannot hold the sentence that discloses a fallback, and the disclosure added to stop a silent degradation reintroduced the failure it replaced
+
+The fourth commit's subsection named this in three sentences and deliberately wrote nothing else. Here is all of it. **IT IS A DEFECT IN THE LIBRARY, IN BOTH LANGUAGE HALVES, AND IT IS THE ROUND'S HEADLINE.** It is also the first thing in this round this mod cannot fix in its own tree, and while it stands this mod must not publish 0.3.3; the release block is its own heading below.
+
+#### The one run, and the line that is written first and thrown away
+
+**ON 2.0.77 (BUILD 84539) A RECIPE-BOUND FkRecipes FALLBACK NOTE CANNOT BE EMITTED AT ALL.** This package and base alone, no fixture of any kind, with `better-belt-balancer-recipe-ingredients` storing a text the language refuses, the library writes its degradation line and then the load dies:
+
+```
+0.381 Script @__better-belt-balancer__/fk_data.lua:609: fkrecipes: ERROR: better-belt-balancer-recipe-ingredients, entry 1 ("2 iron-plat"): no item or fluid is named iron-plat. The mod loaded with its own default instead; fix the text under Settings > Mod settings > Startup, then restart. Changing a recipe empties an assembling machine's input slots of anything the new list does not use.
+0.537 Error Util.cpp:81: Error while loading recipe prototype "bbb-balancer-part" (recipe): Localised string key is too large: 247 > 200 (limit). in property tree at ROOT.recipe.bbb-balancer-part.localised_description[1]
+```
+
+exit 1, no dump, three independent measurements in agreement. **THE FIRST LINE IS THE ONE THAT SAYS WHAT SHOULD HAVE HAPPENED AND NOBODY EVER READS IT.** `resolve` accumulates its lines into `res.logs` and `PlanData` turns them into ops only after every check has passed, so on a refused load the library's accumulated ERROR lines never reach the host at all; that is FkRecipes' own reasoning in `agents/customizer-design.md` decision 2, under THE REFUSAL CARRIES THE NOTE, and it is why a refusal raised after resolution carries an added sentence at all. Here the refusal is not the library's and not one it can decorate: it is the ENGINE's, one stage later, over the prototype the library had already finished composing. The degradation ran. The DISCLOSURE of it is what killed the game.
+
+#### Who measured what, said before any of it is used
+
+**EVERYTHING WITH AN ENGINE IN IT IS THIS ROUND'S OWN RUN AND IS REPORTED HERE RATHER THAN RE-TAKEN**: the refusal above, the byte-versus-character probes, the two clamp sentences handed to the engine verbatim, the technology control, and the per-element and no-aggregate-budget probes. **EVERY BYTE COUNT BELOW IS RE-DERIVED HERE** off FkRecipes' committed source at `221ff9c`, which is the head this mod is adopted onto, by transcribing the four composers' literals (`recipeChangeSentence` at `go/data.go:760`, `fallbackNote` at `:787`, `withDestruction` at `:796`, `clampedItemNote` at `:832`, `clampedFluidNote` at `:838`, and `maxItemAmount = 65535` at `go/ingredientlist.go:132`) and measuring them with their name slot empty:
+
+```sh
+printf '%s' "The stored value of  could not be used, so this mod's own choice applies instead. The reason is in the log." | wc -c      # 107
+printf '%s' "Changing a recipe empties an assembling machine's input slots of anything the new list does not use." | wc -c            # 100
+printf '%s' "Two ingredients resolved onto  and the total was above what one slot holds, so it was capped at 65535. The reason is in the log." | wc -c   # 128
+printf '%s' "Two ingredients resolved onto  and the total was above the largest amount the game can hold, so it was capped at 1e301. The reason is in the log." | wc -c  # 145
+```
+
+**AND THE TWO HALVES SHARE THE STRINGS, so this is not the Go half's defect.** `rust/src/data.rs:1770` is `RECIPE_CHANGE_SENTENCE` and `:1800`, `:1853` and `:1860` are the other three format strings, byte for byte the Go ones (checked by substring over both files at `221ff9c`). Whatever the fix is, it is two edits.
+
+#### The ceiling is 200 BYTES per string element, and a character counter would have got the boundary wrong
+
+Measured by this round on a throwaway Lua fixture hanging a `localised_description` on base's `iron-gear-wheel` recipe, and it is FOUR facts rather than one:
+
+- **PER ELEMENT AND NOT PER STRING.** `{"", 150 bytes, 150 bytes}` is 300 bytes in one description and loads. `{"", 200 bytes}` loads. `{200 bytes}` in the KEY slot loads. `{"", "short", 200 bytes}` loads. Each of those refuses at 201, and the refusal names the 0-based index of the offending element, which is what `localised_description[1]` above is.
+- **AND NO AGGREGATE BUDGET AT ALL**: six elements of which five are 199 bytes, 995 bytes in one description, exit 0.
+- **BYTES AND NOT CHARACTERS.** 200 ASCII characters load and 201 refuse on `201 > 200`. `e`-acute times 100 is 100 characters and 200 UTF-8 bytes and loads; times 101 is 101 characters and 202 bytes and refuses reporting `202 > 200`. A character counter would have said 101 was fine.
+- **ELEMENT 2 IS POLICED IDENTICALLY TO ELEMENT 1** (`201 > 200 ... localised_description[2]`), which is what closes the workaround in the next section but one.
+
+So the only thing that matters anywhere in this finding is how long ONE SENTENCE is, and the library composes its sentences without ever asking.
+
+#### Every note the library can put on a RECIPE is over, and two of them before any name is in them
+
+`appendLocalised` (`go/data.go:1810`) writes `localised(note)`, which is `Arr(Str(""), Str(note))` (`go/value.go:88`), so a note with no author `Description` is element 1 in the engine's 0-based property-tree path. Three sentences can land there, and the recipe channel adds `recipeChangeSentence` to all three through `withDestruction`, because on a recipe the ingredient list is what moved.
+
+| what the library composes on a recipe | bytes before a name | this mod's case | engine |
+|---|---|---|---|
+| `fallbackNote(setting, true)` = 107 + 1 + 100 | **208** | `better-belt-balancer-recipe-ingredients` is 39, so **247** | `247 > 200`, the run above |
+| `withDestruction(clampedItemNote(name), true)` = 128 + 1 + 100 | **229** | `iron-plate` is 10, so **239** | `239 > 200`, handed to the fixture verbatim |
+| `withDestruction(clampedFluidNote(name), true)` = 145 + 1 + 100 | **246** | `water` is 5, so **251** | `251 > 200`, the same fixture |
+
+**THE FALLBACK NOTE LEAVES MINUS EIGHT BYTES FOR A SETTING NAME**, which is the sharpest way to say it: 200 minus 208. There is no name short enough, so there is no consumer, on any mod name, with any setting spelling, who can bind a text setting to a recipe's ingredient list and have the resulting fallback load. **THE TWO CLAMP NOTES ARE OVER WITH NO NAME AT ALL**, at 229 and 246, so on those two the setting name is not even a variable.
+
+#### Every note it can put on a TECHNOLOGY loads, and that is the control that makes this a channel defect and not a library-wide one
+
+The technology channel carries no destruction tail, because a repriced research destroys nothing (`movesIngredients` at `go/customize.go:1208`, and `recipeTextFallback`'s own comment at `:1182`). Its three sentences are **107**, **84** (`packDroppedNote`) and **123** (`packlessSourceNote`) bytes before a name, all re-derived the same way. Measured by this round through this mod's own package with `better-belt-balancer-tech-packs` storing `2 flurb-pack`: exit 0, a dump, and the two-element description on `bbb-balancer`, at **138** bytes (107 + 31). `clampedItemNote` alone, with no tail, is 128 before the name and 138 for `iron-plate`.
+
+**THE TECHNOLOGY CHANNEL IS NOT SAFE, IT IS MERELY NOT DOOMED**, and the narrow claim is the only one worth writing down: `packlessSourceNote` at 123 goes over as soon as a source technology's internal name runs past 77 bytes.
+
+#### No shape a consumer can declare avoids it
+
+- **A SHORTER SETTING NAME IS RULED OUT AT MINUS EIGHT**, and it would not have been free anyway: the prefix is derived from `fkdata.ModName()` at Emit and there is no prefix parameter, so `better-belt-balancer-` is 21 of this mod's 39 bytes and none of them are this mod's to spend.
+- **DECLARING A `Description` ON THE RECIPE MAKES IT WORSE.** `appendLocalised`'s three-parameter arm composes `{"", description, "\n" + note}`, so the note gains a newline byte and moves to element 2, which the probe above shows is policed identically. Measured by this round at `248 > 200`, which is the 247 plus the newline.
+- **A RECIPE'S CRAFTING-TIME FALLBACK DOES LOAD**, and it is the exception that confirms the rule rather than a way out: `energy_required` moves and the ingredient list comes out byte for byte, so `movesIngredients` is false and there is no tail, leaving 200 minus 107 = **93 bytes** of setting name. This mod declares no crafting time, so nothing here reaches it.
+
+#### Why no gate in either repository could see it, and the golden that pins an unloadable prototype
+
+It is not an oversight in one place. It is a seam between two gates, and each one is individually reasonable.
+
+- **FkRecipes' ENGINE GATE CARRIES EXACTLY ONE REFUSED TEXT AND IT IS A SCIENCE-PACK LIST.** `../FkRecipes/testdata/ingame/flipped.json` says so in its own words ("`tips-packs` is THE TYPO"): `fkrecipes-example-tips-packs` is `2 automation-science-pack, 1 militar-science-pack`, the TECHNOLOGY channel, which loads. The ingredient list in the same file, `fkrecipes-example-rivet-ingredients`, is `2 iron-stick, 1 steel-plate`, every name real, so it never falls back and never composes a note at all.
+- **THE REFUSED INGREDIENT LIST LIVES IN THE MIRROR, WHICH HAS NO ENGINE IN IT.** `../FkRecipes/testdata/mirror/standin.lua:419` stores `fkrecipes-example-rivet-ingredients` as `3 steel-plate, 2 iron-stik`, and the mirror runs under `lua52f` against a stand-in that does no property-tree validation whatever.
+- **SO THE SMOKING GUN IS COMMITTED, AND IT IS GREEN.** `../FkRecipes/testdata/mirror/transcript.golden`, the `TRANSCRIPT extend#22` op, pins a `"type"="recipe"` prototype named `fkrecipes-example-steel-rivet` whose `localised_description` element 2 is:
+
+  ```
+  The stored value of fkrecipes-example-rivet-ingredients could not be used, so this mod's own choice applies instead. The reason is in the log. Changing a recipe empties an assembling machine's input slots of anything the new list does not use.
+  ```
+
+  **243 BYTES** (208 plus the 35 of `fkrecipes-example-rivet-ingredients`), re-measured off the committed golden here (`python3` over the file, matching the element and taking `len(...encode())`; the same string appears twice, in the op and in the `FINAL` snapshot). **WHAT THAT MEANS IS THE WHOLE FINDING IN ONE SENTENCE: the library's byte-compared cross-language mirror, the gate whose entire purpose is that the two halves agree with each other exactly, records an unloadable prototype as correct.** Both halves agree. They agree on something the engine refuses.
+
+#### The grade, against the library's own threat model and its own scope letters
+
+Graded against `../FkRecipes/agents/threat-model.md` and not against a rubric of this mod's.
+
+**FINDING: BLOCKED. OWNER FkRecipes. SCOPE B.** B is "Customizing from the screen", and its text is "A player on head typing anything the field accepts and any number the widget accepts: typos ... The game always loads; the player can correct the value from the Mod Settings screen without leaving the game or losing any other value". A typo is the first item on B's own list, and the game does not load. The rubric's BLOCKED is "an in-scope situation leaves the player unable to reach the game". **AND SCOPE K SUPPLIES THE GRADING RULE RATHER THAN A DEFENCE**: K covers engine behaviours no mod can change, names "the error dialog's missing route to Mod Settings" among them, and says in terms that "a path of ours that still leads a player into one of them is graded as the outcome (a lock-out or an abort is BLOCKED)." This is a path of the library's leading a player into exactly that dialog.
+
+**AND IT IS THE LOCK-OUT `playerFallback` WAS WRITTEN TO PREVENT, BY DECISION 2'S OWN MEASUREMENTS.** The engine rewrites `mod-settings.dat` on every successful load and on NO failed one, so nothing in the failed run edits the value that caused it; the `Error loading mods` dialog's five buttons do not reach Mod Settings and `Manage mods`' Back returns to the same dialog; disabling and re-enabling does not drop the stored value; the one measured escape is `Reset mod settings` plus `Disable listed mods`, six steps, every startup preference in the file lost, the mod disabled, and a restart. That is the whole argument decision 2 made for replacing a refusal with a fallback, and on a recipe-bound setting the fallback's own disclosure hands the player back into it. **THE DISCLOSURE ADDED TO STOP A SILENT DEGRADATION REINTRODUCED THE FAILURE IT REPLACED.**
+
+**WHAT IT FALSIFIES IS THE LIBRARY'S OWN NARROW PROPERTY, QUOTED EXACTLY.** `../FkRecipes/agents/implementation-notes.md:432` states the rule as "A value the PLAYER types never introduces a refusal a player who typed nothing would not also have hit; an input the AUTHOR declares still refuses", and `agents/customizer-design.md:25` says the same thing at greater length, with the property deliberately narrowed from the wide version that "shipped once and was false". On 2.0.77 the narrow version is false too, for every consumer binding a player-typed setting to a recipe's ingredient list: a player who typed nothing loads, a player who typed a typo does not, and the refusal exists BECAUSE they typed. **THE LIBRARY'S `CLAUDE.md` PUTS IT EVEN MORE DIRECTLY**, in the bullet that begins "A check that asks the `World` anything is ENVIRONMENTAL": "a stored setting value the library cannot use behaves exactly as if the player had left the field alone, logs ONE `fkrecipes: ERROR: ...` line naming the setting and the screen it is fixed on, AND puts one trailing line into the emitted recipe's or technology's own `localised_description`". The three clauses are joined by AND, and on a recipe the third one destroys the first.
+
+**SECOND FINDING: BLOCKED. OWNER FkRecipes. SCOPE F. NOT REACHABLE THROUGH THIS MOD.** The two clamp notes are the ENVIRONMENT channel and nobody typed anything to reach them: F is "Modpacks that change what the declarations reference, while leaving the base game loadable", and its text is "The load never stops on this mod's account; the library emits the nearest legal prototype, logs one ERROR line, and the recipe or technology tooltip says what was substituted." A plan that resolved to a perfectly legal capped recipe becomes unloadable solely because of the sentence describing it, at 229 and 246 bytes before a name. The author channel that reaches the same two sentences has no scope letter, the threat model's letters all being about the player; it is the same two composers either way. **IT DOES NOT REACH THIS MOD**: every declared amount in the six presets is single-digit against an item ceiling of 65535, which the second assessment records as unreachable here, and the merge this gate exercises is `4 plus 2 is 6`. It is written down because the grade belongs to the library and not to its consumer.
+
+#### What this mod's own second assessment graded, and what moves
+
+`agents/migration-assessment-2.md` was taken at `1caaf08` against FkRecipes `21f5d89`, which is the head BEFORE `6518971` folded in decision C, so neither of the two findings below had a note to trip over.
+
+- **Finding 2 is "CLEAN, up from BLOCKED, for a value the player types"**, and its evidence is that all twenty-two texts a player could type load, with head on `2 iron-plat` and head on `vanilla` producing the same normalised 27,854,440-byte dump at sha256 `8017bbdb5cdbbe2d9506e3b24a0956bc8e79d28938ff6952ada072f33947afff`.
+- **Finding 8 measured the same typo case running**, with the assembler emptied and the game playing, which is a measurement that requires a load that completed.
+
+**BOTH WERE TRUE WHEN THEY WERE TAKEN AND BOTH ARE FALSE AT THE HEAD THIS MOD IS NOW ADOPTED ONTO.** `2 iron-plat` was exit 0 there and is exit 1 here. **THE ASSESSMENT IS A DATED RECORD AND IS NOT REWRITTEN**, which is this repository's standing habit with every superseded measurement: the correction lives here, in the round that found it, and finding 2's grade reverts to BLOCKED against `221ff9c` for the reason above rather than for the reason it originally carried.
+
+#### The gate arm, which PINS A DEFECT, and its control
+
+`test/check-datastage.py` gains `check_note_ceiling`, a pair of arms called from `main` beside `check_remover`, and its own comment block says what they are: "Everything below is a description of something BROKEN that this gate holds still until it is fixed. Nothing here is an endorsement, and the green row the refusal arm prints is the least comfortable line in this file."
+
+- **`note-refused`** drives `better-belt-balancer-recipe-ingredients` to `2 iron-plat` and asserts three things in an order that matters: the RETURN CODE first (a completed load has no engine refusal to match and would otherwise fall through to a confusing message about a string that is not in its log), then the engine's own text `Error while loading recipe prototype "bbb-balancer-part" (recipe): Localised string key is too large: 247 > 200 (limit). in property tree at ROOT.recipe.bbb-balancer-part.localised_description[1]` transcribed off the log rather than composed (the `in` test is against the whole engine text, because the engine prints it twice, once as `Error Util.cpp:81:` and once inside its own error block), and then **THE LIBRARY'S OWN LINE, WHOLE AND IN ORDER, PRESENT IN A RUN THAT PRODUCED NO DUMP.** That last assertion is the one carrying the finding: it says the degradation RAN, the language read the field, refused the name, chose the fallback and composed its line, and only then did the sentence it composed stop the load.
+- **`note-control`** drives `better-belt-balancer-tech-packs` to `2 flurb-pack`, the same kind of value through the same composer, and asserts that the load COMPLETES, that `bbb-balancer` carries the two-element 138-byte description, and **that the RECIPE in that same load carries nothing**, `null` through a projection that takes both prototypes out of one dump. **THE PAIR IS WHAT MAKES IT A DIFF RATHER THAN AN ANECDOTE**: one binary, one library composer, one refused text each, both dropdowns on their declared defaults in both arms, and the only variable is which prototype the note lands on. Both texts are the SHORTEST refusal their field takes, so neither outcome can be blamed on the length of what was typed.
+- **THE ANTI-VACUITY PROOF IS IN THE FILE BECAUSE ONE ARM ASSERTS A FAILURE**, which is the shape that can pass while measuring nothing. Measured, `startup=None` against this package on 2.0.77: exit 0, a dump, an empty `fkrecipes:` stream and no `localised_description` on `bbb-balancer` at all. So against a run whose `mod-settings.dat` never arrived the refusal arm fails on its return code and the control arm fails on its missing note. The same proof caught a real defect in the arm's own first draft: the control arm was printing its `ok` row beside its own FAIL lines, because it compared the SHARED failure flag against a snapshot taken after the refusal arm had already set it, and it has its own flag now.
+
+**THE ARM GOES RED WHEN THE LIBRARY SHORTENS THE SENTENCE, AND THAT IS THE POINT.** A gate that pins a defect is a gate whose green row is a bug report. When FkRecipes fixes this, the refusal arm stops refusing and fails; **THE REMEDY THEN IS TO INVERT IT** into the positive control the fourth commit's absence assertion has never had, not to delete it. That is written into the arm's own block, twice: in the block's own WHEN THE LIBRARY MOVES paragraph ("Do not re-measure the 247 and move it; the number is a symptom") and in the FAIL message the return-code branch prints, which opens by saying the completed load is GOOD NEWS. So the next person does not read a red row as a regression in this mod.
+
+**AND THE ARM COUNT IS NOW TWENTY-THREE**, `2 golden + 16 variant + 1 speed + 2 merge + 2 note`, where the fourth commit left twenty-one. **IT IS THE ONE COUNT IN THIS GATE NOT READ OFF A CONSTANT**: `check_variants` prints a sum of its five tables and `check_remover` prints `len(ARMS)`, while `check_note_ceiling` prints the literal `2 arms`, there being no table for two hand-written arms to live in. The gate's own heading count in CLAUDE.md's "Verification" section and in "Round three" is NOT updated by this subsection, and neither is `make datastage-check`'s wall time; both belong to the round's close with everything else that moves once.
+
+#### THE RELEASE BLOCK
+
+**THIS MOD MUST NOT PUBLISH 0.3.3 WHILE `note-refused` IS GREEN.** Two documents this round already rewrote tell a player the opposite of what the engine does:
+
+- `mod-data/changelog.txt`, the unreleased 0.3.3 section, Info: "A typo introduced into a list that was working does the same thing: the list is set aside whole and the option picked above applies instead, which is a recipe change you did not ask for, and correcting the typo is a second one." There is no recipe change. The game stops.
+- `README.md`, the ingredients paragraph: "the whole list is set aside, the option chosen above applies instead, and the log carries one line naming the setting, the entry and the reason. **The game loads, so you can correct the field and restart.**" It does not load, and the Mod Settings screen is the one place the error dialog cannot reach.
+
+**NEITHER DOCUMENT IS REWRITTEN TO DESCRIBE THE DEFECT, AND THAT IS A JUDGEMENT AND NOT A MEASUREMENT.** In as many words: this is a decision, made here, and somebody could reasonably make the other one. The reasoning is that both documents describe THE RELEASE, the release is blocked, and the library fix is one shortened sentence in two files. A changelog line telling a player that a typo in a settings field stops their game and locks them out of the screen where they would fix it is a worse thing to ship than shipping nothing; rewriting them would also mean rewriting them back, and the intermediate state would be published. **WHAT IS NOT A JUDGEMENT** is that the two sentences are false as they stand on this library head, which the run above measures, and that publishing them unchanged would be shipping a false disclosure. The block is what keeps both from happening.
+
+**THE BLOCK LIFTS ON A MEASUREMENT AND NOT ON A CLAIM**: FkRecipes' three recipe sentences fit 200 bytes per element with this mod's 39-byte setting name in them, `make datastage-check` green with `note-refused` inverted to a positive control, and the changelog and README sentences re-read against a run that loads.
+
+#### What the library owes, precisely enough to act on
+
+Not a design of this mod's. The CONSTRAINT, which the library today does not state anywhere and does not check:
+
+**EVERY SENTENCE THE LIBRARY COMPOSES INTO A PROTOTYPE'S `localised_description` MUST FIT 200 BYTES PER ELEMENT, INCLUDING THE LONGEST SETTING NAME A CONSUMER CAN DECLARE.** The three recipe sentences do not, at 208, 229 and 246 bytes before a name. **AND THE SECOND HALF OF THAT SENTENCE IS THE HARD HALF**: the library refuses no setting name for length anywhere (no length check exists in `go/`), and the prefix comes from `fkdata.ModName()` rather than from the consumer, so "shorten it" has to be stated against a name bound the library would have to introduce and then enforce. A budget with an unbounded term in it is not a budget.
+
+Three shapes are available, and the threat model is what chooses between them rather than taste:
+
+- **SHORTEN.** Keeps the disclosure where a player looks, so it can reach CLEAN. Needs the name bound above to be more than an assumption.
+- **SPLIT ACROSS ELEMENTS.** Mechanically already available: the empty first parameter is the concatenation form the library has emitted since `localised()` existed (`go/value.go:88`), and `appendLocalised`'s three-parameter arm already relies on it to render a description and then a note. The per-element probe says each piece is policed alone and the 995-byte six-element case says there is no aggregate budget, so a sentence broken at a space costs nothing but the composer. Also reaches CLEAN, and does not need a name bound if the splitter is length-driven.
+- **DROP THE TAIL FROM THE PROTOTYPE AND LEAVE IT TO THE LOG.** **THE THREAT MODEL REFUSES THIS AS A FULL FIX, IN ITS OWN WORDS**: "THE LOG IS NOT WHERE A PLAYER LOOKS. A log line is evidence for us and a courtesy for the curious; a disclosure that exists only in the log does not count as one." Under the rubric that trades BLOCKED for AWKWARD, "the game plays and the value is kept, but something changed that is not stated where a player looks". Better than a lock-out and not CLEAN, so it is a stopgap rather than an answer, and it would undo exactly the thing decision C was added to do.
+
+**AND WHATEVER THE FIX IS, IT IS OWED IN FOUR PLACES AT ONCE**: both language halves, `testdata/mirror/transcript.golden` (which currently pins the 243-byte element), and the engine gate, whose `testdata/ingame/flipped.json` would have to carry a refused INGREDIENT list rather than only a refused pack list before any of this could go red upstream. The seam is what let it through, and closing the seam is separate from fixing the sentence.
+
+#### What is still owed
+
+- **The round's close**, unchanged from the fourth commit's list: the package sizes with the growth attributed rather than assumed, the relay's jump figures out of `dist/.fklua-mod.report.json`, the release-to-head proof re-run over its 28 pairs, `make datastage-check`'s wall time at its new arm count (still not re-taken; the last figure anywhere is the re-adoption leg's nineteen-arm pair, real 41.30 and 46.96 on 2026-09-13), and every gate consolidated at its exit code.
+- **The library fix**, which is not this mod's to write and which the release block waits on.
+- **The client run**, which is not this round's to close.
+
 ## The FkLua baseline
 
 The migration was measured against a freshly rebuilt fklua so that a packaging difference could not be mistaken for a library effect.
