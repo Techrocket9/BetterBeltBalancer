@@ -205,8 +205,9 @@ func localeSections(t *testing.T) map[string]map[string]string {
 // none of them is guessable from a label of under fifty characters. The library
 // already demands four of the six (both text fields, and both dropdowns now
 // that each composes its presets onto its own description), so what this test
-// adds is the two NUMBERS: a count and a seconds field with no tooltip say
-// nothing about which setting has to be on Custom for them to do anything.
+// adds is the two NUMBERS. The library composes the RANGE onto each of them and
+// says what a 0 there means, but the entry that says what the number is FOR is
+// this mod's, and without it a player reads a range with no subject.
 func TestEverySettingThisPlanDeclaresIsDescribed(t *testing.T) {
 	sec := localeSections(t)
 	for _, name := range []string{
@@ -280,86 +281,65 @@ func TestTheGrandfatherMessageQuotesTheRealMenuLabel(t *testing.T) {
 	}
 }
 
-// TestEveryCustomDropdownDescriptionNamesTheCustomOption is the fourth, and it
-// is the only thing anywhere that reads a WORD of a description.
+// TestTheLocaleFileRenamesNoTechnologyOfTheGames is the fourth, and it is the
+// one the LIBRARY asked this mod for and then pointedly did not enforce.
 //
-// THE WORDING OF THESE ENTRIES IS OTHERWISE UNGATED, and that is measured
-// rather than assumed. `--dump-data` does not read locale, so the settings dump
-// carries the KEY (`["mod-setting-description.bbb-recipe-cost"]`) and never the
-// string: editing this entry and re-running the gate leaves
-// `mod_settings_sha256` where it was, so `make datastage-check` cannot see a
-// syllable of the .cfg. [TestEverySettingThisPlanDeclaresIsDescribed] above
-// checks the entry is non-empty and nothing else. Every other sentence in the
-// six tooltips is read by a human or it is not read.
+// WHAT THE LIBRARY SAYS AND HOW IT SAYS IT. `bbb-tech-cost`'s composed
+// description names each tier by the GAME's own locale key,
+// `technology-name.logistics` and its two siblings, so the tooltip reads
+// "Logistics 2" where the player's tech tree does. Those keys are not this
+// mod's: Factorio's locale namespace is FLAT AND SHARED, so an entry for one of
+// them here would set the displayed name of BASE'S technology for every mod in
+// the game. `CheckLocaleAdvisories` says exactly that, once per key, and it is
+// a report of its own rather than part of `CheckLocaleWith` for a reason this
+// test is built around.
 //
-// ONE PROPERTY IS WORTH MORE THAN THAT, and it is the one round three added. A
-// dropdown that gained a Custom value has a text field under it that does
-// nothing at all until the dropdown is on Custom, so a description that never
-// mentions Custom leaves the field with no route to it: a player reads what the
-// presets do, types a recipe into the box below, restarts, and gets the preset
-// they were already on. That is not hypothetical -- `bbb-recipe-cost` shipped
-// 0.2.2's sentence unchanged through the round that added the option, which is
-// `agents/migration-assessment.md` finding 6, and this is what would have said
-// so.
+// THE ADVISORIES ARE LOGGED AND NOT ASSERTED, AND THAT IS THE POINT. They are
+// returned whether or not this mod's file defines the key, they never go away,
+// and what they ask for is that nothing be done. A test that called t.Error on
+// them would be permanently red over a thing the library says not to fix --
+// which is precisely why the library took them out of `CheckLocale`'s return,
+// and [TestTheLocaleFileSatisfiesThePlan] above is where "empty is clean" still
+// means what it says.
 //
-// THE PROPERTY IT GATES IS "THE OPENING SENTENCE NAMES THE OPTION", AND THAT
-// NARROWNESS IS ITSELF MEASURED. A first draft demanded the word anywhere in
-// the entry, and an adversarial review broke it in one edit: delete the only
-// clause that tells a player the field exists ("or Custom to write the recipe
-// yourself in the setting below") and the entry still says "Custom" three
-// sentences later, in "Every option but Custom is safe in an overhaul pack", so
-// the check passed on a description that had lost exactly the route it claims
-// to guard. Cutting the entry at its FIRST full stop and demanding the word
-// there closes that: the opening sentence is where the twin `bbb-tech-cost`
-// names it, where a player who reads one line of a tooltip will see it, and it
-// is a standard this file holds itself to rather than a claim that a later
-// mention would be useless. A rewording that moves the word out of the first
-// sentence therefore FIRES, and is meant to.
+// WHAT IS ASSERTED IS THE THING THIS MOD CAN ACTUALLY GET WRONG: that the .cfg
+// defines no `[technology-name]` entry at all. That is an ACTIONABLE property
+// with a one-line fix (delete the entry), and it is the remedy this mod's own
+// second migration assessment asked for and got BACKWARDS. Remedy (f) there
+// said to define `technology-name.logistics-2` and `-3` in this file so the
+// tooltip would not show `Unknown key`; FkRecipes e4604d4 closed that from the
+// other end by wrapping every composed reference in the engine's alternatives
+// form, so an undefined key now degrades to the technology's raw internal name
+// and the tooltip survives whole. Carrying out remedy (f) today would rename
+// base's technologies for every mod in the game -- the exact hazard the
+// library's own flat-namespace collision scan exists to report -- so this test
+// is what keeps it undone.
 //
-// WHAT IT STILL DOES NOT GATE, stated so the comment does not outrun the code:
-// that the entry explains what Custom does, that it says where the field is, or
-// that the rest of the entry is true. Those are a human's to judge, and pinning
-// them would be a transcription that fails on every rewording.
-//
-// IT IS A TWO-ENTRY CHECK RATHER THAN A PINNED LITERAL, the shape
-// [TestTheGrandfatherMessageQuotesTheRealMenuLabel] above is: the word demanded
-// of the description is taken from the MENU's own label for that value, read
-// out of `[string-mod-setting]`, and it is everything before that label's first
-// colon rather than a word in any dictionary sense, so a label whose readable
-// half itself held a colon would demand only the part before it. Renaming the
-// option renames what the tooltip has to say, and neither entry can drift away
-// from the other.
-func TestEveryCustomDropdownDescriptionNamesTheCustomOption(t *testing.T) {
-	sec := localeSections(t)
-	for _, dropdown := range []struct{ setting, custom string }{
-		{SettingRecipeCost, RecipeCustom},
-		{SettingTechCost, TechCustom},
-	} {
-		value := dropdown.setting + "-" + dropdown.custom
-		label := strings.TrimSpace(sec["string-mod-setting"][value])
-		if label == "" {
-			// TestTheLocaleFileSatisfiesThePlan reports the absence itself,
-			// and it reports it as the `Unknown key` render that it is.
+// IT READS THE ENTRIES IN FILE ORDER rather than ranging a map, for the reason
+// nothing anywhere in this repository ranges one: Go randomises that order per
+// run, and a failure that named a different entry each time is a failure
+// nobody can act on.
+func TestTheLocaleFileRenamesNoTechnologyOfTheGames(t *testing.T) {
+	// The advisories, said out loud and asserted on by nothing. Read them with
+	// `go test -v ./tune/ -run TestTheLocaleFileRenamesNoTechnologyOfTheGames`.
+	for _, note := range Plan().CheckLocaleAdvisories(ModName) {
+		t.Log(note)
+	}
+
+	for _, e := range fkrecipes.LocaleEntries(localeText(t)) {
+		// THIS MOD'S OWN TECHNOLOGY IS THE ONE ENTRY THAT BELONGS HERE, and it
+		// belongs here because [Plan] declares it: `technology-name.bbb-balancer`
+		// names a technology nobody else has, and without it the research screen
+		// shows the player the raw key. [TechName] is the whole of what this
+		// plan declares, so it is the whole of the exemption.
+		if e.Section != "technology-name" || e.Key == TechName {
 			continue
 		}
-		word := label
-		if head, _, ok := strings.Cut(word, ":"); ok {
-			word = strings.TrimSpace(head)
-		}
-		// Everything before the first full stop. An entry with no full stop at
-		// all is read whole, which is the only reading that can be right for a
-		// one-clause description.
-		opening := sec["mod-setting-description"][dropdown.setting]
-		if head, _, ok := strings.Cut(opening, "."); ok {
-			opening = head
-		}
-		if !strings.Contains(opening, word) {
-			t.Errorf("[mod-setting-description] %s does not say %q in its "+
-				"FIRST SENTENCE, and %q is what the menu calls the value that "+
-				"switches the text field under it on: a player who reads the "+
-				"opening line of this tooltip is never told the field is "+
-				"there. The first sentence reads %q",
-				dropdown.setting, word, value, opening)
-		}
+		t.Errorf("[technology-name] %s is defined in this mod's own locale "+
+			"file and is not a technology this plan declares. Factorio's locale "+
+			"namespace is flat, so that sets the displayed name of somebody "+
+			"else's technology for EVERY mod in the game. The composed tooltip "+
+			"does not need it -- an undefined key degrades to the raw internal "+
+			"name -- so the fix is to delete the line", e.Key)
 	}
 }

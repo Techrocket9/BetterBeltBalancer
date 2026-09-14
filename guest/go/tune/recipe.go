@@ -24,13 +24,19 @@ package tune
 // deleted; the library walks them now, as one `IngredientChoice` per option
 // built by [Plan]. See the package doc.
 //
-// AND SINCE ROUND THREE THERE IS A SEVENTH VALUE WITH NO PLAN UNDER IT.
-// `custom` hands the ingredients to `better-belt-balancer-recipe-ingredients`,
-// which the player writes in the language FkRecipes' docs/ingredient-list.md
-// documents. It is a value of the dropdown and NOT an option of this file:
-// [RecipePlan] answers
-// for the six, [RecipeValues] is the seven the setting allows, and the library
-// refuses the two lists disagreeing in either direction.
+// AND SINCE ROUND THREE THERE IS A TEXT FIELD BESIDE THE DROPDOWN, WHICH DID
+// NOT COST THIS LIST A ROW. `better-belt-balancer-recipe-ingredients` holds a
+// recipe the player writes in the language FkRecipes' docs/ingredient-list.md
+// documents, and THE TEXT IS THE SWITCH: while it says `default` the dropdown
+// decides, and anything else is what the recipe is made of. So the six values
+// below are the whole of what `bbb-recipe-cost` allows, exactly as they were
+// before the field arrived, and [RecipeOptions] is the one list -- read by the
+// declaration, by [recipeChoices] and by every test that walks the presets.
+//
+// THE OPTION LIST IS WHY THE FIELD COST A PLAYER NOTHING. Factorio resets a
+// stored dropdown value the running release does not offer, silently and
+// permanently, so a seventh row would have been destroyed by one launch of an
+// older release; a value list that never moves cannot be.
 
 // The allowed values of `bbb-recipe-cost` that name a plan, in menu order.
 //
@@ -61,47 +67,12 @@ func RecipeOptions() []string {
 	}
 }
 
-// RecipeCustom is the seventh value of `bbb-recipe-cost`, and the only one with
-// no plan behind it: it hands the ingredients to
-// `better-belt-balancer-recipe-ingredients`, the text setting the player
-// writes.
-//
-// IT IS DELIBERATELY NOT IN [RecipeOptions]. The library takes the presets and
-// the custom value as two separate lists and refuses them overlapping -- "gives
-// custom a preset as well as a Custom arm; name the arm's value with
-// CustomValue" (FkRecipes go/customize.go:440) -- because a value that is both
-// would be a plan and a text field claiming the same row. So [RecipePlan],
-// [recipeChoices] and every test that iterates the PRESETS keep reading the six,
-// and only the dropdown's declaration reads [RecipeValues].
-//
-// The spelling is the library's own default for the arm, which is why
-// `IngredientChoices.CustomValue` is left empty in [Plan]: that field exists for
-// a mod whose dropdown ALREADY ships a preset called `custom`, and this one does
-// not.
-const RecipeCustom = "custom"
-
-// RecipeValues is every value `bbb-recipe-cost` allows, in the order the
-// dropdown shows them: the six presets, then the custom arm.
-//
-// THE SIX KEEP THEIR SPELLING AND THEIR POSITIONS AND THE SEVENTH IS LAST,
-// which is the whole migration. Factorio keys a stored startup choice by its
-// VALUE STRING in mod-settings.dat, so every player who had chosen
-// `belt-express` still reads `belt-express` after the update; the only row that
-// is new is the one nobody has stored. The library checks this list against
-// [recipeChoices] and refuses a mismatch in either direction, with the custom
-// value taken out of the comparison first: FkRecipes go/data.go:247 drops it,
-// and the comparison itself is `matchesAllowedValues` (go/data.go:1461),
-// called from go/data.go:253.
-func RecipeValues() []string {
-	return append(RecipeOptions(), RecipeCustom)
-}
-
 // RecipeDefault is what the setting defaults to, and it is the head of
 // [RecipeOptions] rather than a constant beside it.
 //
-// THE HEAD OF THE PRESETS AND NOT OF [RecipeValues], which is the same
-// statement read from the other end: the default has to be a value a plan
-// answers for, and the custom arm is the one value that is not.
+// ONE LIST AND THEREFORE ONE HEAD. Factorio's `allowed_values` and
+// `default_value` are separate fields and a default outside the list is a load
+// error, so both are read off [RecipeOptions] and the pair cannot drift.
 func RecipeDefault() string { return RecipeOptions()[0] }
 
 // RecipePlan is one option's ingredients, before any of them is checked against
@@ -117,7 +88,7 @@ func RecipeDefault() string { return RecipeOptions()[0] }
 // than answering with no plan -- "A STORED VALUE THE DROPDOWN DOES NOT OFFER IS
 // REFUSED. ... What it used to do was worse than a refusal: the choice lookup
 // found no plan, the recipe came out made of nothing, and no line said so. This
-// is the pilot's own finding, closed." (go/data.go:1478). The refusal names the
+// is the pilot's own finding, closed." (go/data.go, readDropdown). The refusal names the
 // setting as a player's mod-settings.dat carries it, this mod's two being
 // Legacy and therefore unprefixed:
 //

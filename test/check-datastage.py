@@ -65,7 +65,7 @@ a machine with different DLC produces a different hash for a mod that is
 perfectly fine. A golden line whose engine does not match the binary is a SKIP
 with a message, never a failure.
 
-...AND FIFTEEN VARIANT ARMS (ONE OF THEM THE VANILLA CONTROL), A SPEED ARM AND
+...AND SIXTEEN VARIANT ARMS (ONE OF THEM THE VANILLA CONTROL), A SPEED ARM AND
 A MERGE ARM, WHICH ARE NOT HASHED.
 
 0.3.1 made the recipe's cost, the research's cost and the hidden network's belt
@@ -83,23 +83,30 @@ never make easy. So:
   technology's exact unit and prerequisite. Nothing else in the dump is looked
   at, because everything else is the golden's business.
 
-  the RECIPE CUSTOMIZER gets four more, because its states are not values of
-  the dropdown alone: three of them arrived with 0.3.3 (`custom` with the text
-  untouched, `custom` with a recipe written into the text, an edited text under
-  a preset) and the fourth is the part named as its own ingredient, which
-  asserts TWO lines where the two before it assert one. Those three are the
-  LIBRARY'S OWN LOG, which is the only thing in this file that is not read out
-  of a dump -- what the library does with a text under a preset, or with a list
-  that names the product, is by design invisible in the prototypes, so the
-  sentence is the whole of the evidence. See RECIPE_CUSTOM_ARMS.
+  the RECIPE'S TEXT FIELD gets four more, and since fix round 2 none of them is
+  a value of the dropdown: the text is the SWITCH, applying whenever it does
+  not say the reserved word `default`, and the dropdown decides while it does.
+  The four states are the word under a preset that is NOT the default one, a
+  recipe written with the dropdown untouched, a recipe written under a preset
+  -- which is where the text WINS and the preset is set aside -- and the part
+  named as its own ingredient, which asserts TWO lines where the three before
+  it assert one or none. EVERY ONE OF THE FOUR ASSERTS THE INGREDIENT LIST,
+  which the new rule made possible: in every arm here the list a player gets
+  differs from the list a planner that read the wrong field would emit, so such
+  a planner fails on the recipe and not only on a sentence. THE LIBRARY'S OWN
+  LOG is asserted beside it, because the set-aside clause is the one part of
+  this that no prototype carries. See RECIPE_TEXT_ARMS.
 
-  the RESEARCH CUSTOMIZER gets three more (0.3.3): two assert the PAIR a
-  written cost decides, the unit and the prerequisite, because a cost the
-  player wrote has no source technology and the tree position comes from the
-  plan's own ladder rather than from the unit it copied; the third is all three
-  fields edited under a tier, which is `recipe-ignored` for the research and
-  asserts the tier's own unit beside the library's three lines, whole and in
-  order. See TECH_CUSTOM_ARMS and TECH_IGNORED_ARMS.
+  the RESEARCH COST'S THREE FIELDS get four more, split by WHO SUPPLIES THE
+  UNIT. One writes all three fields, so the whole cost is the player's and the
+  expected unit is written out here; the other three leave at least one field
+  saying "the row above decides" -- one of them all three, and the two between
+  move a single field each, which is how three switches are told from one -- so
+  their expected unit is the TIER'S OWN, read out of the same dump with
+  whatever the player moved written over it. The PREREQUISITE is the tier's
+  source technology in all four, however the cost was written, because a player
+  who writes a cost has said what the research costs and nothing about where it
+  sits. See TECH_COST_ARMS and TECH_TIER_ARMS.
 
   the SPEED derivation gets an arm with a mod in it that defines a faster belt,
   because no mod set this machine can otherwise install has one -- vanilla tops
@@ -150,8 +157,11 @@ THE TYPE OF A NUMBER IS ITS SPELLING, which is what the arm tables below have to
 get right. A JSON integer is written as the property tree's signed 64-bit type
 and a JSON float as its double, and that is the ENGINE'S OWN typing: the engine
 rewrites mod-settings.dat after a load with the values it settled on, and an int
-setting comes back from it as the signed 64-bit type. So a count is written `50`
-and a seconds `20.0`, each as the type its own setting prototype declares.
+setting comes back from it as the signed 64-bit type. BOTH RESEARCH NUMBERS ARE
+INT SETTINGS SINCE FIX ROUND 2 -- `better-belt-balancer-tech-seconds` changed
+prototype type from `double-setting` to `int-setting` with it -- so a count is
+written `50` and a seconds `20`, each as the type its own setting prototype
+declares, and neither carries a decimal point any more.
 
 Its anti-vacuity is structural rather than added. If the .dat were ignored, or
 malformed enough to be skipped, every variant arm would read back the DEFAULT
@@ -315,92 +325,146 @@ RECIPE_VARIANTS = {
 RECIPE_DEFAULT = [("iron-plate", 4), ("iron-gear-wheel", 2), ("transport-belt", 2)]
 
 # ---------------------------------------------------------------------------
-# THE CUSTOMIZER'S ARMS, which are the seventh value of `bbb-recipe-cost` and
-# the text setting beside it.
+# THE RECIPE'S TEXT FIELD, WHICH IS THE SWITCH.
 #
-# FOUR ARMS FOR FOUR STATES, and none of them is reachable from the six above:
-# the dropdown on `custom` with the text left alone, the dropdown on `custom`
-# with a recipe written into the text, a text EDITED while the dropdown is still
-# on a preset -- which is the state where nothing must happen and the log has to
-# say so -- and a text naming the balancer part as its own ingredient.
+# FOUR ARMS FOR FOUR STATES, and none of them is a value of the dropdown any
+# more. Fix round 2 withdrew `custom` from `bbb-recipe-cost` and moved the
+# state into the text itself: `better-belt-balancer-recipe-ingredients` applies
+# whenever it does not say the reserved word `default`, and while it does say
+# it the dropdown beside it decides. So the four are the word under a preset
+# that is NOT the default one, a recipe written with the dropdown untouched, a
+# recipe written under a preset -- the state that used to be "nothing happens
+# and the log says so" and is now the text winning -- and a recipe naming the
+# balancer part as its own ingredient.
 #
-# THREE OF THEM ALSO ASSERT A LOG LINE, and that is the one thing in this file
-# that is not a prototype. What the library does about a text under a preset is
-# by design invisible in the dump -- the preset applies, exactly as it would
-# with the field untouched -- so the ONLY evidence that the text was read and
-# deliberately not used is the sentence, and a player who edits a field and sees
-# nothing happen is what that sentence exists to prevent. The self-product arm
-# is the same shape one step further on: the list it asks for IS emitted, so the
-# prototype is exactly what the player typed and the sentence is all there is.
-# The line is compared from `fkrecipes:` onward, never including the engine's
-# own timestamp in front of it.
+# THE WITHDRAWN VALUE IS WHY NONE OF THESE ARMS COULD BE LEFT ALONE. The engine
+# SILENTLY RESETS a stored value a dropdown's `allowed_values` does not list,
+# and persists the reset, with no line in the log. MEASURED HERE and not by the
+# library: agents/migration-assessment-2.md finding 3 handed the AUTHENTIC
+# 0.2.2 artifact a .dat head had written and read it back with `fklua
+# modsettings read` -- exit 0, no `fkrecipes:` line, no Error, no Warning, and
+# both dropdowns reset to `vanilla` and `logistics` with the reset persisted,
+# while the four settings 0.2.2 does not declare survived verbatim. FkRecipes
+# decision A is where that measurement was ADOPTED, and withdrawing the value
+# is what it bought. An arm still
+# storing `bbb-recipe-cost = custom` would therefore be driving the DEFAULT
+# PRESET under a name that says otherwise: green, and measuring the one thing
+# it was not about.
 #
-# ANTI-VACUITY, AND IT IS NOT SPREAD EVENLY ACROSS THE FOUR. A .dat that was
-# ignored or malformed leaves every setting at its declared default, which is
-# the recipe `RECIPE_DEFAULT` names -- so the arms that prove the file was read
-# at all are the three whose expectation is something else. `recipe-custom` is
-# one: `3 iron-plate, 1 splitter` is a list no preset produces, and its log line
-# says the text was taken. `recipe-ignored` is another: cheap's list, where a
-# text that had been applied would give one iron plate rather than two, plus its
-# own line. `recipe-self-product` is the third and the sharpest of them, because
-# `bbb-balancer-part` is a name NO preset and no ladder of this mod can put in
-# an ingredient list at all.
+# EVERY ARM ASSERTS THE INGREDIENT LIST, WHICH IS NEW HERE. Under the old rule
+# a text under a preset was by design invisible in the prototypes and the log
+# line was the whole of the evidence; the text wins now, so the emitted list
+# itself says which of the two fields the planner read. The LOG is asserted
+# beside it because the SET-ASIDE CLAUSE is the part no prototype carries: it
+# names the dropdown and the value being set aside, which is what a player goes
+# looking for when the recipe is not what the row they are standing on says.
 #
-# `recipe-custom-default` CARRIES NONE OF THAT WEIGHT and is here as coverage of
-# the documented path -- `custom` with the field never touched. MEASURED on
-# Factorio 2.0.77 with the packaged mod: the run with NO .dat at all and the run
-# with {bbb-recipe-cost: custom} produce the same ingredient list and no
-# `fkrecipes:` line in either, so nothing this arm observes tells a .dat that
-# was read from one that was ignored. It stays because picking `custom` and
-# typing nothing is a state a player reaches and this gate should visit; what
-# makes the section a measurement is the three arms above it.
+# THE STREAM IS COMPARED WHOLE AND IN ORDER ON ALL FOUR, where two of these
+# arms used to be satisfied by a stream that merely contained their line. Every
+# load here has a stream this file can state completely -- none, one or two
+# lines -- so there is nothing left for the weaker rule to protect, and an extra
+# line in a game that has everything is a degradation rather than noise to be
+# filtered out. The line is compared from `fkrecipes:` onward, never including
+# the engine's own timestamp in front of it.
+#
+# ANTI-VACUITY, AND IT IS ONE SENTENCE FOR ALL FOUR NOW, where the old table had
+# to carry an arm that could not make the claim at all. A .dat that was ignored
+# or malformed leaves every setting at its declared default, which is `vanilla`
+# with the text on the reserved word, and that is the recipe `RECIPE_DEFAULT`
+# names. NO ARM HERE EXPECTS THAT LIST. `recipe-default-word` expects cheap's,
+# because the dropdown is the field it moved and the text is the field it left
+# alone; the other three expect LISTS no preset of this mod emits. Two of them
+# hold an item no preset holds at all, `bbb-balancer-part` in one and nothing a
+# ladder of this mod can reach in either; the third, `recipe-text-alone`, holds
+# the same two items as the `splitter` preset and is separated by the amounts
+# and the order instead (3 iron-plate then 1 splitter against 1 splitter then 2
+# iron-plate), which is a claim about the list and not about the item set. So
+# every
+# arm fails on its INGREDIENTS, not only on a sentence, if the file never
+# arrived -- which is precisely what `recipe-custom-default` could not say:
+# it stored `custom` and expected the default recipe, byte for byte what a run
+# with no .dat at all produces, MEASURED on 2.0.77 and recorded here as its own
+# weakness. The state it covered is `recipe-default-word` now, where the preset
+# underneath is a different one and the list says which field decided.
+#
+# AND IT IS MEASURED RATHER THAN ARGUED. Every arm below was run once with
+# `startup=None` -- which is the run a missing file produces, byte for byte --
+# against this package on 2.0.77: the recipe came back
+# `[('iron-plate', 4), ('iron-gear-wheel', 2), ('transport-belt', 2)]` with an
+# EMPTY `fkrecipes:` stream, and all four arms fail on their ingredient list
+# against it, `recipe-default-word` included.
 #
 # The text is written as a plain string, which is what a player's own settings
 # screen stores.
 # ---------------------------------------------------------------------------
 
-RECIPE_CUSTOM_ARMS = [
-    # `custom` with the text as it ships: the reserved word `default`, which the
-    # library resolves to the mod's own declared list WITH its ladders. So this
-    # is the vanilla recipe, and no line at all is expected about it -- the
-    # library's rule for the word is that it takes the pre-existing path and
-    # says nothing.
-    ("recipe-custom-default", {RECIPE_SETTING: "custom"}, RECIPE_DEFAULT, None),
-    # `custom` with a recipe written into the field. `splitter` is a base item
-    # no other arm of this file emits, so the list cannot be confused with a
-    # preset's, and the amounts are the player's rather than any plan's.
-    ("recipe-custom",
-     {RECIPE_SETTING: "custom", RECIPE_TEXT_SETTING: "3 iron-plate, 1 splitter"},
+RECIPE_TEXT_ARMS = [
+    # THE RESERVED WORD, UNDER A PRESET THAT IS NOT THE DEFAULT ONE. `default`
+    # is what the field ships saying and it means "the dropdown decides", so the
+    # expected list is cheap's and the library says nothing at all -- the rule
+    # for the word is that it takes the pre-existing path in silence. The preset
+    # is `cheap` rather than `vanilla` for the reason the whole table turns on:
+    # a planner that ignored the dropdown while the text said the word would
+    # come out with the vanilla list, which is exactly what a .dat that never
+    # arrived produces.
+    ("recipe-default-word",
+     {RECIPE_SETTING: "cheap", RECIPE_TEXT_SETTING: "default"},
+     RECIPE_VARIANTS["cheap"], []),
+    # A RECIPE WRITTEN WITH THE DROPDOWN UNTOUCHED, which is the state a player
+    # who only ever opens the text field is in. THE ITEM SET IS NOT WHAT
+    # SEPARATES IT: `RECIPE_VARIANTS["splitter"]` holds exactly these two items
+    # and is driven three arms above as `recipe-splitter`. The AMOUNTS and the
+    # ORDER are -- the preset emits `1 splitter, 2 iron-plate` where this arm
+    # asks for `3 iron-plate, 1 splitter` -- and order is part of the
+    # assertion here for the reason `ingredients_of` gives, so neither a preset
+    # nor any plan of this mod can produce this list. THE
+    # CLAUSE NAMES `vanilla`, the value the dropdown still holds: nothing moved
+    # it, and the library reads it anyway in order to say what it set aside.
+    ("recipe-text-alone",
+     {RECIPE_TEXT_SETTING: "3 iron-plate, 1 splitter"},
      [("iron-plate", 3), ("splitter", 1)],
-     "fkrecipes: bbb-balancer-part takes its ingredients from "
-     "better-belt-balancer-recipe-ingredients: 3 iron-plate, 1 splitter"),
-    # A text edited while the dropdown says `cheap`. The preset wins, and the
-    # expected list is cheap's: the text names the SAME item at a different
-    # amount, so an implementation that took it would fail the list comparison
-    # and not only the line.
-    ("recipe-ignored",
+     ["fkrecipes: bbb-balancer-part takes its ingredients from "
+      "better-belt-balancer-recipe-ingredients: 3 iron-plate, 1 splitter"
+      "; the bbb-recipe-cost choice vanilla is set aside"]),
+    # A RECIPE WRITTEN UNDER A PRESET, WHICH IS THE ROUND IN ONE ARM. This is
+    # the state that used to emit cheap's list and log "the text is ignored";
+    # the text wins now and cheap is what is set aside, and the sentence about
+    # an edited field that does nothing exists nowhere any more because there
+    # is no state left for it to be about. The text names the SAME item as the
+    # preset at a DIFFERENT amount -- one iron plate against two and a belt --
+    # so a planner that still preferred the preset fails on the list and not
+    # only on the line. THE CLAUSE NAMES THE CHOICE AND NOT THE SETTING:
+    # `cheap` is the row the player is standing on, which is the thing they
+    # would go looking for; `bbb-recipe-cost` would name the dropdown rather
+    # than the value it holds.
+    ("recipe-text-over-preset",
      {RECIPE_SETTING: "cheap", RECIPE_TEXT_SETTING: "1 iron-plate"},
-     RECIPE_VARIANTS["cheap"],
-     "fkrecipes: better-belt-balancer-recipe-ingredients is edited, but "
-     "bbb-recipe-cost is not on custom, so the text is ignored"),
-    # `custom` with the balancer part named as its own ingredient. THE LOAD
-    # STILL COMPLETES, which is the half of this arm no host test can make:
-    # base 2.0.77 ships `kovarex-enrichment-process`, which takes 40
-    # `uranium-235` and gives back 41, so a recipe naming its own product is a
-    # shape the engine accepts and the library deliberately does not refuse.
-    # What it does now is SAY SO, and before FkRecipes 1f8e363 it did not: the
-    # load drew the ordinary "takes its ingredients from" line and stopped
-    # there, so a player got a recipe nothing can craft with no line about THAT.
-    # TWO LINES, WHOLE AND IN ORDER: the text is read first and the
-    # self-product check runs on the FINAL list, so it lands second.
+     [("iron-plate", 1)],
+     ["fkrecipes: bbb-balancer-part takes its ingredients from "
+      "better-belt-balancer-recipe-ingredients: 1 iron-plate"
+      "; the bbb-recipe-cost choice cheap is set aside"]),
+    # THE BALANCER PART NAMED AS ITS OWN INGREDIENT. THE LOAD STILL COMPLETES,
+    # which is the half of this arm no host test can make: base 2.0.77 ships
+    # `kovarex-enrichment-process`, which takes 40 `uranium-235` and gives back
+    # 41, so a recipe naming its own product is a shape the engine accepts and
+    # the library deliberately does not refuse. What it does is SAY SO, and
+    # before FkRecipes 1f8e363 it did not: the load drew the ordinary "takes its
+    # ingredients from" line and stopped there, so a player got a recipe nothing
+    # can craft with no line about THAT. TWO LINES, WHOLE AND IN ORDER: the text
+    # is read first and the self-product check runs on the FINAL list, so it
+    # lands second. The first of them carries the set-aside clause like every
+    # other line in this table, naming the `vanilla` the dropdown still holds;
+    # the second does not, because it is about the list rather than about which
+    # field produced it.
     ("recipe-self-product",
-     {RECIPE_SETTING: "custom", RECIPE_TEXT_SETTING: "2 bbb-balancer-part"},
+     {RECIPE_TEXT_SETTING: "2 bbb-balancer-part"},
      [("bbb-balancer-part", 2)],
-     ("fkrecipes: bbb-balancer-part takes its ingredients from "
-      "better-belt-balancer-recipe-ingredients: 2 bbb-balancer-part",
+     ["fkrecipes: bbb-balancer-part takes its ingredients from "
+      "better-belt-balancer-recipe-ingredients: 2 bbb-balancer-part"
+      "; the bbb-recipe-cost choice vanilla is set aside",
       "fkrecipes: bbb-balancer-part: bbb-balancer-part is in the list and is "
       "also what this recipe makes, so nothing can craft the first one unless "
-      "something else produces it")),
+      "something else produces it"]),
 ]
 
 # The non-default technologies. The expected UNIT is not written out, because
@@ -412,130 +476,244 @@ RECIPE_CUSTOM_ARMS = [
 TECH_VARIANTS = ["logistics-2", "logistics-3"]
 
 # ---------------------------------------------------------------------------
-# THE RESEARCH CUSTOMIZER'S ARMS, which are the fourth value of `bbb-tech-cost`
-# and the three fields beside it.
+# THE RESEARCH COST'S THREE FIELDS, WHICH ARE THREE SWITCHES.
 #
-# THE EXPECTED UNIT IS WRITTEN OUT HERE, WHERE TECH_VARIANTS' IS NOT, and the
-# reason is the whole difference between the two sections. A tier's cost is
-# whatever base charges for that technology, so it is compared against that
-# technology in the same dump; a CUSTOM cost is three numbers the player typed,
-# so the only honest expectation is those three numbers. The shape is the
-# engine's own short tuple form, `{count, time, ingredients={{name, amount}}}`,
-# which is what base's own units are written in and what the library emits.
+# WHAT FIX ROUND 2 MADE OF THEM. `bbb-tech-cost` lost its `custom` value and the
+# three fields beside it decide one at a time: a pack text on the reserved word
+# `default` and a number at 0 leave that field to the chosen tier, and anything
+# else overwrites it. The two numbers ship at 0 now rather than at
+# [FallbackUnit]'s 20 and 15, and `better-belt-balancer-tech-seconds` changed
+# prototype type from `double-setting` to `int-setting` with them.
 #
-# AND THE PREREQUISITE IS ASSERTED BESIDE IT, because a written cost has no
-# source technology for the tree position to move with. It comes from the plan's
-# `Position` ladder, which since the ladder's flip IS `TechOptions()` -- the
-# tier list itself, logistics, then logistics-2, then logistics-3 -- so in a
-# base game it is `logistics`, this mod's own default tier. That is the point of
-# the flip and it is what the first arm below now measures: picking Custom and
-# typing nothing moves NOTHING, the price or the place.
+# THE TABLE IS SPLIT BY WHO SUPPLIES THE UNIT, which is the whole difference
+# between the two below. TECH_COST_ARMS writes all three fields, so no field of
+# the cost is the tier's and the expected unit is written out here -- three
+# numbers the player typed are the only honest expectation for them.
+# TECH_TIER_ARMS leaves at least one field saying "the row above decides", so
+# its expectation is the TIER'S OWN UNIT read out of the same dump, with
+# whatever the player moved written over it, which is TECH_VARIANTS' rule
+# applied to a mixture.
 #
-# ANTI-VACUITY, AND THE FLIP TOOK THE OLD ONE AWAY, so read this before moving
-# an assertion. A .dat that was ignored or malformed leaves `bbb-tech-cost` at
-# `logistics`, whose unit in a stock game is 20 automation science over 15
-# seconds -- the SAME THREE NUMBERS the untouched custom arm expects, because
-# the defaults are base's own logistics unit on purpose. What used to separate
-# them was the PREREQUISITE, `logistics` for a .dat that did not arrive and
-# `logistics-3` for one that did; the flip makes both `logistics`, so the unit
-# and the prerequisite together are now exactly what a .dat that never reached
-# the engine produces.
+# THE SHAPE IS THE ENGINE'S OWN SHORT TUPLE FORM, `{count, time,
+# ingredients={{name, amount}}}`, which is what base's own units are written in
+# and what the library emits.
 #
-# WHAT PROVES THE FILE WAS READ IS THE LIBRARY'S OWN LOG LINE, and it is
-# asserted FIRST for that reason, before either claim, which is `check_speed`'s
-# discipline. `fkrecipes: bbb-balancer takes its research cost from
-# better-belt-balancer-tech-packs: ...` is written only where the dropdown is on
-# `custom`; a tier emits no line at all, and a run of this package with no .dat
-# at all records ZERO `fkrecipes:` lines, measured on 2.0.77. RED-PROVEN by
-# running this arm with `startup=None`: it fails on that assertion, and on that
-# assertion alone, with `the library's log lines are []`. The second arm
-# separates them a second way as well, on numbers and a pack no tier charges.
+# AND THE PREREQUISITE IS ASSERTED BESIDE THE UNIT IN EVERY ARM. It is the
+# TIER'S SOURCE TECHNOLOGY however the cost was written: a player who writes a
+# cost has said what the research costs and nothing about where it sits.
+# `CustomCost.Position` is gone from the library with the dropdown value, so
+# there is no second ladder left to place a written cost with, and the arms
+# below no longer assert one.
 #
-# `better-belt-balancer-tech-count` IS AN INT SETTING AND ITS NUMBER IS WRITTEN
-# AS ONE: the toolchain encodes a JSON integer as the property tree's signed
-# 64-bit type (type 6), which is the type the engine itself writes an int
-# setting back as. `better-belt-balancer-tech-seconds` is a double setting, so
-# its value is spelled `20.0` and lands as a double (type 2). The engine reads
-# either encoding as the same number (FkRecipes measured both on this same
-# engine: agents/customizer-design.md, the mod-settings.dat table, "the int
-# written as type 6 and as type 2 | both read as the same number"), and the
-# second arm is where the READ is confirmed rather than assumed: a count the
-# engine had rejected or reset would read back as the default 20 and fail the
-# unit comparison by the one field it moved.
+# ANTI-VACUITY FOR TECH_COST_ARMS, AND ALL THREE OF ITS ASSERTIONS NOW MAKE IT,
+# where the old table had only the log line. A .dat that was ignored or
+# malformed leaves `bbb-tech-cost` at `logistics`, both numbers at 0 and the
+# pack text on the word, which is the DEFAULT TIER DECIDING: base's own
+# `logistics` unit, `logistics` as the prerequisite, and NOT ONE `fkrecipes:`
+# line. The arm expects a unit no technology in a base game charges, the
+# prerequisite `logistics-2`, and exactly one line. What used to be true and is
+# not any more is the old note here: under `Position` a written cost was placed
+# by the plan's own ladder, which started at this mod's default tier, so the
+# untouched custom arm's unit AND prerequisite were what a missing file
+# produces and only the line could tell. The tier supplies the placement now,
+# so the prerequisite is a separator again -- which is why this arm's dropdown
+# is on `logistics-2` and not left alone. MEASURED with the same `startup=None`
+# run the recipe table names: the technology came back
+# `{'count': 20, 'ingredients': [['automation-science-pack', 1]], 'time': 15}`
+# after `logistics` with an empty stream, so this arm fails on its unit, on its
+# prerequisite and on its line, each on its own.
+#
+# FOUR SETTINGS ARE WRITTEN AT ONCE AND THAT IS DELIBERATE, against this file's
+# one-variable-at-a-time rule. The three cost fields are ONE COST, and the
+# states where they can be read APART are TECH_TIER_ARMS' business rather than
+# this arm's; the dropdown moves with them so the prerequisite and the clause
+# name something that was READ rather than something that was never touched. No
+# two of the four can be confused in the result: 50 units, 20 seconds and a
+# three-of-one-plus-one-of-another pack list against a tier charging 200, 30
+# and one of each, so a planner that dropped any one of them fails on that
+# field by name.
+#
+# THE EXPECTED UNIT IS COMPLETE BECAUSE THE TIER'S IS. The library overwrites
+# fields on the tier's own unit map rather than building a fresh one, so a
+# `max_level` or a `count_formula` the tier carried would survive into this
+# arm's prototype and a transcription that named only three fields would fail.
+# MEASURED on 2.0.77, base-only `--dump-data`, `jq -c
+# '.technology["logistics-2"].unit' script-output/data-raw-dump.json`:
+# `{"count":200,"ingredients":[["automation-science-pack",1],
+# ["logistic-science-pack",1]],"time":30}` -- exactly the three fields this arm
+# writes over. If base ever gives that unit a fourth, the library keeps it and
+# this arm fails naming it, which is a transcription to fix rather than a
+# defect to chase.
+#
+# BOTH NUMBERS ARE INT SETTINGS AND BOTH ARE WRITTEN AS INTEGERS: the toolchain
+# encodes a JSON integer as the property tree's signed 64-bit type (type 6),
+# which is the type the engine itself writes an int setting back as. The
+# seconds used to be spelled `20.0` here because the setting used to be a
+# double; it is `20` now, and the READ is confirmed rather than assumed in
+# every arm below -- a number the engine had rejected or reset would come back
+# as the declared 0, which means "the tier decides", and fail the unit
+# comparison by the one field it moved.
 # ---------------------------------------------------------------------------
 
 TECH_PACKS_SETTING = "better-belt-balancer-tech-packs"
 TECH_COUNT_SETTING = "better-belt-balancer-tech-count"
 TECH_SECONDS_SETTING = "better-belt-balancer-tech-seconds"
 
-TECH_CUSTOM_ARMS = [
-    # `custom` with all three fields as they ship: the reserved word `default`
-    # in the pack list, and the two numbers at the values the settings declare.
-    # That is [FallbackUnit] in guest/go/tune, which is base's own `logistics`
-    # cost, so picking Custom and typing nothing changes the price of nothing --
-    # and since the ladder's flip it changes the PLACE of nothing either, which
-    # is why the prerequisite below is `logistics`. Whole-dump measurement on
-    # 2.0.77: this arm's normalised data-raw dump hashes `1e1fcf4f56f5ef22`, the
-    # same as the base golden's, so not one prototype in the table moved.
-    ("tech-custom-default", {TECH_SETTING: "custom"},
-     {"count": 20, "time": 15, "ingredients": [["automation-science-pack", 1]]},
-     ["logistics"],
-     "fkrecipes: bbb-balancer takes its research cost from "
-     "better-belt-balancer-tech-packs: count 20, time 15, "
-     "packs 1 automation-science-pack"),
-    # `custom` with all three written. `logistic-science-pack` is a pack no
-    # tier of this mod's charges on its own, and 50 x 20s is a cost no
-    # technology in a base game has, so neither the list nor either number can
+TECH_COST_ARMS = [
+    # ALL THREE FIELDS WRITTEN UNDER A TIER, so the whole price is the player's
+    # and the tier supplies nothing but the place in the tree. The pack list is
+    # neither the tier's (one of each) nor this mod's declared default (one
+    # automation science pack); 20 seconds is not the 30 the tier charges; and
+    # THE PAIR is what separates the numbers, not the count. MEASURED over the
+    # base-only dump on 2.0.77 with
+    # `jq '[.technology[] | select(.unit.count == 50)] | length'`: NINETEEN of
+    # the 196 technologies charge exactly 50, `steel-processing`, `landfill`,
+    # `lubricant`, `speed-module` and fifteen others, so the count alone proves
+    # nothing. `select(.unit.count == 50 and .unit.time == 20)` answers 0, and
+    # so does `select(.unit.time == 20)` on its own -- no base technology is
+    # priced at 20 seconds at all. So 50 units AT 20 SECONDS is a cost no
+    # technology in a base game charges, and no field of the expected unit can
     # be confused with something that was copied.
-    ("tech-custom",
-     {TECH_SETTING: "custom",
-      TECH_PACKS_SETTING: "1 automation-science-pack, 1 logistic-science-pack",
-      TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20.0},
+    ("tech-cost-whole",
+     {TECH_SETTING: "logistics-2",
+      TECH_PACKS_SETTING: "3 automation-science-pack, 1 logistic-science-pack",
+      TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20},
      {"count": 50, "time": 20,
-      "ingredients": [["automation-science-pack", 1], ["logistic-science-pack", 1]]},
-     ["logistics"],
-     "fkrecipes: bbb-balancer takes its research cost from "
-     "better-belt-balancer-tech-packs: count 50, time 20, "
-     "packs 1 automation-science-pack, 1 logistic-science-pack"),
+      "ingredients": [["automation-science-pack", 3],
+                      ["logistic-science-pack", 1]]},
+     ["logistics-2"],
+     ["fkrecipes: bbb-balancer takes its research cost from "
+      "better-belt-balancer-tech-packs: count 50, time 20, "
+      "packs 3 automation-science-pack, 1 logistic-science-pack"
+      "; the bbb-tech-cost choice logistics-2 supplies what the settings leave "
+      "at default"]),
 ]
 
-# ALL THREE FIELDS EDITED UNDER A TIER, which is `recipe-ignored` for the
-# research and the one state of them the arms above cannot visit: all three
-# moved while the dropdown still names a tier. The tier wins, so the expected
-# unit is the SOURCE TECHNOLOGY'S OWN, read out of the same dump exactly as
-# TECH_VARIANTS reads it, and the prerequisite is that tier; the library's lines
-# are the only evidence the three were read and deliberately not used.
+# ---------------------------------------------------------------------------
+# THE ARMS WHERE THE TIER STILL SUPPLIES SOMETHING, and the expected unit is
+# therefore the tier's own, read out of the same dump exactly as TECH_VARIANTS
+# reads it, with the fields the player moved written over it.
 #
-# THERE ARE THREE LINES AND THE ORDER IS THE LIBRARY'S -- the count, the
-# seconds, then the pack text, which is the order go/data.go calls
-# noteIgnoredNumber twice and noteIgnoredText once -- so the whole stream is
-# compared against this list rather than searched for one line at a time. A
-# containment check is passed by a library that says the same sentence twice or
-# says the seconds' before the count's, and the order is the one a player reads
-# down.
+# THREE ARMS, AND WHAT EACH ONE SEPARATES IS A DIFFERENT FIELD. Each of the
+# three is a switch of its own, so a table that moved them only together could
+# not tell three switches from one:
 #
-# A NUMBER EQUAL TO ITS DECLARED DEFAULT DRAWS NO LINE, which is why the values
-# below are 50 and 20 and not the declared 20 and 15. A numeric setting has no
-# reserved word standing for "untouched" the way the pack text's `default` does,
-# so the library compares the stored number against the declared one and a match
-# is silence; guest/go/tune's
-# TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo drives both halves on
-# the host, and this arm drives the edited one through the real .dat.
+#   tech-tier-word     all three fields say "the row above decides" -- the word
+#                      `default` and two zeros -- so the technology is priced
+#                      by the tier BYTE FOR BYTE and the library says nothing.
+#                      It separates a planner that treats a STORED default as
+#                      an override, which would reprice every load of every
+#                      game. It is the research twin of `recipe-default-word`
+#                      and the state every player who never opens the Startup
+#                      tab is in.
+#   tech-count-alone   the COUNT moved and the other two did not, so the count
+#                      is the player's and the time and the packs are the
+#                      tier's. It separates a planner that takes all three
+#                      fields whenever any one of them moves.
+#   tech-packs-alone   the PACK TEXT moved and the two numbers did not, which
+#                      is the other half of that and cannot be got from the
+#                      count arm: a planner that consulted the text only when
+#                      a number was non-zero passes `tech-count-alone` and
+#                      fails here. It is also the one arm in this file where a
+#                      typed list is written INTO a tier's unit rather than
+#                      into a unit the library built, so the count and the time
+#                      beside it have to come back as the tier's.
 #
-# ANTI-VACUITY: the three values are ones logistics-2 does not charge -- two
-# automation packs where it charges one of each, 50 units where it charges 200,
-# 20 seconds where it charges 30 -- so a planner that took any one of them under
-# a tier fails the unit comparison by that field, and not only the lines.
-TECH_IGNORED_ARMS = [
-    ("tech-ignored", "logistics-2",
-     {TECH_SETTING: "logistics-2", TECH_PACKS_SETTING: "2 automation-science-pack",
-      TECH_COUNT_SETTING: 50, TECH_SECONDS_SETTING: 20.0},
-     ["fkrecipes: better-belt-balancer-tech-count is edited, but bbb-tech-cost "
-      "is not on custom, so the number is ignored",
-      "fkrecipes: better-belt-balancer-tech-seconds is edited, but "
-      "bbb-tech-cost is not on custom, so the number is ignored",
-      "fkrecipes: better-belt-balancer-tech-packs is edited, but bbb-tech-cost "
-      "is not on custom, so the text is ignored"]),
+# THE SECONDS-ALONE STATE IS NOT REACHED HERE AND IS NOT UNGUARDED. A fourth
+# engine run would separate it the way the two above do, and it is left to the
+# host suites because nothing about it is an ENGINE question: this mod's own
+# `TestOneFieldMovedTakesTheOtherTwoFromTheTier` in guest/go/tune's
+# plandata_test.go drives all three fields one at a time, and the library's own
+# `TestATimeAloneOverridesTheTier` and `TestAPackTextAloneOverridesTheTier`
+# (FkRecipes go/customize_test.go, with their Rust twins) hold the rule at the
+# source. What an engine adds over those is that the .dat ROUND TRIP carries
+# the value, which the count arm already measures for a number.
+#
+# THE TIER IS `logistics-2` IN ALL THREE AND NOT THE DEFAULT ONE, and that is
+# what makes the partial arms say anything. This mod's `CostChoices.Fallback`
+# is [FallbackUnit], which IS base's `logistics` cost -- 20 units of 15 seconds
+# in one automation science pack -- so under the default tier "the tier
+# supplied the fields I did not move" and "the mod's own declared fallback
+# supplied them" are the same three numbers and the arms could not tell them
+# apart. Under `logistics-2` they are 200 and 30 (measured with the jq above),
+# which neither the fallback nor the settings' declared defaults can produce.
+#
+# ANTI-VACUITY, AND IT IS NOT THE SAME ASSERTION FOR EVERY ARM. The unit and
+# the prerequisite make it for ALL THREE: a .dat that was ignored or malformed
+# leaves `bbb-tech-cost` at `logistics`, so the unit would be base's
+# `logistics` unit where every arm here expects `logistics-2`'s (200 and 30
+# against 20 and 15, two fields at once, and for `tech-packs-alone` the
+# ingredients as well), and the prerequisite would be `logistics` where every
+# arm expects `logistics-2`. The LOG LINE makes it for the two partial arms and
+# NOT for `tech-tier-word`, which deliberately expects no line and would be
+# handed none by a file that never arrived -- which is exactly why that arm's
+# unit and prerequisite are read against a tier this file never defaults to,
+# and why it would be a poor arm under `logistics`. What this table cannot rest
+# on at all is the old table's separator: the three ignored-field sentences are
+# gone with the state that produced them. An expectation that a missing file
+# would also satisfy is worthless, and a missing file here produces the wrong
+# tier twice over: the `startup=None` run above reads 20 units of 15 seconds in
+# one automation science pack after `logistics`, where all three arms here
+# expect `logistics-2`'s own 200 and 30 after `logistics-2`.
+#
+# THE MIXTURE IS BUILT IN THE DRIVER AND NOT TRANSCRIBED, for TECH_VARIANTS'
+# reason: the claim is "whatever base charges for that technology, with the
+# fields the player moved written over it", and a figure written out here would
+# go stale the day base re-costs a tier. THE LOG LINES ARE TRANSCRIBED, because
+# they are the library's own sentences and this file pins those word for word;
+# each quotes the tier's own fields inside itself -- the count arm the tier's
+# time and packs, the pack arm the tier's count and time -- so base re-costing
+# `logistics-2` fails those arms on the line while the unit comparison still
+# passes, and the remedy is to re-transcribe the sentence.
+# ---------------------------------------------------------------------------
+TECH_TIER_ARMS = [
+    # THE THREE WAYS OF SAYING "THE ROW ABOVE DECIDES", ALL AT ONCE. Nothing is
+    # overridden, so no field is written over the tier's unit and the library
+    # has nothing to report: a line here would be the library narrating an
+    # override on every load of every game. It is not the same run as
+    # `tech-logistics-2` above, which leaves the three fields out of the .dat
+    # altogether: this one STORES the word and the two zeros, which is what a
+    # player who typed `default` back into the field leaves behind. `moved` is
+    # empty, so the driver's expectation is the tier's unit unaltered.
+    ("tech-tier-word", "logistics-2",
+     {TECH_SETTING: "logistics-2", TECH_PACKS_SETTING: "default",
+      TECH_COUNT_SETTING: 0, TECH_SECONDS_SETTING: 0},
+     {}, []),
+    # ONE FIELD MOVED. 50 is a count `logistics-2` does not charge and the
+    # other two fields are left saying the word and the zero, so the expected
+    # unit is that tier's with 50 written into `count` alone -- the time and
+    # the pack list have to come back as the tier's 30 seconds and its two
+    # packs. A planner that took all three fields whenever any of them moved
+    # would write this mod's declared 0 seconds and its one declared pack into
+    # the other two slots, and a 0 in a research unit is a load the engine
+    # refuses outright, so that defect arrives here as `--dump-data exited 1`
+    # rather than as a quiet pass.
+    ("tech-count-alone", "logistics-2",
+     {TECH_SETTING: "logistics-2", TECH_COUNT_SETTING: 50},
+     {"count": 50},
+     ["fkrecipes: bbb-balancer takes its research cost from "
+      "better-belt-balancer-tech-packs: count 50, time 30, "
+      "packs 1 automation-science-pack, 1 logistic-science-pack"
+      "; the bbb-tech-cost choice logistics-2 supplies what the settings leave "
+      "at default"]),
+    # THE PACK TEXT ALONE, which is the count arm turned around: the two
+    # numbers say the zero and the text is the one field that moved, so the
+    # expected unit is `logistics-2`'s own COUNT AND TIME with the typed list
+    # written over its `ingredients`. `2 chemical-science-pack` is a list no
+    # tier of this mod charges (logistics-2 charges one automation and one
+    # logistic, logistics-3 charges four packs of which chemical is one at
+    # amount 1) and is not this mod's declared default either, so the
+    # ingredients cannot be confused with anything that was copied, and the
+    # line quotes the tier's 200 and 30 back beside it.
+    ("tech-packs-alone", "logistics-2",
+     {TECH_SETTING: "logistics-2",
+      TECH_PACKS_SETTING: "2 chemical-science-pack"},
+     {"ingredients": [["chemical-science-pack", 2]]},
+     ["fkrecipes: bbb-balancer takes its research cost from "
+      "better-belt-balancer-tech-packs: count 200, time 30, "
+      "packs 2 chemical-science-pack"
+      "; the bbb-tech-cost choice logistics-2 supplies what the settings leave "
+      "at default"]),
 ]
 
 # ---------------------------------------------------------------------------
@@ -1126,9 +1304,51 @@ def legacy_stub_of(dump: Path) -> dict:
 #
 # THE LIST IS IN DECLARATION ORDER, which is the second assertion: sorted by
 # (order, name), the way Factorio sorts a mod's settings for the Startup tab,
-# the six have to come back in exactly this sequence. Each Custom field sits
-# directly under the dropdown that switches it on, which is what `OrderAfter`
-# was called for and what a per-name comparison alone cannot say.
+# the six have to come back in exactly this sequence. Each generated field sits
+# directly under the dropdown it can override, which is what `OrderAfter` was
+# called for and what a per-name comparison alone cannot say.
+#
+# FIX ROUND 2 MOVED NEITHER A NAME NOR AN ORDER. Withdrawing the `custom` value
+# changed which of the two rows decides and not where either sits: the two
+# dropdowns keep their names and their `a` and `b`, and the four generated
+# settings keep theirs and their three letters, so this table is the same six
+# pairs it was before the text became the switch. What DID move is inside the
+# hash and not here, and the difference is the whole reason this table exists:
+# a `mod_settings_sha256` that has to be re-captured against an order string
+# that must not have moved at all. FIVE MOVES, read off this package's own
+# `mod-settings-dump.json` on 2.0.77 (this script's `--diff` keeps it as
+# `<arm>-settings.json`) rather than off the library's notes:
+#
+#   FOUR SETTINGS CHANGED SHAPE, not three. `bbb-recipe-cost` went from seven
+#   `allowed_values` to six and `bbb-tech-cost` from four to three;
+#   `better-belt-balancer-tech-count` went from default 20 and minimum 1 to
+#   default 0 and minimum 0; and `better-belt-balancer-tech-seconds` made those
+#   same two moves AND changed prototype type, from `double-setting` to
+#   `int-setting`, which is why the dump now carries it in the `int-setting`
+#   table beside the count.
+#
+#   THE COMPOSED DESCRIPTIONS MOVED BY DIFFERENT AMOUNTS AND TWO OF THEM HAD
+#   NOTHING TO GROW. `bbb-tech-cost` gained ONE line, the switch line ("\nThe
+#   setting below applies instead while it does not say default.").
+#   `bbb-recipe-cost`, `better-belt-balancer-recipe-ingredients` and
+#   `better-belt-balancer-tech-packs` gained TWO, a wrap line and a switch
+#   line; the ingredient dropdown is the only DROPDOWN carrying a wrap line,
+#   which is why its twin gained one fewer.
+#   `better-belt-balancer-recipe-ingredients` also had a third line EDITED
+#   rather than added, its format line gaining the `none` clause ("The word
+#   none empties the list, so the recipe costs nothing to craft."), which
+#   `better-belt-balancer-tech-packs` does not carry. BOTH DROPDOWNS ALSO LOST
+#   a line, because the composition writes one per allowed value and the
+#   withdrawn one took its own with it. And the two numbers grew nothing: they
+#   carried NO description at all and carry a composed one now ("\nA whole
+#   number from 0 to 1000000. While it is 0 the option chosen above decides.").
+#
+#   AND EVERY COMPOSED LOCALE REFERENCE CHANGED FORM, which nothing else in
+#   this file names. A key a description points at goes out as the engine's
+#   fallback group `{"?", {"<section>.<key>"}, "<raw name>"}` where it went out
+#   as the bare `{"<section>.<key>"}` before (FkRecipes e4604d4), so a key the
+#   game does not define degrades to the raw internal name instead of taking
+#   the tooltip with it. That is a move in all six, the two numbers included.
 # ---------------------------------------------------------------------------
 
 OUR_SETTINGS_ORDERS = [
@@ -1405,7 +1625,7 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
     Returns True on a failure, which is the shape main() already counts in.
     """
     print(f"==> the cost settings, "
-          f"{len(RECIPE_VARIANTS) + len(TECH_VARIANTS) + len(RECIPE_CUSTOM_ARMS) + len(TECH_CUSTOM_ARMS) + len(TECH_IGNORED_ARMS) + 1} "
+          f"{len(RECIPE_VARIANTS) + len(TECH_VARIANTS) + len(RECIPE_TEXT_ARMS) + len(TECH_COST_ARMS) + len(TECH_TIER_ARMS) + 1} "
           f"variant arm(s)")
     bad = False
 
@@ -1427,25 +1647,17 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
         else:
             print(f"  ok   {arm:<26} {got}")
 
-    # THE CUSTOMIZER, four arms, each driving the real settings through the
-    # same writer. See RECIPE_CUSTOM_ARMS for what each state is and why the
-    # log lines are part of three of them.
-    for arm, startup, want, want_line in RECIPE_CUSTOM_ARMS:
-        # A STRING IS ONE LINE THE STREAM MUST CARRY; A TUPLE IS THE WHOLE
-        # STREAM, IN ORDER. The distinction is on the TYPE and not on the
-        # length, so a tuple that ever shrinks to one line keeps the stricter
-        # rule instead of silently dropping to a membership test.
-        #
-        # The two arms that predate this one name one sentence each and
-        # tolerate whatever else the plan said, which is what they were written
-        # to do; `recipe-custom-default` names none at all. `recipe-self-product`
-        # names BOTH of its lines and is compared whole, the way `check_remover`
-        # and `tech-ignored` already are: an extra line there is a degradation
-        # with no cause in a game that has everything, and it must fail rather
-        # than be filtered out of the comparison.
-        whole = want_line is not None and not isinstance(want_line, str)
-        want_lines = ([] if want_line is None else
-                      list(want_line) if whole else [want_line])
+    # THE TEXT FIELD, four arms, each driving the real settings through the
+    # same writer. See RECIPE_TEXT_ARMS for what each state is, why every one
+    # of them asserts the ingredient list, and what makes the set anti-vacuous.
+    for arm, startup, want, want_lines in RECIPE_TEXT_ARMS:
+        # THE WHOLE STREAM, IN ORDER, ON EVERY ARM. The old table carried two
+        # rules -- one line the stream must CARRY, against the whole stream
+        # compared in order -- because two of its arms could not state what
+        # else the plan would say. Every arm here can: none, one or two lines,
+        # written down beside the recipe. So the weaker rule is gone with the
+        # state that needed it, and an extra line is a failure the way it
+        # already is in `check_remover`.
         got = run_arm(arm, factorio, series, mod_dir, None,
                       startup=startup, probe=ingredients_of)
         ings, lines = got["probe"], got["fkrecipes_lines"]
@@ -1454,17 +1666,15 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
             print(f"FAIL {arm}: the recipe is {ings}\n"
                   f"{'':>5}  and {startup} should be {want}")
             continue
-        ok = lines == want_lines if whole else all(ln in lines for ln in want_lines)
-        if not ok:
+        if lines != want_lines:
             bad = True
             print(f"FAIL {arm}: the library's log lines are {lines}\n"
-                  + (f"{'':>5}  and they have to be, whole and in order, {want_lines!r}"
-                     if whole else
-                     f"{'':>5}  and they have to carry {want_lines!r}"))
+                  f"{'':>5}  and they have to be, whole and in order, "
+                  f"{want_lines!r}")
             continue
         print(f"  ok   {arm:<26} {ings}"
-              + "".join(f"\n{'':>5}  said {ln!r}" for ln in want_lines))
-
+              + ("".join(f"\n{'':>5}  said {ln!r}" for ln in want_lines)
+                 if want_lines else f"\n{'':>5}  and said nothing"))
     for value in TECH_VARIANTS:
         arm = f"tech-{value}"
 
@@ -1497,26 +1707,23 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
             u = ours["unit"]
             print(f"  ok   {arm:<26} {u['count']} x {u['time']}s, after {value}")
 
-    # THE RESEARCH CUSTOMIZER, two arms, each asserting the unit AND the
-    # prerequisite. See TECH_CUSTOM_ARMS for what each state is, why the
-    # expected unit is written out where TECH_VARIANTS' is not, and what makes
-    # each arm anti-vacuous.
-    for arm, startup, want_unit, want_after, want_line in TECH_CUSTOM_ARMS:
+    # THE WHOLE COST WRITTEN, one arm, asserting the unit, the prerequisite and
+    # the whole log stream. See TECH_COST_ARMS for what the state is, why the
+    # expected unit is written out where TECH_TIER_ARMS' is not, and what makes
+    # it anti-vacuous.
+    for arm, startup, want_unit, want_after, want_lines in TECH_COST_ARMS:
         got = run_arm(arm, factorio, series, mod_dir, None, startup=startup,
                       probe=lambda d: project(d, '.technology["bbb-balancer"]'))
         ours, lines = got["probe"], got["fkrecipes_lines"]
-        # ANTI-VACUITY FIRST. Since the `Position` ladder starts at this mod's
-        # own default tier, the unit AND the prerequisite below are what a
-        # `mod-settings.dat` that never reached the engine produces, so neither
-        # of them can say the stored value was read. This line can: the library
-        # writes it only under `custom`, and a tier writes nothing.
-        if want_line not in lines:
-            bad = True
-            print(f"FAIL {arm}: the library's log lines are {lines}\n"
-                  f"{'':>5}  and one of them has to be {want_line!r}: without it "
-                  f"the dropdown was not on custom, so the unit and the "
-                  f"prerequisite below are the default tier's and prove nothing")
-            continue
+        # NO ASSERTION HERE IS LOAD-BEARING FOR THE OTHERS, WHICH IS WHAT THE
+        # WITHDRAWAL BOUGHT. The old order put the log line first because it
+        # was the only separator: `Position` placed a written cost from this
+        # mod's own default tier, so the unit and the prerequisite were both
+        # what a `mod-settings.dat` that never reached the engine produces. The
+        # tier places it now and this arm's tier is not the default one, so
+        # each of the three fails on its own against a missing file, and the
+        # order below is the order a maintainer reads them in: what the player
+        # is charged, where it sits, what they were told.
         if ours["unit"] != want_unit:
             bad = True
             print(f"FAIL {arm}: the research unit is {ours['unit']}\n"
@@ -1525,18 +1732,26 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
         if ours.get("prerequisites") != want_after:
             bad = True
             print(f"FAIL {arm}: the prerequisite is {ours.get('prerequisites')}, "
-                  f"not {want_after} -- a written cost is placed by the plan's "
-                  f"own ladder, and nothing else places it")
+                  f"not {want_after} -- a written cost is placed by the tier "
+                  f"the dropdown names, and nothing else places it")
+            continue
+        if lines != want_lines:
+            bad = True
+            print(f"FAIL {arm}: the library's log lines are {lines}\n"
+                  f"{'':>5}  and the whole stream, in order, has to be "
+                  f"{want_lines!r}")
             continue
         u = ours["unit"]
         print(f"  ok   {arm:<26} {u['count']} x {u['time']}s in "
-              f"{[p[0] for p in u['ingredients']]}, after {want_after[0]}\n"
-              f"{'':>5}  said {want_line!r}")
+              f"{[p[0] for p in u['ingredients']]}, after {want_after[0]}")
+        for line in lines:
+            print(f"{'':>5}  said {line!r}")
 
-    # ALL THREE FIELDS EDITED UNDER A TIER. See TECH_IGNORED_ARMS: the tier's
-    # own unit and prerequisite, read the way the tier arms read them, plus the
-    # whole log stream in the library's order.
-    for arm, tier, startup, want_lines in TECH_IGNORED_ARMS:
+    # THE ARMS THE TIER STILL SUPPLIES SOMETHING TO. See TECH_TIER_ARMS: the
+    # tier's own unit, read the way the tier arms read it, with the fields the
+    # player moved written over it, plus the prerequisite and the whole log
+    # stream in the library's order.
+    for arm, tier, startup, moved, want_lines in TECH_TIER_ARMS:
         def tier_probe(dump: Path, src=tier):
             return project(dump, '{ours: .technology["bbb-balancer"], '
                                  'src: .technology["%s"]}' % src)
@@ -1549,11 +1764,17 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
             print(f"FAIL {arm}: base has no `{tier}` technology, so this arm "
                   f"proves nothing")
             continue
-        if ours["unit"] != src["unit"]:
+        # THE MIXTURE, BUILT FROM THE DUMP AND NOT FROM A TRANSCRIPTION: the
+        # tier's own unit with exactly the fields this arm moved written over
+        # it, which is the library's per-field rule stated as an equation. An
+        # empty `moved` is the whole tier, byte for byte.
+        want_unit = dict(src["unit"])
+        want_unit.update(moved)
+        if ours["unit"] != want_unit:
             bad = True
             print(f"FAIL {arm}: the research unit is {ours['unit']}\n"
-                  f"{'':>5}  and `{tier}` charges {src['unit']}: a field the "
-                  f"player wrote reached the unit under a tier")
+                  f"{'':>5}  and `{tier}` charges {src['unit']}, which with "
+                  f"{moved or 'nothing'} written over it is {want_unit}")
             continue
         if ours.get("prerequisites") != [tier]:
             bad = True
@@ -1564,10 +1785,13 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
             bad = True
             print(f"FAIL {arm}: the library's log lines are {lines}\n"
                   f"{'':>5}  and the whole stream, in order, has to be "
-                  f"{want_lines}")
+                  f"{want_lines!r}")
             continue
         u = ours["unit"]
-        print(f"  ok   {arm:<26} {u['count']} x {u['time']}s, after {tier}")
+        print(f"  ok   {arm:<26} {u['count']} x {u['time']}s in "
+              f"{[p[0] for p in u['ingredients']]}, after {tier}")
+        if not lines:
+            print(f"{'':>5}  and said nothing")
         for line in lines:
             print(f"{'':>5}  said {line!r}")
     return bad
@@ -1674,7 +1898,7 @@ def check_remover(factorio: str, series: str, mod_dir: Path) -> bool:
     # THE CLAIM, AND IT IS BOTH HALVES. The list alone would pass on a library
     # that dropped the belt ingredient instead of merging it, and the line
     # alone would pass on one that said the right thing and emitted something
-    # else -- which is why RECIPE_CUSTOM_ARMS asserts both too.
+    # else -- which is why RECIPE_TEXT_ARMS asserts both too.
     bad = False
     ings = [(i["name"], i["amount"]) for i in got["probe"]["ingredients"]]
     if ings != REMOVER_RECIPE:

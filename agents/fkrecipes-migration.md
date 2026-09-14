@@ -1254,6 +1254,197 @@ Factorio 2.0.77 (build 84539, mac-arm64, steam), the binary re-asked its version
 
 **AND THE LIBRARY STILL OWES ONE THING THIS LEG IS THE SECOND WITNESS TO.** FkRecipes' own notes close round 1b with it: nothing in that repository's gates sees what a consumer's suite sees, and what answers it is a document kept by hand. This leg is the case where the document was right and cost nothing, because the behaviour that moved is one this plan does not reach; round one was the case where there was no document at all. Neither is the case that would settle it, which is a behavioural change this plan DOES reach arriving with the line missing from the list.
 
+## Fix round 2, 2026-09-14: the library withdraws the Custom value and this mod adopts the text as the switch
+
+[`agents/migration-assessment-2.md`](agents/migration-assessment-2.md) is this mod's SECOND adversarial assessment, run at `1caaf08` on 2026-09-13 against FkRecipes `21f5d89`: eighteen findings, six of them new, and the question it asked that no round before it had is what an update from a PUBLISHED release costs a player. FkRecipes answered the library's half in five commits, `21f5d89` to `221ff9c`, and wrote a scope for the answer first: [`../FkRecipes/agents/threat-model.md`](../FkRecipes/agents/threat-model.md), whose second paragraph is the sentence the whole round turns on, **THE LOG IS NOT WHERE A PLAYER LOOKS**. A disclosure that exists only in a log does not count as one, so a decision that can only be logged is a decision that has to be made again.
+
+**THIS SECTION IS THE ROUND'S FIRST OF FOUR COMMITS AND IT WILL GROW.** This one is the ADOPT commit: the compile break, the two plan-time refusals, the suite, the locale test turned round, the golden and the gate's arms. Three more are owed and each will append a subsection of its own: the locale prose rewrite, the dropdown labels and the changelog, and the remover fixture. What each still owes is at the end.
+
+Every claim below is on Factorio 2.0.77 (build 84539, mac-arm64, steam) or on the host, the two sibling checkouts clean and READ-ONLY, FkRecipes at `221ff9c` and FkLua's checkout at `01d640a`. **FkLua is unmoved as a PIN and moved as a CHECKOUT, and the distinction is FkRecipes' own finding of this round**: `fklua.lock` is not touched, `../FkLua/bin/fklua gen-bindings --check` and `../FkLua/bin/fklua lock --check` both exit 0 against the committed bindings, and the api pin is still 2.1.17.
+
+### What moved in the library, in this mod's terms
+
+**FkRecipes, `21f5d89` to `221ff9c`, five commits.**
+
+| commit | what it is, in this mod's terms |
+|---|---|
+| `6518971` | **decision A, and the one this mod is about.** The state "the player's own list is in force" moves out of a dropdown VALUE and into the TEXT FIELD. `IngredientsFrom` may sit beside `IngredientsBy` and applies whenever its stored text is not the word `default`; `CostFrom` may sit beside `CostBy` and each of its three fields is a switch of its own. `CustomCost.Seconds` becomes an `IntSettingRef`, `CustomCost.Position` is deleted outright, and a research count or seconds beside a dropdown must declare default 0 and minimum 0. It also folds in decision C: a recipe or technology whose stored value fell back carries a trailing line in its OWN `localised_description` |
+| `67b5090` | **decision B**, degrade rather than refuse where the check asks the WORLD anything. A copied research unit's own science packs go through `ToolExists` now, which is finding 13 closed and is one of the two findings this round made about this mod's fixture, below. The packless refusal gains `, and none of <names> is a science pack here`, and a refusal reached after a stored value fell back keeps its FACT and loses the screen it used to name |
+| `e4604d4` | **decision D**, every locale key a composed description references goes out as `{"?", {"<section>.<key>"}, "<raw>"}` instead of the bare key table. That is finding 15 closed from the other end, and it is why remedy (f) of this mod's own assessment is now actively WRONG |
+| `641cb50` | **decision E**, the word `none` is disclosed beside `default` on an INGREDIENT text setting and deliberately not on a pack one, and the engine's wrap is disclosed in every composed shape that renders a typeable list. Findings 18 and 5 |
+| `221ff9c` | the threat model itself, plus the four commits' house trailer. No code |
+
+**WHAT THE WITHDRAWAL IS FOR, AND IT IS FINDING 3 MEASURED RATHER THAN ARGUED.** Factorio RESETS a stored dropdown value the running release's `allowed_values` does not list and PERSISTS the reset with no line in the log, while a setting a release does not declare at all survives verbatim. So a `custom` row is destroyed by one launch of an older release while the typed text beside it lives, which is a field still showing the player's recipe under a dropdown that has quietly gone back to a preset. Keeping the state in the TEXT makes adopting a customizer on a dropdown a mod already ships an IDENTITY: the option list does not move, no stored choice is reset or changes meaning, and a rollback loses nothing. This mod's six presets and three tiers are what they have always been, and the assessment's most severe finding has no subject left here.
+
+### The compile break, which is four declarations in one function
+
+All four are in `tune.Plan()` in `guest/go/tune/plan.go`, which is exactly where FkRecipes' adoption list said they would be (items 1 to 4 of its fifteen). **The compiler output observed on the untouched tree before a line was changed**, which is the whole of what the build had to say:
+
+```
+tune/plan.go:337:4: unknown field Custom in struct literal of type fkrecipes.IngredientChoices
+tune/plan.go:481:4: unknown field Custom in struct literal of type fkrecipes.CostChoices
+tune/plan.go:484:15: cannot use techSeconds (variable of struct type fkrecipes.DoubleSettingRef) as fkrecipes.IntSettingRef value in struct literal
+tune/plan.go:485:5: unknown field Position in struct literal of type fkrecipes.CustomCost
+```
+
+What each became, read off the diff rather than off the list:
+
+- `IngredientChoices.Custom: recipeIngredients` moves one level out to `RecipeSpec.IngredientsFrom`, beside an `IngredientsBy` whose `Choices` are unchanged.
+- `CostChoices.Custom: &fkrecipes.CustomCost{...}` moves one level out to `TechSpec.CostFrom`, beside a `CostBy` that keeps its three choices and its `Fallback`.
+- `CustomCost.Position` has no replacement and needs none, which is the deletion this mod gets the most out of. A written cost is no longer a dropdown value with no source technology under it, so there is no arm in which this technology has a cost and nothing to hang off; every value of `bbb-tech-cost` names a source and that source is the prerequisite whatever the three settings say. `TechOptions()` is the menu order and the choice table and nothing else now, and the coupling `TechDefault()` used to carry for the Custom arm's placement is gone with the arm.
+- `lib.DoubleSetting(TechSecondsName, 15, ...)` becomes `lib.IntSetting(TechSecondsName, 0, fkrecipes.Between(0, 3600))`. `DoubleSetting` itself stays in the library and stays the right constructor for a crafting time, which this plan does not declare.
+
+**THE CONSTRUCTOR CHANGE IS A PROTOTYPE TYPE CHANGE UNDER A NAME, AND THE LIBRARY MEASURED WHAT THAT COSTS.** `better-belt-balancer-tech-seconds` was a `double-setting` and is an `int-setting`. Measured by FkRecipes headless on 2.0.77: a stored non-integral double under a name redeclared as an int is truncated TOWARD ZERO and then range checked, in range kept and out of range replaced by the DECLARED DEFAULT rather than clamped, with nothing logged in any path and `--dump-data` exit 0 in all of them. **It costs no player anything here**: the four generated settings have never shipped in a public release, so no stored double exists to truncate. It is written down because it is the one break in this round that a consumer who HAD shipped the setting could not have been warned about from inside a guest.
+
+### Two plan-time refusals, which are load failures and arrive after the compiler is happy
+
+**THE CHOICE LIST COVERS THE DROPDOWN'S `allowed_values` EXACTLY.** The library adds no value of its own to a dropdown any more, so nothing is subtracted from the comparison: `RecipeValues()` was `append(RecipeOptions(), RecipeCustom)` and `TechValues()` was `append(TechOptions(), TechCustom)`, seven against six and four against three, and both sides now read one list. The refusal the library raises otherwise is `the recipe bbb-balancer-part offers nothing for the value <v> that the setting bbb-recipe-cost allows` and its technology twin (`../FkRecipes/go/data.go`, the allowed-value walk).
+
+**`RecipeValues`, `TechValues`, `RecipeCustom` and `TechCustom` ARE DELETED OUTRIGHT RATHER THAN REDUCED TO ALIASES**, and that is a decision. The whole reason an Options/Values split existed was the seventh value and the fourth; a `RecipeValues()` that returned `RecipeOptions()` would be a second name for one list, and a reader would have to go and find out which of the two the dropdown is declared with. There is one list per dropdown now, `RecipeOptions` and `TechOptions`, read by the declaration, by `recipeChoices`/`techChoices` and by every test that walks the presets, and `RecipeDefault()`/`TechDefault()` are its head for a reason that is now the only reason: `allowed_values` and `default_value` are separate prototype fields and a default outside the list is a load error.
+
+**A RESEARCH COUNT OR SECONDS BESIDE A `CostBy` DECLARES DEFAULT 0 AND MINIMUM 0.** This mod declared 20 with minimum 1 and 15 with minimum 1, which were `FallbackUnit()`'s own numbers. Both are 0 now, and 0 is what the word `default` looks like on a number: while a field is 0 the tier decides it. The refusal if it is not is the library's, word for word, `fkrecipes: the setting tech-count backs a research count beside a research dropdown, so its declared default and its minimum must both be 0 (0 means the dropdown decides)`. **THE MAXIMA ARE STILL THIS MOD'S AND THE MINIMA ARE NOT**, which is the whole shape of the change: the library refuses a research number with no maximum of at least 1, so the ceiling is the one bound left to choose and 1,000,000 and 3,600 are unchanged.
+
+**AND WHAT STOPS A 0 REACHING THE ENGINE IS THE COST BEHIND THE FIELD AND NOT THE FENCE.** The engine refuses a unit whose count is 0 and one whose time is 0. What this plan emits for a field left at 0 is the number the chosen TIER carries, or, where no source in that ladder carries a unit at all, the number `CostChoices.Fallback` declares, which is `FallbackUnit()`'s 20 and 15 and is what `TestNoLogisticsAtAllIsTheFallbackAndNoPrerequisite` walks. Either way something non-zero answers, so no arm of this plan writes a 0 into a unit, and `plan.go` says so where the declarations are rather than leaving it to be read off the fence.
+
+### The suite: fifty-two tests, thirteen gone and eleven new
+
+`cd guest/go && go test ./tune/ -count=1` is **exit 0** and `go test ./tune/ -count=1 -v | grep -c '^=== RUN   Test'` reads **52**, where the re-adoption leg's was 54. Thirteen `func Test` came out and eleven went in (`git diff -U0 -- guest/go/tune/ | grep '^[-+]func Test'`).
+
+**FOUR OF THE THIRTEEN HAD NOTHING LEFT TO ASSERT AT ALL, and they are two different kinds of nothing.**
+
+- `TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo` and `TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo` pinned `... is edited, but ... is not on custom, so the text is ignored` and its number twin. Those sentences exist nowhere in the library now and nothing replaces them: every non-default value is live, so there is no state left for such a line to be about. What replaces the tests is the opposite claim -- `TestATextUnderAPresetTakesTheRecipeOverAndNamesWhatItSetAside` and `TestOneFieldMovedTakesTheOtherTwoFromTheTier` -- and the gate's `recipe-text-over-preset` arm is the same sentence at the engine.
+- `TestThePositionLadderStepsUpAndThenLetsGo` and `TestTheCustomArmTakesItsPlaceFromTheDefaultTier` were about `CustomCost.Position`, and there is no API behind them any more. **NOTHING REPLACES THEM EITHER, and that is the point rather than a gap**: the property they held was that a written cost lands somewhere legal in the tree, and a cost that cannot exist without a tier cannot land anywhere else. `TestTheCostAndThePrerequisiteComeFromOneSource` and `TestALadderStepsDownAndTakesThePrerequisiteWithIt` were already the tier's own version of it and are untouched.
+
+**THE OTHER NINE ARE THE SAME PROPERTY RE-DERIVED AGAINST THE NEW CONTRACT, AND EIGHT OF THEM ARE RENAMED, BECAUSE A NAME IS AN ASSERTION TOO.** `TestTheCustomValueTakesItsIngredientsFromTheText` became `TestATypedTextTakesTheRecipeOverFromTheDropdown`; `TestTheDefaultWordUnderCustomIsTheVanillaLadder` became `TestTheDefaultWordLetsTheDropdownDecide`, which is a different claim and not a reworded one, because the word now hands the decision back to a dropdown that was never consulted before; `TestAnUnreadableCustomTextTakesTheDeclaredList` became `TestAnUnreadableTextLetsTheDropdownDecide` for the same reason; `TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo` lost one word and kept its four rows; `TestTheCustomResearchCostUntouchedIsTheFallbackUnit` became `TestTheThreeFieldsUntouchedLeaveTheTierDeciding`, which is the sharpest rename of the set, since what an untouched research field means moved from "this mod's own 20 and 15" to "whatever the tier charges"; `TestTheCustomResearchCostIsTheThreeSettings` became `TestTheThreeFieldsOverrideTheTier`; `TestAnUnreadableResearchNumberTakesTheDeclaredDefault` became `TestAnUnreadableResearchNumberLeavesTheTierDeciding`; and `TestTheCustomResearchDefaultsAreTheFallbackUnit` became `TestTheThreeResearchDeclarationsAreWhatThisFileClaims`, because two of the three declarations are no longer that unit's and only the pack list still is.
+
+**`TestEveryCustomDropdownDescriptionNamesTheCustomOption` IS THE ONE DELETION THAT COST SOMETHING, and what it cost is recorded rather than replaced.** Fix round 1 built it and red-proved it four times; it read `[string-mod-setting] bbb-recipe-cost-custom` and `bbb-tech-cost-custom`, took everything before the first colon as the word, and demanded that word in the FIRST SENTENCE of the dropdown's own description. Both entries are deleted in this commit, so the test has nothing to read. The property it guarded -- a dropdown whose text field is invisible until the description mentions it -- has no subject either, because the text field is live from the moment it stops saying `default` and no dropdown value switches it on. What is LOST is that it was the only thing anywhere that read a WORD of a description, and the ten entries that still say Custom are now unguarded by anything at all; that is the next commit's work and it is named at the end of this section.
+
+### Two findings this round made about this mod's own test fixture
+
+Both are about `guest/go/tune/world_test.go` and neither is the library's, which is why they are findings rather than adoption items.
+
+**THE FIXTURE `World` STORED THE PRE-ROUND NUMBERS, SO EVERY "UNTOUCHED GAME" TEST WOULD HAVE BEEN DRIVING AN OVERRIDDEN ONE.** `everythingWorld()`'s `startupRaw` answered `fkrecipes.Num(20)` and `fkrecipes.Num(15)` for the count and the seconds, which were this mod's declared defaults and were therefore a player who had touched nothing. Under the new declarations 0 is what an untouched field holds, so 20 and 15 are a player who DRAGGED BOTH SLIDERS -- and the two numbers they dragged them to look exactly like an untouched field and are not one. A suite left that way would have had every tier test silently overriding both numbers while reading as the default configuration. Both are `Num(0)` now and the comment says why.
+
+**`TestAnUnreachedFallbacksPackIsNeverProbed` WAS SILENTLY WRONG, AND IT IS DECISION B THAT MADE IT SO.** It used to take EVERY tool away, on the reading that a source carrying a unit ends the pack question; `67b5090` filters a COPIED tier unit's own packs through `ToolExists`, so that world loses the tier's pack as well, lands on the declared fallback after all, and reaches a refusal -- which is the opposite of what the test is named for. The world is narrower now and the claim is sharper for it: the tier is `logistics-2`, priced in one `logistic-science-pack`, in a game whose only tool is that pack, so `FallbackUnit()`'s `automation-science-pack` is a name nothing in this world answers for and NOTHING ASKS. What says the source arm ran is the prerequisite (`logistics-2`), the unit (the tier's own, which is not `FallbackUnit()`'s numbers) and the empty log stream. The property the old world was reaching by accident has its own test, `TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused`.
+
+### The locale test is turned round: the advisories are logged and the assertion is a rename
+
+`TestEveryCustomDropdownDescriptionNamesTheCustomOption` is replaced in place by `TestTheLocaleFileRenamesNoTechnologyOfTheGames`, which is the library's item 7 obeyed and this mod's remedy (f) reversed in one test.
+
+**`CheckLocaleAdvisories` IS DELIBERATELY NOT WIRED INTO ANY FAILING TEST, AND THE LIBRARY'S ITEM 7 IS A PROHIBITION RATHER THAN A SUGGESTION.** It returns a note for every out-of-prefix key the plan composes, whether or not the file defines it, it never goes away, and what it asks for is that nothing be done. A suite that called `t.Error` on it would be permanently red over a thing the library says not to fix, which is precisely why FkRecipes took it out of `CheckLocale`'s return. `TestTheLocaleFileSatisfiesThePlan` is where "empty is clean" still means what it says, and it is untouched. The three advisories are `t.Log`ged, one per key, read back with `cd guest/go && go test -v ./tune/ -run TestTheLocaleFileRenamesNoTechnologyOfTheGames`:
+
+```
+note: the dropdown setting bbb-tech-cost composes the game's own key technology-name.logistics, which this plan does not own; where the game does not define it the tooltip shows logistics instead, and defining it here would rename it for every mod
+note: the dropdown setting bbb-tech-cost composes the game's own key technology-name.logistics-2, which this plan does not own; where the game does not define it the tooltip shows logistics-2 instead, and defining it here would rename it for every mod
+note: the dropdown setting bbb-tech-cost composes the game's own key technology-name.logistics-3, which this plan does not own; where the game does not define it the tooltip shows logistics-3 instead, and defining it here would rename it for every mod
+```
+
+**WHAT IS ASSERTED IS THE THING THIS MOD CAN GET WRONG**: that the `.cfg` defines no `[technology-name]` entry but its own, `TechName`, read in FILE ORDER out of `fkrecipes.LocaleEntries` rather than out of a map, because Go randomises a map's order per run and a failure naming a different entry each time is a failure nobody can act on. **REMEDY (f) OF THIS MOD'S OWN SECOND ASSESSMENT IS NOT DONE AND IS NOW ACTIVELY WRONG.** It said to define `technology-name.logistics-2` and `-3` here so the tooltip would not lose itself to an undefined key; `e4604d4` closed that from the library's end, so an undefined key degrades to the technology's raw internal name and the tooltip survives whole, and carrying out (f) today would set the displayed name of BASE's technologies for every mod in the game. The test is what keeps it undone.
+
+### The golden, and the property this repository checked before re-capturing
+
+`test/check-datastage.py --capture` on 2.0.77. **Only `mod_settings_sha256` moved, `aa75497e55ce4333` to `b6e583e6163249ba`, the same on both mod sets**; both `data_raw_sha256` are unmoved to the digit (`1e1fcf4f56f5ef22` base, `e7001bf98d6c6771` incumbent) and so are both `prototype_list_checksum` values. Since the data-raw hash is taken over the WHOLE normalised dump, its being unmoved IS those dumps compared byte for byte, which is what says a withdrawal of a dropdown value and a rewrite of five composed descriptions reach the SETTINGS stage and nothing else while every setting is at its default. That is the property FkRecipes' item 13 predicted and said to treat a move in as a finding rather than a re-capture.
+
+**FIVE THINGS MOVED IN THE SETTINGS DUMP AND ALL FIVE ARE READ OUT OF THE ENGINE'S OWN `mod-settings-dump.json`**, not argued from the diff:
+
+1. `bbb-recipe-cost`'s `allowed_values` is **six** where it was seven and `bbb-tech-cost`'s is **three** where it was four, both having lost `custom`.
+2. `better-belt-balancer-tech-seconds` is an `int-setting` where it was a `double-setting`, under the same name, and BOTH research numbers read `default_value` 0 and `minimum_value` 0 where they read 20 with minimum 1 and 15 with minimum 1.
+3. Both dropdowns' composed description gains a closing switch line, `\nThe setting below applies instead while it does not say default.`, and the INGREDIENT one gains the wrap line before it; both text settings gain the wrap line and a switch line of their own, and the ingredient one's format line gains the `none` clause (`The word none empties the list, so the recipe costs nothing to craft.`), which is finding 18 closed and remedy (g) with it.
+4. The two research numbers carry a composed `localised_description` where they carried NONE AT ALL: `\nA whole number from 0 to 1000000. While it is 0 the option chosen above decides.` and its 3600 twin. That is half of finding 9 closed -- the two numeric ranges are now in words where a player looks -- and the half that is left is this mod's `[mod-setting-description]` entry saying what the number is FOR, which the library requires and this file already ships.
+5. **Every locale key any composed description references is now `{"?", {"<section>.<key>"}, "<raw>"}` where it was the bare `{"<section>.<key>"}`**, so the head line of all five compositions, the nine preset labels and the three `technology-name` references each gained two elements. That is `e4604d4`, and it closes finding 15: the research-cost setting had NO TOOLTIP AT ALL on a stock install, because no locale file anywhere defines `technology-name.logistics-2`, and an undefined key inside a `localised_description` costs the whole thing on the client while the dump goes on carrying the string. No gate in either repository can see that defect, which is why the fix had to come from the shape rather than from a check.
+
+The 2.1.16 and 2.1.17 rows are NOT re-captured and keep their `_stale` keys, each gaining the same paragraph naming the move and the re-capture command, which is the sixth time that arm's settings dump has moved unrecorded.
+
+### The composed tooltips, re-measured on the engine, and the ceilings corrected
+
+Read out of the engine's own settings dump with this mod's own `.cfg` resolved into it, the `{"?", ...}` groups rendered the way the engine renders them (the first alternative the file defines, else the raw fallback). Six settings carry a `localised_description` now where four did.
+
+| setting | parameters | depth | lines | longest line | characters |
+|---|--:|--:|--:|--:|--:|
+| `bbb-recipe-cost` | 9 of 20 | 4 of 20 | 15 | **557** | 1,323 |
+| `bbb-tech-cost` | 5 of 20 | 4 of 20 | 5 | **622** | 885 |
+| `better-belt-balancer-recipe-ingredients` | 6 of 20 | 3 of 20 | 6 | 420 | 967 |
+| `better-belt-balancer-tech-packs` | 6 of 20 | 3 of 20 | 6 | 409 | 862 |
+| `better-belt-balancer-tech-count` | 2 of 20 | 3 of 20 | 2 | 105 | 186 |
+| `better-belt-balancer-tech-seconds` | 2 of 20 | 3 of 20 | 2 | 117 | 195 |
+
+**THE CEILINGS IN THAT TABLE ARE CORRECTED AND FIX ROUND 1'S WERE WRONG IN ONE HALF.** That round wrote "of 19" for the nesting and read the parameter ceiling as a per-STRING budget. FkRecipes re-measured both on 2.0.77 twice independently this cycle, one `--dump-data` per row: **20 PARAMETERS PER TABLE**, not per string, the 21st refusing the load with `Too many parameters for localised string: 21 > 20 (limit).`; **20 LEVELS OF NESTING DEPTH**, the 21st refusing with `Too deep recursion for localised string: 21 > 20 (limit).`; and no global table budget at all, a description holding 421 tables at depth 3 loading clean. What changes in the reading is the headroom rather than the numbers: `e4604d4` spends one level of DEPTH per wrapped key and no parameters, because a wrapper occupies the slot the bare key table occupied, and depth is the budget with 20 levels in it. **NOTHING IS NEAR EITHER CEILING**: the worst is `bbb-recipe-cost` at 9 of 20 and 4 of 20, and growth costs one parameter per preset.
+
+**THE 557 AND THE 622 ARE THIS MOD'S OWN LOCALE ENTRIES AND A LATER COMMIT CUTS THEM.** Line 1 of each dropdown tooltip IS the consumer's `[mod-setting-description]`, and both are the entries that still offer a `Custom` option the dropdown no longer has, so the number and the sentence move together in the same commit. **NOT MEASURED: whether any of the six renders whole.** No client was run and none was started; the parameters, the depth, the lines and the characters are measured and the rendering is not, which is the client run still owed since round three and now one line larger on four of the six.
+
+The command, kept because the arithmetic is not obvious: the composed description is read out of `mod-settings-dump.json`, `{"?", key, raw}` groups are resolved against `mod-data/locale/en/better-belt-balancer.cfg`, `""`-keyed tables are concatenated, and parameters are counted per table rather than per string.
+
+### The gate's arms, and the three tables that were named for a value
+
+`test/check-datastage.py`'s three customizer tables are renamed with the state they drive, because each was named for a dropdown value that does not exist: `RECIPE_CUSTOM_ARMS` is `RECIPE_TEXT_ARMS`, `TECH_CUSTOM_ARMS` is `TECH_COST_ARMS`, and `TECH_IGNORED_ARMS` is `TECH_TIER_ARMS`. **EIGHT CUSTOMIZER ARMS WHERE THERE WERE SEVEN**, and five of the seven names are gone:
+
+| arm | what it drives |
+|---|---|
+| `recipe-default-word` | the reserved word stored under `cheap`, so the expected list is cheap's and the library says NOTHING. The preset is `cheap` rather than `vanilla` on purpose: a planner that ignored the dropdown while the text said the word would come out with the vanilla list, which is byte for byte what a `.dat` that never arrived produces |
+| `recipe-text-alone` | a recipe typed with the dropdown untouched, `3 iron-plate, 1 splitter`, which is an ORDER and a set of amounts no preset of this mod can produce |
+| `recipe-text-over-preset` | the round in one arm: `1 iron-plate` under `cheap`, the same item at a different amount, so a planner that still preferred the preset fails on the LIST and not only on the line |
+| `recipe-self-product` | the re-adoption leg's arm, unchanged in what it drives and carrying its two lines |
+| `tech-cost-whole` | all three fields written under `logistics-2`, 50 units at 20 seconds of a list neither the tier's nor this mod's declared default |
+| `tech-tier-word` | the three ways of saying "the row above decides" all at once, the word and two zeros STORED, and no line at all |
+| `tech-count-alone` | one field moved, so the expected unit is the tier's with 50 written into `count` alone |
+| `tech-packs-alone` | the count arm turned round, the typed list over the tier's own count and time |
+
+**EVERY ONE OF THE EIGHT COMPARES THE WHOLE `fkrecipes:` STREAM, IN ORDER.** The old table carried two rules, one line the stream must CARRY against the whole stream compared in order, because two of its arms could not state what else the plan would say; every arm here can, so the weaker rule is gone with the state that needed it and an extra line is a failure. `OUR_SETTINGS_ORDERS` does NOT move: `a`, `aab`, `b`, `bad`, `bae`, `baf`, six pairs, exactly as the library predicted, because withdrawing a value moves neither a name nor an order.
+
+**THE GATE IS TWENTY ARMS**, counted from the script rather than by eye: the two hashed mod sets, sixteen variant arms (`len(RECIPE_VARIANTS) + len(TECH_VARIANTS) + len(RECIPE_TEXT_ARMS) + len(TECH_COST_ARMS) + len(TECH_TIER_ARMS) + 1` = 5 + 2 + 4 + 1 + 3 + 1), the speed arm and the merge arm.
+
+### Red proofs
+
+Each break made on purpose in this mod's own code, its fixture or its locale file, the failure observed, the break reverted. FkRecipes and FkLua were read-only for the whole commit, so no proof below is injected in a library.
+
+| injected | what fired |
+|---|---|
+| `IngredientsBy` dropped from the `RecipeSpec` while `IngredientsFrom` stays | **TWELVE tests**, including all four rows of `TestATextTheGameCannotAnswerFallsBackAndSaysSo`: `the text "3 tungsten-plate" is made of [{iron-plate 4} {iron-gear-wheel 2} {transport-belt 2}] and the gate asserts [{iron-plate 2} {transport-belt 1}]`. Which is what says the two fields are both load-bearing and that the dropdown is still consulted when the text stands down |
+| `IngredientsFrom` removed, and separately `CostFrom` | **38 each**, on the library's own binding rule: `fkrecipes: the setting <name> is declared and nothing reads it; a text setting must be bound to one recipe or technology` |
+| the `Count` and `Seconds` handles swapped in the `CustomCost` literal | exactly `TestTheThreeFieldsOverrideTheTier` and `TestOneFieldMovedTakesTheOtherTwoFromTheTier`, which is the narrowest pair in the suite and is what says the two settings are told apart by their slot and not by their bounds |
+| the fixture `World`'s stored `20` and `15` put back for the two research numbers | **21 tests**, which is the finding above measured: a fixture holding this mod's old declared defaults is a player who moved both sliders, and 21 tests would have been reading an overridden game as an untouched one |
+| `IntSetting(TechCountName, 20, Between(1, 1000000))` put back | **three**, on the library's designed refusal: `fkrecipes: the setting tech-count backs a research count beside a research dropdown, so its declared default and its minimum must both be 0 (0 means the dropdown decides)` |
+| `[technology-name] logistics-2=Belt logistics II` added to `mod-data/locale/en/better-belt-balancer.cfg` | the new `TestTheLocaleFileRenamesNoTechnologyOfTheGames`, which is the only thing in either repository that could have seen it: the advisories do not fail, the checker reads keys this plan owns, and `--dump-data` never reads a locale file at all |
+| `checkFallbackNote`'s `recipe` argument flipped, at either call site | exactly one test each, which is decision C's scoping rule held from this side: a recipe's INGREDIENT text earns the assembling-machine sentence and a pack text does not |
+| `textFieldLines`'s `ingredients` argument flipped, at either call site | exactly one test each, the `none` clause landing on the pack field or going missing from the ingredient one |
+
+### What is owed upstream, with its evidence
+
+**THE PACKLESS REFUSAL NAMES ONE RUNG TWICE WHEN THE TIER'S COPIED PACK AND THE DECLARED `Fallback`'s ONE RUNG ARE THE SAME NAME.** `67b5090` gave that sentence a rung list, and this mod's declared fallback pack is `automation-science-pack` with no ladder under it, which is also the pack `logistics` is priced in, so the two probes are the same name asked about twice and the sentence reads `... research takes at least one, and none of automation-science-pack, automation-science-pack is a science pack here`. Two tests here reach it and pin it as it is, `TestAFallbackThisModsOwnPackListCannotPayForStillRefuses` and `TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused`; `TestAReachedFallbackWithNoPackInTheGameIsRefused` reaches the single-name form, which is the same sentence with only the declared rung tried. It is cosmetic, it is in a message a player reads in an error dialog, and the fix is the library's: de-duplicate the rung list in walk order. **RECORDED HERE AND NOT FIXED HERE**, because the sentence belongs to FkRecipes and this repository pins it rather than builds it.
+
+### Gates, at their exit codes
+
+Exit codes read directly and never through a pipe. Every wasm build runs under `GOTOOLCHAIN=go1.26.6`, which is the re-adoption leg's own environment fact unchanged: the host's Go is go1.27.1, `tinygo version` reads `0.41.1 darwin/arm64 (using go version go1.27.1 ...)`, and TinyGo 0.41.1 refuses that toolchain outright with `requires go version 1.19 through 1.26, got go1.27`. The remedy is not in the Makefile and was not put there, for the reason that leg gives: it fails loudly with its own remedy, and a pinned Go version would be this repository deciding a toolchain question for whoever builds it next.
+
+| gate | exit | |
+|---|---|---|
+| `cd guest/go && go test ./tune/ -count=1` | 0 | 52 `func Test` |
+| `../FkLua/bin/fklua gen-bindings --check` | 0 | `guest/go/fkapi/fkapi.go is up to date (4865 members bound, 5 deferred)` |
+| `../FkLua/bin/fklua lock --check` | 0 | `fklua.lock is up to date (api 2.1.17)`; neither the lock nor the bindings is dirty |
+| `make check` | 0 | gofmt included; `test/check-release-arm.sh` green inside it on `14 / 25 / 8 / 4 / 2`, the 25 being the ahead-count BEFORE this commit lands, which is the shape the re-adoption leg's own row has |
+| `GOTOOLCHAIN=go1.26.6 make mod` | 0 | |
+| `make datastage-check` | 0 | after the re-capture; twenty arms, the two hashed mod sets at `b6e583e6163249ba` for the settings dump and `1e1fcf4f56f5ef22` and `e7001bf98d6c6771` for data-raw, both unmoved |
+| `make test`, fourteen suites | **NOT RUN** | the packaged mod is pinned 2.1 and the binary is 2.0.77, as in every round before |
+| the 2.1.16 and 2.1.17 golden rows | **NOT RUN** | no 2.1 binary here; their `_stale` notes stand, one paragraph longer |
+| the client run | **NOT REACHABLE**, owed since round three | and one line larger: the two hovers are still `bbb-recipe-cost`'s and `bbb-tech-cost`'s first lines, now 557 and 622 characters, and four of the six tooltips gained a line this commit |
+| the release-to-head proof, 28 pairs | **NOT TAKEN AT THIS COMMIT** | it belongs to the round's close, where the four commits are in and the settings dump has stopped moving |
+| package sizes and the relay's jump figures | **NOT TAKEN AT THIS COMMIT** | same reason; the round's close is where a figure is comparable against the re-adoption leg's |
+
+**WHICH OF THOSE ROWS WERE RE-TAKEN WHEN THIS SECTION WAS WRITTEN, said rather than left to be assumed.** `go test ./tune/`, `make check`, `gen-bindings --check` and `lock --check` were re-run against the working tree while these notes were being written and agree with the figures above, including the 52. `make mod` and `make datastage-check` are the commit's own runs and were not re-taken here, because both write into `dist/` and the gate stages mods; what stands in their place as evidence that the golden claim is real is the COMMITTED file, whose 2.0.77 row reads `b6e583e6163249ba` for the settings dump on both mod sets and `1e1fcf4f56f5ef22` and `e7001bf98d6c6771` for data-raw, unmoved, and whose `_note` carries the five moves read out of the engine's own dump.
+
+### What this commit leaves the round, and what each remaining commit owes
+
+**THE LOCALE PROSE, WHICH IS THE ONE THING NO GATE IN EITHER REPOSITORY CAN SEE.** `--dump-data` does not read a locale file, the checker reads KEYS and never the strings beside them, and the one test that read a word of a description went with the value it was about. **TEN ENTRIES IN `mod-data/locale/en/better-belt-balancer.cfg` GO ON INSTRUCTING THE PLAYER TO PICK AN OPTION THE DROPDOWN NO LONGER OFFERS, and nothing anywhere is red** (`grep -n Custom mod-data/locale/en/better-belt-balancer.cfg`): SIX DESCRIPTIONS -- `bbb-recipe-cost` offering "or Custom to write the recipe yourself in the setting below" and later "Every option but Custom is safe in an overhaul pack", `bbb-tech-cost` offering "or Custom to write the cost yourself in the three settings below", and the four generated fields each scoping themselves to "while the recipe/research setting above is set to Custom" -- AND FOUR NAMES, `Custom balancer part recipe` and three `Custom balancer research: ...`. **THIS IS THE MISLED SHAPE THE WHOLE ROUND EXISTS TO CLOSE ARRIVING THROUGH THE ROUND'S OWN MIGRATION**, and the second assessment moved finding 6 to CLEAN partly on the strength of one of those very sentences. The rule is one rule applied ten times: the text field applies whenever it does not say `default`, and the dropdown supplies the rest.
+
+**STILL OWED TO THE ROUND, one commit each.**
+
+- *The locale prose.* The ten entries above, plus the `bbb-tech-cost` entry's placement clause, which described a Custom research hanging off a ladder of its own and describes nothing now.
+- *The dropdown labels and the changelog.* The 557 and the 622 are the two consumer entries and are the tallest wraps this mod can produce; the ten of eleven dropdown labels over the client's measured ~37-character truncation are unchanged and unmeasured since fix round 1. And remedy (h) of the second assessment is unwritten: the changelog discloses that changing the recipe empties an assembler and does not disclose the NEW way to change it that this round creates, which is that a typo in the text field falls back instead of refusing, so the recipe can move without the player touching the dropdown.
+- *The remover fixture.* Remedy (i): `check_remover`'s fixture breaks Space Age before this mod can be judged on a stock install, so the arm it guards is only honest with the expansions disabled, and the fixture should sweep at `data-final-fixes` the way the synthetic one built for the assessment does.
+- *The round's close.* The package sizes, the relay's jump figures, the release-to-head proof over its 28 pairs, and every gate consolidated at its exit code.
+
+**AND ONE THING THIS COMMIT CLOSES OUTRIGHT.** Remedy (f) is struck rather than done, and this file says so in the one place a future reader would go looking: `TestTheLocaleFileRenamesNoTechnologyOfTheGames` is what stops somebody carrying it out.
+
 ## The FkLua baseline
 
 The migration was measured against a freshly rebuilt fklua so that a packaging difference could not be mistaken for a library effect.

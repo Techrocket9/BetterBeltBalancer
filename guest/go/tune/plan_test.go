@@ -49,12 +49,13 @@ func (planWorld) ModName() string { return ModName }
 // wantSetting is one expected prototype: every field, transcribed.
 //
 // THE FIELD SET IS PART OF THE TRANSCRIPTION since the customizer landed. Six
-// settings of four shapes carry four different field lists, so `fields` names
+// settings of three shapes carry three different field lists, so `fields` names
 // what each one may have rather than one list covering all of them, and it is
 // derived from the transcription below rather than from the plan: a dropdown
 // has `allowed_values`, a text setting has `auto_trim`, a numeric one has
 // `minimum_value` and `maximum_value`, and a `localised_description` appears on
-// the four the library composes one for. The emission order is FkRecipes
+// ALL SIX since fix round 2, which is what moved the two numbers out of the
+// no-description column they used to sit in. The emission order is FkRecipes
 // go/settings.go's, whose own note puts the description last "because it is the
 // bulkiest field and because it is composed out of everything above it"; the
 // comparison is order-insensitive, so what is checked here is the SET.
@@ -73,9 +74,10 @@ type wantSetting struct {
 	// nil for every other kind. NEITHER BOUND IS A BALANCE OPINION: the engine
 	// RESETS a stored number outside its own bounds to the default rather than
 	// clamping it, so what is declared is exactly the set of values the data
-	// stage can ever read -- and the library refuses a custom research cost
-	// whose count could be below 1 or whose seconds could be 0, because the
-	// engine refuses a unit with either.
+	// stage can ever read -- and beside a research dropdown the MINIMUM is not
+	// this mod's to choose at all, because 0 is what a number says instead of
+	// the reserved word `default` and the library refuses any other floor by
+	// name.
 	bounds []float64
 	// description is the composed localised_description, or the zero Value for
 	// a setting the library composes none for.
@@ -108,30 +110,40 @@ func wantSettings() []wantSetting {
 			settingType:  "startup",
 			defaultValue: fkrecipes.Str("vanilla"),
 			order:        "a",
-			// SEVEN VALUES, THE SIX THAT SHIPPED IN THEIR ORDER AND `custom`
-			// LAST. Factorio keys a stored startup choice by this string, so a
-			// value that moved or changed spelling is a player's preference
-			// silently discarded; the seventh is the only row nobody can have
-			// stored.
+			// SIX VALUES, THE SIX THAT SHIPPED, IN THEIR ORDER. Factorio keys a
+			// stored startup choice by this string and RESETS one the running
+			// release does not offer, so a value that moved, changed spelling or
+			// was added and later withdrawn is a player's preference silently
+			// discarded. This list has not moved since 0.2.2 and the customizer
+			// did not move it either: the text field beside the dropdown is what
+			// switches, not a seventh row.
 			allowed: []string{
 				"vanilla", "cheap", "belt-fast", "belt-express",
-				"splitter", "splitter-express", "custom",
+				"splitter", "splitter-express",
 			},
 			// THE COMPOSED DESCRIPTION, transcribed rung by rung: this mod's own
 			// description key, then one line per PRESET -- the value's own
 			// locale entry followed by that preset's list in the language the
-			// text field takes. No line for `custom`, which has no preset behind
-			// it. Each preset shows the FIRST rung of every ladder, because the
+			// text field takes -- and then the library's two closing sentences.
+			// Each preset shows the FIRST rung of every ladder, because the
 			// settings stage has no data.raw to walk one with.
+			//
+			// THE WRAP LINE IS ON THIS DROPDOWN AND NOT ON THE RESEARCH ONE, and
+			// that asymmetry is the library's own rule rather than an omission
+			// here: it goes wherever a TYPEABLE LIST is rendered, and a research
+			// preset renders a localised technology name with nothing in it to
+			// copy. THE SWITCH LINE IS LAST on both.
 			description: fkrecipes.Arr(
 				fkrecipes.Str(""),
-				localeKey("mod-setting-description.bbb-recipe-cost"),
+				localeRef("mod-setting-description", "bbb-recipe-cost", "bbb-recipe-cost"),
 				presetLine("bbb-recipe-cost", "vanilla", "4 iron-plate, 2 iron-gear-wheel, 2 transport-belt"),
 				presetLine("bbb-recipe-cost", "cheap", "2 iron-plate, 1 transport-belt"),
 				presetLine("bbb-recipe-cost", "belt-fast", "4 iron-plate, 2 iron-gear-wheel, 2 fast-transport-belt"),
 				presetLine("bbb-recipe-cost", "belt-express", "4 steel-plate, 2 iron-gear-wheel, 2 express-transport-belt"),
 				presetLine("bbb-recipe-cost", "splitter", "1 splitter, 2 iron-plate"),
 				presetLine("bbb-recipe-cost", "splitter-express", "1 express-splitter, 2 steel-plate"),
+				fkrecipes.Str(wrapSentence),
+				fkrecipes.Str(dropdownSwitchSentence),
 			),
 		},
 		{
@@ -146,15 +158,19 @@ func wantSettings() []wantSetting {
 			defaultValue: fkrecipes.Str("default"),
 			order:        "aab",
 			autoTrim:     true,
-			// FOUR PARAMETERS SINCE FkRecipes 0077f3c, and only the first two
-			// are this mod's: its own description key, then the declared list
-			// rendered in the language the field takes, then the library's own
-			// two sentences. See [textFieldLines].
+			// SEVEN PARAMETERS, and only the first two are this mod's: its own
+			// description key, then the declared list rendered in the language
+			// the field takes, then the library's own FOUR sentences. See
+			// [textFieldLines], and `true` because this is the INGREDIENT field:
+			// its format line names the word `none` and the pack field's does
+			// not.
 			description: fkrecipes.Arr(append([]fkrecipes.Value{
 				fkrecipes.Str(""),
-				localeKey("mod-setting-description.better-belt-balancer-recipe-ingredients"),
+				localeRef("mod-setting-description",
+					"better-belt-balancer-recipe-ingredients",
+					"better-belt-balancer-recipe-ingredients"),
 				fkrecipes.Str("\ndefault: 4 iron-plate, 2 iron-gear-wheel, 2 transport-belt"),
-			}, textFieldLines()...)...),
+			}, textFieldLines(true)...)...),
 		},
 		{
 			kind:         "string-setting",
@@ -162,42 +178,43 @@ func wantSettings() []wantSetting {
 			settingType:  "startup",
 			defaultValue: fkrecipes.Str("logistics"),
 			order:        "b",
-			// FOUR VALUES, THE THREE THAT SHIPPED IN THEIR ORDER AND `custom`
-			// LAST, which is the recipe dropdown's migration made a second time
-			// and for the same reason: a stored `logistics-3` still reads
-			// `logistics-3`, and the fourth row is the only one nobody can have
-			// stored.
-			allowed: []string{"logistics", "logistics-2", "logistics-3", "custom"},
+			// THREE VALUES, THE THREE THAT SHIPPED, IN THEIR ORDER, which is the
+			// recipe dropdown's statement made a second time and for the same
+			// reason: a stored `logistics-3` still reads `logistics-3`, because
+			// the three fields beside this row switch themselves and the row
+			// never grew one.
+			allowed: []string{"logistics", "logistics-2", "logistics-3"},
 			// THE COMPOSED DESCRIPTION, and its lines say something different
 			// from the recipe dropdown's. A research preset has no list to
 			// render -- what it costs is whatever the game charges for that
 			// technology, which the settings stage has no data.raw to read -- so
 			// the library writes the SOURCE it would copy from, and names it by
 			// the technology's LOCALISED name rather than by its internal one:
-			// the tail is `": cost of "` followed by
-			// `{"technology-name.<source>"}` where it used to be one string
-			// ending in the bare name (FkRecipes go/customize.go:821,
-			// costPresetTail). Each source is the FIRST rung of that option's
-			// ladder in [TechLadder] -- `logistics`, `logistics-2` and
-			// `logistics-3` are each their own tier's head -- which is the tier
-			// the player asked for; where a ladder steps down is a fact about
-			// their mod set and is not knowable here.
+			// the tail is `": cost of "` followed by that technology's own
+			// `[technology-name]` key in the alternatives form (FkRecipes
+			// go/customize.go, costPresetTail). Each source is the FIRST rung
+			// of that option's ladder in [TechLadder] -- `logistics`,
+			// `logistics-2` and `logistics-3` are each their own tier's head --
+			// which is the tier the player asked for; where a ladder steps down
+			// is a fact about their mod set and is not knowable here.
 			//
-			// AND THE TRADE IS THIS MOD'S LADDER TO ORDER, which the library
-			// says out loud rather than hiding it. `technology-name.<source>`
-			// is the GAME's entry, for a technology base or some other mod
-			// declared, so nothing new is owed to the locale checker; but where
-			// the technology or its entry is missing the engine renders
-			// `Unknown key: "technology-name.<source>"` in the tooltip, where
-			// the bare internal name used to stand. All three sources here are
-			// base's own, so the marker takes a pack that removed a logistics
-			// tier outright.
+			// AND THE KEY IS THE GAME'S, WHICH COSTS THIS MOD NOTHING EITHER
+			// WAY. `technology-name.<source>` names a technology base or some
+			// other mod declared, so nothing new is owed to the locale checker
+			// and nothing may be offered to it either: defining one of those
+			// keys here would rename base's technology for every mod in the
+			// game, which is [TestTheLocaleFileRenamesNoTechnologyOfTheGames]'s
+			// subject. Where the technology or its entry is missing the
+			// alternatives form degrades to the raw internal name and the
+			// tooltip survives whole, where the bare key it replaced used to
+			// delete the entire tooltip in silence.
 			description: fkrecipes.Arr(
 				fkrecipes.Str(""),
-				localeKey("mod-setting-description.bbb-tech-cost"),
+				localeRef("mod-setting-description", "bbb-tech-cost", "bbb-tech-cost"),
 				costPresetLine("bbb-tech-cost", "logistics", "logistics"),
 				costPresetLine("bbb-tech-cost", "logistics-2", "logistics-2"),
 				costPresetLine("bbb-tech-cost", "logistics-3", "logistics-3"),
+				fkrecipes.Str(dropdownSwitchSentence),
 			),
 		},
 		{
@@ -211,47 +228,117 @@ func wantSettings() []wantSetting {
 			defaultValue: fkrecipes.Str("default"),
 			order:        "bad",
 			autoTrim:     true,
-			// The recipe text field's four parameters again, with this mod's
-			// own rendered default in the middle and the library's same two
-			// sentences after it.
+			// The recipe text field's seven parameters again, with this mod's
+			// own rendered default in the middle and the library's same four
+			// sentences after it -- LESS THE WORD `none`, which is why
+			// [textFieldLines] takes the kind. A pack list refuses that word
+			// ("research takes at least one science pack"), so the library does
+			// not offer it here.
 			description: fkrecipes.Arr(append([]fkrecipes.Value{
 				fkrecipes.Str(""),
-				localeKey("mod-setting-description.better-belt-balancer-tech-packs"),
+				localeRef("mod-setting-description",
+					"better-belt-balancer-tech-packs",
+					"better-belt-balancer-tech-packs"),
 				fkrecipes.Str("\ndefault: 1 automation-science-pack"),
-			}, textFieldLines()...)...),
+			}, textFieldLines(false)...)...),
 		},
 		{
 			// THE UNIT COUNT. An int setting, so `default_value` is a NUMBER,
-			// and both bounds are emitted: 1 is what the library demands of a
-			// count (the engine refuses a unit count of 0) and the ceiling is
-			// this mod's own.
+			// and it is 0 BECAUSE THE ROW ABOVE DECIDES: beside a research
+			// dropdown the library demands a declared default and a minimum of
+			// 0 and refuses anything else by name, because 0 is what a number
+			// says instead of the reserved word `default`. The ceiling is this
+			// mod's own and is the one bound it chooses.
 			kind:         "int-setting",
 			name:         "better-belt-balancer-tech-count",
 			settingType:  "startup",
-			defaultValue: fkrecipes.Num(20),
+			defaultValue: fkrecipes.Num(0),
 			order:        "bae",
-			bounds:       []float64{1, 1000000},
+			bounds:       []float64{0, 1000000},
+			description:  numberDescription("better-belt-balancer-tech-count", "1000000"),
 		},
 		{
-			// THE SECONDS PER UNIT. A double setting, whose minimum has to be
-			// ABOVE zero rather than at least 1 -- the engine refuses a unit
-			// time of 0 -- and 1 second is this mod's floor rather than the
-			// library's.
-			kind:         "double-setting",
+			// THE SECONDS PER UNIT. An INT setting since fix round 2, where it
+			// was a double: the field carries a research time in whole seconds,
+			// and the library's `CustomCost.Seconds` takes an `IntSettingRef`
+			// and nothing else. Its bounds are the count's for the count's
+			// reason.
+			//
+			// THE TYPE CHANGE IS THE ONE THING HERE A PLAYER COULD FEEL, and it
+			// is measured rather than assumed: a stored non-integral double
+			// under a setting redeclared as an int is truncated toward zero and
+			// then range checked, with the declared default applying out of
+			// range and nothing logged in any path. Nobody outside this machine
+			// has stored one, because this name has never shipped.
+			kind:         "int-setting",
 			name:         "better-belt-balancer-tech-seconds",
 			settingType:  "startup",
-			defaultValue: fkrecipes.Num(15),
+			defaultValue: fkrecipes.Num(0),
 			order:        "baf",
-			bounds:       []float64{1, 3600},
+			bounds:       []float64{0, 3600},
+			description:  numberDescription("better-belt-balancer-tech-seconds", "3600"),
 		},
 	}
 }
 
-// localeKey is a localised string that is nothing but a key, `{"section.key"}`,
-// which is how one locale entry is referenced from inside another.
-func localeKey(key string) fkrecipes.Value {
-	return fkrecipes.Arr(fkrecipes.Str(key))
+// localeRef is how the library references one locale entry from inside
+// another: the engine's ALTERNATIVES form, `{"?", {"section.key"}, "raw"}`,
+// where it used to write the bare `{"section.key"}`.
+//
+// THE THIRD ELEMENT IS WHAT THE PLAYER READS WHERE THE GAME HAS NO ENTRY, and
+// it is a parameter here because it differs per key: a setting's description
+// falls back to the setting's own emitted name, a dropdown value's label to the
+// raw value, and a technology's name to its internal name. The library measured
+// what the bare form cost -- an undefined key inside a composed description
+// deletes the WHOLE tooltip on the settings screen and the whole description
+// block on a recipe, with exit 0, no engine warning and the dump still carrying
+// the string -- so this shape is the defect's cure and not decoration.
+//
+// THE RAW FALLBACK IS LAST AND THAT IS PART OF THE TRANSCRIPTION. A plain
+// string alternative always resolves, so a raw string anywhere but the end
+// short-circuits every alternative after it and the key would never be read.
+func localeRef(section, key, raw string) fkrecipes.Value {
+	return fkrecipes.Arr(
+		fkrecipes.Str("?"),
+		fkrecipes.Arr(fkrecipes.Str(section+"."+key)),
+		fkrecipes.Str(raw),
+	)
 }
+
+// The library's own sentences, transcribed. They are constants rather than
+// literals at each site for the reason [textFieldLines] is one helper: they are
+// the LIBRARY'S text, identical wherever it composes them, so a second
+// hand-written spelling would be the drift the library's own corpus exists to
+// prevent. What is this mod's -- the rendered default line, the preset lists --
+// is written out at every site instead.
+//
+// TRANSCRIBED FROM WHAT THE PLAN EMITS AND CHECKED AGAINST THE LIBRARY'S OWN
+// CONSTANTS, one by one: `listWrapLine`, `textFormatLine` with
+// `ingredientNoneClause`, `textSwitchLine`, `textFallbackLine`,
+// `dropdownSwitchLine` and `researchRangeLine` in FkRecipes go/customize.go.
+const (
+	wrapSentence = "\nA list too long for one line continues on the next; " +
+		"the continuation is part of the same list."
+	formatSentence = "\nWrite internal names, as the default line above does, " +
+		"in at most 2000 characters."
+	// THE WORD `none` IS AN INGREDIENT CLAUSE AND NOT A SENTENCE, appended to
+	// the format line above on an ingredient list and on nothing else.
+	noneClause = " The word none empties the list, so the recipe costs " +
+		"nothing to craft."
+	// ABOVE, on both text fields: `bbb-recipe-cost` sorts at "a" and its text
+	// field at "aab", `bbb-tech-cost` at "b" and its pack field at "bad". The
+	// library compares the EMITTED ORDER STRINGS rather than the declaration
+	// order, so this word is a fact about where the rows land in the menu.
+	textSwitchSentence = "\nWhile this says default the option chosen above " +
+		"applies; anything else applies instead of it."
+	textFallbackSentence = "\nA text this mod cannot use is set aside and that " +
+		"default applies instead; the reason is in the log, or in the load " +
+		"error if the load stops anyway."
+	// And BELOW on both dropdowns, which is the same two pairs read from the
+	// other end.
+	dropdownSwitchSentence = "\nThe setting below applies instead while it " +
+		"does not say default."
+)
 
 // presetLine is one preset's line of a dropdown's composed description: a
 // newline, the VALUE'S OWN locale entry (the label the player sees in the
@@ -262,11 +349,7 @@ func localeKey(key string) fkrecipes.Value {
 // keeps its own line and the copyable internal list is indented under it. The
 // reason is the consumer's own dropdown labels: this mod's are 35 to 65
 // characters and the closed widget truncates at about 37, so on the old
-// one-line shape the list a player was meant to copy began past the fold. What
-// it costs is vertical space -- the recipe dropdown's composed description is 13
-// lines where it was 7, which is 1 + 6 x 2 against 1 + 6, measured off the
-// engine's own mod-settings dump -- and neither ceiling is near: 7 top-level
-// parameters of 20, depth 3 of 19.
+// one-line shape the list a player was meant to copy began past the fold.
 //
 // THE SETTING IS A PARAMETER even though only the recipe dropdown's lines are
 // built here now (the research dropdown's have a shape of their own, below),
@@ -278,45 +361,73 @@ func presetLine(setting, value, text string) fkrecipes.Value {
 	return fkrecipes.Arr(
 		fkrecipes.Str(""),
 		fkrecipes.Str("\n"),
-		localeKey("string-mod-setting."+setting+"-"+value),
+		localeRef("string-mod-setting", setting+"-"+value, value),
 		fkrecipes.Str("\n  type: "+text),
 	)
 }
 
-// textFieldLines is the two sentences the LIBRARY appends to every text setting
-// it composes a description for, since FkRecipes 0077f3c.
+// textFieldLines is the FOUR sentences the LIBRARY appends to every text
+// setting it composes a description for, under this mod's own rendered default
+// line: the wrap, the format, the switch and the fallback.
 //
-// TRANSCRIBED FROM THE ENGINE'S OWN DUMP rather than from the test failure or
-// from the library's source. `test/check-datastage.py`'s `run_arm` over the
-// built mod at `dist/better-belt-balancer_0.3.3` writes a
-// `mod-settings-dump.json`, and these are the third and fourth parameters of
-// `better-belt-balancer-recipe-ingredients`' `localised_description` in it, byte
-// for byte; the same two are the third and fourth of
-// `better-belt-balancer-tech-packs`'. The mod-settings golden moved on this and
-// on the preset separator above, and on nothing else.
+// TRANSCRIBED FROM WHAT THE PLAN EMITS AND THEN CHECKED SENTENCE BY SENTENCE
+// AGAINST THE LIBRARY'S OWN CONSTANTS. Two of the four were here before fix
+// round 2 and two are new, and the format line grew a clause on one of the two
+// fields.
 //
 // ONE HELPER RATHER THAN TWO COPIES, which is the one place this file derives
-// where it otherwise transcribes, and the reason is what these two sentences
-// ARE: the LIBRARY'S, identical on both text settings by construction, so two
-// hand-written spellings of one sentence would be exactly the drift the
-// library's own corpus exists to prevent. What could differ between the two
-// settings is the `\ndefault: ...` line ABOVE them, which is this mod's own
-// rendering and IS written out twice below.
+// where it otherwise transcribes, and the reason is what these sentences ARE:
+// the LIBRARY'S, identical on both text settings by construction. What could
+// differ between the two settings is the `\ndefault: ...` line ABOVE them,
+// which is this mod's own rendering and IS written out twice.
 //
-// THE SECOND SENTENCE IS THE FALLBACK, ANNOUNCED WHERE THE PLAYER TYPES.
-// FkRecipes 2e5f779 stopped refusing a text this mod cannot use: it is set
-// aside, this mod's declared list applies, and the reason goes to the log. The
-// clause "or in the load error if the load stops anyway" is the library saying
-// the fallback is NOT total, which is
-// [TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo]'s subject.
-func textFieldLines() []fkrecipes.Value {
-	return []fkrecipes.Value{
-		fkrecipes.Str("\nWrite internal names, as the default line above does, " +
-			"in at most 2000 characters."),
-		fkrecipes.Str("\nA text this mod cannot use is set aside and that default " +
-			"applies instead; the reason is in the log, or in the load error if " +
-			"the load stops anyway."),
+// EXCEPT FOR THE ONE CLAUSE THAT IS NOT IDENTICAL, which is why this takes an
+// argument. `none` empties an ingredient list and is a legitimate thing for a
+// player to want; a pack list REFUSES the word ("research takes at least one
+// science pack"), so the library does not offer it there. A parameter is what
+// makes "the ingredient field says it and the pack field does not" a thing this
+// file can state and therefore get wrong.
+//
+// THE THIRD SENTENCE IS THE SWITCH AND IT IS FIX ROUND 2'S WHOLE SUBJECT. The
+// settings screen has no conditional visibility at all, so it can never show
+// which of the two rows is deciding; saying the RULE in both tooltips is what
+// the library can do instead, and this is the text-field half of it.
+//
+// THE FOURTH IS THE FALLBACK, ANNOUNCED WHERE THE PLAYER TYPES. A text this mod
+// cannot use is set aside, this mod's declared list applies, and the reason
+// goes to the log. The clause "or in the load error if the load stops anyway"
+// is the library saying the fallback is NOT total, which is
+// [TestATextTheGameCannotAnswerFallsBackAndSaysSo]'s subject.
+func textFieldLines(ingredients bool) []fkrecipes.Value {
+	format := formatSentence
+	if ingredients {
+		format += noneClause
 	}
+	return []fkrecipes.Value{
+		fkrecipes.Str(wrapSentence),
+		fkrecipes.Str(format),
+		fkrecipes.Str(textSwitchSentence),
+		fkrecipes.Str(textFallbackSentence),
+	}
+}
+
+// numberDescription is the whole composed description of a RESEARCH NUMBER,
+// which the two numeric settings carry since fix round 2 and carried nothing
+// before it.
+//
+// THREE PARAMETERS AND NOT SEVEN. A number has no list to render, so there is
+// no default line, no wrap line and no format line: what the library owes the
+// player here is the RANGE, which the settings screen shows nowhere, and what 0
+// means, which they could not guess. The ceiling is a string parameter because
+// it is rendered by the library's own amount formatter rather than by Go's
+// float printing -- 1000000 and not 1e+06 -- and this mod's two ceilings differ.
+func numberDescription(setting, max string) fkrecipes.Value {
+	return fkrecipes.Arr(
+		fkrecipes.Str(""),
+		localeRef("mod-setting-description", setting, setting),
+		fkrecipes.Str("\nA whole number from 0 to "+max+
+			". While it is 0 the option chosen above decides."),
+	)
 }
 
 // costPresetLine is one research tier's line of `bbb-tech-cost`'s description,
@@ -327,9 +438,12 @@ func textFieldLines() []fkrecipes.Value {
 // level rather than under it, so a cost line carries four parameters after its
 // empty format string where a recipe preset's carries three.
 //
-// THE NAME IS NOT `costLine`, which two tests in plandata_test.go already use
-// as a local const for a pinned sentence: a package-level function of that name
-// would be shadowed inside them, which compiles and reads as a mistake.
+// THE NAME AVOIDS `costLine`, WHICH IS A RULE ABOUT THE SHAPE AND NOT ABOUT
+// TODAY'S CALLERS. plandata_test.go pins whole log sentences as local consts
+// and reaches for names of exactly that shape when it does; a package-level
+// function sharing one would be SHADOWED inside any test that declared it,
+// which compiles, runs and reads as a mistake. Keeping the two vocabularies
+// apart costs a word here and cannot be got wrong later.
 //
 // THE SOURCE IS A PARAMETER BESIDE THE VALUE even though this mod spells them
 // the same. [TechOptions]' strings ARE the base technology names, so `logistics`
@@ -340,9 +454,9 @@ func costPresetLine(setting, value, source string) fkrecipes.Value {
 	return fkrecipes.Arr(
 		fkrecipes.Str(""),
 		fkrecipes.Str("\n"),
-		localeKey("string-mod-setting."+setting+"-"+value),
+		localeRef("string-mod-setting", setting+"-"+value, value),
 		fkrecipes.Str(": cost of "),
-		localeKey("technology-name."+source),
+		localeRef("technology-name", source, source),
 	)
 }
 
@@ -439,32 +553,51 @@ func settingProto(t *testing.T, ops []fkrecipes.Op, name string) map[string]fkre
 	return nil
 }
 
-// TestTheCustomResearchDefaultsAreTheFallbackUnit is the one thing the
-// transcription above cannot say: that the three numbers a player who picks
-// Custom and types nothing is charged are BASE'S OWN `logistics` UNIT, and not
-// three numbers that happen to look like it.
+// TestTheThreeResearchDeclarationsAreWhatThisFileClaims is the one thing the
+// transcription above cannot say: WHY those three declared defaults are those
+// three, which is two different reasons and not one.
 //
-// [FallbackUnit] is what this technology costs in a game whose logistics chain
-// is gone, and it is what the custom arm defaults to as well, so the two have to
-// be ONE statement rather than two transcriptions -- a settings screen holding
-// two different vanilla costs is a thing only a dump would ever show.
+// THE TWO NUMBERS DECLARE 0 AND 0 BECAUSE THE ROW ABOVE DECIDES. Beside a
+// research dropdown the library takes 0 as the number's reserved word and
+// refuses any other declared default by name, so a plan declaring [FallbackUnit]'s
+// 20 and 15 here would not load at all -- and a player who had never opened the
+// settings screen would be charged 20 units of 15 seconds whatever tier they
+// were standing on, which is an override nobody asked for wearing a default's
+// clothes.
 //
-// THE TWO NUMBERS ARE THE HALF WITH TEETH. They are literals in [Plan] and
-// literals in [FallbackUnit], so this comparison can fail. The PACK half cannot:
-// `better-belt-balancer-tech-packs` is declared FROM `FallbackUnit().Packs`, and
-// what is checked there is the RENDERING -- that the declared pack reaches the
-// player's tooltip as `1 automation-science-pack`, which is the text they copy
-// to start from.
+// WHAT THIS TEST ADDS FOR THE TWO NUMBERS IS THE ANTI-VACUITY GUARD AND
+// NOTHING ELSE, and the header says so rather than implying more. That the
+// emitted `default_value` is 0 is already transcribed field by field in
+// [wantSettings]; the two `checkNum` calls below restate it so this test reads
+// as one statement, and the claim only this test can make is the one under
+// them: that [FallbackUnit] charges a NON-ZERO count and a non-zero time, so
+// "the two settings declare 0" is a statement that they are NOT that unit's
+// numbers. Without that guard an editor who zeroed the fallback unit would make
+// both readings agree for the wrong reason.
+//
+// THE PACK HALF IS THE ONE THAT IS NOT DERIVABLE FROM THE TRANSCRIPTION AT
+// ALL, and it is why this test exists as a test rather than as a comment.
+// [wantSettings] transcribes the rendered string `\ndefault: 1
+// automation-science-pack`; what is checked here is that the string is what
+// `FallbackUnit().Packs` RENDERS TO, so the settings screen cannot come to hold
+// two different vanilla costs without one of the two readings moving.
+//
+// THE PACK TEXT IS THE OPPOSITE OF THE NUMBERS AND ITS DEFAULT IS STILL THAT
+// UNIT'S. A text
+// field's reserved word is `default`, so the field ships holding the word and
+// the DECLARED list is what the word stands for where no tier answers; that
+// list is `FallbackUnit().Packs`, and what is checked here is the RENDERING --
+// that the declared pack reaches the player's tooltip as
+// `1 automation-science-pack`, which is the text they copy to start from.
 //
 // # "ENDS WITH" WAS THE PREDICATE AND STOPPED BEING THE RIGHT ONE
 //
 // The rendered default was the LAST parameter of the composed description until
-// FkRecipes 0077f3c, so "the description ends with it" said what this test
-// means. It is the THIRD of five now, because the library appends two sentences
-// of its own after it ([textFieldLines]). Reading `Arr[len-3]` instead would
-// keep the shape of the old check and none of its meaning: it would pass on a
-// library that appended a third sentence and moved this mod's line, and fail on
-// one that appended a fourth while rendering the same list.
+// FkRecipes 0077f3c. It is the THIRD of seven now, because the library appends
+// four sentences of its own after it ([textFieldLines]). Reading `Arr[len-4]`
+// instead would keep the shape of the old check and none of its meaning: it
+// would pass on a library that appended a fifth sentence and moved this mod's
+// line, and fail on one that appended a sixth while rendering the same list.
 //
 // SO THE PREDICATE IS "EXACTLY ONE PARAMETER IS A `\ndefault: ` LINE, AND IT IS
 // THIS ONE", which is positional in nothing and is STRICTER than the old check
@@ -472,14 +605,23 @@ func settingProto(t *testing.T, ops []fkrecipes.Op, name string) map[string]fkre
 // this test exists to catch, the declared default transcribed a second time
 // somewhere -- failed "ends with" only if the second one came last, and fails
 // this always.
-func TestTheCustomResearchDefaultsAreTheFallbackUnit(t *testing.T) {
+func TestTheThreeResearchDeclarationsAreWhatThisFileClaims(t *testing.T) {
 	unit := FallbackUnit()
 	ops := planOps(t)
 
-	checkNum(t, SettingTechCount, settingProto(t, ops, SettingTechCount),
-		"default_value", float64(unit.Count))
-	checkNum(t, SettingTechSeconds, settingProto(t, ops, SettingTechSeconds),
-		"default_value", unit.Seconds)
+	for _, tc := range []struct{ setting, what string }{
+		{SettingTechCount, "the research count"},
+		{SettingTechSeconds, "the research time"},
+	} {
+		checkNum(t, tc.setting+" ("+tc.what+")",
+			settingProto(t, ops, tc.setting), "default_value", 0)
+	}
+	if unit.Count == 0 || unit.Seconds == 0 {
+		t.Errorf("FallbackUnit charges %d unit(s) of %v second(s), and a 0 in "+
+			"either makes the two assertions above vacuous: what they say is "+
+			"that the two settings do NOT ship holding this unit's numbers",
+			unit.Count, unit.Seconds)
+	}
 
 	rendered := make([]string, 0, len(unit.Packs))
 	for _, p := range unit.Packs {

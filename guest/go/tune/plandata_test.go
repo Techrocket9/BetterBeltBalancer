@@ -226,10 +226,10 @@ func TestTheRecipeIsTheOneThatShipped(t *testing.T) {
 // `mod-settings.dat` and a real engine; this drives them through a fixture in
 // milliseconds and says WHICH ingredient moved.
 //
-// SIX AND NOT THE DROPDOWN'S SEVEN. `custom` is a value with no plan behind it,
-// so there is nothing here for it to be compared against; the gate's own recipe
-// loop stops at the same six for the same reason, and the customizer's arms are
-// their own, in both places.
+// SIX AND EXACTLY THE DROPDOWN'S SIX. The library adds no value of its own to a
+// dropdown, so what the option list holds and what this loop drives are one
+// list; the text field beside it is not a row here, and the customizer's arms
+// are their own, in this file and in the gate alike.
 func TestEveryRecipeOptionIsTheListTheGateAsserts(t *testing.T) {
 	for _, tc := range []struct {
 		option string
@@ -457,36 +457,49 @@ func TestAGameWithNoIngredientsIsAnEmptyRecipeRatherThanAnInventedOne(t *testing
 // THAT DAY IS 2026-09-07. FkRecipes c7a806e resolves the fallback at the one
 // point it applies -- "THE FALLBACK IS RESOLVED ONLY HERE, which is the point:
 // its packs are probed when the fallback is what applies, and never when a
-// source answered" (go/data.go:696) -- and the design record calls it the
+// source answered" (go/data.go, the CostBy arm) -- and the design record calls it the
 // answer to this mod's ask by name, in a row of FkRecipes'
 // agents/customizer-design.md whose decision ends: the Fallback is resolved
 // only when used. The fallback's NUMBERS are still checked eagerly, in the plan
-// walk with no World in hand (go/data.go:348), which is the right split: a
+// walk with no World in hand (go/customize.go, validateCostChoices), which is the right split: a
 // count of zero is this mod's mistake and is knowable without asking the game
 // anything.
 //
-// SO A GAME WITH NO SCIENCE PACK AT ALL LOADS, as long as something carries a
-// unit. What says the SOURCE arm ran, rather than a fallback that happened to
-// survive, is the prerequisite (exactly `logistics`) and the empty log stream:
-// [FallbackUnit] is logistics' own numbers written out, so a surviving fallback
-// would carry the same unit, and the unit comparison is kept as the half that
-// says the research charges what logistics charges. Measured by the review:
-// with every ladder emptied the fallback survives, the unit compares equal, and
-// what fires is the missing prerequisite and the "fallback cost applies" line.
+// SO A GAME THAT HAS NOT GOT THIS MOD'S OWN SCIENCE PACK LOADS, as long as the
+// tier it is on is priced in a pack it HAS. The game here is `logistics-2` --
+// which the fixture prices in one `logistic-science-pack` -- in a game whose
+// only tool is that pack, so [FallbackUnit]'s `automation-science-pack` is a
+// name nothing in this world answers for and NOTHING ASKS.
+//
+// THE WORLD IS NARROWER THAN IT WAS AND THE REASON IS A SECOND PROBE THIS TEST
+// DID NOT USED TO MEET. It used to take every tool away, on the reading that a
+// source carrying a unit ends the question; the library filters a COPIED unit's
+// own packs through `ToolExists` now, so a game with no tool at all loses the
+// tier's pack as well and lands on the fallback after all. That is a different
+// property, and [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused] is
+// where it is pinned. What is left here is the narrow claim the lazy resolve
+// was asked for, and it is sharper for it: the name in the FALLBACK is absent
+// from this game and the load is clean.
+//
+// WHAT SAYS THE SOURCE ARM RAN is the prerequisite (exactly `logistics-2`), the
+// unit (the tier's own, which is not [FallbackUnit]'s numbers) and the empty log
+// stream.
 func TestAnUnreachedFallbacksPackIsNeverProbed(t *testing.T) {
 	base := everythingWorld()
-	l1, _ := base.tech(TechLogistics)
+	l2, _ := base.tech(TechLogistics2)
 
-	protos, logs := extendsOf(t, dataOps(t, base.withTools()))
+	w := base.withStartup(SettingTechCost, TechLogistics2).
+		withTools("logistic-science-pack")
+	protos, logs := extendsOf(t, dataOps(t, w))
 	for _, line := range logs {
-		t.Errorf("a game whose logistics carries a unit degraded over a "+
-			"fallback nothing reached: %s", line)
+		t.Errorf("a game whose logistics-2 is priced in a pack it has degraded "+
+			"over a fallback nothing reached: %s", line)
 	}
 	got := protoOf(t, protos, "technology", TechName)
-	checkPrereqs(t, "an unreached fallback", got, TechLogistics)
-	if !reflect.DeepEqual(got["unit"], *l1.unit) {
-		t.Errorf("the unit is %s and logistics charges %s",
-			showValue(got["unit"]), showValue(*l1.unit))
+	checkPrereqs(t, "an unreached fallback", got, TechLogistics2)
+	if !reflect.DeepEqual(got["unit"], *l2.unit) {
+		t.Errorf("the unit is %s and logistics-2 charges %s",
+			showValue(got["unit"]), showValue(*l2.unit))
 	}
 }
 
@@ -517,8 +530,12 @@ func TestAReachedFallbackWithNoPackInTheGameIsRefused(t *testing.T) {
 			"anyway: a research that costs nothing is one a player finishes " +
 			"by opening the screen")
 	}
+	// THE SENTENCE NAMES THE RUNGS IT TRIED, which it did not before this
+	// library round: one name here, because this mod declares its fallback
+	// pack with no ladder under it.
 	want := "fkrecipes: the technology bbb-balancer has no science pack the " +
-		"game has; research takes at least one"
+		"game has; research takes at least one, and none of " +
+		"automation-science-pack is a science pack here"
 	if err.Error() != want {
 		t.Errorf("the refusal reads\n got  %q\n want %q", err.Error(), want)
 	}
@@ -883,97 +900,102 @@ func TestAnUnreadableSettingTakesTheDeclaredDefault(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// THE CUSTOMIZER: the seventh value, and the text field behind it.
+// THE CUSTOMIZER: the text field beside the dropdown, and the text is the
+// switch.
 //
-// `bbb-recipe-cost` gained one value and
-// `better-belt-balancer-recipe-ingredients` arrived beside it, so a player who
-// wants a recipe none of the six presets is can write one. Five behaviours are
-// pinned below, and every sentence a PLAYER can be shown is compared word for
-// word rather than by substring: a refusal that
-// stops the load is the only thing they are given to fix it with, so its
-// wording is as much this mod's surface as the recipe is.
+// `better-belt-balancer-recipe-ingredients` arrived beside `bbb-recipe-cost`
+// and the dropdown's six values did not move, so a player who wants a recipe
+// none of the six presets is writes one and a player who does not never sees a
+// difference. WHAT DECIDES IS THE TEXT ITSELF: while it says `default` the
+// dropdown applies exactly as it always did, and anything else is what the
+// recipe is made of, with the choice it set aside named in the log.
+//
+// EVERY SENTENCE A PLAYER CAN BE SHOWN IS COMPARED WORD FOR WORD rather than by
+// substring: a refusal that stops the load is the only thing they are given to
+// fix it with, so its wording is as much this mod's surface as the recipe is.
 // ---------------------------------------------------------------------------
 
-// theDefaultWord is FkRecipes' reserved word for "the mod's own declared list,
-// with its ladders". The library keeps it unexported (go/ingredientlist.go:100,
-// `defaultWord`) and documents it in docs/ingredient-list.md, so a consumer
-// writes it out; it is written out ONCE here, because the fixture, these tests
-// and the engine gate all have to say the same seven letters.
+// theDefaultWord is FkRecipes' reserved word for "the row beside me decides",
+// and where there is no row beside it, "the mod's own declared list with its
+// ladders". The library keeps it unexported (go/ingredientlist.go, `defaultWord`)
+// and documents it in docs/ingredient-list.md, so a consumer writes it out; it
+// is written out ONCE here, because the fixture, these tests and the engine
+// gate all have to say the same seven letters.
 const theDefaultWord = "default"
 
-// vanillaLadderList is what the vanilla plan resolves to in a game that has
-// every rung, transcribed rather than read off [RecipePlan] for the reason
-// every expectation in this file is transcribed. It is what BOTH untouched
-// paths of the customizer must produce: the word `default`, and a text the
-// planner could not read at all.
-func vanillaLadderList() []ingredientPair {
-	return []ingredientPair{
-		{"iron-plate", 4}, {"iron-gear-wheel", 2}, {"transport-belt", 2}}
-}
-
-// TestTheDefaultWordUnderCustomIsTheVanillaLadder is the state a player reaches
-// by picking `custom` and typing nothing.
+// TestTheDefaultWordLetsTheDropdownDecide is the state every player who never
+// opens the Startup tab is in, and the whole reason the text is the switch.
 //
 // THE WORD IS NOT A LIST AND THAT IS THE WHOLE DESIGN.
 // `better-belt-balancer-recipe-ingredients` ships holding `default`, and the
-// library resolves that to the DECLARED list with its ladders rather than to a
-// rendering of it -- so a player who switches
-// to `custom` and never edits gets exactly what `vanilla` gives them, in this
-// release and in every later one, and in a modpack missing a rung
-// (FkRecipes go/customize.go:1138, the isDefault arm of resolveIngredientsFrom).
+// library reads the word as "the row beside me decides" rather than as a
+// rendering of anything -- so the dropdown answers, in this release and in
+// every later one, and adopting the customizer cost a player on `cheap`
+// nothing at all.
+//
+// THE DROPDOWN IS ON `cheap` AND NOT ON ITS OWN DEFAULT, which is what makes
+// this test able to fail. On `vanilla` the preset's list and this field's
+// declared list are the same three pairs, so a planner that ignored the
+// dropdown and rendered the declaration would pass; `cheap` is two pairs and
+// neither of them is vanilla's.
 //
 // AND IT DRAWS NO LOG LINE, which is the library's stated rule for this arm:
-// "the word default: the AUTHOR's declared list with its ladders, which is the
-// pre-existing resolution path and gets no line of its own"
-// (go/customize.go:1084). So the assertion is the EMPTY log stream rather than
-// the absence of one particular sentence: a line here would be the library
-// narrating an untouched field on every load of every game.
+// nothing was overridden, so there is nothing to narrate. The assertion is the
+// EMPTY log stream rather than the absence of one particular sentence, because
+// a line here would be the library narrating an untouched field on every load
+// of every game.
 //
 // THE THREE SPELLINGS ARE THE LANGUAGE'S, not this mod's guesses. Surrounding
 // space is trimmed and one trailing comma is tolerated, so " default " and
-// "default," are the marker too -- which matters beyond tidiness, because
-// [TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo] asks the SAME function
-// what "edited" means: a spelling read as an edit would tell a player their
-// untouched field was ignored.
-func TestTheDefaultWordUnderCustomIsTheVanillaLadder(t *testing.T) {
+// "default," are the word too -- and a spelling read as a LIST instead would
+// hand the player a recipe made of one ingredient called `default`, or take the
+// load down.
+func TestTheDefaultWordLetsTheDropdownDecide(t *testing.T) {
 	for _, text := range []string{theDefaultWord, " default ", "default,"} {
 		w := everythingWorld().
-			withStartup(SettingRecipeCost, RecipeCustom).
+			withStartup(SettingRecipeCost, RecipeCheap).
 			withStartup(SettingRecipeIngredients, text)
 		protos, logs := extendsOf(t, dataOps(t, w))
 		for _, line := range logs {
-			t.Errorf("the text %q is the default marker and the plan said "+
+			t.Errorf("the text %q is the default word and the plan said "+
 				"something about it: %s", text, line)
 		}
-		checkIngredients(t, "custom on "+strconv.Quote(text),
-			protoOf(t, protos, "recipe", PartName), vanillaLadderList())
+		checkIngredients(t, "cheap under "+strconv.Quote(text),
+			protoOf(t, protos, "recipe", PartName),
+			[]ingredientPair{{"iron-plate", 2}, {"transport-belt", 1}})
 	}
 }
 
-// TestAnUnreadableCustomTextTakesTheDeclaredList is the OTHER untouched path,
-// and it is not the same one.
+// TestAnUnreadableTextLetsTheDropdownDecide is the OTHER untouched path, and it
+// is not the same one.
 //
 // A setting the planner cannot read AT ALL is a hand-edited mod-settings.dat
 // with the row missing: the engine writes every setting's current value into
 // that file, untouched defaults included, so no player produces this. The
-// library degrades to the declared list and SAYS SO, with the sentence it uses
-// for every unreadable setting -- and that line is the whole difference between
-// this arm and the word above. One is a player's choice; the other is a file
-// somebody edited by hand, and it should not pass in silence.
+// library behaves exactly as it does for the word -- the dropdown decides --
+// and SAYS SO, with the sentence it uses for every unreadable setting. That
+// line is the whole difference between this arm and the word above. One is a
+// player's choice; the other is a file somebody edited by hand, and it should
+// not pass in silence.
+//
+// THE DROPDOWN IS ON `cheap` FOR [TestTheDefaultWordLetsTheDropdownDecide]'s
+// REASON: on `vanilla` a planner that fell back to this field's own declared
+// list would be indistinguishable from one that asked the dropdown.
 //
 // THE FIXTURE HAS TO ANSWER THE EMITTED NAME FOR THIS TO MEAN ANYTHING.
 // `better-belt-balancer-recipe-ingredients` is generated, so the name the
 // library asks `StartupSetting` for is the PREFIXED one a player's file carries.
 // A fixture keyed on anything else would answer absent for every arm of the
 // customizer, and this is the one test that would still pass.
-func TestAnUnreadableCustomTextTakesTheDeclaredList(t *testing.T) {
+func TestAnUnreadableTextLetsTheDropdownDecide(t *testing.T) {
 	w := everythingWorld().
-		withStartup(SettingRecipeCost, RecipeCustom).
+		withStartup(SettingRecipeCost, RecipeCheap).
 		withoutStartup(SettingRecipeIngredients)
 	protos, logs := extendsOf(t, dataOps(t, w))
 
 	checkIngredients(t, "an unreadable text",
-		protoOf(t, protos, "recipe", PartName), vanillaLadderList())
+		protoOf(t, protos, "recipe", PartName),
+		[]ingredientPair{{"iron-plate", 2}, {"transport-belt", 1}})
 	// THE SENTENCE IS A LITERAL, not the constants spliced together: this
 	// section compares every line a player is shown word for word, and a
 	// renamed constant has to fail this test rather than travel through it.
@@ -982,23 +1004,32 @@ func TestAnUnreadableCustomTextTakesTheDeclaredList(t *testing.T) {
 			"readable, so its default applies")
 }
 
-// TestTheCustomValueTakesItsIngredientsFromTheText is the feature, stated as
-// the recipe a player gets.
+// TestATypedTextTakesTheRecipeOverFromTheDropdown is the feature, stated as the
+// recipe a player gets.
 //
 // THE ORDER IS THE TYPED ORDER, which is why the comparison is a slice: the
 // list a player writes is the list they see in the crafting tooltip, and a
 // planner that sorted it would be quietly rewriting their recipe.
 //
+// THE OVERRIDE IS TOTAL, which is the ingredient field's rule and not the
+// research fields': the WHOLE list is the player's, and the preset contributes
+// nothing to it. That is why the line ends `is set aside` where the research
+// line ends `supplies what the settings leave at default`.
+//
 // THE LOG LINE IS PINNED WORD FOR WORD, AND IT IS THE CANONICAL RENDERING
 // RATHER THAN THE TEXT AS TYPED: a player who wrote `iron-plate x3` reads back
-// `3 iron-plate` and learns the form the library would have written
-// (FkRecipes go/customize.go:1152). It names the RECIPE and the SETTING by their
-// EMITTED names -- the recipe unprefixed because it is Legacy, the setting
-// prefixed because it is generated -- so the line points at the row in the menu
-// a player would go and edit.
-func TestTheCustomValueTakesItsIngredientsFromTheText(t *testing.T) {
+// `3 iron-plate` and learns the form the library would have written. It names
+// the RECIPE, the SETTING and the DROPDOWN by their EMITTED names -- the recipe
+// and the dropdown unprefixed because they are Legacy, the text setting
+// prefixed because it is generated -- so the line points at the two rows in the
+// menu a player would go and look at.
+//
+// THE DROPDOWN IS LEFT ON ITS OWN DEFAULT HERE, so the clause names `vanilla`,
+// which is what a player who typed into the field and touched nothing else
+// reads. [TestATextUnderAPresetTakesTheRecipeOverAndNamesWhatItSetAside] is the
+// same rule with a preset under it and a list that can tell the two apart.
+func TestATypedTextTakesTheRecipeOverFromTheDropdown(t *testing.T) {
 	w := everythingWorld().
-		withStartup(SettingRecipeCost, RecipeCustom).
 		withStartup(SettingRecipeIngredients, "3 iron-plate, 1 splitter")
 	protos, logs := extendsOf(t, dataOps(t, w))
 
@@ -1006,14 +1037,15 @@ func TestTheCustomValueTakesItsIngredientsFromTheText(t *testing.T) {
 		[]ingredientPair{{"iron-plate", 3}, {"splitter", 1}})
 	checkExactlyOneLog(t, logs,
 		"fkrecipes: bbb-balancer-part takes its ingredients from "+
-			"better-belt-balancer-recipe-ingredients: 3 iron-plate, 1 splitter")
+			"better-belt-balancer-recipe-ingredients: 3 iron-plate, 1 splitter"+
+			"; the bbb-recipe-cost choice vanilla is set aside")
 }
 
 // TestATextNamingTheBalancerPartItselfEmitsItAndSaysSo is the round-1 open item
 // closed from the library's side, pinned here as what a player now reads.
 //
-// THE SHAPE. `bbb-recipe-cost = custom` with `2 bbb-balancer-part` in the text
-// asks for a recipe whose only ingredient is the thing it makes. The library
+// THE SHAPE. `2 bbb-balancer-part` typed into the text field asks for a recipe
+// whose only ingredient is the thing it makes. The library
 // resolves a typed name against an overlay that holds THIS PLAN'S OWN ITEMS on
 // top of the game's, so `bbb-balancer-part` is present and the list emits; a
 // declared LADDER cannot reach the same place, because its rungs are probed
@@ -1039,7 +1071,6 @@ func TestTheCustomValueTakesItsIngredientsFromTheText(t *testing.T) {
 // on an order swap where a membership test would not.
 func TestATextNamingTheBalancerPartItselfEmitsItAndSaysSo(t *testing.T) {
 	w := everythingWorld().
-		withStartup(SettingRecipeCost, RecipeCustom).
 		withStartup(SettingRecipeIngredients, "2 "+PartName)
 	protos, logs := extendsOf(t, dataOps(t, w))
 
@@ -1059,7 +1090,8 @@ func TestATextNamingTheBalancerPartItselfEmitsItAndSaysSo(t *testing.T) {
 	// assertion.
 	want := []string{
 		"fkrecipes: bbb-balancer-part takes its ingredients from " +
-			"better-belt-balancer-recipe-ingredients: 2 bbb-balancer-part",
+			"better-belt-balancer-recipe-ingredients: 2 bbb-balancer-part" +
+			"; the bbb-recipe-cost choice vanilla is set aside",
 		"fkrecipes: bbb-balancer-part: bbb-balancer-part is in the list and " +
 			"is also what this recipe makes, so nothing can craft the first " +
 			"one unless something else produces it",
@@ -1069,32 +1101,42 @@ func TestATextNamingTheBalancerPartItselfEmitsItAndSaysSo(t *testing.T) {
 	}
 }
 
-// TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo is the shape a pair of
-// settings must not have: a field the player edits where nothing happens.
+// TestATextUnderAPresetTakesTheRecipeOverAndNamesWhatItSetAside is the shape
+// this round exists to reach, and it is the exact inverse of what stood here.
 //
-// The two rows are not both live. The text applies only while the dropdown says
-// `custom`, and on any preset the preset wins -- so the library says out loud
-// that it read the text and is not using it, which is the entire reason it
-// parses a text it has no intention of applying.
+// WHAT THIS TEST USED TO SAY. Until fix round 2 the text applied only while the
+// dropdown said `custom`, so a player standing on `cheap` who typed a recipe
+// got `cheap` and one log line telling them their edit was ignored. That is a
+// field a player edits where nothing happens, and the round's answer was not to
+// narrate it better but to make it impossible: THE TEXT IS THE SWITCH, so a
+// non-default text under any preset is live and the preset is what is set
+// aside. The sentence this test pinned exists nowhere any more, in this mod or
+// in the library, because there is no state left for it to be about.
 //
 // WHAT MAKES THIS NOT VACUOUS is the ingredient list beside the line. `cheap`
-// and the text name the same item at different amounts, so an implementation
-// that quietly took the text would emit one iron plate and fail the comparison
-// rather than only losing a sentence in the log.
-func TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo(t *testing.T) {
+// and the text name the same item at DIFFERENT AMOUNTS, so a planner that still
+// preferred the preset would emit two iron plates and a belt and fail the
+// comparison rather than only losing a sentence in the log.
+//
+// AND THE CLAUSE NAMES THE CHOICE, not the setting: `cheap` is the row the
+// player is standing on, and it is the thing they would go looking for when the
+// recipe is not what the dropdown says. A clause naming `bbb-recipe-cost`
+// instead would point at the row rather than at the value it holds.
+func TestATextUnderAPresetTakesTheRecipeOverAndNamesWhatItSetAside(t *testing.T) {
 	w := everythingWorld().
 		withStartup(SettingRecipeCost, RecipeCheap).
 		withStartup(SettingRecipeIngredients, "1 iron-plate")
 	protos, logs := extendsOf(t, dataOps(t, w))
 
-	checkIngredients(t, "an edited text under cheap",
+	checkIngredients(t, "a typed text under cheap",
 		protoOf(t, protos, "recipe", PartName),
-		[]ingredientPair{{"iron-plate", 2}, {"transport-belt", 1}})
+		[]ingredientPair{{"iron-plate", 1}})
 	// A literal for the reason the unreadable arm's is: a renamed constant
 	// must fail this sentence rather than be carried by it.
 	checkExactlyOneLog(t, logs,
-		"fkrecipes: better-belt-balancer-recipe-ingredients is edited, but "+
-			"bbb-recipe-cost is not on custom, so the text is ignored")
+		"fkrecipes: bbb-balancer-part takes its ingredients from "+
+			"better-belt-balancer-recipe-ingredients: 1 iron-plate"+
+			"; the bbb-recipe-cost choice cheap is set aside")
 }
 
 // fallbackLine is the ONE line the library logs when it sets a player's text
@@ -1104,19 +1146,41 @@ func TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo(t *testing.T) {
 // severity in the text because Factorio's `log()` has one channel and no level,
 // and the tail is the only instruction a player gets: this is the sentence that
 // has to survive a refactor unchanged.
+//
+// AND A RECIPE'S INGREDIENT TEXT CARRIES ONE SENTENCE MORE THAN A PACK TEXT
+// DOES, which is why this takes an argument. Changing a recipe empties an
+// assembling machine's input slots of anything the new list does not use -- up
+// to eighty items destroyed outright rather than spilled on the ground, which
+// is a thing worth saying before a player acts on it -- and repricing a
+// research destroys nothing, so the pack field's line stops one sentence
+// earlier. It is the same constant the library writes into the RECIPE'S OWN
+// tooltip, which is what keeps the two from drifting apart.
 func fallbackLine(reason string) string {
+	return packFallbackLine(reason) +
+		" Changing a recipe empties an assembling machine's input slots of " +
+		"anything the new list does not use."
+}
+
+// packFallbackLine is the same line without the recipe's second sentence, which
+// is what a science-pack text gets.
+func packFallbackLine(reason string) string {
 	return "fkrecipes: ERROR: " + reason +
 		". The mod loaded with its own default instead; fix the text under " +
 		"Settings > Mod settings > Startup, then restart."
 }
 
-// TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo pins the three texts a
-// player is likeliest to get wrong, and what the mod does with each: it applies
-// ITS OWN DECLARED LIST and writes one line naming the setting and the reason.
-// A FOURTH ROW drives the first of those texts a second time in a game with no
-// `transport-belt`, and it is there because the other three cannot tell the
-// DECLARATION from the `vanilla` PRESET: in a game that has everything the two
-// are the same three pairs. Its own comment says how they part.
+// TestATextTheGameCannotAnswerFallsBackAndSaysSo pins the three texts a player
+// is likeliest to get wrong, and what the mod does with each: it applies THE
+// PRESET THE DROPDOWN IS ON, writes one line naming the setting and the reason,
+// and says so in the recipe's own tooltip. A FOURTH ROW drives the first of
+// those texts a second time in a game with no `transport-belt`, and it is there
+// because the other three cannot tell a preset that carries its ladders from a
+// flat list: in a game that has everything the two are the same two pairs. Its
+// own comment says how they part.
+//
+// EVERY ROW STANDS ON `cheap` AND NOT ON THE DROPDOWN'S OWN DEFAULT, and that
+// is what makes the headline claim above falsifiable at all; the `cheap` local
+// below carries the reason.
 //
 // THE NAME USED TO SAY "IsRefused" AND THE LIBRARY STOPPED REFUSING. FkRecipes
 // 2e5f779 made a value the PLAYER controls fall back instead, and the reason is
@@ -1131,12 +1195,13 @@ func fallbackLine(reason string) string {
 // opposite of what the library now does would be worse than no test, hence the
 // rename.
 //
-// WHAT IS ASSERTED IS THE PAIR, and neither half alone would do. The LIST says
-// the player got this mod's recipe rather than a guess or a hole -- vanilla,
-// which is the `default_value` of the dropdown they are not on, applied because
-// their text was set aside. The LINE says the mod noticed: a fallback with no
-// line is a player editing a field where nothing happens and nothing explains
-// it, which is the same defect the ignored-text arm exists for at the other end.
+// WHAT IS ASSERTED IS THE TRIPLE, and no one of the three would do. The LIST
+// says the player got this mod's recipe rather than a guess or a hole --
+// `cheap`, the preset the dropdown is on, applied because their text was set
+// aside. The LINE says the mod noticed. And the TOOLTIP is the only one of the
+// three a player ever sees: the settings screen still holds the text they
+// typed, and nothing but that trailing line tells them the game is not using
+// it.
 //
 // NOTHING IS SUBSTITUTED FOR A TYPED NAME, and that has not changed. A ladder is
 // the AUTHOR saying "any of these will do"; a typed name is a player naming one
@@ -1145,8 +1210,9 @@ func fallbackLine(reason string) string {
 // author's declaration rather than taking the load down with it.
 //
 // THE FALLBACK IS NOT TOTAL AND NO ROW HERE IS THE EXCEPTION. What the text
-// falls back TO is this mod's own declaration, and a mod set where THAT cannot
-// produce a legal result still stops the load. Every ladder resolves in all
+// falls back TO is this mod's own declaration -- the preset behind the row the
+// player is on -- and a mod set where THAT cannot produce a legal result still
+// stops the load. Every ladder resolves in all
 // four worlds here, the fourth by merging; the recipe field's own worst case
 // is not a refusal at all but an empty ingredient list, which
 // [TestAGameWithNoIngredientsIsAnEmptyRecipeRatherThanAnInventedOne] pins as the
@@ -1161,7 +1227,7 @@ func fallbackLine(reason string) string {
 // keeping the labels as they are is the decision recorded in
 // mod-data/locale/en/better-belt-balancer.cfg, and this is what makes keeping
 // them safe.
-func TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
+func TestATextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 	// THE WHOLE VOCABULARY LESS `transport-belt`, FOR THE LAST ROW ALONE. Built
 	// and guarded exactly as
 	// [TestAPackWithoutTransportBeltMergesRatherThanDuplicating] builds it,
@@ -1178,12 +1244,21 @@ func TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 			len(ladderVocabulary())-len(noBelt))
 	}
 
-	// THE VANILLA LIST, WHICH IS THIS MOD'S DECLARATION AND NOT A GUESS.
+	// THE `cheap` LIST, WHICH IS THE PRESET THE DROPDOWN IS ON AND NOT A GUESS.
 	// Written out rather than taken from [RecipePlan] for the reason every
-	// expectation in this file is written out, and it is the same literal
-	// [TestVanillaIsTodaysRecipe] holds.
-	vanilla := []ingredientPair{
-		{"iron-plate", 4}, {"iron-gear-wheel", 2}, {"transport-belt", 2}}
+	// expectation in this file is written out.
+	//
+	// `cheap` AND NOT `vanilla`, WHICH IS WHAT MAKES THIS TEST ABLE TO FAIL ON
+	// ITS OWN HEADLINE. [Plan] declares the text field's default AS
+	// `RecipePlan(RecipeVanilla)`, so on the dropdown's own default value the
+	// preset and the field's declared list are the same three ladders: a
+	// planner that fell back to the FIELD rather than to the DROPDOWN would
+	// emit identical bytes and every row here would pass. Driving `cheap` is
+	// the same precaution [TestTheDefaultWordLetsTheDropdownDecide] and
+	// [TestAnUnreadableTextLetsTheDropdownDecide] take, and the research twin
+	// [TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo] takes by driving
+	// `logistics-2`.
+	cheap := []ingredientPair{{"iron-plate", 2}, {"transport-belt", 1}}
 
 	for _, tc := range []struct {
 		text   string
@@ -1201,7 +1276,7 @@ func TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 			text: "3 tungsten-plate",
 			reason: `better-belt-balancer-recipe-ingredients, entry 1 ` +
 				`("3 tungsten-plate"): no item or fluid is named tungsten-plate`,
-			want: vanilla,
+			want: cheap,
 		},
 		{
 			// The display name off this mod's own dropdown label.
@@ -1209,15 +1284,16 @@ func TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 			reason: `better-belt-balancer-recipe-ingredients, entry 1 ` +
 				`("2 iron plates"): no item or fluid is named "iron plates"; ` +
 				`did you mean iron-plate`,
-			want: vanilla,
+			want: cheap,
 		},
 		{
 			// A NAME THE GAME HAS, WHICH IS THE THIRD SHAPE AND NOT A TYPO AT
 			// ALL. This mod's recipe declares no `Category`, so it is
 			// `crafting`, and the library rejects a fluid there at the list
 			// rather than letting the engine refuse the prototype later
-			// (FkRecipes go/ingredientlist.go:145-159, and the sentence at
-			// :826). Every real game has `water`, so this is the reason a
+			// (FkRecipes go/ingredientlist.go:145-159, and the sentence
+			// `categoryTakesItemsOnly` guards). Every real game has `water`, so
+			// this is the reason a
 			// player reaches after "no item or fluid is named": the field
 			// takes an ingredient, water IS one, and what cannot be used
 			// names the category rather than the spelling.
@@ -1225,20 +1301,23 @@ func TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 			reason: `better-belt-balancer-recipe-ingredients, entry 1 ` +
 				`("1 water"): water is a fluid, and a recipe in the crafting ` +
 				`category takes items only`,
-			want: vanilla,
+			want: cheap,
 		},
 		{
-			// THE ROW THAT TELLS THE DECLARED LIST FROM THE `vanilla` PRESET,
-			// which the three above cannot. [Plan] declares this field's
-			// default AS `RecipePlan(RecipeVanilla)`, so in a game that has
-			// every rung the author's declaration and the preset are the same
-			// three pairs and a fallback onto either would pass those rows. In
-			// a game with no `transport-belt` they part: the DECLARATION
-			// carries its ladders, so its third one falls to `iron-plate`,
-			// merges into the first and says so. A rendered preset -- the flat
-			// three names the library would have stored had it emitted the list
-			// as a `default_value` -- has no third ladder, so it would come out
-			// as two pairs and say nothing.
+			// THE ROW THAT SAYS THE FALLBACK CARRIES ITS LADDERS, which the
+			// three above cannot. In a game that has every rung the chosen
+			// preset resolves to two flat names and a planner that had lost the
+			// ladders would pass those rows. In a game with no
+			// `transport-belt` the two part: `cheap`'s second entry is a
+			// LADDER, so it falls to `iron-plate`, merges into the first and
+			// says so, where a flat list would come out as one name and one
+			// missing one and say nothing.
+			//
+			// WHAT THE TEXT FALLS BACK TO IS THE DROPDOWN, AND THAT IS THE
+			// ROUND'S OWN CHANGE. A text this mod cannot use behaves exactly as
+			// the word `default` does, so the row the player is standing on
+			// decides -- `cheap` on every row here, which is not the list this
+			// field declares as its own.
 			//
 			// THE TEXT IS THE FIRST ROW'S, DELIBERATELY: the only thing this
 			// row moves is the game.
@@ -1246,12 +1325,12 @@ func TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 			reason: `better-belt-balancer-recipe-ingredients, entry 1 ` +
 				`("3 tungsten-plate"): no item or fluid is named tungsten-plate`,
 			stocked: noBelt,
-			want:    []ingredientPair{{"iron-plate", 6}, {"iron-gear-wheel", 2}},
-			extra:   mergeLine("4 plus 2 is 6"),
+			want:    []ingredientPair{{"iron-plate", 3}},
+			extra:   mergeLine("2 plus 1 is 3"),
 		},
 	} {
 		w := everythingWorld().
-			withStartup(SettingRecipeCost, RecipeCustom).
+			withStartup(SettingRecipeCost, RecipeCheap).
 			withStartup(SettingRecipeIngredients, tc.text)
 		if tc.stocked != nil {
 			w = w.withItems(tc.stocked...)
@@ -1265,8 +1344,10 @@ func TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 			continue
 		}
 		protos, logs := extendsOf(t, ops)
-		checkIngredients(t, "the text "+strconv.Quote(tc.text),
-			protoOf(t, protos, "recipe", PartName), tc.want)
+		recipe := protoOf(t, protos, "recipe", PartName)
+		checkIngredients(t, "the text "+strconv.Quote(tc.text), recipe, tc.want)
+		checkFallbackNote(t, "the text "+strconv.Quote(tc.text), recipe,
+			SettingRecipeIngredients, true)
 		// THE WHOLE STREAM IN ORDER, which is what the fourth row needs and the
 		// first three lose nothing by: the fallback line comes first, because
 		// the text is read before the declaration it falls back to is walked,
@@ -1279,6 +1360,45 @@ func TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 			t.Errorf("the text %q said\n got  %q\n want %q",
 				tc.text, logs, wantLogs)
 		}
+	}
+}
+
+// checkFallbackNote is the sentence a PLAYER reads without opening the log,
+// which is the half of a fallback that used to be nowhere at all.
+//
+// WHY IT IS ASSERTED AND NOT LEFT TO THE LOG LINE BESIDE IT. A refused text is
+// a state the settings screen cannot show: the field still holds what the
+// player typed and the game is not using it, and the log is not where a player
+// looks. FkRecipes writes one trailing line into the prototype's own
+// `localised_description` for exactly that, so the recipe tooltip in the
+// crafting menu and the technology's in the research screen say why they are
+// not what was typed.
+//
+// THE RECIPE CARRIES ONE SENTENCE MORE THAN THE TECHNOLOGY, joined by a space
+// on the one line: changing a recipe empties an assembling machine's input
+// slots of anything the new list does not use, and repricing a research
+// destroys nothing. It is the same constant the library appends to a recipe's
+// ERROR line, which is what keeps the tooltip and the log from drifting apart,
+// and [fallbackLine] is this file's other reader of it.
+//
+// THE SHAPE IS TWO PARAMETERS AND NOT THREE because neither this mod's recipe
+// nor its technology declares a `Description`: an author's own description
+// would sit at slot 1 with the note after it. A prototype nothing fell back on
+// carries NO `localised_description` at all, which [TestTheRecipeIsTheOneThatShipped]
+// and [TestTheTechnologyIsTheOneThatShipped] say by listing the fields those
+// two may have.
+func checkFallbackNote(t *testing.T, what string, proto map[string]fkrecipes.Value, setting string, recipe bool) {
+	t.Helper()
+	note := "The stored value of " + setting + " could not be used, so this " +
+		"mod's own choice applies instead. The reason is in the log."
+	if recipe {
+		note += " Changing a recipe empties an assembling machine's input " +
+			"slots of anything the new list does not use."
+	}
+	want := fkrecipes.Arr(fkrecipes.Str(""), fkrecipes.Str(note))
+	if !reflect.DeepEqual(proto["localised_description"], want) {
+		t.Errorf("%s: the prototype's localised_description is %s\n want %s",
+			what, showValue(proto["localised_description"]), showValue(want))
 	}
 }
 
@@ -1302,27 +1422,41 @@ func checkExactlyOneLog(t *testing.T, logs []string, want string) {
 }
 
 // ---------------------------------------------------------------------------
-// THE RESEARCH CUSTOMIZER: the fourth value, and the three fields behind it.
+// THE RESEARCH CUSTOMIZER: three fields beside the dropdown, each its own
+// switch.
 //
-// `bbb-tech-cost` gained `custom` and `better-belt-balancer-tech-packs`,
-// `better-belt-balancer-tech-count` and `better-belt-balancer-tech-seconds`
-// arrived beside it, so a player who wants a research cost none of the three
-// tiers charges can write one. The same rule the recipe's
-// section states holds here: every sentence a PLAYER can be shown is compared
-// word for word, because a refusal that stops the load is all they are given to
-// fix it with.
+// `better-belt-balancer-tech-packs`, `better-belt-balancer-tech-count` and
+// `better-belt-balancer-tech-seconds` arrived beside `bbb-tech-cost` and the
+// dropdown's three values did not move. WHAT DECIDES IS EACH FIELD ITSELF, one
+// field at a time: a pack text on the word `default` and a number at 0 leave
+// that field to the chosen tier, and anything else overwrites it. So a player
+// who touches nothing is charged the tier byte for byte, and a player who drags
+// one slider changes one number.
 //
 // WHAT IS DIFFERENT FROM THE RECIPE'S HALF, and it is why these are not the
-// same tests twice. A written recipe replaces one field of one prototype; a
-// written research cost replaces the unit AND decides where the technology
-// hangs, because the prerequisite that used to move with the copied unit has no
-// source to move from. So every arm below asserts the PAIR.
+// same tests twice. A written recipe replaces the WHOLE list, and its line ends
+// `is set aside`; a written research cost replaces the fields it names and the
+// tier supplies the rest, so its line ends `supplies what the settings leave at
+// default`. The PLACE IN THE TREE is the tier's either way -- every value of
+// this dropdown names a source technology and that source is the prerequisite
+// however the cost was written -- which is why no arm below asserts a placement
+// that moves.
+//
+// The same rule the recipe's section states holds here: every sentence a PLAYER
+// can be shown is compared word for word, because a refusal that stops the load
+// is all they are given to fix it with.
 // ---------------------------------------------------------------------------
 
 // customUnit is the unit shape the library emits for a written cost: the
 // engine's SHORT TUPLE form, `{count, time, ingredients={{name, amount}}}`,
 // which is the same shape [unitOf] builds for a fixture technology and the same
 // one the tier arms copy verbatim.
+//
+// THE FIELD ORDER IS THE TIER'S, which is why this still matches a unit the
+// library built by OVERWRITING one rather than by constructing one: the library
+// replaces a field in the place it already had and appends only a field the
+// unit did not carry, so a tier built by [unitOf] and then written over comes
+// out in this order.
 func customUnit(count, seconds float64, packs ...ingredientPair) fkrecipes.Value {
 	tuples := make([]fkrecipes.Value, 0, len(packs))
 	for _, p := range packs {
@@ -1335,7 +1469,7 @@ func customUnit(count, seconds float64, packs ...ingredientPair) fkrecipes.Value
 	)
 }
 
-// checkUnit is the whole-unit comparison the four arms below share.
+// checkUnit is the whole-unit comparison the arms below share.
 func checkUnit(t *testing.T, what string, got map[string]fkrecipes.Value, want fkrecipes.Value) {
 	t.Helper()
 	if !reflect.DeepEqual(got["unit"], want) {
@@ -1343,71 +1477,69 @@ func checkUnit(t *testing.T, what string, got map[string]fkrecipes.Value, want f
 	}
 }
 
-// TestTheCustomResearchCostUntouchedIsTheFallbackUnit is the state a player
-// reaches by picking Custom and typing nothing, and it is deliberately the same
-// cost `logistics` charges in a stock game.
+// TestTheThreeFieldsUntouchedLeaveTheTierDeciding is the state every player who
+// never opens the Startup tab is in, and it is fix round 2's central property
+// stated as the load they get.
 //
-// THE THREE FIELDS DEFAULT TO [FallbackUnit] so that switching to Custom is a
-// no-op until the player edits something. That is the opposite of a hidden
-// change: the row they just picked prices the research exactly as the row above
-// it did, and every edit from there is theirs.
+// THE TIER BYTE FOR BYTE, AND NOT A COST THAT HAPPENS TO MATCH IT. The
+// comparison is against the FIXTURE'S OWN `logistics-2` unit rather than against
+// three numbers written out here, which is what makes the claim "whatever this
+// game charges for that technology" rather than "200 logistic science": a
+// planner that rebuilt the unit out of the three settings' declared defaults
+// would produce 0, 0 and this mod's declared pack, and fail on every field.
 //
-// THE PACK TEXT IS UNTOUCHED AND THE TWO NUMBERS ARE STILL READ, which is the
-// library's rule and not a shortcut: "THE COUNT AND THE SECONDS ARE ALWAYS
-// READ, on both text paths. They are separate settings and the player may have
-// moved them whether or not they touched the pack list" (FkRecipes
-// go/customize.go:1217). So the log line reports all three even here, where
-// nothing was written -- one line, and it is the only thing the plan says.
+// AND NOT ONE LOG LINE, WHICH IS THE HALF WITH THE DESIGN IN IT. The library
+// answers "the custom cost does not apply at all" when all three fields are at
+// their declared defaults beside a tier, so there is nothing to narrate; a line
+// here would be the library reporting an override on every load of every game.
 //
-// AND THE PREREQUISITE IS `logistics`, which is the [Plan] `Position` ladder's
-// first rung and, because that ladder IS [TechOptions], this mod's own default
-// tier: a written cost has no source technology to move with, so the arm
-// carries its own placement, and the placement it carries is the one the player
-// already had. That is what makes the no-op above whole rather than true of the
-// price alone -- on the engine, `bbb-tech-cost = custom` untouched now produces
-// a data-raw dump byte-identical to the default one.
-//
-// SO THE PREREQUISITE NO LONGER SEPARATES THIS ARM FROM A TIER, AND THE LOG
-// LINE DOES. On `logistics` the unit and the prerequisite here are what a
-// planner that never read the dropdown would emit; the line below is not, and
-// [checkExactlyOneLog] demands it. The gate's `tech-custom-default` arm carries
-// the same property and asserts the line FIRST for that reason.
-func TestTheCustomResearchCostUntouchedIsTheFallbackUnit(t *testing.T) {
-	w := everythingWorld().withStartup(SettingTechCost, TechCustom)
+// `logistics-2` AND NOT THE DEFAULT TIER, so a planner that ignored the dropdown
+// and copied the first rung would fail: the three fixture units differ from each
+// other on purpose.
+func TestTheThreeFieldsUntouchedLeaveTheTierDeciding(t *testing.T) {
+	base := everythingWorld()
+	w := base.withStartup(SettingTechCost, TechLogistics2)
+	l2, ok := base.tech(TechLogistics2)
+	if !ok || l2.unit == nil {
+		t.Fatal("the fixture has no logistics-2 unit to be compared against")
+	}
+
 	protos, logs := extendsOf(t, dataOps(t, w))
 	got := protoOf(t, protos, "technology", TechName)
 
-	checkUnit(t, "custom untouched", got,
-		customUnit(20, 15, ingredientPair{"automation-science-pack", 1}))
-	checkPrereqs(t, "custom untouched", got, TechLogistics)
-	checkExactlyOneLog(t, logs,
-		"fkrecipes: bbb-balancer takes its research cost from "+
-			"better-belt-balancer-tech-packs: count 20, time 15, "+
-			"packs 1 automation-science-pack")
-
-	// NO max_level, AND IT IS AN ASSERTION RATHER THAN AN ABSENCE NOBODY
-	// LOOKED AT. Under a tier the library copies the source technology's level
-	// cap along with its unit ([TestTheCopiedUnitCarriesTheSourceMaxLevel]);
-	// under Custom there is no source, so a cap arriving here could only have
-	// come from a technology this cost has nothing to do with.
-	checkOnly(t, TechName, got,
-		"type", "name", "icon", "icon_size", "prerequisites", "unit", "effects", "order")
+	checkUnit(t, "three untouched fields under logistics-2", got, *l2.unit)
+	checkPrereqs(t, "three untouched fields under logistics-2", got, TechLogistics2)
+	for _, line := range logs {
+		t.Errorf("nothing was overridden and the plan said something: %s", line)
+	}
 }
 
-// TestTheCustomResearchCostIsTheThreeSettings is the feature, stated as the
-// research a player gets.
+// TestTheThreeFieldsOverrideTheTier is the feature, stated as the research a
+// player gets.
 //
 // ALL THREE FIELDS ARE DRIVEN AT ONCE, which is the one place in this file that
 // moves more than one variable, and it is deliberate: the three are one cost.
 // What makes it readable is that no two of them can be confused -- 50 units, 20
-// seconds and a two-pack list, against defaults of 20, 15 and one pack -- so a
-// planner that dropped any one of them fails on that field by name.
+// seconds and a two-pack list, against a tier charging 200 units, 30 seconds
+// and one logistic science pack -- so a planner that dropped any one of them
+// fails on that field by name.
 //
 // THE PACK ORDER IS THE TYPED ORDER, for the reason a written recipe's is: the
 // list a player writes is the list the research screen shows them back.
-func TestTheCustomResearchCostIsTheThreeSettings(t *testing.T) {
+//
+// AND THE PREREQUISITE IS STILL THE TIER'S SOURCE, which is the whole of what
+// separates a repriced research from a moved one. A player who writes a cost
+// has said what it costs and nothing about where it sits, so `logistics-2` is
+// what it hangs off before and after.
+//
+// THE LINE ENDS IN THE CLAUSE THAT NAMES THE TIER even though the settings left
+// it nothing to supply, and that is the library's shape rather than an
+// oversight here: the clause states the RULE a player needs when they move one
+// field, and a sentence that appeared and vanished with the number of fields
+// driven would be a sentence nobody could learn.
+func TestTheThreeFieldsOverrideTheTier(t *testing.T) {
 	w := everythingWorld().
-		withStartup(SettingTechCost, TechCustom).
+		withStartup(SettingTechCost, TechLogistics2).
 		withStartup(SettingTechPacks, "1 automation-science-pack, 1 logistic-science-pack").
 		withNumberStartup(SettingTechCount, 50).
 		withNumberStartup(SettingTechSeconds, 20)
@@ -1417,158 +1549,70 @@ func TestTheCustomResearchCostIsTheThreeSettings(t *testing.T) {
 	checkUnit(t, "a written research cost", got, customUnit(50, 20,
 		ingredientPair{"automation-science-pack", 1},
 		ingredientPair{"logistic-science-pack", 1}))
-	checkPrereqs(t, "a written research cost", got, TechLogistics)
+	checkPrereqs(t, "a written research cost", got, TechLogistics2)
 	// A LITERAL, not the constants spliced together: this section compares
 	// every line a player is shown word for word, and a renamed constant has to
 	// fail this test rather than travel through it.
 	checkExactlyOneLog(t, logs,
 		"fkrecipes: bbb-balancer takes its research cost from "+
 			"better-belt-balancer-tech-packs: count 50, time 20, "+
-			"packs 1 automation-science-pack, 1 logistic-science-pack")
+			"packs 1 automation-science-pack, 1 logistic-science-pack"+
+			"; the bbb-tech-cost choice logistics-2 supplies what the settings "+
+			"leave at default")
 }
 
-// TestThePositionLadderStepsUpAndThenLetsGo is the placement half of the
-// custom arm, driven through every rung.
+// TestOneFieldMovedTakesTheOtherTwoFromTheTier is the property the whole shape
+// rests on, and neither test above can make it: that the three fields are three
+// switches and not one.
 //
-// IT STEPS UP WHERE [TechLadder] STEPS DOWN, and that is the whole of the
-// difference between the two ladders. A tier's ladder starts at the tier the
-// player asked for and walks toward cheaper ones; this one is [TechOptions]
-// itself, cheapest first, so its head is this mod's default tier and a game
-// missing that tier gets the next one UP rather than a place a player on the
-// untouched setting never had.
+// THREE ARMS, ONE FIELD EACH, and every arm asserts the WHOLE unit. The tier is
+// `logistics-2` -- 200 units of 30 seconds paid in one logistic science pack --
+// and every value driven here is one that tier does not charge, so a planner
+// that took all three fields whenever any of them moved would come out with
+// this mod's declared 0, 0 and one automation science pack in the two slots the
+// player did not touch, and fail by field.
 //
-// THE COST DOES NOT MOVE WITH IT, which is the difference from
-// [TestALadderStepsDownAndTakesThePrerequisiteWithIt] and the reason both
-// exist. A tier's ladder steps down to a technology whose UNIT is then copied,
-// so the pair moves together; this ladder decides a place in the tree only, and
-// the price is the player's in all three worlds.
-//
-// THE LAST CASE IS THE ONE WITH NO ROWS LEFT. A prerequisite naming a
-// technology nobody defined is a load error rather than a cost, so the library
-// emits none and says so -- and this mod's research still exists, still costs
-// what the player wrote, and simply hangs off nothing.
-func TestThePositionLadderStepsUpAndThenLetsGo(t *testing.T) {
-	base := everythingWorld().withStartup(SettingTechCost, TechCustom)
-	l2, _ := base.tech(TechLogistics2)
-	l3, _ := base.tech(TechLogistics3)
-	want := customUnit(20, 15, ingredientPair{"automation-science-pack", 1})
-	const costLine = "fkrecipes: bbb-balancer takes its research cost from " +
-		"better-belt-balancer-tech-packs: count 20, time 15, " +
-		"packs 1 automation-science-pack"
+// THE PACK ARM IS THE ONE WITH A SECOND CLAIM IN IT. A typed pack list replaces
+// the tier's `ingredients` IN PLACE, so the count and the time keep the tier's
+// numbers AND the unit keeps the tier's field order; a planner that rebuilt the
+// map would pass the value comparison a `DeepEqual` over an ordered map turns
+// down.
+func TestOneFieldMovedTakesTheOtherTwoFromTheTier(t *testing.T) {
+	const line = "fkrecipes: bbb-balancer takes its research cost from " +
+		"better-belt-balancer-tech-packs: "
+	const tail = "; the bbb-tech-cost choice logistics-2 supplies what the " +
+		"settings leave at default"
+	base := everythingWorld().withStartup(SettingTechCost, TechLogistics2)
 
 	for _, tc := range []struct {
 		name  string
 		world fixtureWorld
-		after string
+		want  fkrecipes.Value
+		log   string
 	}{
-		{"logistics absent", base.withTechs(l2, l3), TechLogistics2},
-		{"only logistics-3 is left", base.withTechs(l3), TechLogistics3},
+		{
+			"the count alone", base.withNumberStartup(SettingTechCount, 50),
+			customUnit(50, 30, ingredientPair{"logistic-science-pack", 1}),
+			line + "count 50, time 30, packs 1 logistic-science-pack" + tail,
+		},
+		{
+			"the seconds alone", base.withNumberStartup(SettingTechSeconds, 20),
+			customUnit(200, 20, ingredientPair{"logistic-science-pack", 1}),
+			line + "count 200, time 20, packs 1 logistic-science-pack" + tail,
+		},
+		{
+			"the pack text alone",
+			base.withStartup(SettingTechPacks, "3 automation-science-pack"),
+			customUnit(200, 30, ingredientPair{"automation-science-pack", 3}),
+			line + "count 200, time 30, packs 3 automation-science-pack" + tail,
+		},
 	} {
 		protos, logs := extendsOf(t, dataOps(t, tc.world))
 		got := protoOf(t, protos, "technology", TechName)
-		checkPrereqs(t, tc.name, got, tc.after)
-		checkUnit(t, tc.name, got, want)
-		checkExactlyOneLog(t, logs, costLine)
+		checkUnit(t, tc.name, got, tc.want)
+		checkPrereqs(t, tc.name, got, TechLogistics2)
+		checkExactlyOneLog(t, logs, tc.log)
 	}
-
-	// NO LOGISTICS CHAIN AT ALL. A tier would land on [FallbackUnit] here; the
-	// custom arm does not, because its cost never came from a technology.
-	protos, logs := extendsOf(t, dataOps(t, base.withTechs()))
-	got := protoOf(t, protos, "technology", TechName)
-	checkUnit(t, "no logistics at all", got, want)
-	if v, ok := got["prerequisites"]; ok {
-		t.Errorf("the technology carries prerequisites %s in a game with no "+
-			"logistics technology at all: that names something nobody defined",
-			showValue(v))
-	}
-	// THE ORDER IS THE COST AND THEN THE PLACEMENT, which is the library's own
-	// ("what it costs, then where it hangs", FkRecipes go/data.go:632) and is
-	// asserted rather than tolerated: a transcript a maintainer reads top to
-	// bottom is the only place these two lines are ever seen together.
-	if !reflect.DeepEqual(logs, []string{
-		costLine,
-		"fkrecipes: bbb-balancer: none of logistics, logistics-2, logistics-3 " +
-			"is present, so the technology has no prerequisite",
-	}) {
-		t.Errorf("the plan's log stream is %q\n want the cost and then the "+
-			"dropped ladder", logs)
-	}
-}
-
-// TestTheCustomArmTakesItsPlaceFromTheDefaultTier states fix round 1's central
-// property IN THE TERMS THE ARGUMENT USES, which no other test in this file
-// does.
-//
-// WHY IT EXISTS BESIDE TESTS THAT ALREADY PASS. The flip made [Plan]'s
-// `Position` field [TechOptions] itself so that the head of the Custom arm's
-// ladder would be [TechDefault] BY CONSTRUCTION. Every other assertion of that
-// placement names the literal [TechLogistics] --
-// [TestTheCustomResearchCostUntouchedIsTheFallbackUnit] here, `TechDefault() ==
-// TechLogistics` over in `tune_test.go` -- so the two ends of the coupling sit
-// in different files and a change that pulled them apart would show up as one
-// unrelated-looking failure. This one compares the two ends to each other, so
-// it fails FOR THE PROPERTY: a `Position` spelled out again as a literal, or a
-// [TechDefault] that stops being `TechOptions()[0]`, reddens the first two
-// assertions by name whatever the tier list happens to hold.
-//
-// REORDERING [TechOptions] IS THE CONTROL AND IT LEAVES THE FIRST HALF GREEN,
-// which is the claim: the menu order, the default and the Custom arm's head
-// move together, so the property survives a reorder rather than depending on
-// today's spelling.
-//
-// THE SECOND HALF IS THE MOD SET WHERE THE TWO PART, and it is the one the
-// player-facing texts scope their promise away from. It is written against the
-// literal tier names on purpose: it is a statement about a particular game,
-// `logistics-2` and `logistics-3` present and `logistics` absent, and not about
-// whatever list [TechOptions] holds. There the DEFAULT tier has nothing to hang
-// off -- [TechLadder] for `logistics` is that one name -- so the plan emits no
-// `prerequisites` field at all, while Custom untouched steps up to
-// `logistics-2`. Both pay the same unit. So picking Custom in that game MOVES
-// the research, from nowhere to Logistics 2, and every sentence a player reads
-// (`mod-data/changelog.txt`, the `bbb-tech-cost` locale entry, README's
-// research paragraph) says "does not move" only of a game that has Logistics.
-func TestTheCustomArmTakesItsPlaceFromTheDefaultTier(t *testing.T) {
-	full := everythingWorld()
-
-	protos, _ := extendsOf(t, dataOps(t, full.withStartup(SettingTechCost, TechCustom)))
-	got := protoOf(t, protos, "technology", TechName)
-	checkPrereqs(t, "custom untouched hangs off TechDefault()", got, TechDefault())
-
-	// AND THE DEFAULT TIER ANSWERS THE SAME NAME IN THE SAME GAME, which is
-	// what makes the equality above a NO-OP rather than a coincidence: the two
-	// dropdown values a player moves between produce one prerequisite.
-	protos, _ = extendsOf(t, dataOps(t, full))
-	got = protoOf(t, protos, "technology", TechName)
-	checkPrereqs(t, "the default tier hangs off TechDefault()", got, TechDefault())
-
-	// THE GAME WITH NO `logistics`, both readings, the same fallback unit.
-	l2, _ := full.tech(TechLogistics2)
-	l3, _ := full.tech(TechLogistics3)
-	noHead := full.withTechs(l2, l3)
-	want := customUnit(20, 15, ingredientPair{"automation-science-pack", 1})
-
-	protos, logs := extendsOf(t, dataOps(t, noHead))
-	got = protoOf(t, protos, "technology", TechName)
-	if v, ok := got["prerequisites"]; ok {
-		t.Errorf("without logistics the default tier carries prerequisites %s"+
-			"\n want none: its ladder is that one technology and the game has "+
-			"not got it", showValue(v))
-	}
-	checkUnit(t, "without logistics the default tier", got, want)
-	checkExactlyOneLog(t, logs,
-		"fkrecipes: bbb-balancer: no source for the logistics cost carries a "+
-			"unit, so the fallback cost applies and the technology has no "+
-			"prerequisite")
-
-	protos, logs = extendsOf(t, dataOps(t,
-		noHead.withStartup(SettingTechCost, TechCustom)))
-	got = protoOf(t, protos, "technology", TechName)
-	checkPrereqs(t, "without logistics custom untouched", got, TechLogistics2)
-	checkUnit(t, "without logistics custom untouched", got, want)
-	checkExactlyOneLog(t, logs,
-		"fkrecipes: bbb-balancer takes its research cost from "+
-			"better-belt-balancer-tech-packs: count 20, time 15, "+
-			"packs 1 automation-science-pack")
 }
 
 // TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo is the recipe field's
@@ -1580,22 +1624,24 @@ func TestTheCustomArmTakesItsPlaceFromTheDefaultTier(t *testing.T) {
 // these four fall back rather than refuse, and the header there carries the
 // lock-out measurement that decided it.
 //
-// WHAT THE DECLARATION IS HERE. [FallbackUnit] -- 20 units of 15 seconds paid
-// in one `automation-science-pack`, which is base's own `logistics` cost -- and
-// it is the same three numbers `better-belt-balancer-tech-count`,
-// `-tech-seconds` and `-tech-packs` declare as their defaults. So the assertion
-// is exactly what [TestTheCustomResearchCostUntouchedIsTheFallbackUnit] gets
-// for a player who typed NOTHING: a text this mod cannot use prices the
-// research the way an empty field does.
+// WHAT IT FALLS BACK TO IS THE TIER, AND THAT IS FIX ROUND 2'S CHANGE. A pack
+// text this mod cannot use behaves exactly as the word `default` does, so the
+// row the player is standing on decides, and with the two numbers untouched as
+// well NOTHING of the custom cost applies: the technology is priced by
+// `logistics-2` byte for byte, which is precisely what
+// [TestTheThreeFieldsUntouchedLeaveTheTierDeciding] asserts for a player who
+// typed nothing at all.
 //
-// TWO LINES AND NOT ONE, IN THIS ORDER, and both are asserted. The library
-// reports the fallback first and the cost it went on to charge second, which is
-// the transcript a maintainer reads top to bottom: what went wrong, then what
-// the player got. The stream is compared WHOLE for
-// [TestThePositionLadderStepsUpAndThenLetsGo]'s reason -- that is the only
-// place two lines are ever seen together -- and it is what keeps the pair from
-// being satisfied by a plan that logged the error and then charged something
-// else.
+// ONE LINE AND NOT TWO, which is the other half of that. The library says the
+// typed text was set aside and then has no override to report, so the cost line
+// that used to follow is absent -- and the stream is compared WHOLE rather than
+// searched, which is what makes the absence part of the claim: a plan that
+// logged the error and then wrote a cost of its own would fail here.
+//
+// THE TIER IS `logistics-2` AND NOT THE DEFAULT ONE, so a planner that fell
+// back to this mod's own declared pack list rather than to the tier would come
+// out with one automation science pack where 200 units of one logistic science
+// pack belong.
 //
 // THE FIRST IS THE ONE THAT SEPARATES THIS FIELD FROM THE RECIPE'S. Both take
 // the same language and the same names, and `1 iron-plate` is a perfectly good
@@ -1626,13 +1672,6 @@ func TestTheCustomArmTakesItsPlaceFromTheDefaultTier(t *testing.T) {
 // [TestAFallbackThisModsOwnPackListCannotPayForStillRefuses] is the game that
 // does not.
 func TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
-	// The cost the fallback lands on, said once and not derived: it is the same
-	// sentence [TestTheCustomResearchCostUntouchedIsTheFallbackUnit] pins as
-	// the only thing an untouched Custom arm says.
-	const costLine = "fkrecipes: bbb-balancer takes its research cost from " +
-		"better-belt-balancer-tech-packs: count 20, time 15, " +
-		"packs 1 automation-science-pack"
-
 	for _, tc := range []struct {
 		text   string
 		reason string
@@ -1660,7 +1699,7 @@ func TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 		},
 	} {
 		w := everythingWorld().
-			withStartup(SettingTechCost, TechCustom).
+			withStartup(SettingTechCost, TechLogistics2).
 			withStartup(SettingTechPacks, tc.text)
 		ops, err := Plan().PlanData(w)
 		if err != nil {
@@ -1671,10 +1710,12 @@ func TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 			continue
 		}
 		protos, logs := extendsOf(t, ops)
-		checkUnit(t, "the pack text "+strconv.Quote(tc.text),
-			protoOf(t, protos, "technology", TechName),
-			customUnit(20, 15, ingredientPair{"automation-science-pack", 1}))
-		if want := []string{fallbackLine(tc.reason), costLine}; !reflect.DeepEqual(logs, want) {
+		tech := protoOf(t, protos, "technology", TechName)
+		checkUnit(t, "the pack text "+strconv.Quote(tc.text), tech,
+			customUnit(200, 30, ingredientPair{"logistic-science-pack", 1}))
+		checkFallbackNote(t, "the pack text "+strconv.Quote(tc.text), tech,
+			SettingTechPacks, false)
+		if want := []string{packFallbackLine(tc.reason)}; !reflect.DeepEqual(logs, want) {
 			t.Errorf("the pack text %q said\n got  %q\n want %q",
 				tc.text, logs, want)
 		}
@@ -1685,13 +1726,21 @@ func TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 // the contract the two tests above pin, and it is the library's own claim
 // rather than this mod's inference: "A VALUE THE PLAYER TYPES NEVER INTRODUCES
 // A REFUSAL A PLAYER WHO TYPED NOTHING WOULD NOT ALSO HAVE HIT; AN INPUT THE
-// AUTHOR DECLARES STILL REFUSES" (FkRecipes go/customize.go:857, playerFallback).
+// AUTHOR DECLARES STILL REFUSES" (FkRecipes go/customize.go, playerFallback).
 //
-// THE WORLD IS THE ONE THAT MAKES IT SHARP. `1 water` is the same unusable text
-// the first row of the test above drives, and the game is the same one except
-// that its science packs are `logistic-science-pack` alone. So the fallback
-// lands on this mod's declared list, one `automation-science-pack`, which has
-// nothing to land on either, and the load stops. It stops for a player who typed
+// TWO THINGS SEPARATE THIS WORLD FROM THE TEST ABOVE, AND THE SECOND IS WHAT
+// DECIDES IT. The science packs are `logistic-science-pack` alone, AND the
+// dropdown sits at its own default `logistics` rather than at `logistics-2`.
+// The tier is what makes the difference: `logistics-2` is priced in a pack this
+// game HAS, so driving it here makes the refusal disappear entirely, where
+// `logistics` is priced in `automation-science-pack` and loses it.
+//
+// SO THE WALK IS TWO STEPS AND NOT ONE. `1 water` is the same unusable text the
+// first row of the test above drives, so the typed list is set aside; the
+// chosen tier's COPIED pack is then dropped because this game has it as
+// nothing at all; and only THEN is this mod's declared fallback reached, one
+// `automation-science-pack`, which has nothing to land on either. The load
+// stops. It stops for a player who typed
 // NOTHING in that same game too, which is the whole of what makes this refusal
 // legitimate where a refusal on the typed text would not be:
 // [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused] is that player, and
@@ -1704,9 +1753,23 @@ func TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 // and the untouched arm's, and asserting the WHOLE string is what pins it: a
 // library that fell back silently and then refused would produce the shorter
 // sentence and fail here.
+//
+// IT POINTS NOWHERE, AND THAT IS A CORRECTION RATHER THAN A LOSS. It used to
+// end by telling the player to correct the setting under Settings then Mod
+// settings then Startup; the `Error loading mods` dialog has no route to that
+// screen (measured by the library on 2.0.77), so the advice was unusable while
+// the fact in front of it was true. The fact stayed and the route went.
+//
+// THE NAME APPEARS TWICE IN THE LIST OF RUNGS AND THAT IS WHAT THE LIBRARY
+// EMITS. It names every rung the walk asked about in the order it asked, and
+// this game asks about `automation-science-pack` twice for two different
+// reasons: once as the pack the chosen tier's own unit was copied with, and
+// once as the rung this mod's declared fallback names. It reads as a stutter to
+// anybody who does not know that, and it is transcribed here rather than
+// smoothed over, because what this test pins is the sentence a player is
+// actually shown.
 func TestAFallbackThisModsOwnPackListCannotPayForStillRefuses(t *testing.T) {
 	w := everythingWorld().
-		withStartup(SettingTechCost, TechCustom).
 		withStartup(SettingTechPacks, "1 water").
 		withTools("logistic-science-pack")
 
@@ -1717,10 +1780,10 @@ func TestAFallbackThisModsOwnPackListCannotPayForStillRefuses(t *testing.T) {
 			"nobody defined, which is a load error with this mod's name on it")
 	}
 	const want = "fkrecipes: the technology bbb-balancer has no science pack " +
-		"the game has; research takes at least one. The stored value of " +
-		"better-belt-balancer-tech-packs could not be used, so the mod's own " +
-		"declaration applied; correcting it under Settings > Mod settings > " +
-		"Startup is what a player can change here."
+		"the game has; research takes at least one, and none of " +
+		"automation-science-pack, automation-science-pack is a science pack " +
+		"here. The stored value of better-belt-balancer-tech-packs could not " +
+		"be used, so the mod's own declaration applied."
 	if err.Error() != want {
 		t.Errorf("the refusal is\n got  %q\n want %q", err.Error(), want)
 	}
@@ -1731,7 +1794,7 @@ func TestAFallbackThisModsOwnPackListCannotPayForStillRefuses(t *testing.T) {
 //
 // A player who typed nothing gets the DECLARED pack list, whose ladder is
 // walked through `ToolExists` and whose rungs are DROPPED rather than refused
-// when the game has none of them (FkRecipes go/data.go:1167,
+// when the game has none of them (FkRecipes go/data.go,
 // resolvePackLadders) -- the same tolerance every ingredient ladder in this
 // package has.
 //
@@ -1744,14 +1807,18 @@ func TestAFallbackThisModsOwnPackListCannotPayForStillRefuses(t *testing.T) {
 // hand-rolled research cost lose its packs".
 //
 // AND WHAT A LOST LAST PACK GETS IS A REFUSAL, not a free research. It is the
-// same sentence [TestAReachedFallbackWithNoPackInTheGameIsRefused] pins for the
-// fallback, which is the point: a lost pack reads the same however the cost was
-// chosen. The drop itself is a log line the library writes on the way, and it
-// is not asserted here because a refused plan hands back the refusal and no
-// ops at all.
+// same refusal [TestAReachedFallbackWithNoPackInTheGameIsRefused] pins, WITH
+// ONE RUNG MORE IN ITS LIST, and the difference is the whole of what these two
+// games are: there no technology carries a unit at all, so the only rung ever
+// asked about is this mod's declared fallback pack; here the chosen tier DOES
+// carry a unit, its copied `automation-science-pack` is asked about and lost
+// first, and the declared fallback then names the same name a second time. The
+// library reports every rung the walk asked in the order it asked, so the
+// sentence carries it twice. The drop itself is a log line the library writes
+// on the way, and it is not asserted here because a refused plan hands back the
+// refusal and no ops at all.
 func TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused(t *testing.T) {
 	w := everythingWorld().
-		withStartup(SettingTechCost, TechCustom).
 		withItems(append(ladderVocabulary(), "automation-science-pack")...).
 		withTools("logistic-science-pack")
 
@@ -1761,106 +1828,46 @@ func TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused(t *testing.T) {
 			"priced its research anyway: the pack ladder is asking ItemExists, " +
 			"and the engine takes tool-type items in a unit and nothing else")
 	}
+	// THE SAME SENTENCE THE FALLBACK ARM GETS, LESS THE STORED-VALUE CLAUSE,
+	// because nothing here was typed. The rung list repeats the name for
+	// [TestAFallbackThisModsOwnPackListCannotPayForStillRefuses]'s reason: the
+	// tier's copied pack and the declared fallback's one rung are the same
+	// name asked about twice.
 	want := "fkrecipes: the technology bbb-balancer has no science pack the " +
-		"game has; research takes at least one"
+		"game has; research takes at least one, and none of " +
+		"automation-science-pack, automation-science-pack is a science pack here"
 	if err.Error() != want {
 		t.Errorf("the refusal reads\n got  %q\n want %q", err.Error(), want)
 	}
 }
 
-// TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo is the research side
-// of [TestAnEditedTextUnderAPresetIsIgnoredAndTheLogSaysSo], and it pins two
-// claims more than that one does: that under a tier NONE of the three fields
-// enters the unit, and that each one the player moved SAYS SO. Each of the two
-// numbers draws
-// noteIgnoredNumber's sentence (FkRecipes go/customize.go:1204, called at
-// go/data.go:654 and 655) and the pack text draws noteIgnoredText's
-// (go/customize.go:1171, called at go/data.go:656), in the order the library
-// calls them: the count, then the seconds, then the text. Under a tier the unit
-// is copied from the source and no number of this mod's enters it, and a player
-// who drags the count slider, sees the research unchanged and finds nothing in
-// the log has been told their edit landed when it did not.
+// TestAnUnreadableResearchNumberLeavesTheTierDeciding is the two numbers'
+// version of [TestAnUnreadableTextLetsTheDropdownDecide], and there are two
+// shapes of unreadable rather than one because a number has both: a row MISSING
+// from a hand-edited mod-settings.dat, and a row PRESENT under the wrong type,
+// which is what another mod redefining this mod's setting as text would hand
+// the planner. The library reads both through one function (FkRecipes
+// go/customize.go, readNumber) and both take the declared default with one
+// sentence, which is pinned here word for word.
 //
-// EDITED MEANS "NOT THE DECLARED DEFAULT" FOR A NUMBER, and that is the half
-// this mod is on the hook for rather than the library. A numeric setting has no
-// reserved word standing for the author's answer the way a text field's
-// `default` does, so the library compares the stored number against the
-// DECLARED one -- and the number it compares against is the one [Plan] writes
-// down, 20 for the count and 15 for the seconds (plan.go:284 and 285). A field
-// sitting at its declared default is indistinguishable from an untouched one
-// and draws no line, which is why the three-line arm drives 50 and 20 and not
-// 20 and 15.
+// AND THE DECLARED DEFAULT IS 0, SO THE DEGRADATION IS A NO-OP IN THE PROTOTYPE
+// AND A LINE IN THE LOG. That is the whole shape of this test since fix round 2:
+// a number that cannot be read falls to 0, 0 means the tier decides, and the
+// research comes out priced by `logistics-2` exactly as it does for a player
+// whose file is intact. The stream is compared WHOLE, so the absence of a cost
+// line is part of the claim: a planner that wrote a 0 into the unit, or that
+// reported an override nothing overrode, fails here.
 //
-// THE STREAM IS ASSERTED WHOLE AND IN ORDER on every arm. "One of these is
-// somewhere in the log" would be passed by a library that emitted the count's
-// line twice, or the seconds' before the count's, and the order is the one a
-// player reads down.
-//
-// WHAT MAKES THIS NOT VACUOUS is the unit beside the lines. Every value driven
-// here is one the fixture's logistics-2 does not charge -- it charges 200 units
-// of 30 seconds and one logistic science pack (world_test.go's everythingWorld;
-// the real game's charges one of each, which is what the gate's arm drives
-// against), against 50 or 20 units, 20 or 15 seconds and two automation packs,
-// so the two declared defaults are not that tier's numbers either, and the
-// arms that park a field at its default lose no teeth:
-// a planner that took any one of these under a tier fails the unit comparison
-// by that field, and not only loses a sentence in the log.
-func TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo(t *testing.T) {
-	// Literals, for the reason every pinned sentence in this file is one.
-	const (
-		countLine = "fkrecipes: better-belt-balancer-tech-count is edited, but " +
-			"bbb-tech-cost is not on custom, so the number is ignored"
-		secondsLine = "fkrecipes: better-belt-balancer-tech-seconds is edited, " +
-			"but bbb-tech-cost is not on custom, so the number is ignored"
-		packsLine = "fkrecipes: better-belt-balancer-tech-packs is edited, but " +
-			"bbb-tech-cost is not on custom, so the text is ignored"
-	)
-	for _, tc := range []struct {
-		name           string
-		count, seconds float64
-		want           []string
-	}{
-		{"both numbers moved", 50, 20, []string{countLine, secondsLine, packsLine}},
-		{"the count at its declared default", 20, 20, []string{secondsLine, packsLine}},
-		{"the seconds at its declared default", 50, 15, []string{countLine, packsLine}},
-	} {
-		w := everythingWorld().
-			withStartup(SettingTechCost, TechLogistics2).
-			withStartup(SettingTechPacks, "2 automation-science-pack").
-			withNumberStartup(SettingTechCount, tc.count).
-			withNumberStartup(SettingTechSeconds, tc.seconds)
-		l2, _ := w.tech(TechLogistics2)
-		protos, logs := extendsOf(t, dataOps(t, w))
-		got := protoOf(t, protos, "technology", TechName)
-
-		checkUnit(t, tc.name+" under logistics-2", got, *l2.unit)
-		checkPrereqs(t, tc.name+" under logistics-2", got, TechLogistics2)
-		if !reflect.DeepEqual(logs, tc.want) {
-			t.Errorf("%s: the plan's log stream is\n got  %q\n want the "+
-				"ignored fields in the library's order, %q", tc.name, logs, tc.want)
-		}
+// THE OTHER FIELD IS LEFT UNTOUCHED ON EACH ARM, which is what keeps the two
+// distinguishable: an implementation that treated one unreadable number as a
+// reason to take BOTH from the settings would still produce the tier's numbers
+// here and be caught by the log comparison rather than by the unit.
+func TestAnUnreadableResearchNumberLeavesTheTierDeciding(t *testing.T) {
+	base := everythingWorld().withStartup(SettingTechCost, TechLogistics2)
+	l2, ok := base.tech(TechLogistics2)
+	if !ok || l2.unit == nil {
+		t.Fatal("the fixture has no logistics-2 unit to be compared against")
 	}
-}
-
-// TestAnUnreadableResearchNumberTakesTheDeclaredDefault is the two numbers'
-// version of [TestAnUnreadableCustomTextTakesTheDeclaredList], and there are
-// two shapes of unreadable rather than one because a number has both: a row
-// MISSING from a hand-edited mod-settings.dat, and a row PRESENT under the
-// wrong type, which is what another mod redefining this mod's setting as text
-// would hand the planner. The library reads both through one function
-// (FkRecipes go/customize.go:1302, readNumber) and both take the declared
-// default with one sentence, which is pinned here word for word.
-//
-// THE STREAM IS ASSERTED WHOLE, two lines in order: the degradation first,
-// because the number is read before the cost line is written, and then the
-// cost line carrying the DECLARED number -- which is the half with teeth, since
-// the fixture supplies nothing and the 20 or the 15 can only have come from
-// [Plan]'s own declaration.
-func TestAnUnreadableResearchNumberTakesTheDeclaredDefault(t *testing.T) {
-	want := customUnit(20, 15, ingredientPair{"automation-science-pack", 1})
-	const costLine = "fkrecipes: bbb-balancer takes its research cost from " +
-		"better-belt-balancer-tech-packs: count 20, time 15, " +
-		"packs 1 automation-science-pack"
 	for _, tc := range []struct {
 		name  string
 		world fixtureWorld
@@ -1868,26 +1875,24 @@ func TestAnUnreadableResearchNumberTakesTheDeclaredDefault(t *testing.T) {
 	}{
 		{
 			"the count row is missing",
-			everythingWorld().withStartup(SettingTechCost, TechCustom).
-				withoutNumberStartup(SettingTechCount),
+			base.withoutNumberStartup(SettingTechCount),
 			"fkrecipes: the setting better-belt-balancer-tech-count was not " +
 				"readable, so its default applies",
 		},
 		{
 			"the seconds row holds text",
-			everythingWorld().withStartup(SettingTechCost, TechCustom).
-				withRawStartup(SettingTechSeconds, fkrecipes.Str("15")),
+			base.withRawStartup(SettingTechSeconds, fkrecipes.Str("15")),
 			"fkrecipes: the setting better-belt-balancer-tech-seconds was not " +
 				"readable, so its default applies",
 		},
 	} {
 		protos, logs := extendsOf(t, dataOps(t, tc.world))
 		got := protoOf(t, protos, "technology", TechName)
-		checkUnit(t, tc.name, got, want)
-		checkPrereqs(t, tc.name, got, TechLogistics)
-		if !reflect.DeepEqual(logs, []string{tc.line, costLine}) {
+		checkUnit(t, tc.name, got, *l2.unit)
+		checkPrereqs(t, tc.name, got, TechLogistics2)
+		if !reflect.DeepEqual(logs, []string{tc.line}) {
 			t.Errorf("%s: the plan's log stream is %q\n want the degradation "+
-				"and then the cost, %q", tc.name, logs, []string{tc.line, costLine})
+				"and nothing else, %q", tc.name, logs, []string{tc.line})
 		}
 	}
 }

@@ -31,13 +31,13 @@ import (
 // items -- so while every ingredient came from those six the library never
 // asked. `better-belt-balancer-recipe-ingredients` is a text field a player
 // writes anything into, and the language looks a bare name up among the ITEMS
-// and then among the FLUIDS (FkRecipes go/ingredientlist.go:1199 and :1202),
+// and then among the FLUIDS (FkRecipes go/ingredientlist.go, resolveName),
 // so every path a typed name the game cannot answer can take asks this
 // question.
 //
 // THE OLD COMMENT'S PREDICTION HELD, AND IT WAS RE-MEASURED RATHER THAN
 // ASSUMED. With this method deleted again,
-// [TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo] answers
+// [TestATextTheGameCannotAnswerFallsBackAndSaysSo] answers
 // `panic: fkrecipes: World.FluidExists is not implemented by this fixture`
 // (go/world.go:168), through `resolveName` at go/ingredientlist.go:1202 --
 // which is better than the `false` an unwritten stub would have returned.
@@ -47,9 +47,13 @@ import (
 // `categoryTakesItemsOnly` (FkRecipes go/ingredientlist.go:145-159) is the
 // engine's rule written down on the library's side of the boundary: a fluid
 // under that category is rejected at the list, by category name
-// (go/ingredientlist.go:826), before any prototype is built. MEASURED on
-// Factorio 2.0.77 with the packaged mod at `bbb-recipe-cost = custom` and
-// `bbb-recipe-ingredients = "1 water"`, the load failed with `fkrecipes:
+// (go/ingredientlist.go, the fluid sentence), before any prototype is built.
+// MEASURED on Factorio 2.0.77 with the packaged mod at `bbb-recipe-cost =
+// custom` and `bbb-recipe-ingredients = "1 water"` -- A STATE THAT NO LONGER
+// EXISTS, because fix round 2 withdrew that dropdown value and made the text
+// itself the switch; the reading is kept because the SENTENCE is what it was
+// about and the sentence did not move, and typing the same text today reaches
+// it with the dropdown left on any preset. The load failed with `fkrecipes:
 // bbb-recipe-ingredients, entry 1 ("1 water"): water is a fluid, and a recipe
 // in the crafting category takes items only` -- the library's sentence, naming
 // the setting and the entry, and not the engine's prototype error. That run
@@ -62,7 +66,7 @@ import (
 // text is set aside, this mod's declared list applies and the load completes.
 // The sentence itself is unchanged, which is why the run above is still the
 // reading this fixture rests on; what changed is what surrounds it, and
-// [TestACustomTextTheGameCannotAnswerFallsBackAndSaysSo] is where that is
+// [TestATextTheGameCannotAnswerFallsBackAndSaysSo] is where that is
 // pinned.
 //
 // SO THE FLUID IS STOCKED RATHER THAN WITHHELD, because every real game has
@@ -137,8 +141,9 @@ type fixtureWorld struct {
 	// outside its setting's declared range to the default; this map answers
 	// whatever a test put in it, so a test driving 50 units cannot see a
 	// maximum lowered below 50. The declared bounds are pinned as fields by
-	// [TestEverySettingPrototypeIsTheOneThatShipped], and the engine enforcing
-	// them is the gate's `tech-custom` arm's business.
+	// [TestEverySettingPrototypeIsTheOneThatShipped], and whether the ENGINE
+	// enforces them on a stored value belongs to the dump gate, which is the
+	// only place a real `mod-settings.dat` is written and read back.
 	startupRaw map[string]fkrecipes.Value
 }
 
@@ -213,8 +218,8 @@ func (w fixtureWorld) EntityExists(name string) bool { return has(w.entities, na
 func (w fixtureWorld) RecipeExists(name string) bool { return has(w.recipes, name) }
 
 // ToolExists is the science-pack question, and THREE things in this mod's plan
-// ask it now: a `CostBy` fallback's pack ladder, the custom arm's declared pack
-// ladder when the text is untouched, and every name a player types into
+// ask it now: a `CostBy` fallback's pack ladder, every science pack COPIED out
+// of a chosen tier's own unit, and every name a player types into
 // `better-belt-balancer-tech-packs`. All three ask this and not
 // [fixtureWorld.ItemExists], which is what
 // [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused] pins from the
@@ -298,11 +303,11 @@ func everythingWorld() fixtureWorld {
 		// ALL SIX SETTINGS ANSWER, THE TWO TEXT ONES WITH THE RESERVED WORD,
 		// which is what a real game hands the planner: Factorio stores every
 		// setting's current value in mod-settings.dat, untouched defaults
-		// included (measured by the library, FkRecipes go/lib.go:378), so a
+		// included (measured by the library, FkRecipes go/lib.go, IngredientsSetting), so a
 		// player who never opened the settings screen still answers `default`
 		// here. A fixture that left it absent would model the hand-edited file
-		// instead, which is [TestAnUnreadableCustomTextTakesTheDeclaredList]'s
-		// world and is reached through `withoutStartup`.
+		// instead, which is [TestAnUnreadableTextLetsTheDropdownDecide]'s world
+		// and is reached through `withoutStartup`.
 		startup: map[string]string{
 			SettingRecipeCost:        RecipeDefault(),
 			SettingRecipeIngredients: theDefaultWord,
@@ -312,13 +317,22 @@ func everythingWorld() fixtureWorld {
 		// THE TWO NUMBERS CANNOT GO IN THE MAP ABOVE, which is why they are
 		// here rather than beside their siblings: `startup` produces a string
 		// and the library reads a research count through `KindNum`
-		// (FkRecipes go/customize.go:1302, readNumber), so a string would be
-		// UNREADABLE and every custom arm would carry a degradation line and
+		// (FkRecipes go/customize.go, readNumber), so a string would be
+		// UNREADABLE and every research arm would carry a degradation line and
 		// the declared default. These are the declared defaults said in the
 		// kind the engine stores them in.
+		//
+		// AND THE DECLARED DEFAULT IS 0 SINCE FIX ROUND 2, which is what a
+		// number says instead of the reserved word: beside a research dropdown
+		// a field at 0 leaves that field to the tier. A fixture answering 20
+		// and 15 here would be a player who had DRAGGED both sliders, so every
+		// test that means to drive an untouched game would be driving an
+		// overridden one -- and the two numbers it drove would be this mod's
+		// old declared defaults, which look exactly like an untouched field and
+		// are not one.
 		startupRaw: map[string]fkrecipes.Value{
-			SettingTechCount:   fkrecipes.Num(20),
-			SettingTechSeconds: fkrecipes.Num(15),
+			SettingTechCount:   fkrecipes.Num(0),
+			SettingTechSeconds: fkrecipes.Num(0),
 		},
 	}
 }

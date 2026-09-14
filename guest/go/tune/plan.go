@@ -79,10 +79,10 @@ import (
 //
 // `recipe-ingredients`, `tech-packs`, `tech-count` and `tech-seconds` have
 // never shipped, so no stored value forces their hand, and they are handed to
-// [fkrecipes.Lib.IngredientsSetting], [fkrecipes.Lib.PacksSetting],
-// [fkrecipes.Lib.IntSetting] and [fkrecipes.Lib.DoubleSetting] as BARE names.
-// Each prefixes the name with the mod's own and derives the order from the
-// declaration index, so what the settings stage emits is
+// [fkrecipes.Lib.IngredientsSetting], [fkrecipes.Lib.PacksSetting] and
+// [fkrecipes.Lib.IntSetting] TWICE, as BARE names. Each prefixes the name with
+// the mod's own and derives the order from the declaration index, so what the
+// settings stage emits is
 // `better-belt-balancer-recipe-ingredients` and three more of that shape --
 // which is the path FkRecipes' docs/usage.md describes and its
 // docs/migration.md works through, in a worked example that is literally this
@@ -101,7 +101,7 @@ import (
 // recipe dropdown and the research dropdown. For the recipe's text field that
 // is where it belongs; for the research's three it is wrong, because the menu
 // would read recipe, ingredients, packs, count, seconds, research, with THE
-// RESEARCH DROPDOWN BELOW ITS OWN CUSTOM FIELDS -- three rows a player reads
+// RESEARCH DROPDOWN BELOW ITS OWN CUSTOMIZER FIELDS -- three rows a player reads
 // before the row that decides whether any of them is live. No ordering of the
 // declarations could fix it, because the letters come from the index rather
 // than from where the line is written, so all four took a Legacy constructor,
@@ -130,11 +130,11 @@ import (
 //	mod-settings.dat, where every migrated mod that grows a setting will carry
 //	the same seam.
 //
-// THE COST, STATED RATHER THAN HIDDEN. Round three's four custom-row extracts
-// in the scratchpad were dumped under the `bbb-` names and are reset by
-// construction, and anybody holding an unshipped 0.3.3 build with a stored
-// custom value loses it. Nobody outside this machine does; round three's
-// staging was reverted.
+// THE COST, STATED RATHER THAN HIDDEN. Round three's four customizer-row
+// extracts in the scratchpad were dumped under the `bbb-` names and are reset
+// by construction, and anybody holding an unshipped 0.3.3 build with a value
+// stored in one of those four rows loses it. Nobody outside this machine does;
+// round three's staging was reverted.
 //
 // THREE THINGS THE SETTINGS STAGE REFUSES IN A MIXED PLAN, AND NONE OF THEM IS
 // REACHABLE FROM THIS PLAN'S CONSTANTS: an EMPTY order given to `OrderAfter`; a
@@ -185,7 +185,7 @@ func Plan() *fkrecipes.Lib {
 	// before a map exists. The one setting of this mod's that is runtime-global
 	// is hand-rolled in guest/go/data/settings.go for exactly that reason.
 	recipeCost := lib.LegacyDropdownSettingNeedingLocale(
-		SettingRecipeCost, RecipeDefault(), RecipeValues(), "a")
+		SettingRecipeCost, RecipeDefault(), RecipeOptions(), "a")
 
 	// EVERYTHING GENERATED FROM HERE SORTS UNDER THE RECIPE DROPDOWN. The call
 	// names an ORDER, "a", and not a setting: what follows carries "a" and then
@@ -210,7 +210,7 @@ func Plan() *fkrecipes.Lib {
 	// mod's own list, with its ladders" across releases, because the engine
 	// stores every setting's current value including untouched defaults -- a
 	// rendered default would freeze a silent player's recipe at the day they
-	// installed the mod (FkRecipes go/lib.go:378, IngredientsSetting). What the
+	// installed the mod (FkRecipes go/lib.go, IngredientsSetting). What the
 	// declaration buys is two things: the word resolves to THIS list, ladders
 	// and all, and the list is written out in the setting's description so the
 	// player can copy it and edit it.
@@ -226,7 +226,7 @@ func Plan() *fkrecipes.Lib {
 		RecipeIngredientsName, asIngredients(RecipePlan(RecipeVanilla)))
 
 	techCost := lib.LegacyDropdownSettingNeedingLocale(
-		SettingTechCost, TechDefault(), TechValues(), "b")
+		SettingTechCost, TechDefault(), TechOptions(), "b")
 
 	// AND EVERYTHING GENERATED FROM HERE SORTS UNDER THE RESEARCH DROPDOWN,
 	// which is the call this whole decision was waiting for. Without it the
@@ -242,14 +242,21 @@ func Plan() *fkrecipes.Lib {
 	// THE RESEARCH COST THE PLAYER WRITES, as the three fields a Factorio unit
 	// actually has: what it is paid in, how many, and how long one takes.
 	//
-	// THE DEFAULTS ARE [FallbackUnit], WHICH IS BASE'S OWN `logistics` UNIT --
-	// 20 automation science over 15 seconds -- so a player who picks Custom and
-	// changes nothing gets what this technology has cost in every save this mod
-	// has ever been in. The packs are built FROM `FallbackUnit().Packs` rather
-	// than written out a second time; the two numbers are literals here and
-	// [TestTheCustomResearchDefaultsAreTheFallbackUnit] is what says they are
-	// still that unit's, because a second transcription that drifted would put
-	// two different "vanilla" costs in one settings screen.
+	// EACH FIELD IS A SWITCH OF ITS OWN AND THE TIER DECIDES THE REST. A pack
+	// text on the word `default` and a number at 0 are the three ways of saying
+	// "the row above decides", so a player who touches nothing is charged the
+	// tier they picked, BYTE FOR BYTE, and a player who moves one slider moves
+	// one field of it. That is why the two numbers ship at 0 rather than at
+	// [FallbackUnit]'s 20 and 15: a declared 20 beside a tier charging 200 is
+	// not a default, it is an override nobody asked for, and the library
+	// refuses the declaration outright ("its declared default and its minimum
+	// must both be 0 (0 means the dropdown decides)").
+	//
+	// THE PACK TEXT'S DECLARED DEFAULT IS STILL [FallbackUnit]'s PACK, built
+	// FROM `FallbackUnit().Packs` rather than written out a second time, and
+	// [TestTheThreeResearchDeclarationsAreWhatThisFileClaims] is what says the
+	// three declarations are what this file claims: 0, 0 and that one pack
+	// rendered into the tooltip a player copies from.
 	//
 	// THE PACK LIST CARRIES NO `Fallbacks` LADDER, AND THAT IS A DECISION.
 	// Every other ladder in this package ends at a name every game with belts
@@ -258,21 +265,34 @@ func Plan() *fkrecipes.Lib {
 	// is base's own name and an overhaul is free to remove it; no other name is
 	// likelier to be present, so a second rung would be a guess dressed as a
 	// ladder. What happens without one is the library's and is pinned by
+	// [TestAReachedFallbackWithNoPackInTheGameIsRefused] and by
 	// [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused]: the ladder is
 	// walked through `ToolExists`, a pack no rung answers for is DROPPED with a
 	// line, and a unit that loses every pack is refused by name rather than
-	// emitted free.
+	// emitted free. THE LADDER IS REACHED THROUGH THE `Fallback`, not through
+	// the text field: beside a tier an untouched pack text takes the TIER's own
+	// science packs, and this list is what prices the research when the tier
+	// has none left.
 	//
 	// WHY A MAXIMUM IS DECLARED AT ALL, since neither bound is a balance
 	// opinion. The engine RESETS a stored number outside its own bounds to the
 	// default rather than clamping it (measured by the library, FkRecipes
-	// go/customize.go:458), so the declared range is exactly the set of values
-	// the data stage can ever read -- and the library refuses a `CustomCost`
-	// whose count can be below 1 or whose seconds can be 0, because the engine
-	// refuses a unit with either. The minima are therefore load-bearing and the
-	// maxima are the other half of the same fence: a player who types 10^12
-	// units has not written a research, and a number the engine would hand back
-	// as a reset is better than one nothing can pay.
+	// go/customize.go), so the declared range is exactly the set of values the
+	// data stage can ever read. Beside a dropdown the MINIMUM is not this mod's
+	// to choose -- it is 0, because 0 is the word `default` of a number -- and
+	// the library refuses a research number with no maximum of at least 1, so
+	// the ceiling is the one bound left and it is this mod's: a player who
+	// types 10^12 units has not written a research, and a number the engine
+	// would hand back as a reset is better than one nothing can pay.
+	//
+	// WHAT STOPS A 0 REACHING THE ENGINE IS THE COST BEHIND THE FIELD AND NOT
+	// THE FENCE. The engine refuses a unit whose count is 0 and one whose time
+	// is 0, and what the library emits for a field left at 0 is the number the
+	// TIER carries or, where no source in the chosen ladder carries a unit at
+	// all, the number `CostChoices.Fallback` declares
+	// ([TestNoLogisticsAtAllIsTheFallbackAndNoPrerequisite] is that game, and
+	// [FallbackUnit] is 20 and 15). Either way something non-zero answers, so
+	// there is no arm of this plan where a 0 is written into a unit.
 	//
 	// THREE BARE NAMES AT DECLARATION INDICES 3, 4 AND 5, whose two letters are
 	// "ad", "ae" and "af" and whose prefix is the "b" in force: the settings
@@ -281,8 +301,8 @@ func Plan() *fkrecipes.Lib {
 	// `better-belt-balancer-tech-seconds` at "baf", each under the dropdown at
 	// "b" and in the order written here.
 	techPacks := lib.PacksSetting(TechPacksName, FallbackUnit().Packs)
-	techCount := lib.IntSetting(TechCountName, 20, fkrecipes.Between(1, 1000000))
-	techSeconds := lib.DoubleSetting(TechSecondsName, 15, fkrecipes.Between(1, 3600))
+	techCount := lib.IntSetting(TechCountName, 0, fkrecipes.Between(0, 1000000))
+	techSeconds := lib.IntSetting(TechSecondsName, 0, fkrecipes.Between(0, 3600))
 
 	// THE ITEM, and every field of it is transcribed from what shipped.
 	//
@@ -321,21 +341,31 @@ func Plan() *fkrecipes.Lib {
 	// library emits it as `energy_required` and omits the field entirely at
 	// zero, so the 1 has to be said.
 	//
-	// `Custom` IS THE SEVENTH VALUE AND `CustomValue` IS LEFT EMPTY, which the
-	// library reads as the word `custom` -- the field exists for a mod whose
-	// dropdown already ships a preset by that name, and none of the six is one.
-	// On any preset the text is not read: it is parsed only to decide whether
-	// the player EDITED it, and an edit under a preset draws one line saying so
-	// rather than changing anything (FkRecipes go/customize.go:1171,
-	// noteIgnoredText).
+	// `IngredientsFrom` SITS BESIDE `IngredientsBy` AND THE TEXT IS THE SWITCH.
+	// The dropdown offers the SIX values it has always offered and the library
+	// adds none of its own to it; what decides between the two rows is the text
+	// field itself, which applies whenever it does not say `default` and hands
+	// the choice back to the dropdown whenever it does. So the ingredient
+	// override is TOTAL when it is live -- the whole list is the player's and
+	// the preset is set aside with one line saying so -- and invisible when it
+	// is not.
+	//
+	// THAT SHAPE IS WHY THE DROPDOWN'S OPTION LIST NEVER MOVED. Factorio resets
+	// a stored value the running release's `allowed_values` does not list, and
+	// persists the reset with no line in the log (measured by the library on
+	// 2.0.77), so a `custom` row would be destroyed by one launch of an older
+	// release while the typed text survived -- a field still showing the
+	// player's recipe beside a dropdown that had quietly gone back to a preset.
+	// Keeping the state in the TEXT makes this whole feature an identity for a
+	// player who never opens the Startup tab and a no-op for a rollback.
 	recipe := lib.LegacyRecipe(part, PartName, fkrecipes.RecipeSpec{
 		CraftTime: 1,
 		Order:     PartOrder,
 		IngredientsBy: &fkrecipes.IngredientChoices{
 			Setting: recipeCost,
 			Choices: recipeChoices(),
-			Custom:  recipeIngredients,
 		},
+		IngredientsFrom: recipeIngredients,
 	})
 
 	// THE TECHNOLOGY, whose cost the player chooses.
@@ -367,19 +397,20 @@ func Plan() *fkrecipes.Lib {
 	// hand-rolled version loaded and copied logistics' own unit. FkRecipes
 	// c7a806e answered the ask: "THE FALLBACK IS RESOLVED ONLY HERE, which is
 	// the point: its packs are probed when the fallback is what applies, and
-	// never when a source answered" (go/data.go:696), so a game with no science
-	// pack at all loads as long as a source carries a unit, and
-	// [TestAnUnreachedFallbacksPackIsNeverProbed] is that half. The fallback's
-	// NUMBERS are still checked eagerly, in the plan walk and with no question
-	// asked of the game (go/data.go:348), which is the right split: a count of
-	// zero is this mod's own mistake. What the lazy resolve MOVED rather than
-	// removed is the other half -- where the fallback IS the price its packs
-	// are walked as ladders, and a unit that loses every one of them is refused
-	// with `fkrecipes: the technology bbb-balancer has no science pack the game
-	// has; research takes at least one`, which
-	// [TestAReachedFallbackWithNoPackInTheGameIsRefused] pins. That refusal is
-	// the right answer and not a regression: a research with no packs is not a
-	// cheap one, it is free.
+	// never when a source answered" (go/data.go, the CostBy arm), so a game
+	// whose tier is priced in a pack it HAS loads with this mod's own fallback
+	// pack absent, and [TestAnUnreachedFallbacksPackIsNeverProbed] is that
+	// half. The fallback's NUMBERS are still checked eagerly, in the plan walk
+	// and with no question asked of the game (go/customize.go,
+	// validateCostChoices), which is the right split: a count of zero is this
+	// mod's own mistake. What the lazy resolve MOVED rather than removed is the
+	// other half -- where the fallback IS the price its packs are walked as
+	// ladders, and a unit that loses every one of them is refused with
+	// `fkrecipes: the technology bbb-balancer has no science pack the game has;
+	// research takes at least one, and none of automation-science-pack is a
+	// science pack here`, which [TestAReachedFallbackWithNoPackInTheGameIsRefused]
+	// pins word for word. That refusal is the right answer and not a
+	// regression: a research with no packs is not a cheap one, it is free.
 	//
 	// `max_level` TRAVELS WITH THE UNIT. It lives on the TECHNOLOGY rather than
 	// in the unit, and `CostBy` copies the source's, where the hand-rolled
@@ -394,81 +425,39 @@ func Plan() *fkrecipes.Lib {
 	// produce a unit with neither and abort the load with this mod's name on it,
 	// and a verbatim copy loads.
 	//
-	// `Custom` IS THE FOURTH VALUE AND `CustomValue` IS LEFT EMPTY, which the
-	// library reads as the word `custom` -- the field exists for a mod whose
-	// dropdown already ships a preset by that name, and none of the three tiers
-	// is one. On any tier none of the three fields ENTERS THE UNIT, which is
-	// copied from the source; all three are still read to say whether the
-	// player moved them, and each one that was draws one line saying it is
-	// ignored, the count, then the seconds, then the pack text (FkRecipes
-	// go/data.go:654 to 656, noteIgnoredNumber twice and noteIgnoredText once;
-	// a number at its declared default draws nothing, since 9754f49). It is
-	// the same courtesy the recipe's text gets, and
-	// [TestAnEditedPackTextUnderATierIsIgnoredAndTheLogSaysSo] pins all three
-	// against the defaults declared here.
+	// `CostFrom` SITS BESIDE `CostBy` AND EACH FIELD IS ITS OWN SWITCH. The
+	// dropdown offers the THREE tiers it has always offered, and the three
+	// settings overwrite the chosen tier's unit ONE FIELD AT A TIME: a pack
+	// text on the word `default`, a count at 0 and a seconds at 0 each mean
+	// "the tier decides this one". So a player who touches nothing is charged
+	// the tier byte for byte, a player who types a pack list keeps the tier's
+	// count and time, and nothing is ever read and then ignored -- the
+	// `is edited, but ... is not on custom` line this arm used to draw has no
+	// state left to be about.
 	//
-	// `Position` IS WHY A CUSTOM COST STILL LANDS SOMEWHERE IN THE TREE. Under
-	// every tier the prerequisite moves with the unit because a source
-	// technology was named; a written cost names none, so the arm carries its
-	// own ladder and the library takes the FIRST rung the game has as the sole
-	// prerequisite ("the first technology the game has becomes the sole
-	// prerequisite, exactly as a chosen tier's source would", FkRecipes
-	// go/customize.go:1282, customPrereqs), or no prerequisite at all with a
-	// line saying so.
+	// THE OPTION LIST NEVER MOVED, for the recipe dropdown's reason one level
+	// up: Factorio resets a stored value the running release does not offer and
+	// persists the reset silently, so a `custom` row would be destroyed by any
+	// rollback while the three fields beside it survived. The state lives in
+	// the fields instead, and adopting the customizer on this dropdown costs a
+	// stored `logistics-3` nothing.
 	//
-	// IT IS [TechOptions] ITSELF, CHEAPEST FIRST, SO THE HEAD OF THE LADDER IS
-	// THIS MOD'S OWN DEFAULT TIER BY CONSTRUCTION rather than by a second
-	// transcription: [TechDefault] is that list's head, and a `Position`
-	// spelled out again here is a copy that can drift from it. That is the one
-	// choice in this arm and it is a measurement. The three fields ship at
-	// [FallbackUnit], base's own `logistics` unit, so that IN A GAME THAT HAS
-	// `logistics` picking Custom and typing nothing changes nothing -- and with
-	// the ladder headed here that promise is true of the WHOLE PROTOTYPE TABLE
-	// and not only of the price. Measured on Factorio 2.0.77 through the gate's
-	// own `run_arm`, base's own mod set: `bbb-tech-cost = custom` with nothing
-	// else stored gives a normalised data-raw dump hashing `1e1fcf4f56f5ef22`,
-	// BYTE-IDENTICAL to the default dump, where a ladder headed at
-	// `logistics-3` hashes `afb19d7fa0cfd0a5` and the one field that differs is
-	// `prerequisites`.
+	// AND THE TIER STILL PLACES THE TECHNOLOGY, WHICH IS WHY THERE IS NO
+	// PLACEMENT FIELD HERE AT ALL. `CostBy` names a source technology on every
+	// value the dropdown has, and that source is the prerequisite whatever the
+	// three settings say -- so repricing the research does not move it in the
+	// tree, and the cost and the place cannot come apart. The ladder this arm
+	// used to carry for a value that named no source went with the value: there
+	// is no arm left in which this technology has a cost and no source to hang
+	// off, so there is nothing for such a ladder to decide.
 	//
-	// THAT CONDITION IS THE HEAD'S PRESENCE AND IT IS NOT A HEDGE. Take
-	// `logistics` away and the two readings PART, because a tier's ladder is
-	// [TechLadder] and the default tier's is that one name, where this one has
-	// two rungs under it. Measured on the host in a game holding `logistics-2`
-	// and `logistics-3` and nothing below them (`cd guest/go && go test ./tune/
-	// -run TestTheCustomArmTakesItsPlaceFromTheDefaultTier`): the DEFAULT tier
-	// emits no `prerequisites` field at all and says so (`no source for the
-	// logistics cost carries a unit, so the fallback cost applies and the
-	// technology has no prerequisite`), while Custom untouched emits
-	// `["logistics-2"]`, both on the same [FallbackUnit]. So picking Custom
-	// THERE does move the research, from nowhere to Logistics 2 -- which is a
-	// legal place and the nearest one, and is the whole reason the ladder has
-	// rungs under its head at all. It is also why every sentence a player reads
-	// says "does not move" of a game that has Logistics and states the
-	// without-Logistics case as its own clause.
-	//
-	// THE ARGUMENT THAT STOOD HERE GOT THE RULE RIGHT AND THE STATE WRONG. The
-	// rule is this section's own and it does not move: a cost and a place in
-	// the tree that disagree is the defect, and a blue-science price at a
-	// red-science place is the shape of it. What the argument reasoned about
-	// was the state a player is ABOUT TO REACH, the numbers they are likeliest
-	// to write; a ladder decides the state they are IN. Untouched, they are
-	// paying 20 red science, and `logistics-3` put that behind base 2.0.77's
-	// own gate on that technology, `["production-science-pack", "lubricant"]`
-	// read out of the same dump: the mismatch this section argues against, with
-	// the sign flipped, for as long as the player has not typed. The expensive
-	// case the old argument protected gates itself anyway: a player who writes
-	// 300 units of four packs has stated the gate in the cost. THAT LAST STEP
-	// IS REASONING AND NOT A PROBE, and is marked so rather than dropped
-	// because it is what the choice between the two errors turns on: a cost
-	// gates SOFTLY, since an unaffordable research is still reachable by
-	// playing on, where a prerequisite gates HARD, since a walled one is not
-	// reachable at all until the wall is. NOT MEASURED on the engine.
-	//
-	// The ladder then steps UP the tiers for the same reason [TechLadder] steps
-	// down them: a pack without `logistics` still places the research, and a
-	// game with no logistics chain at all leaves it unattached rather than
-	// naming a technology nobody defined.
+	// WHAT A PLAYER WHO REPRICES STILL CHANGES, said rather than hidden: the
+	// count and the seconds are whole numbers, and a tier priced by a
+	// `count_formula` loses that formula the moment the count setting is not 0,
+	// because the engine refuses a unit carrying both (measured by the library
+	// on 2.0.77). None of the three logistics tiers is priced by a formula in
+	// base, so this reaches a modpack that repriced one and nothing else; the
+	// library says so in the log and in the technology's own tooltip.
 	lib.LegacyTechnology(TechName, fkrecipes.TechSpec{
 		Icon:     PartIcon,
 		IconSize: 64,
@@ -478,12 +467,11 @@ func Plan() *fkrecipes.Lib {
 			Setting:  techCost,
 			Choices:  techChoices(),
 			Fallback: FallbackUnit(),
-			Custom: &fkrecipes.CustomCost{
-				Packs:    techPacks,
-				Count:    techCount,
-				Seconds:  techSeconds,
-				Position: TechOptions(),
-			},
+		},
+		CostFrom: &fkrecipes.CustomCost{
+			Packs:   techPacks,
+			Count:   techCount,
+			Seconds: techSeconds,
 		},
 	})
 
@@ -493,11 +481,12 @@ func Plan() *fkrecipes.Lib {
 // recipeChoices turns [RecipePlan] into the library's shape, one choice per
 // PRESET value IN MENU ORDER.
 //
-// SIX AND NOT SEVEN. `custom` is a value of the dropdown with no plan behind
-// it, and the library takes it as the `Custom` arm instead; a choice covering
-// it as well would be refused by name ("gives custom a preset as well as a
-// Custom arm"). So this walks [RecipeOptions] and the dropdown is declared
-// with [RecipeValues], and the library checks the two against each other.
+// SIX AND EXACTLY SIX. The library adds no value of its own to a dropdown, so
+// the choice list has to cover the `allowed_values` EXACTLY and a plan that
+// covered one fewer would be refused by name ("the recipe bbb-balancer-part
+// offers nothing for the value <v> that the setting bbb-recipe-cost allows").
+// [RecipeOptions] is therefore read here and at the declaration alike, and the
+// library checks the two against each other.
 //
 // BUILT FROM THE LADDERS RATHER THAN BESIDE THEM. The library checks a choice
 // list against its dropdown's allowed values and refuses a mismatch by name, so
@@ -539,10 +528,10 @@ func asIngredients(plan []Item) []fkrecipes.Ingredient {
 // techChoices is the same for [TechLadder]: one choice per TIER value, whose
 // sources are that option's ladder, most preferred first.
 //
-// THREE AND NOT FOUR, for the reason [recipeChoices] is six and not seven:
-// `custom` is a value of the dropdown with no ladder behind it, and the library
-// takes it as the `Custom` arm instead. So this walks [TechOptions] and the
-// dropdown is declared with [TechValues].
+// THREE AND EXACTLY THREE, for the reason [recipeChoices] is six and exactly
+// six: the choice list covers the dropdown's `allowed_values` with nothing
+// added and nothing subtracted, so [TechOptions] is read here and at the
+// declaration alike.
 func techChoices() []fkrecipes.CostChoice {
 	options := TechOptions()
 	out := make([]fkrecipes.CostChoice, 0, len(options))
@@ -562,11 +551,11 @@ func techChoices() []fkrecipes.CostChoice {
 // removed the chain gets the vanilla cost rather than a broken load, and
 // nobody who has not removed it can tell the difference.
 //
-// IT IS ALSO WHAT THE CUSTOM ARM'S THREE FIELDS DEFAULT TO, since round three:
-// the same unit is what a player who picks Custom and types nothing is charged,
-// so the pack list of `better-belt-balancer-tech-packs` is taken from here
-// rather than written a second time. See the declarations in [Plan] for why the
-// two numbers are not.
+// IT IS ALSO WHAT `better-belt-balancer-tech-packs` DECLARES, since round
+// three: the pack list a player sees written out in that field's tooltip, and
+// the list the word `default` in it stands for, is taken from here rather than
+// written a second time. The two NUMBERS beside it declare 0, which beside a
+// tier is the word `default` of a number; see the declarations in [Plan].
 //
 // Exported so a test can compare it against the fixture's `logistics` without
 // either of them being derived from the other.

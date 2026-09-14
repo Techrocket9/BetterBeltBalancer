@@ -16,14 +16,18 @@ package tune
 // affordable, and out of order in Factoriopedia. One technology is named once,
 // and both fields come from it.
 //
-// AND SINCE ROUND THREE THERE IS A FOURTH VALUE WITH NO TECHNOLOGY UNDER IT.
-// `custom` hands the research cost to three settings the player fills in --
-// `better-belt-balancer-tech-packs`, `better-belt-balancer-tech-count` and
-// `better-belt-balancer-tech-seconds` -- so a player who wants a price none of
-// the three tiers charges can write one. It is a value of the dropdown and NOT
-// an option of this file: [TechLadder] and [TechOptions]
-// answer for the three tiers, [TechValues] is the four the setting allows, and
-// the library refuses the two lists disagreeing in either direction.
+// AND SINCE ROUND THREE THERE ARE THREE FIELDS BESIDE THE DROPDOWN, WHICH DID
+// NOT COST THIS LIST A ROW. `better-belt-balancer-tech-packs`,
+// `better-belt-balancer-tech-count` and `better-belt-balancer-tech-seconds`
+// overwrite the chosen tier's unit ONE FIELD AT A TIME: a pack text on the word
+// `default` and a number at 0 each leave that field to the tier. So a player
+// who wants a price none of the three tiers charges writes one without leaving
+// the tier they are on, and the tier still decides where the research hangs.
+//
+// THE THREE VALUES BELOW ARE THEREFORE THE WHOLE OF WHAT `bbb-tech-cost`
+// ALLOWS, exactly as they were before the fields arrived. [TechOptions] is the
+// one list, read by the declaration and by [techChoices] alike, and a player
+// who had stored `logistics-3` still reads `logistics-3`.
 
 // The tier values of `bbb-tech-cost`, in menu order.
 const (
@@ -32,65 +36,27 @@ const (
 	TechLogistics3 = "logistics-3"
 )
 
-// TechOptions is every allowed value of `bbb-tech-cost` that names a
-// technology, cheapest first. The strings ARE the base technology names, which
-// is why there is no mapping table under this: the option a player picks is the
-// technology they get.
+// TechOptions is every allowed value of `bbb-tech-cost`, cheapest first. The
+// strings ARE the base technology names, which is why there is no mapping table
+// under this: the option a player picks is the technology they get.
 //
-// AND SINCE FIX ROUND 1 IT IS THE CUSTOM ARM'S `Position` LADDER TOO. A written
-// cost names no source technology, so [Plan] places it by a ladder of its own,
-// and that ladder is THIS LIST rather than a slice spelled out beside it: the
-// head is [TechDefault] by construction, so an untouched Custom hangs where the
-// default tier already hangs. THE ORDER HERE IS THEREFORE LOAD-BEARING TWICE
-// OVER -- it is the menu order the dropdown shows AND the order the custom arm
-// walks -- and `plan.go`'s comment on that field carries the measurement.
+// THE ORDER HERE IS THE MENU ORDER AND THAT IS ALL IT IS SINCE FIX ROUND 2.
+// This list was also the placement ladder of a `custom` value that named no
+// source technology; there is no such value any more, because every value of
+// this dropdown names a source and the source is the prerequisite whatever the
+// three settings beside it say. So nothing walks this list but the menu and the
+// choice table, and [TechDefault] is still its head.
 func TechOptions() []string {
 	return []string{TechLogistics, TechLogistics2, TechLogistics3}
-}
-
-// TechCustom is the fourth value of `bbb-tech-cost`, and the only one that
-// names no technology: the packs, the unit count and the seconds per unit come
-// from the three settings beside it.
-//
-// IT IS DELIBERATELY NOT IN [TechOptions], exactly as [RecipeCustom] is not in
-// [RecipeOptions] and for the same library rule: a value covered by a preset
-// choice AND by a Custom arm is refused by name -- "gives custom a preset as
-// well as a Custom arm; name the arm's value with CustomValue"
-// (FkRecipes go/customize.go:440, `customArmValues`). So [TechLadder],
-// [techChoices] and every test that iterates the TIERS keep reading the three,
-// and only the dropdown's declaration reads [TechValues].
-//
-// The spelling is the library's own default for the arm, which is why
-// `CostChoices.CustomValue` is left empty in [Plan]: that field exists for a mod
-// whose dropdown ALREADY ships a preset called `custom`, and this one does not.
-const TechCustom = "custom"
-
-// TechValues is every value `bbb-tech-cost` allows, in the order the dropdown
-// shows them: the three tiers, then the custom arm.
-//
-// THE THREE KEEP THEIR SPELLING AND THEIR POSITIONS AND THE FOURTH IS LAST,
-// which is the whole migration, and it is the same statement [RecipeValues]
-// makes for the recipe. Factorio keys a stored startup choice by its VALUE
-// STRING in mod-settings.dat, so every player who had chosen `logistics-3`
-// still reads `logistics-3` after the update; the only row that is new is the
-// one nobody has stored.
-func TechValues() []string {
-	return append(TechOptions(), TechCustom)
 }
 
 // TechDefault is what the setting defaults to -- today's behaviour, which is
 // `logistics`, the same tier the incumbent's first one hangs off.
 //
-// THE HEAD OF THE TIERS AND NOT OF [TechValues]: the default has to be a value
-// a ladder answers for, and the custom arm is the one value that is not.
-//
-// AND THE CUSTOM ARM'S PLACEMENT IS THIS FUNCTION'S ANSWER TOO, which is the
-// other end of the coupling [TechOptions] above describes: `Position` is that
-// list, so its head is whatever this returns, and an editor who moves the
-// default tier moves where a Custom research hangs in the same stroke. That is
-// the property fix round 1 rests on and it is ASSERTED IN THOSE TERMS rather
-// than against the literal `logistics`, by
-// [TestTheCustomArmTakesItsPlaceFromTheDefaultTier].
+// ONE LIST AND THEREFORE ONE HEAD, exactly as [RecipeDefault] is the head of
+// [RecipeOptions]: `allowed_values` and `default_value` are separate prototype
+// fields and a default outside the list is a load error, so both come from one
+// place here.
 func TechDefault() string { return TechOptions()[0] }
 
 // TechLadder is the technologies to try for one option, most preferred first.
@@ -103,10 +69,10 @@ func TechDefault() string { return TechOptions()[0] }
 //
 // THE DEFAULT ARM IS A SHAPE GUARD AND NOT A LIVE FALLBACK, exactly as
 // [RecipePlan]'s is and for the same reason: [Plan] builds one `CostChoice` per
-// TIER value and hands `custom` to the Custom arm instead, so no string a player
-// can store reaches this switch. An unknown one reaches the library's dropdown
-// read, and since FkRecipes c7a806e it is REFUSED BY NAME where it used to get
-// an empty ladder and land on [FallbackUnit] with no prerequisite:
+// value the dropdown allows, and [TechOptions] is that list, so no string a
+// player can store reaches this switch. An unknown one reaches the library's
+// dropdown read, and since FkRecipes c7a806e it is REFUSED BY NAME where it
+// used to get an empty ladder and land on [FallbackUnit] with no prerequisite:
 //
 //	fkrecipes: bbb-tech-cost holds "not-an-option", which is not one of its values
 //
