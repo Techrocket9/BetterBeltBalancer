@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode"
 
 	fkrecipes "github.com/Techrocket9/fkrecipes/go"
 )
@@ -41,7 +42,7 @@ import (
 //	one key, which the old TestNoAllowedValueCollidesWithAnother did by hand and
 //	the library now does over the whole plan.
 //
-// WHAT THE LIBRARY DELIBERATELY DOES NOT DO IS BELOW, as four tests of this
+// WHAT THE LIBRARY DELIBERATELY DOES NOT DO IS BELOW, as five tests of this
 // mod's own. Its header says so in as many words: a description is optional
 // there, because the engine's failure for a missing one is a lost tooltip
 // rather than an `Unknown key` in the player's face, and the hand-rolled list
@@ -342,4 +343,229 @@ func TestTheLocaleFileRenamesNoTechnologyOfTheGames(t *testing.T) {
 			"does not need it -- an undefined key degrades to the raw internal "+
 			"name -- so the fix is to delete the line", e.Key)
 	}
+}
+
+// TestNoSettingDescriptionNamesAnOptionNoDropdownOffers is the fifth, and it
+// exists because ten entries of this file once instructed the player to pick an
+// option the dropdown does not have and NOTHING ANYWHERE WENT RED.
+//
+// WHY NOTHING COULD SEE IT. FkRecipes' locale checker reads KEYS -- every
+// declared value has an entry, no entry names a value the plan does not declare
+// -- and never the strings beside them. `--dump-data` carries the key and not
+// the string, so `make datastage-check` cannot see a syllable of the file. The
+// four tests above read four specific entries for four specific properties.
+// When the `custom` dropdown value was withdrawn, every key in the file stayed
+// valid and six descriptions and four names went on naming it.
+//
+// WHAT THIS PINS, AND IT IS ONE WORD PER ENTRY. For each dropdown the plan
+// declares, it takes that dropdown's own allowed values and the words of the
+// `[string-mod-setting]` label of each one -- which is the vocabulary a player
+// can actually see in the menu -- and then requires that every capitalised word
+// in the `[mod-setting-name]` and `[mod-setting-description]` entries of that
+// dropdown AND of the settings bound beside it comes from that vocabulary, or
+// else from the words this mod uses to name its own prototypes. `Logistics` and
+// `Default` pass because they are option labels; `Balancer` passes because it
+// is what this mod calls its machine; `Custom` passes nothing, because no value
+// of either dropdown is spelled that way and no prototype is called that.
+//
+// THE RELATIONSHIP IS THE POINT AND NOT THE WORD. Nothing here writes `Custom`
+// down. Add a value to [RecipeOptions] or [TechOptions], give it a
+// `[string-mod-setting]` label, and every entry in that group may name it the
+// next moment; withdraw one and every entry naming it fails here. So this test
+// says something about the dropdowns and the prose agreeing, which is the thing
+// that went wrong, rather than about a string that has already been deleted.
+//
+// WHAT IT DOES NOT CATCH, which matters because it reads one word and these
+// entries carry paragraphs:
+//
+//	It reads words, not sentences. An entry that describes a behaviour this
+//	mod no longer has, in ordinary lower case, passes: "the field below is
+//	only read while the dropdown is on the seventh option" is false and
+//	invisible here.
+//
+//	It skips the first word of every sentence in a DESCRIPTION, because a
+//	sentence opens with a capital whatever it opens with. A description that
+//	begins with a withdrawn option word is missed. It does NOT skip the first
+//	word of a `[mod-setting-name]` entry, since a label is not a sentence --
+//	and that is exactly where four of the ten hid ("Custom balancer part
+//	recipe").
+//
+//	It scans only the settings this plan binds into a dropdown group. The
+//	hand-rolled `bbb-multi-edge-parts` belongs to no dropdown and is not read,
+//	which is why the word `Factorio` in its description is nobody's business
+//	here.
+//
+//	It says nothing about whether the rule the entries state is the right one.
+//	The rule is that the text field applies whenever it does not say `default`
+//	and the dropdown supplies the rest; a human reads that, or nobody does.
+//
+// AND IT REFUSES ONE THING THAT IS NOT A MENU OPTION, MEASURED RATHER THAN
+// IMAGINED. A bound setting's entries may not use a capitalised DISPLAY name or
+// product name mid-sentence: writing `not the names shown on screen (say
+// iron-plate, not "Iron plate")` into the ingredients field fails here on
+// `Iron`, and `Factorio`, `Factoriopedia` and `Startup` are the same shape.
+// README.md makes exactly that iron-plate point in exactly that phrasing, so an
+// author moving the sentence into the tooltip will meet this. THE REMEDY IS NOT
+// TO WEAKEN THE TEST, because the word it would have to start admitting is the
+// word it exists to refuse: lower-case the display name, or name the prototype
+// in one of this mod's own `[entity-name]`, `[item-name]`, `[recipe-name]` or
+// `[technology-name]` entries, which is where a name this mod really gives
+// something belongs and which this test already reads.
+func TestNoSettingDescriptionNamesAnOptionNoDropdownOffers(t *testing.T) {
+	sec := localeSections(t)
+	var scanned []string
+
+	// This mod's own display vocabulary, read out of the file rather than
+	// written down here: the words it uses to NAME its own prototypes. A
+	// balancer is a machine, not a row of a menu, so a label may say it.
+	ownName := map[string]bool{}
+	for _, e := range fkrecipes.LocaleEntries(localeText(t)) {
+		switch e.Section {
+		case "entity-name", "item-name", "recipe-name", "technology-name":
+			for _, w := range capitalisedWords(e.Value, false) {
+				ownName[strings.ToLower(w)] = true
+			}
+		}
+	}
+
+	// The groups, in declaration order, straight off [Plan]'s own lists. A
+	// slice and not a map, for the reason nothing in this repository ranges
+	// one: Go randomises that order per run.
+	for _, group := range []struct {
+		dropdown string
+		values   []string
+		beside   []string
+	}{
+		{SettingRecipeCost, RecipeOptions(), []string{SettingRecipeIngredients}},
+		{SettingTechCost, TechOptions(), []string{SettingTechPacks, SettingTechCount, SettingTechSeconds}},
+	} {
+		scanned = append(scanned, group.dropdown)
+		scanned = append(scanned, group.beside...)
+		// What this dropdown offers, spelled both ways a player meets it: the
+		// stored value itself (`belt-express`, one word per segment) and the
+		// label the menu renders for it. The library's own checker is what
+		// guarantees this section covers exactly these values, so reading the
+		// labels here cannot drift from the plan.
+		offered := map[string]bool{}
+		for _, v := range group.values {
+			for _, part := range strings.Split(v, "-") {
+				offered[strings.ToLower(part)] = true
+			}
+			for _, w := range capitalisedWords(sec["string-mod-setting"][group.dropdown+"-"+v], false) {
+				offered[strings.ToLower(w)] = true
+			}
+		}
+
+		for _, name := range append([]string{group.dropdown}, group.beside...) {
+			for _, section := range []string{"mod-setting-name", "mod-setting-description"} {
+				entry := sec[section][name]
+				if entry == "" {
+					// Absence is reported by TestTheLocaleFileSatisfiesThePlan
+					// and TestEverySettingThisPlanDeclaresIsDescribed.
+					continue
+				}
+				for _, w := range capitalisedWords(entry, section == "mod-setting-description") {
+					if offered[strings.ToLower(w)] || ownName[strings.ToLower(w)] {
+						continue
+					}
+					t.Errorf("[%s] %s names %q, and %s offers no value spelled "+
+						"that way: it allows %s and nothing else. A player told "+
+						"to pick %q looks for a row of the menu that is not "+
+						"there. The rule this entry has to state instead is "+
+						"that the field below applies whenever it does not say "+
+						"default, and the dropdown supplies the rest. If %q is "+
+						"not meant as a menu option at all, it is being read as "+
+						"one because it is capitalised and is neither an option "+
+						"label of this dropdown nor a name this mod gives one "+
+						"of its own prototypes",
+						section, name, w, group.dropdown,
+						strings.Join(group.values, ", "), w, w)
+				}
+			}
+		}
+	}
+
+	// AND THE TABLE ABOVE HAS TO COVER THE WHOLE PLAN, or a seventh setting
+	// bound beside a dropdown is silently unscanned and this test reports
+	// nothing about it -- which is the failure mode it exists to close, one
+	// layer out.
+	//
+	// THE PLAN IS ASKED RATHER THAN TRANSCRIBED. `*fkrecipes.Lib` exports no
+	// accessor for the settings it holds, but `CheckLocaleWith` run against an
+	// EMPTY locale file reports one `has no [mod-setting-name] entry` finding
+	// per declared setting, in declaration order, so the findings ARE the
+	// enumeration. A hand-rolled name is not in it, because the hand-rolled
+	// list only suppresses orphans and never creates an obligation, and
+	// `bbb-multi-edge-parts` belongs to no dropdown anyway. If the library ever
+	// changes that sentence this loop finds nothing and the assertion fails
+	// loudly rather than passing over an empty reading, which is the safe
+	// direction for a check whose input is a message.
+	var declared []string
+	for _, finding := range Plan().CheckLocaleWith(ModName, "", HandRolledSettings()) {
+		rest, ok := strings.CutPrefix(finding, "the setting ")
+		if !ok {
+			continue
+		}
+		if name, _, ok := strings.Cut(rest, " has no [mod-setting-name] entry"); ok {
+			declared = append(declared, name)
+		}
+	}
+	covered := map[string]bool{}
+	for _, name := range scanned {
+		covered[name] = true
+	}
+	for _, name := range declared {
+		if !covered[name] {
+			t.Errorf("this plan declares the setting %s and no dropdown group "+
+				"above scans it, so nothing here reads its [mod-setting-name] "+
+				"or [mod-setting-description] entry for an option the menu "+
+				"does not offer. Add it to the group of the dropdown it sits "+
+				"beside; the settings scanned are %s",
+				name, strings.Join(scanned, ", "))
+		}
+	}
+	if len(declared) != len(scanned) {
+		t.Errorf("the groups above scan %d settings (%s) and this plan declares "+
+			"%d (%s): the two have to be the same set, or this test is reading "+
+			"a file against a plan it does not cover",
+			len(scanned), strings.Join(scanned, ", "),
+			len(declared), strings.Join(declared, ", "))
+	}
+}
+
+// capitalisedWords is the reading [TestNoSettingDescriptionNamesAnOptionNoDropdownOffers]
+// is built on, and it is deliberately crude: a word is what whitespace
+// separates, stripped of the punctuation and the backticks around it, and it
+// counts when its first rune is an upper-case letter.
+//
+// `skipSentenceOpeners` is what tells a label from a paragraph. In a
+// description the first word of every sentence is capitalised because it opens
+// a sentence and for no other reason, so it is skipped; a `[mod-setting-name]`
+// entry is a label rather than a sentence and every word of it is read,
+// including the first, because that is where a field named for a withdrawn
+// option puts the option's name.
+//
+// A sentence is taken to end at `.`, `:`, `;`, `!` or `?`. The colon and the
+// semicolon are over-generous -- both are followed by a lower-case word in this
+// file -- and over-generous is the safe direction: it can only skip a word, and
+// a skipped word is a miss rather than a false failure.
+func capitalisedWords(text string, skipSentenceOpeners bool) []string {
+	var out []string
+	opener := true
+	for _, raw := range strings.Fields(text) {
+		atOpening := opener
+		opener = strings.HasSuffix(raw, ".") || strings.HasSuffix(raw, ":") ||
+			strings.HasSuffix(raw, ";") || strings.HasSuffix(raw, "!") ||
+			strings.HasSuffix(raw, "?")
+		w := strings.TrimFunc(raw, func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+		})
+		if w == "" || (atOpening && skipSentenceOpeners) {
+			continue
+		}
+		if unicode.IsUpper([]rune(w)[0]) {
+			out = append(out, w)
+		}
+	}
+	return out
 }

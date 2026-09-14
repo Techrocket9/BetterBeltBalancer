@@ -1445,6 +1445,188 @@ Exit codes read directly and never through a pipe. Every wasm build runs under `
 
 **AND ONE THING THIS COMMIT CLOSES OUTRIGHT.** Remedy (f) is struck rather than done, and this file says so in the one place a future reader would go looking: `TestTheLocaleFileRenamesNoTechnologyOfTheGames` is what stops somebody carrying it out.
 
+### The round's second commit: ten entries rewritten under one rule, seven comment blocks with them, and one test so it cannot go false silently
+
+**TWO FILES, AND ONE OF THEM HAD NEVER BEEN READ BY ANYTHING.** `mod-data/locale/en/better-belt-balancer.cfg` and `guest/go/tune/locale_test.go`, `git diff --stat` reading `367 insertions(+), 88 deletions(-)`. This is FkRecipes' adoption item 9, the one that commit's own subsection above ends by naming, and it is the item that exists because the library's adversarial review of decision E found it as must-fix 2: the adoption list would have had the consumer ship six false tooltips and stop one sentence short of saying so, because item 8's "no entry becomes an ORPHAN" is true about KEYS and reads as a statement about the file.
+
+**NOTHING WAS RED ANYWHERE, AND THE THREE REASONS ARE THREE DIFFERENT BLINDNESSES.** FkRecipes' locale checker reads KEYS -- every declared value has an entry, no entry names a value the plan does not declare -- and never the strings beside them. `--dump-data` carries the locale key and not the string, so `make datastage-check` cannot see a syllable of the file. And the one test that read a WORD of a description, `TestEveryCustomDropdownDescriptionNamesTheCustomOption`, was deleted in the adopt commit along with the `[string-mod-setting]` entries it read the word out of. Every key in the file stayed valid across the withdrawal; ten strings went false under them.
+
+#### The ten entries, before and after, in full
+
+Taken out of `git diff` rather than retyped. Line numbers are HEAD's for the OLD and the working tree's for the NEW, and they are the ten lines FkRecipes' item 9 names.
+
+**FOUR NAMES, each of which named the field for an option instead of for what it holds.** A name is the half a player reads without hovering anything, and it is where four of the ten hid.
+
+```
+OLD :130  better-belt-balancer-recipe-ingredients=Custom balancer part recipe
+NEW :133  better-belt-balancer-recipe-ingredients=Balancer part ingredients
+```
+
+False twice over: `Custom` is no value of `bbb-recipe-cost`, and `recipe` made the row a second copy of the dropdown above it rather than the list that goes into it. The new name says what the field holds.
+
+```
+OLD :143  better-belt-balancer-tech-packs=Custom balancer research: science packs
+NEW :147  better-belt-balancer-tech-packs=Balancer research: science packs
+```
+
+```
+OLD :144  better-belt-balancer-tech-count=Custom balancer research: units
+NEW :148  better-belt-balancer-tech-count=Balancer research: units
+```
+
+```
+OLD :145  better-belt-balancer-tech-seconds=Custom balancer research: seconds per unit
+NEW :149  better-belt-balancer-tech-seconds=Balancer research: seconds per unit
+```
+
+All three carried the same false word in the same first position, and all three lose it and nothing else. The three-row shape is the engine's rather than a choice: a text field takes the packs, and a count and a time are a number each.
+
+**SIX DESCRIPTIONS.**
+
+```
+OLD :197  bbb-recipe-cost=What a balancer part costs to craft, or Custom to write the recipe yourself in the setting below. The default is what this mod has always used. Every option but Custom is safe in an overhaul pack: where one names something your mods do not have, the nearest thing they do have is used instead, and where that leaves one item named twice the two amounts are added, so what you craft can be a shorter list than the one shown here. A recipe you write yourself is the opposite on purpose, and it is taken as written: nothing is substituted for a name you typed.
+NEW :203  bbb-recipe-cost=What a balancer part costs to craft. The default is what this mod has always used. Every option is safe in an overhaul pack: where one names something your mods do not have, the nearest thing they do have is used instead, and where that leaves one item named twice the two amounts are added, so what you craft can be a shorter list than the one shown. A list you write yourself is taken as written: nothing is substituted for a name you typed.
+```
+
+FALSE IN TWO PLACES AND THE SECOND ONE IS THE ONE THE SECOND ASSESSMENT GRADED. The offer, "or Custom to write the recipe yourself in the setting below", sends the player to a row of the menu that is not there. And "Every option but Custom is safe in an overhaul pack" was the scoping that moved finding 6 from MISLED to CLEAN one round earlier: with the seventh value gone, six of six options substitute, the exception has no subject, and the promise is general again. The contrast a player choosing between the two rows still needs is kept in the last sentence, now about a LIST rather than about an option.
+
+```
+OLD :218  better-belt-balancer-recipe-ingredients=What a balancer part is made of while the recipe setting above is set to Custom. Write the amount, then the item's internal name, and separate ingredients with commas: 2 iron-plate, 1 splitter. Internal names are the ones the game uses in its own data and in rich text, not the names shown on screen. The word default means this mod's own recipe, and the tooltip on the setting above lists every preset written this way.
+NEW :233  better-belt-balancer-recipe-ingredients=What a balancer part is made of. Write the amount, then the item's internal name, and separate ingredients with commas: 2 iron-plate, 1 splitter. Internal names are the ones the game uses in its own data and in rich text, not the names shown on screen. The tooltip on the setting above lists every preset written this way, which is where to copy one from.
+```
+
+The opening scoped the field to a state that cannot be reached. The closing half-sentence about `default` went with it for a different reason, below.
+
+```
+OLD :219  bbb-tech-cost=The balancer is always unlocked by its own research; this picks which logistics tier that research is priced like, or Custom to write the cost yourself in the three settings below. For a tier the cost is copied from that technology, so it follows whatever your mods charge for it, and the balancer's research moves to sit just after it in the technology tree. On Custom it sits after Logistics, the same place the setting's default puts it, so picking Custom does not move it; without Logistics it sits after the lowest of Logistics 2 and Logistics 3 your mods have, and it has no prerequisite if none of the three exists.
+NEW :265  bbb-tech-cost=Which logistics tier the balancer's own research is priced like. The cost is copied from that technology, so it follows whatever your mods charge, and the research sits just after it in the technology tree. A tier your mods leave unpriced steps down to the next belt tier, and where that runs out the research takes 20 units of automation science at 15 seconds each with no prerequisite. The three settings below override that tier one field at a time: the science packs while that field does not say default, the unit count and the seconds while either is not 0.
+```
+
+FALSE IN THE OFFER AND FALSE IN A WHOLE PLACEMENT CLAUSE. "or Custom to write the cost yourself in the three settings below" is the offer; the entire third sentence described where a Custom research hangs, and `CustomCost.Position` is deleted outright, so it described nothing. What replaces it is the behaviour that is actually there: `TechLadder` in `guest/go/tune/tech.go` steps `logistics-3` down through 2 to 1 and `logistics-2` down to 1, and `FallbackUnit()` in `guest/go/tune/plan.go` is 20 automation science at 15 seconds with no prerequisite where no rung carries a unit. That is the same 20 and 15 this mod used to declare as the two numeric defaults, arriving now from the other side of the change.
+
+```
+OLD :236  better-belt-balancer-tech-packs=What the balancer research is paid in while the research setting above is set to Custom. Write the amount, then the pack's internal name, and separate packs with commas: 1 automation-science-pack, 1 logistic-science-pack. Only science packs are accepted, and internal names are the ones the game uses in its own data and in rich text, not the names shown on screen. The word default means this mod's own list.
+NEW :284  better-belt-balancer-tech-packs=What the balancer research is paid in. Write the amount, then the pack's internal name, and separate packs with commas: 1 automation-science-pack, 1 logistic-science-pack. Only science packs are accepted, and internal names are the ones the game uses in its own data and in rich text, not the names shown on screen.
+```
+
+```
+OLD :241  better-belt-balancer-tech-count=How many units of science the balancer research costs, while the research setting above is set to Custom.
+NEW :294  better-belt-balancer-tech-count=How many units of science the balancer research costs.
+```
+
+```
+OLD :242  better-belt-balancer-tech-seconds=How many seconds one unit of the balancer research takes in a lab, while the research setting above is set to Custom.
+NEW :295  better-belt-balancer-tech-seconds=How many seconds one unit of the balancer research takes in a lab.
+```
+
+The two numbers were one sentence each and the second half of each sentence was the false one. The first assessment's own finding 4 quotes `How many units of science the balancer research costs, while the research setting above is set to Custom.` as the thing that states the RULE and cannot state the STATE; the rule it stated is now not a rule at all.
+
+#### One rule, applied ten times
+
+**THE TEXT FIELD APPLIES WHENEVER IT DOES NOT SAY `default`, AND THE DROPDOWN SUPPLIES THE REST.** That is FkRecipes' item 9 in its own words and it is the whole of the editorial policy here. Three shapes come out of it and each of the ten is one of the three: a dropdown's description drops the option from its list; a field scoped "while the setting above is set to Custom" is scoped to nothing instead and simply says what it is; and a field NAMED for the option is named for what it holds.
+
+**FOR THE RESEARCH THE RULE IS PER FIELD, AND TWO OF THE THREE FIELDS SWITCH ON 0 RATHER THAN ON A WORD.** `better-belt-balancer-tech-packs` switches on the word `default`; `-tech-count` and `-tech-seconds` switch on 0, which is what the adopt commit's `IntSetting(TechCountName, 0, Between(0, 1000000))` and its 3600 twin mean. `bbb-tech-cost`'s new last sentence is the only entry a player reads that names all three, and it names them in exactly that split.
+
+#### Two entries got shorter by dropping a sentence the library composes, and one of the two omissions was wrong
+
+**THE RECIPE FIELD'S `default` SENTENCE IS THE LIBRARY'S NOW AND WAS RIGHT TO DROP.** `The word default means this mod's own recipe` was removed from `better-belt-balancer-recipe-ingredients` and `The word default means this mod's own list.` from `-tech-packs`, because FkRecipes composes `textSwitchLine` under each of them (`go/customize.go:724`): `While this says default the option chosen above applies; anything else applies instead of it.` Saying it twice in one tooltip is the thing the whole comment block above that entry exists to refuse.
+
+**AND `bbb-tech-cost`'s THREE FIELDS WERE DROPPED ON A THEORY THAT DOES NOT HOLD, WHICH AN ADVERSARIAL REVIEW CAUGHT AND NO GATE COULD HAVE.** The first rewrite of that entry said nothing about the three settings below it, on the theory that the library says so. What the library actually composes onto that dropdown is ONE sentence, `dropdownSwitchLine` at `go/customize.go:733`, reaching the cost dropdown through `go/customize.go:680`:
+
+```
+The setting below applies instead while it does not say default.
+```
+
+It is SINGULAR ("the setting"), it is built from `CustomCost.Packs` and from nothing else (`dropdownSwitchLine(l.relativeOrder(i, c.Packs.index-1))`, where `c` is `t.spec.CostFrom`), and its switch is the word `default`. Three rows sit below that dropdown and two of them switch on 0, so the composed line cannot be read as covering them, and an entry leaving the three to it would have told a player about one field and left the other two invisible. **THAT IS THE MISLED SHAPE ARRIVING A SECOND TIME INSIDE THE COMMIT THAT EXISTS TO CLOSE IT**, and it is worth saying plainly: it was caught by a read of the library's source, not by anything that can go red. The entry enumerates all three itself now, and the overlap on the pack text is deliberate rather than a repetition, because the composed line names no field and the whole difficulty is that "the setting below" is three settings here.
+
+#### The two lengths, and they are the two longest strings this mod puts on a settings screen
+
+```
+git show HEAD:mod-data/locale/en/better-belt-balancer.cfg | awk 'NR==197||NR==219{sub(/^[^=]*=/,""); print NR": "length}'
+awk 'NR==203||NR==265{sub(/^[^=]*=/,""); print NR": "length}' mod-data/locale/en/better-belt-balancer.cfg
+```
+
+| entry | before | after |
+|---|---|---|
+| `bbb-recipe-cost` | 557 | **443** |
+| `bbb-tech-cost` | 622 | **563** |
+
+The 557 is the one the second assessment measured wrapping to ten visual lines inside a 24-line tooltip that fit on screen, and the adopt commit's own tooltip table names both as the two hovers the owed client run has to take. **THE 687 IS NOT REPRODUCIBLE FROM THIS TREE AND IS RECORDED AS REPORTED RATHER THAN MEASURED**: the tech entry is said to have gone to 687 characters when the three fields went back in after the review and to have been re-cut to the 563 above, and that intermediate draft exists in no commit, so no command here produces it. What the tree can say is that the final entry is 59 characters shorter than the one it replaces while carrying a clause the old one did not have.
+
+#### The new test, and it reads one word per entry where the entries carry paragraphs
+
+`TestNoSettingDescriptionNamesAnOptionNoDropdownOffers` in `guest/go/tune/locale_test.go` is the fifth of this mod's own locale tests, and the header sentence of that block moves from "as four tests of this mod's own" to "as five".
+
+**WHAT IT PINS.** For each dropdown the plan declares it builds a vocabulary out of the plan rather than out of a literal: that dropdown's own allowed values, split on `-` so `belt-express` contributes `belt` and `express`, plus every capitalised word of each value's `[string-mod-setting]` label. To that it adds this mod's own DISPLAY vocabulary, read out of the same file's `[entity-name]`, `[item-name]`, `[recipe-name]` and `[technology-name]` sections. Then every capitalised word of the `[mod-setting-name]` and `[mod-setting-description]` entries of that dropdown AND of the settings bound beside it has to come from one of the two. `Logistics` and `Default` pass because they are option labels (`bbb-tech-cost-logistics=Default: Logistics, alongside transport belts`); `Balancer` passes because `[item-name] bbb-balancer-part=Balancer part` is what this mod calls its machine; `Custom` passes nothing, because no value of either dropdown is spelled that way and no prototype is named that.
+
+**THE RELATIONSHIP IS WHAT IS PINNED AND THE WORD IS NOT.** Nothing in the test writes `Custom` down. Add a value to `RecipeOptions()` or `TechOptions()` with a label and every entry in that group may name it; withdraw one and every entry naming it fails. `capitalisedWords` is the reading underneath: a word is what whitespace separates, stripped of surrounding punctuation and backticks, counted when its first rune is upper case.
+
+**WHAT IT DELIBERATELY DOES NOT CATCH, which its own comment lists.** It reads WORDS and not SENTENCES, so a description of a behaviour this mod no longer has, written in ordinary lower case, passes untouched. It SKIPS THE FIRST WORD OF EVERY SENTENCE in a description, because a sentence opens with a capital whatever it opens with, so a description beginning with a withdrawn option word is missed; it does not skip the first word of a `[mod-setting-name]` entry, since a label is not a sentence, and that is exactly where four of the ten hid. Its sentence boundary is `.`, `:`, `;`, `!` or `?`, which is over-generous on the colon and the semicolon and over-generous in the safe direction, since the cost is a missed word rather than a false failure. And it scans only settings bound into a dropdown group, so the hand-rolled `bbb-multi-edge-parts` is not read at all, which is why the word `Factorio` in its name is nobody's business here.
+
+**AND ONE FALSE POSITIVE, MEASURED RATHER THAN IMAGINED.** A bound setting's entries may not use a capitalised display or product name mid-sentence. Replacing the ingredients entry's `not the names shown on screen.` with ``not the names shown on screen (say `iron-plate`, not "Iron plate").`` and running `go test ./tune/ -run TestNoSettingDescriptionNamesAnOptionNoDropdownOffers -count=1` exits **1** on:
+
+```
+[mod-setting-description] better-belt-balancer-recipe-ingredients names "Iron", and bbb-recipe-cost offers no value spelled that way: it allows vanilla, cheap, belt-fast, belt-express, splitter, splitter-express and nothing else. ...
+```
+
+`README.md:65` already makes exactly that point in exactly that phrasing (`` Internal names are the ones the game uses in its own data and in rich text (`iron-plate`, not "Iron plate") ``), so an author moving the sentence into the tooltip meets this. THE REMEDY IS NOT TO WEAKEN THE TEST, because the word it would have to start admitting is the word it exists to refuse: lower-case the display name, or give the prototype a name in one of this mod's own `[entity-name]`, `[item-name]`, `[recipe-name]` or `[technology-name]` entries, which the test already reads. `Factorio`, `Factoriopedia` and `Startup` are the same shape.
+
+#### Its group membership is derived from the plan as well, and that is the layer out
+
+The table of groups is a literal, and a literal that fell behind the plan would leave a seventh bound setting silently unscanned, which is the failure mode the test exists to close arriving one layer out. `TestEverySettingThisPlanDeclaresIsDescribed` (`locale_test.go:214`) holds exactly such a literal list of the six, and the new test deliberately does NOT compare against it. **THE PLAN IS ASKED INSTEAD.** `*fkrecipes.Lib` exports no accessor for the settings it holds, so the test runs `Plan().CheckLocaleWith(ModName, "", HandRolledSettings())` against an EMPTY locale file and reads the one `the setting <name> has no [mod-setting-name] entry` finding per declared setting; the findings ARE the enumeration, in declaration order. A hand-rolled name is not among them, because the hand-rolled list only suppresses orphans and never creates an obligation. If the library ever changes that sentence the loop finds nothing and the length assertion fails loudly rather than passing over an empty reading, which is the safe direction for a check whose input is a message.
+
+#### Red proofs
+
+Three, each break made in this mod's own file, the designed failure observed at its exit code, the break reverted. `go test ./tune/ -count=1` back at **exit 0** and `git diff --stat` back at `367 insertions(+), 88 deletions(-)` after each. FkRecipes and FkLua were read-only throughout.
+
+| injected | what fired |
+|---|---|
+| `[mod-setting-name] better-belt-balancer-recipe-ingredients` put back to `Custom balancer part recipe` | exit **1**, `[mod-setting-name] better-belt-balancer-recipe-ingredients names "Custom", and bbb-recipe-cost offers no value spelled that way: it allows vanilla, cheap, belt-fast, belt-express, splitter, splitter-express and nothing else.` This is the NAME half, and it is the half the sentence-opener skip does not cover |
+| `, or Custom to write the cost yourself in the three settings below` put back into `bbb-tech-cost`'s description | exit **1**, `[mod-setting-description] bbb-tech-cost names "Custom", and bbb-tech-cost offers no value spelled that way: it allows logistics, logistics-2, logistics-3 and nothing else.` This is the DESCRIPTION half, mid-sentence, which is where the other six were |
+| `SettingTechSeconds` dropped from the `bbb-tech-cost` group's `beside` list | exit **1** on BOTH coverage assertions: `this plan declares the setting better-belt-balancer-tech-seconds and no dropdown group above scans it ...` and `the groups above scan 5 settings (...) and this plan declares 6 (...)`. Which is what says the enumeration is read off the plan and not off the table |
+
+**AND ONE WHOLE-FILE READING, WHICH IS THE TEST RUN AGAINST THE DEFECT ITSELF.** HEAD's entire `.cfg` restored into the working tree and the test run five times reports **13 errors every time**, byte-identical across the five (`for i in 1 2 3 4 5; do go test ./tune/ -run TestNoSettingDescriptionNamesAnOptionNoDropdownOffers -count=1 2>&1 | grep -c 'locale_test.go:471'; done` prints `13` five times). The 13 cover all ten entries, with `bbb-recipe-cost`'s description contributing two occurrences and `bbb-tech-cost`'s three; `Logistics`, `Default` and `Balancer` are in that same file and none of them is reported, which is the vocabulary derivation doing its half of the work.
+
+#### What this closes, and what it does not
+
+**FINDING 18 AND REMEDY (g) ARE ANSWERED BY NOT WRITING THE WORD.** The adopt commit's golden already records the library composing `The word none empties the list, so the recipe costs nothing to craft.` onto the ingredient field's format line (`ingredientNoneClause`, `go/customize.go:969`) and deliberately not onto the pack field's, whose parser turns the word down with `research takes at least one science pack` (`go/ingredientlist.go:282`). So an entry saying it here would duplicate the library on one field and CONTRADICT it on the other. The `.cfg` says that in a comment block above the ingredients entry rather than in the entry, which is the correct place for a decision not to write something.
+
+**HALF OF FINDING 9 IS CLOSED BY THE LIBRARY'S COMPOSED RANGE LINES AND THE OTHER HALF IS WHAT THESE TWO ENTRIES NOW ARE.** `A whole number from 0 to 1000000. While it is 0 the option chosen above decides.` and its 3600 twin (`go/customize.go:820`) put the ranges in words where a player looks, which is the half the adopt commit's golden moved. The half that was always this mod's is the entry saying what the number is FOR, and each of the two is now exactly that one sentence and nothing else: a player who sets a number and sees nothing change is answered by the composed line under it rather than by a clause naming a state that does not exist.
+
+**FINDING 4 IS CLOSED BY THE ROUND RATHER THAN BY THIS COMMIT, AND NOTHING IN THESE NOTES HAD SAID SO.** `grep -n 'finding 4' agents/fkrecipes-migration.md` has exactly one hit in the whole file, `:854`, which is round one's changelog paragraph scoping where the silence was measured; this round's section did not name it once before this paragraph. Finding 4 is MISLED: the settings screen presents ignored values as if they were live, photographed on a client, with the engine's own settings dump byte-identical whatever the player stored, so nothing on the screen could ever have said otherwise. ITS WHOLE MECHANISM WAS A STORED TEXT THE MOD READ AND THEN IGNORED. With the text as the switch there is no such state: a field holding something other than `default`, or a number other than 0, IS in force, and a field the player left alone is a field whose row the dropdown decides. The finding has no subject left, and the four entries it quoted as stating a rule the screen could not state are four of the ten rewritten above.
+
+**FINDING 15 WAS CLOSED IN THE ADOPT COMMIT**, from the library's end, by `e4604d4`'s `{"?", {"<section>.<key>"}, "<raw>"}` wrapper; this commit adds nothing to it and takes nothing from it.
+
+**AND NOTHING HERE IS SEEN BY ANY GATE BUT THE NEW TEST.** `--dump-data` still carries the key and not the string; the library's checker still reads keys; `make check` reads Go and not prose. What `go test ./tune/` reads of this file is one capitalised word at a time, against two vocabularies, in six entries of a file whose settings sections run to paragraphs. Every other sentence rewritten in this commit is read by a human or it is not read.
+
+#### A prohibition kept, which is item 3 of the round
+
+`[technology-name]` defines `bbb-balancer=Belt balancer` and nothing else (`awk '/^\[technology-name\]/{f=1;next} /^\[/{f=0} f&&NF' mod-data/locale/en/better-belt-balancer.cfg`), so remedy (f) stays undone and `TestTheLocaleFileRenamesNoTechnologyOfTheGames` goes on being what stops somebody carrying it out. This commit rewrote the file around that section and did not touch it.
+
+#### Five stale sentences this commit deliberately did not touch
+
+All five are in the `[string-mod-setting]` label-census comment block, and they belong to the LABELS commit rather than to this one: the labels themselves do not move here, and a census rewritten without the measurement that moves with it would be two commits' work reported as one. Re-measured against the working tree with
+
+```
+awk '/^bbb-(recipe|tech)-cost-/{k=$0; sub(/^[^=]*=/,""); split(k,a,"="); print a[1], length}' mod-data/locale/en/better-belt-balancer.cfg
+```
+
+which prints `50 38 58 65 35 52 45 43 46` for the nine labels in file order:
+
+1. `:328`, "the one place a player looks before switching to Custom". There is no switching to Custom; what the two vocabularies sit one under the other FOR is a player about to type in the field.
+2. `:343`, "TEN OF THIS MOD'S ELEVEN dropdown labels are at or past it". There are NINE labels now, and EIGHT of the nine are at or past the ~37-character truncation the assessment measured; only `bbb-recipe-cost-splitter` at 35 is clearly under. The six preset figures the block quotes, 35, 38, 50, 52, 58 and 65, are all still exact.
+3. `:346`, "`custom` is 52". That label was deleted with the value in the adopt commit and no `-custom` key remains in the section.
+4. `:346`, "all four of `bbb-tech-cost`'s are over at 43, 45, 46 and 54". THREE survive, at 43, 45 and 46; the 54 was the custom label.
+5. `:319`, the cross-reference calling the label question "item 4 of `What BetterBeltBalancer must do to adopt this`". Item 4 of that list is now `CustomCost.Seconds` taking an `IntSettingRef`; the label question is not numbered in it at all any more.
+
+#### What is still owed, and is now scheduled
+
+**`README.md` IS STALE IN AT LEAST FIVE PLACES AND NO GATE READS IT EITHER** (`grep -n 'Custom' README.md`): `:49` "each has a Custom option with settings beside it where you write the value yourself"; `:63`, the option table row `| Custom | whatever you write in the Custom balancer part recipe setting below it |`; `:65`, "**Custom balancer part recipe** is read only while the recipe setting is on Custom"; `:67`, "Logistics (the default), Logistics 2, Logistics 3, or Custom"; and `:69`, the whole Custom paragraph, whose "Left alone they are 20 automation science packs at 15 seconds each" is now 0 and 0 with the tier deciding, and whose closing placement clause has the same `CustomCost.Position` behind it that `bbb-tech-cost`'s did. The four the brief named are `:63`, `:65`, `:67` and `:69`; `:49` is a fifth.
+
+**`mod-data/changelog.txt`'s UNRELEASED 0.3.3 ROWS ANNOUNCE THE OPTION ON BOTH SETTINGS AND NEED A REWRITE RATHER THAN AN ADDED SENTENCE.** Three rows name it (`grep -n Custom mod-data/changelog.txt`): `:7` the recipe feature row, `:8` the research feature row (which also carries the 20 and the 15 as "left alone", and a placement paragraph), and `:10` the Info row warning that launching an older release resets a setting left on Custom. All three are about a value that never shipped, so remedy (h)'s ask, one sentence disclosing that a typo in the text field is now a way to change the recipe without touching the dropdown, lands inside a rewrite rather than beside the existing rows.
+
+**AND THE TWO THE ROUND ALREADY HAD.** The nine dropdown labels with their census block, which is the five sentences above plus the KEEP decision re-argued at nine labels rather than eleven; and the remover fixture, remedy (i).
+
 ## The FkLua baseline
 
 The migration was measured against a freshly rebuilt fklua so that a packaging difference could not be mistaken for a library effect.
