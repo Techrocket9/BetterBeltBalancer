@@ -2071,11 +2071,11 @@ Out of `dist/.fklua-mod.report.json`'s `jumps` object (`python3 -c` over the fil
 
 Consolidated from the five commits and the five subsections above rather than restated in each, and every item re-checked against HEAD.
 
-**THE LOCALISED-STRING CEILING, AND THE 0.3.3 RELEASE BLOCK THAT FOLLOWS FROM IT.** BLOCKED, owner FkRecipes, scope B for the fallback note a player's typo reaches and scope F for the two clamp notes no player can. The arithmetic, the four engine facts under it, the grade, the committed mirror golden that pins an unloadable prototype and what the library owes in which four places are the fifth subsection above and are not repeated here. **`CLAUDE.md` CARRIES THE BLOCK AS A CRITICAL RULE WITH ITS OWN LIFT CONDITION**, which is the one rule in that file that forbids an action rather than recording one, and it expires on a library fix rather than on this round; a green `note-refused` row in `make datastage-check` is the block still in force, and this close's own run has one.
+**THE LOCALISED-STRING CEILING, AND THE 0.3.3 RELEASE BLOCK THAT FOLLOWS FROM IT.** BLOCKED, owner FkRecipes, scope B for the fallback note a player's typo reaches and scope F for the two clamp notes no player can. The arithmetic, the four engine facts under it, the grade, the committed mirror golden that pins an unloadable prototype and what the library owes in which four places are the fifth subsection above and are not repeated here. **`CLAUDE.md` CARRIES THE BLOCK AS A CRITICAL RULE WITH ITS OWN LIFT CONDITION**, which is the one rule in that file that forbids an action rather than recording one, and it expires on a library fix rather than on this round; a green `note-refused` row in `make datastage-check` is the block still in force, and this close's own run has one. **CLOSED 2026-09-14 BY THE FIX ROUND 2B RE-ADOPTION, ON FkRecipes `137f4aa`, AND THIS ANNOTATION IS ADDED WHERE THE ITEM STANDS RATHER THAN BY REWRITING IT**: the library chunks the sentence, `note-refused` is inverted and renamed `note-recipe`, and the block is lifted. What the paragraph says about the defect was true when it was written and is a dated record; "a green `note-refused` row is the block still in force" no longer describes any row, there being no such arm. See "Fix round 2b re-adoption".
 
 **THE CLIENT RUN, OWED SINCE ROUND THREE, AND LARGER NOW THAN IT WAS.** It was two tooltip hovers. It is now two tooltip hovers and **two CLOSED DROPDOWNS**: all nine option labels moved in the round's third commit, on a truncation measured near 37 characters on one widget at one UI scale in an earlier round, and **no number in this repository has ever seen one of the nine render**. The two tooltips are `bbb-recipe-cost` at **970 characters** and `bbb-tech-cost` at **733**, the third commit's own re-measurement, and what has never been measured on either is whether it renders whole. Every figure in this round is a character or a byte count; both the dropdown cut and the tooltip wrap are by pixel width. Not this round's to close.
 
-**THE DOUBLED RUNG NAME IN THE LIBRARY'S PACKLESS REFUSAL.** `... research takes at least one, and none of automation-science-pack, automation-science-pack is a science pack here`, which is the tier's copied pack and this mod's declared `Fallback` rung being the same name asked about twice. Cosmetic, in a sentence a player reads in an error dialog, owner FkRecipes, and the fix is a de-duplication in the library's own walk order. Two tests here reach it and pin it as it is, `TestAFallbackThisModsOwnPackListCannotPayForStillRefuses` and `TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused` (`guest/go/tune/plandata_test.go:1789` and `:1843`), so a library that shortens it fails here by name rather than silently.
+**THE DOUBLED RUNG NAME IN THE LIBRARY'S PACKLESS REFUSAL.** `... research takes at least one, and none of automation-science-pack, automation-science-pack is a science pack here`, which is the tier's copied pack and this mod's declared `Fallback` rung being the same name asked about twice. Cosmetic, in a sentence a player reads in an error dialog, owner FkRecipes, and the fix is a de-duplication in the library's own walk order. Two tests here reach it and pin it as it is, `TestAFallbackThisModsOwnPackListCannotPayForStillRefuses` and `TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused` (`guest/go/tune/plandata_test.go:1789` and `:1843`), so a library that shortens it fails here by name rather than silently. **CLOSED 2026-09-14 BY FkRecipes `f2df7ab`, WHICH DE-DUPLICATED THE RUNG LIST AT THE SINGLE WRITER OF THE STATE THE SENTENCE IS COMPOSED FROM.** The two tests named here went red by name, which is what they were pinned for, and they pin the single-name sentence now; their line numbers have moved with the edit and are `:1861` and `:1912` at the re-adoption leg's commit. See "Fix round 2b re-adoption".
 
 **`TestEverySettingThisPlanDeclaresIsDescribed`'s SIX-NAME LITERAL IS STILL THE ONE PLACE A SEVENTH SETTING COULD JOIN THE PLAN WITHOUT A TEST NOTICING.** It walks a hand-written list of the six (`guest/go/tune/locale_test.go:214`, under the function at `:212`), and a plan that grew would leave the seventh unchecked for a description with nothing red. The locale commit deliberately did NOT tie its own new test to that literal, reading the enumeration off `CheckLocaleWith` against an empty locale file instead, and said so in its subsection; what it did not do is fix the older test, which is the one that still holds the literal.
 
@@ -2084,6 +2084,202 @@ Consolidated from the five commits and the five subsections above rather than re
 **AND THE FOUR SMALLER THINGS THE ROUND'S OWN SUBSECTIONS NAME.** The wrap residue: the six `  type:` lines are the LIBRARY's rendering of this mod's declared lists, measure 57, 38, 62, 66, 32 and 41 characters, and the two longest still pass the 57-to-60 threshold with their continuation at the left margin, which is finding 5's residue, is the engine's, and is disclosed by the library in the same tooltip. The lost sentence: the adopt commit retired the one word-for-word pin of the no-source fallback line in a game holding `logistics-2` and `-3` and not `logistics`, recorded there as a lost SENTENCE rather than a lost property, the property itself still being asserted. The new locale test's own three blind spots, in its own comment: it reads words and not sentences, it skips a sentence's opening word in a description, and a bound setting's entries may not use a capitalised display or product name mid-sentence. And the merge and ceiling arms run with `DLC` all False on purpose, so the fixture's own two-stage shape is what they hold, the expansion measurement behind it having been taken once by hand.
 
 **WHAT IS NOT LISTED HERE IS THE RE-ADOPTION LEG'S OWN STILL-OPEN LIST**, which this round does not touch except where it is already annotated in place: the labels bullet is CLOSED by the third commit, and `bbb-tech-cost` carrying no overhaul-pack sentence where its twin does, the `Sync mods with save` route being unpromised, "a cost gates softly where a prerequisite gates hard" being reasoning rather than a probe, and the 2.0 branch's own 0.2.3 changelog entry all stand exactly as that leg left them.
+
+## Fix round 2b re-adoption, 2026-09-14: the sentence that stopped the load is two elements now, and 0.3.3 is unblocked
+
+The previous round ended with this mod's release blocked on a defect in the library, a gate arm written to go red on the day the library moved, and a remedy written into the arm's own block. FkRecipes fix round 2b is that day. **THE BLOCK LIFTS ON LIBRARY COMMIT `137f4aa`**, and this leg is the measurement it lifts on rather than the claim.
+
+### What moved in the library, in this mod's terms
+
+FkRecipes `221ff9c` to `61ac80c`, three commits, and only one of them reaches a prototype.
+
+| commit | what it is | what it does here |
+|---|---|---|
+| `f2df7ab` | a pack the walk asked about twice is named once | two of this mod's tests go red BY NAME, which is what they were pinned for |
+| `137f4aa` | every literal composed into a DATA-STAGE PROTOTYPE's localised fields is chunked to 180-byte elements at word boundaries, concatenation byte-identical; the SETTINGS side is deliberately left alone | the release block lifts; one test and one gate arm move, and this mod's four composed setting descriptions are untouched |
+| `61ac80c` | `docs/migration.md` and two library comments corrected about WHEN a `Fallback`'s packs are probed | comments only in `go/data.go` (checked: the diff carries no non-comment line), so nothing is emitted differently; two comments HERE were quoting the sentence it retracted |
+
+### The block lifts, and here is the run it lifts on
+
+Factorio 2.0.77 build 84539, the binary re-asked its version first, this package and base alone, `better-belt-balancer-recipe-ingredients` storing `2 iron-plat`, which is the same text and the same fixture the previous round measured the refusal on:
+
+- **EXIT 0 AND A DUMP**, where the same arm was exit 1 and no dump at `221ff9c`.
+- **`bbb-balancer-part.localised_description` IS EXACTLY THREE ELEMENTS**: `""`, then 176 bytes ending `... Changing a recipe empties an ` with the trailing space, then 71 bytes reading `assembling machine's input slots of anything the new list does not use.` The two chunks concatenated are the 247-byte sentence byte for byte, which is 208 bytes of library constant plus this mod's 39-byte setting name, and they end with the same destruction sentence the library's ERROR line ends with, which the arm asserts over what the engine returned rather than over two literals. The engine joins a localised string's parameters with nothing between them, so the bytes a client is handed do not move; whether a chunk boundary shows on SCREEN is unmeasured, and that is the last section here.
+- **EVERY ELEMENT IS UNDER THE 200-BYTE CEILING**, 176 and 71 against a ceiling that has not moved.
+- **THE LIBRARY'S OWN ERROR LINE IS STILL THERE, WHOLE AND IN ORDER**, and is now a line somebody can read, because the load it was written for completes: exactly one `fkrecipes: ERROR: ` line, ending `Changing a recipe empties an assembling machine's input slots of anything the new list does not use.`
+- **AND THE RECIPE IS THE ONE A PLAYER WHO TYPED NOTHING GETS**, 4 iron plates, 2 gears and 2 transport belts, the dropdown's own default standing untouched. That is the claim the library's whole player-fallback design rests on and it had never been measured on an engine through this mod, because until now the load it needs did not happen.
+
+**THE TECHNOLOGY CHANNEL IS UNCHANGED AND IS STILL THE CONTROL.** `better-belt-balancer-tech-packs` on `2 flurb-pack` is exit 0, the 138-byte note in ONE element on `bbb-balancer`, and no `localised_description` on the recipe in that same load. 138 is inside the library's 180-byte chunk budget, so the technology sentence is one piece and the pair is now a diff in SHAPE as well as in channel.
+
+### The two documents, re-read against a run that loads
+
+The previous round declined to rewrite either, on the judgement that both describe the release, the release was blocked, and the library fix was one shortened sentence. Both were re-read here against the run above and **BOTH ARE TRUE AS THEY STAND, SO BOTH ARE KEPT**:
+
+- `mod-data/changelog.txt`, 0.3.3 Info: "A typo introduced into a list that was working does the same thing: the list is set aside whole and the option picked above applies instead, which is a recipe change you did not ask for, and correcting the typo is a second one." The list IS set aside whole, the option picked above IS what applies, and it is a recipe change. Measured.
+- `README.md`, the ingredients paragraph: "the whole list is set aside, the option chosen above applies instead, and the log carries one line naming the setting, the entry and the reason. The game loads, so you can correct the field and restart." One line, and the game loads. Measured.
+
+**NEITHER DOCUMENT GAINS A SENTENCE ABOUT THE TOOLTIP, AND THAT IS A DECISION.** The library writes a trailing line into the recipe's own description saying the stored value was set aside; README describes the log and not the tooltip. Adding it would be describing the library's disclosure in this mod's voice, and where the tooltip wraps in a real crafting screen is still unmeasured, which is the client run owed since round three. The log sentence is the one this repository has measured.
+
+### What went red on the untouched tree, which is the whole of what this leg adopted
+
+`make check` on the tree as the previous round left it, against library `61ac80c`: **exit 2**, which is `make`'s own code rather than `go test`'s, over **three tests**. All three in `guest/go/tune`, all three pinning a library sentence word for word, and all three red for the reason they were pinned.
+
+- **`TestATextTheGameCannotAnswerFallsBackAndSaysSo`**, four rows, each expecting the note in ONE element and getting two. This is `137f4aa` arriving.
+- **`TestAFallbackThisModsOwnPackListCannotPayForStillRefuses`** and **`TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused`**, each expecting `... none of automation-science-pack, automation-science-pack is a science pack here` and getting the name once. This is `f2df7ab` arriving, and it is the item the previous round's own still-open list named: "Two tests here reach it and pin it as it is ... so a library that shortens it fails here by name rather than silently." It did, and this is the name it failed by.
+
+**NO EXECUTABLE GUEST SOURCE CHANGED IN THIS LEG, SHOWN TWO WAYS RATHER THAN ASSERTED.** `guest/go/tune/plan.go` is the only guest file this leg touches; `git diff -U0 -- guest/go/tune/plan.go | grep '^[+-]' | grep -v '^[+-][+-]' | grep -vE '^[+-]\s*//'` prints NOTHING, which is the evidence FkRecipes' own `61ac80c` gives for the same kind of claim about itself, and this tree built with that round's `plan.go` restored produces a `fk_data_module.lua` unmoved to the byte. `plandata_test.go` is tests, `test/check-datastage.py` is the gate, and the rest is documentation. The packaged mod differs from the previous round's only through the library, which is what makes the 28-pair proof below say what it says.
+
+### `checkFallbackNote`, which now asserts three things instead of one
+
+The helper both fallback-note tests share built the whole sentence and compared `Arr(Str(""), Str(note))` against the prototype. It builds the same sentence and asks three separately breakable questions of what the library emitted:
+
+1. **EVERY ELEMENT IS AT OR UNDER 200 BYTES.** The engine's number, not the library's 180, compared against and never computed with. This is the one that decides whether the game loads.
+2. **THE ELEMENTS CONCATENATED ARE THE SENTENCE, BYTE FOR BYTE.** This is what says the chunking is invisible to whoever reads the tooltip.
+3. **AND THE CUT FALLS WHERE THIS LIBRARY HEAD PUTS IT**, 176 then 71 on the recipe and one piece on the technology. Pinned deliberately, and named in the helper's own comment as the weakest of the three and the first to give way if the budget ever moves for a reason. That is the same bet the two packless tests made, taken with the cost of it now on the record.
+
+### The gate arm, inverted, and it is `note-recipe` now
+
+`note-refused` asserted a return code, an engine refusal message and the library's line present in a run that produced no dump. Its own block said what to do on the day it went red, twice, and the return-code branch's FAIL message opened by saying a completed load would be GOOD NEWS. **THE REMEDY IS CARRIED OUT AND NOT DELETED.** What the arm asserts now, in one load:
+
+- the library's ERROR line, whole and in order, which is the assertion that survived the inversion unchanged and is the half that says the degradation RAN;
+- the element COUNT, three, against a literal that spells out why it is three;
+- the two chunks whole;
+- **every element measured against the 200-byte ceiling over what the ENGINE put in the dump** rather than over the literal above it, so a literal edited to match a regression cannot make it pass. That is `check_note_elements`, and `note-control` calls it too;
+- the TECHNOLOGY in the same load carrying nothing, which is the mirror image of the assertion `note-control` already made about the recipe. Between them one refused text lands its note on one prototype and leaves the other untouched, in both directions;
+- and the RECIPE ITSELF, `RECIPE_DEFAULT`, which no assertion about a sentence can reach.
+
+**THE ARM IS RENAMED BECAUSE THE OLD NAME WOULD NOW SAY THE WRONG THING.** What is refused is the TEXT, by the library's own language, which is the premise of both arms rather than the outcome of either; a row reading `note-refused exit 0` would read as a contradiction. `note-control` keeps its name and every one of its measurements. The arm count does not move: **twenty-three**, `2 golden + 16 variant + 1 speed + 2 merge + 2 note`.
+
+**AND `expect_refusal` IS GONE FROM `run_arm`.** It was the one opt-out from this file's standing rule that a non-zero engine exit stops the whole gate, it existed for one caller, and that caller no longer asserts a refusal. A parameter no caller passes is an unreachable branch in a shared helper, so it came out with the defect it existed for, and `run_arm`'s docstring says where it lived and what an arm reinstating it would owe. A library regression now stops the gate at `[note-recipe] --dump-data exited 1` with the engine's last error lines on stderr, which is loud, names the arm, and is what every other arm here already relies on.
+
+### Red proofs, thirteen of them, all in this mod's own tree
+
+FkRecipes is read-only for this leg, so every break was made here, the designed failure observed, and the file restored and sha256-compared against its snapshot afterwards. **THE CEILING ASSERTIONS CANNOT BE BROKEN FROM THIS TREE IN THE OTHER DIRECTION AND THAT IS SAID PLAINLY**: the library's chunker bounds every element by construction, so no declaration of this mod's can produce an over-long one, and the proof available is the reachability one, which is narrowing the asserted ceiling and watching it name real elements and their real byte counts.
+
+THREE IN THE HOST SUITE:
+
+| # | the break | what went red |
+|---|---|---|
+| 1 | `checkFallbackNote`'s `elementCeiling` 200 to 150 | the host test, naming element 1 at **176 bytes** on all four rows |
+| 2 | `checkFallbackNote`'s expected chunks collapsed to the whole sentence | the chunk equality alone; the concatenation check stayed green, which is what says the two are independent |
+| 3 | one word of the expected sentence mistyped (`log` to `logs`) | the concatenation check AND the chunk equality, both, the expected chunks being derived from the sentence; row 2 is the one that separates them |
+
+AND TEN IN THE ENGINE GATE, every one of them a full `make datastage-check` at exit **2**:
+
+| # | the break | what went red |
+|---|---|---|
+| 4 | `NOTE_ELEMENT_CEILING` 200 to 150 | `note-recipe`, naming `bbb-balancer-part.localised_description` element 1 at 176 bytes; `note-control` stayed GREEN at 138, which is the next break |
+| 5 | `NOTE_ELEMENT_CEILING` 200 to 100 | BOTH arms, 176 on the recipe and 138 on the technology, which is what says `check_note_elements` reaches the control arm too |
+| 6 | `NOTE_RECIPE_DESCRIPTION` collapsed to the pre-chunk two-element form | the COUNT branch alone (`carries 3 ... and the chunked note is 2`), the equality branch being an `elif` behind it |
+| 7 | one word inside a chunk (`empties an ` to `empties the `) | the equality branch, printing the dump's own three elements |
+| 8 | the arm's startup given `TECH_PACKS_SETTING` as well | the technology-carries-nothing assertion AND the log-stream assertion, two lines, which is the one break that proves both |
+| 9 | the arm's startup given `RECIPE_SETTING: cheap` | the ingredient assertion, `[('iron-plate', 2), ('transport-belt', 1)]` against the default's three |
+| 10 | `NOTE_RECIPE_SENTENCE` mistyped (`log` to `logs`) | the concatenation assertion and the chunk equality, the description being derived from the sentence |
+| 11 | `NOTE_DESTRUCTION` changed (`does not use` to `will not use`) | FOUR lines, and the two that matter are the tooltip's and the LOG's, each named separately: `the note does not end with the sentence a recipe change earns` and `the log line does not end with ...`. That is the assertion two literals updated in step could not fake, and this is it reaching both |
+| 12 | the technology-exists probe pointed at a name no mod defines | `there is no bbb-balancer technology in this dump at all, so the absence asserted next says nothing`, which is the guard the review asked for doing its job |
+| 13 | `NOTE_CONTROL_SENTENCE` mistyped | `note-control` alone, with **`note-recipe` printing its `ok` row beside it**, which is the proof that each arm's summary is a function of that arm and not of a shared flag |
+
+**ROWS 4 AND 5 ARE THE SAME KNOB AT TWO DEPTHS AND ARE COUNTED AS TWO**, because the pair is what separates "the check runs" from "the check runs on both arms". Rows 6, 8, 10, 11, 12 and 13 were taken against the arm AS COMMITTED, after the adversarial review reshaped it; rows 4, 5, 7 and 9 were taken against the draft and guard code the review did not move (`check_note_elements` byte for byte, the equality branch, the ingredient comparison), and rows 10 and 11 exercise that equality branch again at the committed shape.
+
+### The fixture the library's third commit was about
+
+**`TestAnUnreachedFallbacksPackIsNeverProbed` IS STILL RIGHT AND ITS HEADER WAS NOT.** The narrowed world the previous round gave it, `withTools("logistic-science-pack")` under the `logistics-2` tier, is exactly what `docs/migration.md` now says such a fixture needs: "a source that carries a copyable unit AND keeps at least one pack, which a game with every `tool` taken out of it does not have". The test passes unchanged.
+
+What was wrong is that its header and `plan.go`'s comment beside it each QUOTED the library's own sentence for why, "its packs are probed when the fallback is what applies, and never when a source answered", and `61ac80c` took those words out of `go/data.go` as false: the packs are put to the game in TWO places, when no source in the chosen ladder carries a unit and when a source carried one whose every pack the `tool` probe then dropped. Both comments here say the two places now and name the commit that retracted the one. **THIS IS A COMMENT THAT WOULD HAVE AGED INTO A WRONG MENTAL MODEL, and the seam it sat on is a consumer quoting a library's internal comment as its own reasoning.** The fix is the same either way: quote what the library DOCUMENTS, which is the file a consumer is promised, rather than what it says to itself.
+
+### The goldens, and the 28-pair proof
+
+**NO GOLDEN MOVED AND NONE WAS RE-CAPTURED.** `test/datastage-goldens.json` is untouched at HEAD (`git status --porcelain` over it prints nothing) and `make datastage-check` reads at HEAD exactly what the previous round captured: `base data_raw_sha256 1e1fcf4f56f5ef22`, `incumbent data_raw_sha256 e7001bf98d6c6771`, and `b6e583e6163249ba` for the settings dump on both mod sets. That was the expectation stated before the run, and it is what a chunker reached only by a composed note should do: nothing on the declared defaults falls back, so nothing composes a note, so nothing moves.
+
+**THE RELEASE-TO-HEAD PROOF WAS RE-RUN, AND IT IS A STRONGER COMPARISON THAN THE PREVIOUS ROUNDS RAN.** Fourteen configurations on both mod sets, 28 pairs, each pair one `--dump-data` against the mod built on FkRecipes `221ff9c` and one against the same tree built on `61ac80c`. **WHAT IS COMPARED IS THE WHOLE NORMALISED DUMP AND NOT AN OWNED-PROTOTYPE EXTRACT**: `data_raw_sha256` and `mod_settings_sha256` from this gate's own `normalised_sha`, over runs through this gate's own `run_arm`, so nothing about the staging, the private write-data or the settings writer is reimplemented. A whole-dump hash also covers the class an extract is blind to, which is a data stage damaging somebody else's prototypes.
+
+- **ALL 28 PAIRS IDENTICAL ON BOTH HASHES**, zero DIFFERS, and no pair's `fkrecipes:` log stream moved either. Exit **0**, `pairs: 28`.
+- The fourteen are the declared default with no `.dat` at all, the six recipe presets, the three research tiers and four typed states (`recipe-text-alone`, `recipe-text-over-preset`, `tech-cost-whole`, `tech-packs-alone`), read off the gate's own tables rather than retyped.
+- **THE OLD HALF WAS BUILT WITHOUT TOUCHING THE SIBLING CHECKOUT.** `git archive 221ff9c` out of FkRecipes into a scratch directory, which writes nothing to that repository, the `replace` in `guest/go/go.mod` pointed at it for one build into `dist/old`, and `go.mod` restored and sha256-compared afterwards. Both sibling checkouts print nothing for `git status --porcelain` at the end of this leg, as they did at the start.
+- **WHAT IT DOES NOT COVER IS A CONFIGURATION THAT FALLS BACK**, because none of the fourteen does: they are the configurations a player reaches by choosing, and the note is composed only when a stored value cannot be used. The falling-back configurations are the two note arms, which is where they belong, and they are asserted rather than hashed.
+
+### Sizes, and the cross-round comparison this leg WITHDRAWS
+
+**THE INSTRUMENT DID NOT MOVE.** `fklua.lock` is untouched, `lock --check` reads `fklua.lock is up to date (api 2.1.17)`, `gen-bindings --check` reads the committed bindings unmoved, and the packaging binary is the previous round's own, `vcs.revision=01d640a...`, `vcs.modified=false`, sha256 `e053bb17f7ac3657`. FkLua's CHECKOUT moved `01d640a` to `16f0986` and **the binary was deliberately NOT rebuilt**, because `git diff --stat 01d640a..16f0986` is `agents/engine-findings.md | 2 +-` and nothing else: one line of one working note, no code, so a rebuild would change the revision string in the report and nothing in the output.
+
+**THE LIBRARY ROUND COSTS THE PACKAGED MOD NOTHING, AND THAT IS A CONTROLLED MEASUREMENT RATHER THAN A DELTA BETWEEN TWO ROUNDS' RECORDS.** One tree, one root directory, one packager, one toolchain, and the ONLY variable the library head: `221ff9c` and `61ac80c` each exported with `git archive` into scratch directories of the SAME path length (110 bytes each, so the path-sensitivity round two measured is held still too), each built through the same `make DIST=... zip`.
+
+| | FkRecipes `221ff9c` | FkRecipes `61ac80c` | |
+|---|--:|--:|---|
+| `better-belt-balancer_0.3.3.zip` | 892,437 B | **892,437 B** | **BYTE-IDENTICAL** (`cmp` exit 0) |
+| `fk_data_module.lua` | 4,873,227 B, 124,177 lines | **4,873,227 B, 124,177 lines** | **BYTE-IDENTICAL** (`cmp` exit 0) |
+| `dist/bbb.wasm` | 1,303,099 B | **1,303,099 B** | unmoved; the control guest imports nothing of FkRecipes |
+| `dist/bbbdata.wasm` | 1,203,149 B | 1,209,837 B | **+6,688 B**, and it is NOT a package member: the data module is compiled out of it and the wasm never ships |
+
+So three library commits, one of which adds a splitter, a nested-group call and their comments, reach the shipped bytes NOWHERE. The +6,688 B is the intermediate wasm and includes its debug sections.
+
+**AND THE CROSS-ROUND COMPARISON IS WITHDRAWN, WHICH IS A CORRECTION OF THIS SECTION'S OWN FIRST DRAFT.** It read the previous round's close and reported the zip at -2,674 B, `fk_data_module.lua` at -119,274 B and `bbbdata.wasm` at -16,081 B, and attributed the module's whole -119,274 B to the library. **THE CONTROLLED TABLE ABOVE SAYS THE LIBRARY MOVED THE MODULE BY ZERO**, so that attribution was false, and it was the adversarial review before this commit that made it measurable by refusing a footnote that had excused a related gap.
+
+What is left is a discrepancy with no owner, stated as one:
+
+- **THIS LEG'S ABSOLUTE FIGURES, AT THE SHIPPING ROOT**, which are what a future round should compare against: zip **892,437 B** (three consecutive builds agreeing), `fk_data_module.lua` **4,873,227 B and 124,177 lines**, `fk_module.lua` **3,132,893 B and 88,844 lines**, `dist/bbb.wasm` **1,303,099 B**, `dist/bbbdata.wasm` **1,209,509 B**.
+- **FIX ROUND 2'S CLOSE RECORDED 895,111, 4,992,501 / 128,322 AND 1,225,590 FOR THE FIRST, SECOND AND LAST OF THOSE**, and nothing here reproduces them. `fk_module.lua` is the one figure that does reproduce, unmoved at 3,132,893 B and 88,844 lines, which is now the FIFTH recorded point at which it is.
+- **THE ONE ATTEMPT TO REBUILD THAT ROUND'S OWN TREE HAS AN UNCONTROLLED VARIABLE IN IT AND IS NOT OFFERED AS AN ANSWER.** `git archive e77210f` into a scratch directory, both replaces absolute, library `221ff9c`, gives **4,856,812 B / 123,444 lines** and `bbbdata.wasm` **1,203,685 B**, which matches neither that round's record nor this tree. Its ROOT PATH is not the shipping one, and round two measured this very build to be root-path sensitive (`bbb.wasm` 1,304,595 B in a scratch clone against the real tree's 1,302,885, +1,710 B). So it says only that the figure is not reproducible from a scratch export.
+- **WHAT WAS RULED OUT**, each with one build: the library (the controlled table); the FkRecipes `replace` path (this tree gives 4,873,227 B at a 21-byte relative path and at a 110-byte absolute one alike); this leg's own comment edit to `guest/go/tune/plan.go` (this tree built with that round's `plan.go` restored gives 4,873,227 B, unmoved to the byte); and the packager, whose binary is byte-identical to the one that round used.
+- **WHAT IS NOT RULED OUT** is anything in the environment between 2026-09-14 04:36 and this leg. A future round wanting to close it should build `221ff9c` AT THE SHIPPING ROOT and into `dist`, which cannot be done while FkRecipes is read-only at another head, and compare against this leg's absolutes.
+
+**THE HONEST SUMMARY IS THE SHORT ONE**: the library round is free, measured; the round-over-round size series has a break in it at this point, measured; and no sentence here joins the two.
+
+### The relay row
+
+Out of `dist/.fklua-mod.report.json`'s `jumps` object. A STATION is a trampoline `fklua` inserts to break a jump the emitted Lua could not otherwise make, Lua 5.2's signed 18-bit jump offset being the limit; BLOCK ROOM is how much room the module's widest single basic block has left before the span one hop covers, and it is the figure that actually bounds the module.
+
+| | fix round 2's close | this leg | |
+|---|--:|--:|---|
+| data: widest span before the relay | 1,013,809 then 965,409 B | **963,336 B** | in `(*fkrecipes.Lib).PlanData`, 147% of the 655,355-byte limit |
+| data: stations | 11 | **11** | unmoved |
+| data: widest span after the relay, top level | 347,663 B | **347,517 B** | 53% of the limit |
+| data: the relayed function's own after-relay span | 328,108 B | **328,107 B** | its own block 802 B with 326,875 B of room |
+| data: widest block, and its room | 8,858 B in `fkrecipes.probeIn`, 318,819 B | **8,858 B in `fkrecipes.probeIn`, 318,819 B (97% of the 327,677 one hop covers)** | unmoved |
+| control: everything | 303,874 B in `main.flushLive`, no relay, block room 316,644 B | **unmoved in every field** | |
+
+**THE NUMBER THAT BOUNDS THE MODULE DID NOT MOVE BY A BYTE**, on either half, for the third recorded round running. The stations stayed at 11 and the widest span shrank 2,073 B against the previous round's record, so nothing this round did reached the function that is near the limit; and since the controlled table above says the module itself is byte-identical across the library move, the relay figures' own round-over-round comparison inherits the same break the sizes section names, and what stands unqualified is the ABSOLUTES in this leg's column.
+
+### Every gate at its exit code
+
+Every wasm build runs under `GOTOOLCHAIN=go1.26.6`, and `make datastage-check` and `make test` need it too, which is the previous round's own finding. Exit codes read DIRECTLY and never through a pipe. Factorio 2.0.77, the binary re-asked its version before any engine row (`Version: 2.0.77 (build 84539, mac-arm64, steam)`) and re-asked again by the gate, whose first heading prints what it got. Every engine run under a private mods directory and a private write-data; the real user directory was never named.
+
+| gate | exit | |
+|---|---|---|
+| `make check` ON THE UNTOUCHED TREE | **2** | the leg's own baseline, and `make`'s own code rather than `go test`'s: three tests, all three pinning a library sentence on purpose |
+| `cd guest/go && go test ./tune/ -count=1` | **0** | 53 tests, unmoved in count |
+| `make check` | **0** | the whole of it: `go test` over the six packages, `GOOS=wasip1 GOARCH=wasm go vet ./data/` and `./obs/...`, the fastbelt fixture's vet, `fklua gen-bindings --check`, `fklua lock --check`, `test/check-release-arm.sh` and the gofmt sweep |
+| `../FkLua/bin/fklua gen-bindings --check` | **0** | `guest/go/fkapi/fkapi.go is up to date (4865 members bound, 5 deferred)` |
+| `../FkLua/bin/fklua lock --check` | **0** | `fklua.lock is up to date (api 2.1.17)`, the api pin unmoved |
+| `test/check-release-arm.sh` | **0** | on `14 / 31 / 8 / 4 / 2`: 14 paths differ from the cut point `cf5a78e`, master 31 ahead, 8 carrying a blob master carries byte for byte, 4 the recut's stamp, 2 its working notes |
+| `python3 -m py_compile test/check-datastage.py` | **0** | the gate script parses, checked on every edit to it |
+| `GOTOOLCHAIN=go1.26.6 make mod` | **0** | |
+| `GOTOOLCHAIN=go1.26.6 make zip` | **0** | 892,437 B, three consecutive builds of the final tree agreeing; an earlier build in the same session read 892,436 with every member's byte count identical, so the archive figure is stable to within a byte rather than to the byte |
+| `GOTOOLCHAIN=go1.26.6 make datastage-check` | **0** | **TWENTY-THREE engine runs and THIRTY-ONE ok lines** over `2 golden + 16 variant + 1 speed + 2 merge + 2 note` arms, on BOTH mod sets, **real 45.09 and 45.38** over two runs (`/usr/bin/time -p`) against fix round 2's 43.93 at the same arm count, no golden dirty and none re-captured |
+| the release-to-head proof, 28 pairs | **0** | `pairs: 28`, 28 IDENTICAL, 0 DIFFERS, no log stream moved |
+| `make test`, fourteen suites | **NOT RUN**, exit **2** | observed rather than assumed, and observed TWICE: bare it dies at TinyGo (`requires go version 1.19 through 1.26, got go1.27`), and under the pinned toolchain it reaches the engine gate and refuses there with `the built mod targets Factorio 2.1 and the binary is 2.0.` The packaged mod is pinned 2.1 and the binary is 2.0.77, as in every round since round one |
+| the 2.1.16 and 2.1.17 golden rows | **NOT RUN** | same reason, no 2.1 binary on this machine, and neither row's `_stale` note gains anything this leg because no golden moved |
+| the client run | **NOT REACHABLE**, owed since round three | and one question larger than it was; see below |
+
+### The adversarial review, and the four things it moved that a gate could not
+
+An Opus review over the whole diff before the commit, eight MUST-FIX and eleven SHOULD-FIX, all taken. Four are worth naming because no gate in this repository could have gone red over any of them.
+
+- **THE SIZE ATTRIBUTION.** It refused a footnote that had excused a 22,441-byte gap on `dist/old/bbbdata.wasm` with a path-sensitivity measurement that (a) was about a different binary, (b) pointed the other way and (c) was 13x too small, and it pointed out that the gap was larger than the delta the table attributed to the library on the row above it. Chasing that is what produced the controlled build pair, which showed the library moves the packaged mod by ZERO bytes and the `-119,274 B` attribution was false. **THE REVIEW DID NOT FIND THE ERROR; IT REFUSED THE EXCUSE, AND THE ERROR WAS UNDER IT.**
+- **TWO COMMENT BLOCKS IN `test/check-datastage.py` THAT NOW SAID THE OPPOSITE OF THE FILE THEY ARE IN**: the module docstring's arm inventory, still describing two arms that pin something broken and citing a constant this change deleted, and `check_remover`'s block, still saying in the present tense that the positive case cannot be taken off this engine at all and that an arm asserting it is an arm nothing could make green. `note-recipe` is that arm and it is green.
+- **AN ASSERTION THE COMMENT CLAIMED AND THE CODE DID NOT MAKE.** `NOTE_RECIPE_DESCRIPTION`'s comment said the arm asserts the tooltip and the log agree; the arm compared two independent literals, so a library that let them drift would go red once and be made green by updating both. The shared sentence is one constant now and the arm asserts it against BOTH, over what the engine returned. Red proof 11 is that assertion reaching both.
+- **AND A GUARD THAT COULD NOT TELL ABSENT FROM EMPTY.** The technology-carries-nothing assertion read a projection that answers `null` for a technology that is not in the dump at all, so a load emitting no technology would have passed it. Its existence is asked separately now, and red proof 12 is the guard firing.
+
+The other items were smaller and are in the diff: a stale arm name in a Go doc comment, a red-proof row that understated what went red, an enumeration that counted eight where the table had nine, a single-caller helper inlined, a concatenation seam left mid-phrase, and two counts and a forward pointer in `CLAUDE.md`.
+
+### What this leg closes, and what it leaves open
+
+**CLOSED.** The 0.3.3 release block, on `137f4aa` and on the run above. The doubled rung name in the library's packless refusal, which the previous round's still-open list owned and which `f2df7ab` de-duplicated; the two tests that pinned it now pin the single name. And `docs/migration.md`'s gap about when a `Fallback`'s packs are probed, which `61ac80c` closed in the library and this leg closed in the two comments here that were quoting the retracted sentence.
+
+**THE CLIENT RUN, OWED SINCE ROUND THREE, AND ONE QUESTION LARGER.** It was two tooltip hovers and two closed dropdowns. The splitter adds a question no dump can answer: whether a client's own renderer treats a chunk boundary as anything at all. It should not, because the engine concatenates a localised string's parameters and the dump shows the pieces separately either way, and the library's own notes carry the same item as open. Nothing here has hovered one. **THIS IS THE ONE THING A READER SHOULD NOT TAKE FROM THIS LEG'S GREEN ROWS**: what is measured is that the prototype LOADS and that the bytes concatenate, not that the sentence reads right on screen.
+
+**AND WHAT IS NOT LISTED HERE IS THE PREVIOUS ROUND'S OWN STILL-OPEN LIST**, which this leg touches in exactly two places and leaves alone everywhere else. THE TWO: its ceiling-and-release-block item and its doubled-rung-name item each gain a CLOSED annotation in place, the habit this file already used when fix round 2 closed the re-adoption leg's labels bullet, and neither paragraph is rewritten. THE REST stands exactly as that round left it: `TestEverySettingThisPlanDeclaresIsDescribed`'s six-name literal, the wrap residue, the lost sentence, the new locale test's three blind spots, the merge and note arms running with `DLC` all False, and the 2.1 rows.
+
 
 ## The FkLua baseline
 

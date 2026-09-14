@@ -395,12 +395,16 @@ func Plan() *fkrecipes.Lib {
 	// WAS REACHED, so a pack with a perfectly good `logistics` and no
 	// `automation-science-pack` in it was refused at plan time where the
 	// hand-rolled version loaded and copied logistics' own unit. FkRecipes
-	// c7a806e answered the ask: "THE FALLBACK IS RESOLVED ONLY HERE, which is
-	// the point: its packs are probed when the fallback is what applies, and
-	// never when a source answered" (go/data.go, the CostBy arm), so a game
-	// whose tier is priced in a pack it HAS loads with this mod's own fallback
-	// pack absent, and [TestAnUnreachedFallbacksPackIsNeverProbed] is that
-	// half. The fallback's NUMBERS are still checked eagerly, in the plan walk
+	// c7a806e answered the ask by putting the pack question where the fallback
+	// applies rather than everywhere, so a game whose tier is priced in a pack
+	// it HAS loads with this mod's own fallback pack absent, and
+	// [TestAnUnreachedFallbacksPackIsNeverProbed] is that half. WHERE IT
+	// APPLIES IS TWO PLACES AND THIS COMMENT USED TO QUOTE THE LIBRARY AS
+	// SAYING IT WAS ONE ("never when a source answered"): no source in the
+	// chosen ladder carrying a unit at all, AND a source carrying one whose
+	// every pack the `tool` probe then dropped. FkRecipes 61ac80c took that
+	// clause out of its own source as false and `docs/migration.md` states both
+	// places. The fallback's NUMBERS are still checked eagerly, in the plan walk
 	// and with no question asked of the game (go/customize.go,
 	// validateCostChoices), which is the right split: a count of zero is this
 	// mod's own mistake. What the lazy resolve MOVED rather than removed is the

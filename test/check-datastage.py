@@ -129,17 +129,18 @@ never make easy. So:
   contract rather than a degradation it apologises for. See REMOVER_DATA_LUA
   and check_remover.
 
-  the LIBRARY'S OWN TRAILING SENTENCE gets two, and they are the only arms in
-  this file that pin something BROKEN. A stored ingredient text that falls back
-  makes FkRecipes compose a 247-byte sentence onto this mod's recipe, and the
-  engine's ceiling on one element of a localised string is 200 bytes, so the
-  load STOPS: the degradation runs, the disclosure of it is what refuses, and
-  the library's own log line saying the mod loaded dies with the load. The
-  second arm is the control that makes it a diff -- the same shape on the PACK
-  text loads, with the sentence on the technology -- and the comment above
-  check_note_ceiling carries the byte counts, why no gate in either repository
-  could see this, and the release that must not ship while these two are
-  green. See NOTE_REFUSAL_ENGINE and check_note_ceiling.
+  the LIBRARY'S OWN TRAILING SENTENCE gets two, one per CHANNEL. A stored text
+  that falls back makes FkRecipes compose a sentence into the emitted
+  prototype's own localised_description, and the engine refuses any element of
+  a localised string over 200 BYTES and stops the load. On this mod's recipe
+  that sentence is 247 bytes, which is why the recipe arm PINNED A DEFECT until
+  FkRecipes 137f4aa chunked it; it is a POSITIVE CONTROL now, asserting a load
+  that completes, three elements of 176 and 71 bytes under the ceiling, the
+  library's own log line, and the recipe a player who typed nothing would have
+  got. The second arm is the same shape on the PACK text, where the sentence is
+  138 bytes and stays one piece, and each arm asserts that the OTHER channel's
+  prototype in its own load carries nothing. See check_note_ceiling, whose
+  block carries the arithmetic and the history.
 
 ...AND THE SIX STARTUP SETTINGS' `order` STRINGS, ON BOTH GOLDEN ARMS, WHICH
 ARE INSIDE THE HASH AND ARE ASSERTED ANYWAY. Four of the six are GENERATED names
@@ -1260,7 +1261,7 @@ def build_remover(series: str, out: Path) -> Path:
 def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
             keep: Path | None, extras: list[Path] | None = None,
             startup: dict | None = None, probe=None,
-            mod_set: str | None = None, expect_refusal: bool = False) -> dict:
+            mod_set: str | None = None) -> dict:
     """One --dump-data run. `arm` NAMES IT; `mod_set` SAYS WHAT IS IN IT.
 
     THE TWO WERE ONE STRING UNTIL FIX ROUND 2 and could not stay one. A golden
@@ -1275,19 +1276,24 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
     label and the mod set are separate arguments, and a caller that passes no
     `mod_set` keeps the old behaviour exactly -- the name IS the mod set.
 
-    A NON-ZERO ENGINE EXIT STOPS THE WHOLE GATE, AND THAT DEFAULT DOES NOT
-    MOVE. Every other claim in this file is of the form "the load completed and
-    the dump says X", and the `sys.exit` below is the entire mechanism behind
-    the first half: an arm cannot assert a prototype out of a dump that was
-    never written, and a gate that turned a refused load into one FAIL line
-    would go on to print fifteen more arms' worth of noise about a game that
-    did not load. `expect_refusal` is the opt-in for the one caller whose claim
-    IS the refusal -- `check_note_ceiling`, and nothing else in this file calls
-    it -- and it returns the engine's text and its return code in place of the
-    hashes and the probe, because on a refused run there is no dump to hash or
-    probe. A caller that passes it and then does not assert the return code has
-    written an arm that cannot fail, which is why that arm asserts the CODE and
-    the MESSAGE and the LIBRARY'S OWN LINE, three separately breakable things.
+    A NON-ZERO ENGINE EXIT STOPS THE WHOLE GATE, AND THAT DEFAULT HAS NO
+    EXCEPTIONS AGAIN. Every claim in this file is of the form "the load
+    completed and the dump says X", and the `sys.exit` below is the entire
+    mechanism behind the first half: an arm cannot assert a prototype out of a
+    dump that was never written, and a gate that turned a refused load into one
+    FAIL line would go on to print twenty more arms' worth of noise about a game
+    that did not load.
+
+    THERE WAS ONE OPT-OUT AND IT IS GONE, WITH THE DEFECT IT EXISTED FOR.
+    `expect_refusal` returned the engine's text and its return code in place of
+    the hashes and the probe, for the one caller whose claim WAS a refusal:
+    `check_note_ceiling`, which pinned a library sentence that could not be
+    emitted onto a recipe at all. FkRecipes `137f4aa` chunks that sentence, the
+    arm is a positive control now (see its own block), and no caller is left, so
+    the parameter came out rather than staying as an unreachable branch in a
+    shared helper. An arm that needs it again reinstates it here, where its
+    warning belongs with it: a caller that asks for a refusal and does not then
+    assert the return code has written an arm that cannot fail.
     """
     work = Path(tempfile.mkdtemp(prefix=f"bbb-datastage-{arm}-"))
     try:
@@ -1342,24 +1348,15 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
                 stdout=fh, stderr=subprocess.STDOUT,
             ).returncode
         text = log.read_text()
-        if rc != 0 and not expect_refusal:
+        if rc != 0:
             sys.stderr.write(text[-4000:])
             sys.exit(f"[{arm}] --dump-data exited {rc}")
 
-        # The two the engine wrote, lifted before the branch because a refused
-        # run has them and has nothing else. Their own comments are below, on
-        # the keys they end up in.
+        # The two the engine wrote. Their own comments are below, on the keys
+        # they end up in.
         said = [line[line.index("fkrecipes:"):] for line in text.splitlines()
                 if "fkrecipes:" in line]
         ran = re.findall(r"Loading mod (\S+) \S+ \(data\.lua\)", text)
-        if rc != 0:
-            # ONLY REACHABLE UNDER expect_refusal, and it returns a SHORTER
-            # dict on purpose: there is no script-output at all after a refused
-            # load, so a caller that reached for `probe` or a hash here would
-            # get a KeyError rather than a wrong answer.
-            return {"mods": [mod_name] + extra_names, "returncode": rc,
-                    "engine_text": text, "fkrecipes_lines": said,
-                    "load_order": ran}
 
         so = userdir / "script-output"
         keep_raw = keep_set = None
@@ -1374,10 +1371,11 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
 
         out = {
             "mods": [mod_name] + extra_names,
-            # ZERO BY CONSTRUCTION HERE, and recorded anyway so that the one
-            # arm asserting a refusal and the one asserting a completed load
-            # ask the same question of the same key rather than one of them
-            # asking it of a `.get` default.
+            # ZERO BY CONSTRUCTION, the branch above being the only other way
+            # out of this function. It is recorded so an arm's `ok` row can
+            # PRINT the code the engine actually returned rather than the
+            # literal 0, which is the difference between a report and a
+            # transcription.
             "returncode": rc,
             "data_raw_sha256": normalised_sha(so / "data-raw-dump.json", keep_raw),
             "mod_settings_sha256": normalised_sha(so / "mod-settings-dump.json", keep_set),
@@ -2272,50 +2270,31 @@ def check_remover_arm(mod_set: str, got: dict) -> bool:
     # `localised_name` either, this mod declaring no `Description` on its
     # recipe. `guest/go/tune/plandata_test.go`'s `checkFallbackNote` says the
     # same thing from the host side.
-    # THE POSITIVE CASE CANNOT BE TAKEN OFF THIS ENGINE AT ALL, which is why
-    # the break that red-proved this assertion was made against a RECORDED
-    # dump -- the precedent OUR_SETTINGS_ORDERS' block already sets, having
-    # read its five moves off a kept `mod-settings-dump.json`. Every probe in
-    # this file is a pure function of a dump PATH, so a doctored copy is a
-    # legitimate input to the same assertion, and here it is the ONLY input.
-    # MEASURED on 2.0.77, this package and base alone with no fixture of any
-    # kind: with `better-belt-balancer-recipe-ingredients` storing
-    # `2 iron-plat`, so that a recipe-bound setting really does fall back and a
-    # note really is earned, the load is REFUSED -- `Error while loading recipe
-    # prototype "bbb-balancer-part" (recipe): Localised string key is too
-    # large: 247 > 200 (limit). in property tree at
-    # ROOT.recipe.bbb-balancer-part.localised_description[1]`, exit 1, no dump.
-    # AND THE CEILING IS 200 BYTES RATHER THAN 200 CHARACTERS, which decides
-    # whether an author could write round it. MEASURED on 2.0.77 with a
-    # throwaway Lua fixture hanging a `localised_description` on base's
-    # `iron-gear-wheel` recipe: 200 ASCII characters load and 201 refuse
-    # (`201 > 200`), and 100 `e` acutes -- 100 characters, 200 UTF-8 bytes --
-    # load while 101 refuse reporting `202 > 200`. A character counter would
-    # have said 101.
+    # THE POSITIVE CASE HAS AN ENGINE-SIDE CONTROL SINCE THE FIX ROUND 2B
+    # RE-ADOPTION, AND IT DID NOT WHEN THIS ARM WAS WRITTEN. The break that
+    # red-proved this assertion was made against a RECORDED dump, the precedent
+    # OUR_SETTINGS_ORDERS' block already sets, having read its five moves off a
+    # kept `mod-settings-dump.json`; every probe in this file is a pure function
+    # of a dump PATH, so a doctored copy is a legitimate input to the same
+    # assertion, and at the time it was the ONLY input. The reason was that a
+    # note this library really composes onto a RECIPE could not be emitted at
+    # all: FkRecipes' fallback sentence is 208 bytes before a setting name goes
+    # into it and 247 with this mod's, against a ceiling of 200 BYTES per
+    # element, so the load was refused before any assertion here could run.
+    # FkRecipes 137f4aa chunks it, `note-recipe` is that positive control, and
+    # the two arms' own block is where all of it lives now.
     #
-    # ALL THREE OF THE LIBRARY'S TRAILING SENTENCES ARE OVER, not only the one
-    # above, and the arithmetic is off its own committed source (`fallbackNote`,
-    # `withDestruction`, `clampedItemNote`, `clampedFluidNote` in
-    # FkRecipes go/data.go). The fallback RECIPE note is 208 bytes before the
-    # setting's name goes in it, so no name is short enough to bring one into
-    # range; the clamped ITEM note with the same destruction tail is 229 before
-    # the item's name and the clamped FLUID note 246 before the fluid's, so
-    # those two are over BEFORE any name at all. Handed to the engine verbatim
-    # on the same fixture: `iron-plate` refuses at `239 > 200` and `water` at
-    # `251 > 200`. The library's TECHNOLOGY note is 107 before the name, 138
-    # here, and it loads -- measured twice, through this mod with
-    # `better-belt-balancer-tech-packs` storing `2 flurb-pack` (exit 0, a dump,
-    # and the two-element description on `bbb-balancer`) and on the fixture.
+    # WHAT STAYS TRUE HERE IS THE CLAIM THIS ARM ACTUALLY MAKES, which is an
+    # ABSENCE and is about a ladder rather than about a ceiling: a merge that
+    # resolved earns no note, because nothing was stored to fall back and
+    # nothing was clamped. `note-recipe` is the other half of that pair from the
+    # other side, one dump showing a note where one is earned and this one
+    # showing none where none is.
     #
-    # THAT IS A LIBRARY FINDING AND NOT THIS GATE'S TO FIX. It is recorded here
-    # because it is why the absence this arm asserts has no engine-side
-    # positive control to sit beside it, and because an arm asserting the
-    # positive is an arm nothing could make green. IT ALSO MAKES THE SENTENCE
-    # BELOW UNREACHABLE IN ONE DIRECTION: a note this library would really have
-    # written stops the load before any assertion here runs, so what the gate
-    # prints in that case is `run_arm`'s own `--dump-data exited 1`. The gate
-    # still goes red, which is what matters; this arm just does not get to say
-    # why.
+    # AND A NOTE THIS ARM WRONGLY EARNED WOULD NOW BE READABLE RATHER THAN
+    # FATAL, which is the one behavioural difference: before the library fix the
+    # gate went red on `run_arm`'s own `--dump-data exited 1` without getting to
+    # say why, and now the assertion below prints the description it found.
     if "localised_description" in ours_recipe:
         bad = True
         print(f"FAIL {arm}: the `{OUR_PART}` recipe carries a "
@@ -2336,103 +2315,95 @@ def check_remover_arm(mod_set: str, got: dict) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# THE LOCALISED-STRING CEILING, TWO ARMS, AND THEY PIN A DEFECT RATHER THAN A
-# DESIGN. Everything below is a description of something BROKEN that this gate
-# holds still until it is fixed. Nothing here is an endorsement, and the green
-# row the refusal arm prints is the least comfortable line in this file.
+# THE LOCALISED-STRING CEILING, TWO ARMS, ONE PER CHANNEL, AND THEY ARE POSITIVE
+# CONTROLS SINCE 2026-09-14. Until FkRecipes `137f4aa` the first of them pinned
+# a DEFECT: the library's trailing disclosure sentence was longer than the
+# engine will accept in one element of a localised string, so on a RECIPE it
+# could not be emitted at all and a typo a player typed into
+# `better-belt-balancer-recipe-ingredients` STOPPED THE LOAD. That arm was
+# written to go red on the day the library moved, with its own remedy in it, and
+# this is that remedy carried out: it asserts a load that COMPLETES now, and
+# 0.3.3's release block is lifted. The defect, its arithmetic and its grade are
+# the dated record in agents/fkrecipes-migration.md, "Fix round 2", and are not
+# re-argued here.
 #
-# WHAT IS BROKEN. FkRecipes writes a trailing English sentence into an emitted
-# prototype's `localised_description` when a stored setting value fell back or
-# a merged amount was clamped. On a RECIPE it cannot: the sentence is longer
-# than the engine will accept and the load stops. MEASURED on 2.0.77 (build
-# 84539), this package and base alone, no fixture of any kind, with
-# `better-belt-balancer-recipe-ingredients` storing `2 iron-plat`:
-#
-#     Error while loading recipe prototype "bbb-balancer-part" (recipe):
-#     Localised string key is too large: 247 > 200 (limit). in property tree at
-#     ROOT.recipe.bbb-balancer-part.localised_description[1]
-#
-# exit 1, no dump. THE LIBRARY'S OWN LINE IS WRITTEN FIRST AND DIES WITH THE
-# LOAD, and it is the line that says what should have happened: `The mod loaded
-# with its own default instead; fix the text under Settings > Mod settings >
-# Startup, then restart.` The mod did not load, and the accumulated log ops
-# never reach the host on a refused load, so the player is not told that
-# either. The degradation ran; the DISCLOSURE of it is what killed the game.
+# THE ARM WAS CALLED `note-refused` AND IS CALLED `note-recipe`, because a name
+# saying refused would now say the wrong thing about the load: what is refused
+# is the TEXT, by the library's own language, which is the premise of both arms
+# rather than the outcome of either. `note-control` keeps its name and its
+# measurements unchanged; it was the control that made the defect a diff, and
+# what it controls for now is the channel.
 #
 # THE CEILING IS 200 BYTES PER STRING ELEMENT, MEASURED FOUR WAYS on a
 # throwaway Lua fixture hanging a `localised_description` on base's
-# `iron-gear-wheel` recipe. 200 ASCII characters load and 201 refuse
-# (`201 > 200`). 100 `e` acutes -- 100 characters, 200 UTF-8 bytes -- load
-# while 101 refuse reporting `202 > 200`, so the counter is BYTES and no author
-# can spend the difference on shorter words. Element 2 is policed identically
-# to element 1 (`201 > 200 ... localised_description[2]`). And there is NO
-# aggregate budget: six elements of which five are 199 bytes, 995 bytes in all,
-# load with exit 0. So the limit is per element and the only thing that matters
-# is how long one sentence is.
+# `iron-gear-wheel` recipe, and it has not moved: 200 ASCII characters load and
+# 201 refuse (`201 > 200`). 100 `e` acutes -- 100 characters, 200 UTF-8 bytes --
+# load while 101 refuse reporting `202 > 200`, so the counter is BYTES and no
+# author can spend the difference on shorter words. Element 2 is policed
+# identically to element 1 (`201 > 200 ... localised_description[2]`). And there
+# is NO aggregate budget: six elements of which five are 199 bytes, 995 bytes in
+# all, load with exit 0.
 #
-# IT IS THE LIBRARY'S TO FIX AND NOT THIS MOD'S, AND NO DECLARATION CAN DODGE
-# IT. The arithmetic is off FkRecipes' own committed source, `fallbackNote`,
-# `withDestruction`, `clampedItemNote` and `clampedFluidNote` in go/data.go.
-# The three sentences it can put on a RECIPE are 208, 229 and 246 bytes BEFORE
-# a name goes into them: the fallback note is 208 and this mod's setting name
-# is 39, which is the 247 above, and a setting name would have to be NEGATIVE
-# eight bytes to bring one into range; the clamped ITEM note is 229 and the
-# clamped FLUID note 246 before the item's or the fluid's name, so those two
-# are already over with no name at all. Handed to the engine verbatim on the
-# same fixture, `iron-plate` refuses at `239 > 200` and `water` at `251 > 200`.
-# DECLARING A `Description` MAKES IT WORSE RATHER THAN BETTER: `appendLocalised`
-# then emits `{"", <description>, "\n" + <note>}`, so the note gains a byte and
-# moves to element 2, which is policed the same.
+# WHAT THE LIBRARY DID ABOUT IT, AND WHY THE SENTENCE IS THE SAME SENTENCE.
+# `chunkLocalised` / `chunk_localised` fills an element to 180 bytes -- the
+# library's own budget, twenty short of the engine's ceiling on purpose -- and
+# cuts after the last space inside it. The chunks concatenated are the input
+# byte for byte, and the engine joins a localised string's parameters with
+# nothing between them, so a player reads what they always would have. The
+# arithmetic in this mod's case: the recipe sentence is 208 bytes of library
+# constant plus this mod's 39-byte setting name, 247 in all, which comes out
+# 176 + 71; the technology sentence is 107 plus 31, 138 in all, which is inside
+# the budget and stays one piece. THE TWO ARMS ARE THEREFORE A DIFF IN SHAPE AS
+# WELL AS IN CHANNEL: three elements on the recipe, two on the technology, and
+# the same composer behind both.
 #
-# THE TECHNOLOGY CHANNEL IS WHERE THE DISCLOSURE STILL LANDS, which is the
-# whole point of the second arm: same shape, same kind of refused text, and the
-# load completes with the sentence on the prototype. Its three sentences are
-# 107, 84 and 123 bytes before the name, so they are not doomed the way the
-# recipe's are -- though the packless one at 123 is over as soon as a source
-# technology's name runs past 77 bytes, which is a narrower claim than "the
-# technology channel is safe" and is all this file asserts.
+# WHAT EACH ARM ASSERTS THAT THE OTHER CANNOT.
 #
-# WHY NO GATE IN EITHER REPOSITORY COULD SEE IT, and it is not an oversight in
-# one place but a seam between two. FkRecipes' engine gate (`scripts/
-# run-ingame.sh`) carries exactly one text the language refuses, and
-# `testdata/ingame/flipped.json` says which: `fkrecipes-example-tips-packs` is
-# `2 automation-science-pack, 1 militar-science-pack`, a SCIENCE-PACK list --
-# the technology channel, which loads. The ingredient list in that same file,
-# `fkrecipes-example-rivet-ingredients`, is `2 iron-stick, 1 steel-plate`,
-# every name real, so it never falls back and never composes a note. The
-# refused INGREDIENT list lives in the MIRROR instead, and the mirror runs
-# under lua52f against a stand-in that does no property-tree validation at all.
-# THE SMOKING GUN IS COMMITTED: `testdata/mirror/transcript.golden`, line
-# `TRANSCRIPT extend#22`, pins `"type"="recipe"`, `"name"=
-# "fkrecipes-example-steel-rivet"` with a `localised_description` whose element
-# 2 is 243 bytes. That golden is a prototype a real engine will not load, and
-# it is green.
+#   `note-recipe` is the channel that used to be unreachable, and it asks SIX
+#   separately breakable questions. EVERY ELEMENT AT OR UNDER 200 BYTES, over
+#   what the engine returned rather than over the literal above it, which is
+#   the property that decides whether the game loads. THE CONCATENATION IS THE
+#   SENTENCE, which is what a player actually reads, the engine joining the
+#   parameters with nothing between them. THE ELEMENT COUNT AND THE TWO CHUNKS
+#   WHOLE, so a library that re-chunks fails here by name. THE LIBRARY'S OWN
+#   ERROR LINE, whole and in order, which is the half that says the degradation
+#   RAN. THE TOOLTIP AND THE LOG ENDING THE SAME WAY, which is the only one of
+#   the six that two literals updated in step could not fake. And THE RECIPE
+#   ITSELF, which is the claim the whole fallback design rests on and which no
+#   assertion about a sentence can reach: a player who typed a typo gets the
+#   recipe a player who typed nothing gets.
 #
-# THIS MOD MUST NOT PUBLISH 0.3.3 WHILE THIS ARM IS GREEN. The unreleased
-# 0.3.3 changelog tells a player `the list is set aside whole and the option
-# picked above applies instead`, and README.md says `The game loads, so you can
-# correct the field and restart.` On this library head the game does not load.
-# Both sentences are true of the PACK field and false of the INGREDIENT field,
-# and the gate cannot tell them apart because a changelog is not in a dump.
-# This paragraph is where a maintainer running the gate will read it.
+#   `note-control` is the same shape on the other channel, and its own note is
+#   asserted concatenated AND in one piece, the second half being what says 138
+#   bytes is inside the library's budget. Each arm asserts that the OTHER
+#   channel's prototype in its own load carries nothing, so between them one
+#   refused text lands its note on one prototype and leaves the other untouched,
+#   in both directions. The recipe arm asks separately whether the technology
+#   EXISTS before asserting it carries nothing, because a projection over a
+#   prototype that is not there answers `null` too; the control arm needs no
+#   such guard for the recipe, its own description equality proving the
+#   technology is there and every other arm in this file proving the recipe is.
 #
-# WHEN THE LIBRARY MOVES, THIS ARM GOES RED, AND THE REMEDY IS TO INVERT IT.
-# Any shortening of the recipe sentence past the ceiling makes the load
-# complete, the refusal arm fails on its return code, and what belongs here
-# then is the assertion this arm should always have been: exit 0, a dump, and
-# `.recipe["bbb-balancer-part"].localised_description` carrying the note. Do
-# not re-measure the 247 and move it; the number is a symptom.
+# A LOAD THAT DOES NOT COMPLETE IS NOW `run_arm`'s OWN DEFAULT AND NOT AN
+# ASSERTION HERE, which is the file's standing shape and the reason
+# `expect_refusal` is gone from `run_arm` with this commit: it existed for one
+# caller, this one, and a parameter no caller passes is an unreachable branch in
+# a shared helper. A regression in the library now stops the whole gate at
+# `[note-recipe] --dump-data exited 1` with the engine's last error lines on
+# stderr, which is loud, names the arm, and is what every other arm in this file
+# already relies on.
 #
-# ANTI-VACUITY, AND IT MATTERS MORE HERE THAN ANYWHERE because one arm asserts
-# a FAILURE. A run whose `mod-settings.dat` never arrived loads on the declared
-# defaults, writes no `fkrecipes:` line at all and puts no note on anything --
-# MEASURED, `startup=None` against this package on 2.0.77: exit 0, a dump, an
-# empty `fkrecipes:` stream and `.technology["bbb-balancer"]
-# .localised_description` absent. So the refusal arm fails on its return code
-# against such a run and the control arm fails on its missing note. Neither can
-# pass while measuring nothing.
+# ANTI-VACUITY. A run whose `mod-settings.dat` never arrived loads on the
+# declared defaults, writes no `fkrecipes:` line at all and puts no note on
+# anything -- MEASURED, `startup=None` against this package on 2.0.77: exit 0, a
+# dump, an empty `fkrecipes:` stream and `.technology["bbb-balancer"]
+# .localised_description` absent. Both arms assert a note that is PRESENT and a
+# log line that is PRESENT, so both fail against such a run. The recipe arm's
+# ingredient assertion is the one part that would survive it, and it is there
+# for the opposite reason: it is what says the fallback landed on the right list
+# rather than merely landing.
 #
-# ONE VARIABLE EACH, like every other arm here: the refusal arm moves the
+# ONE VARIABLE EACH, like every other arm here: the recipe arm moves the
 # ingredient text and nothing else, the control arm moves the pack text and
 # nothing else, and both dropdowns stay on their declared defaults in both.
 # ---------------------------------------------------------------------------
@@ -2443,95 +2414,221 @@ def check_remover_arm(mod_set: str, got: dict) -> bool:
 NOTE_REFUSED_INGREDIENTS = "2 iron-plat"
 NOTE_REFUSED_PACKS = "2 flurb-pack"
 
-# The technology this mod emits. Spelled here because the control arm names it
-# in a projection and in two messages; the older arms spell it inline, and one
-# constant for three new uses is not a refactor of them.
+# The technology this mod emits. Spelled here because both arms name it in a
+# projection and in their messages; the older arms spell it inline, and one
+# constant for those uses is not a refactor of them.
 NOTE_TECH = "bbb-balancer"
 
-# What the ENGINE says, transcribed off its own log rather than composed here,
-# including the 247 (which is 208 bytes of the library's constant plus the 39
-# of this mod's setting name, and is arithmetic a gate must not perform for the
-# thing it is gating). The `in` test is against the whole engine text because
-# the engine prints this twice, once as `Error Util.cpp:81: ...` and once
-# inside its own `------------- Error -------------` block.
-NOTE_REFUSAL_ENGINE = (
-    'Error while loading recipe prototype "bbb-balancer-part" (recipe): '
-    'Localised string key is too large: 247 > 200 (limit). in property tree at '
-    'ROOT.recipe.bbb-balancer-part.localised_description[1]')
+# THE SENTENCE BOTH CHANNELS SHARE, AND IT IS SPELLED ONCE FOR A REASON. The
+# library appends it to a RECIPE's note and to a recipe's ERROR line alike, and
+# to neither of the technology's, because a repriced research destroys nothing.
+# Spelling it once is what lets the recipe arm assert the TOOLTIP AND THE LOG
+# END THE SAME WAY over what the engine returned: two literals updated in step
+# could hide a library that let them drift, and one literal asserted against
+# both cannot.
+NOTE_DESTRUCTION = ("Changing a recipe empties an assembling machine's input "
+                    "slots of anything the new list does not use.")
 
-# What the LIBRARY said on the way down, whole and in order. Both arms pin this
-# because it is the half that says the degradation RAN: the language read the
-# field, refused the name, chose the fallback and composed its line, and only
-# then did the sentence it composed stop the load.
-NOTE_REFUSAL_LOG = [
+# WHAT THE LIBRARY SAID, whole and in order. Both arms pin this because it is
+# the half that says the degradation RAN: the language read the field, refused
+# the name, chose the fallback and composed its line.
+NOTE_RECIPE_LOG = [
     'fkrecipes: ERROR: better-belt-balancer-recipe-ingredients, entry 1 '
     '("2 iron-plat"): no item or fluid is named iron-plat. The mod loaded with '
     'its own default instead; fix the text under Settings > Mod settings > '
-    'Startup, then restart. Changing a recipe empties an assembling machine\'s '
-    'input slots of anything the new list does not use.']
+    'Startup, then restart. ' + NOTE_DESTRUCTION]
 NOTE_CONTROL_LOG = [
     'fkrecipes: ERROR: better-belt-balancer-tech-packs, entry 1 '
     '("2 flurb-pack"): no science pack is named flurb-pack. The mod loaded '
     'with its own default instead; fix the text under Settings > Mod settings '
     '> Startup, then restart.']
 
-# And the note the control arm proves DOES land, transcribed out of the dump.
-# Two elements, because this mod declares no `Description` on its technology.
-# Element 1 is 138 bytes: the library's 107-byte constant plus this mod's
-# 31-byte setting name.
-NOTE_CONTROL_DESCRIPTION = [
-    "",
+# THE NOTE THE RECIPE CARRIES, WHOLE, which is a DIFFERENT sentence from the log
+# line above and shares only the tail. 247 bytes: 208 of library constant plus
+# this mod's 39-byte setting name.
+NOTE_RECIPE_SENTENCE = (
+    "The stored value of better-belt-balancer-recipe-ingredients could not be "
+    "used, so this mod's own choice applies instead. The reason is in the log. "
+    + NOTE_DESTRUCTION)
+
+# AND WHERE THE LIBRARY CUTS IT, which is the one number here that is the
+# LIBRARY'S choice rather than the engine's. It fills an element to 180 bytes
+# and cuts after the last space inside that, so the 247 comes out 176 and 71 and
+# element 1 ENDS IN A SPACE. Written as an offset into the sentence above rather
+# than as two more literals, so the concatenation cannot drift from the whole by
+# a transcription error; what a reader wants to see spelled out is in the arm's
+# `ok` row, which prints the byte counts off the dump.
+NOTE_RECIPE_CUT = 176
+NOTE_RECIPE_DESCRIPTION = ["",
+                           NOTE_RECIPE_SENTENCE[:NOTE_RECIPE_CUT],
+                           NOTE_RECIPE_SENTENCE[NOTE_RECIPE_CUT:]]
+
+# And the note the control arm proves lands on the OTHER channel. Two elements:
+# 138 bytes, the library's 107-byte constant plus this mod's 31-byte setting
+# name, which is inside the chunk budget and is therefore one piece, and no
+# destruction tail because a repriced research destroys nothing.
+NOTE_CONTROL_SENTENCE = (
     "The stored value of better-belt-balancer-tech-packs could not be used, so "
-    "this mod's own choice applies instead. The reason is in the log."]
+    "this mod's own choice applies instead. The reason is in the log.")
+NOTE_CONTROL_DESCRIPTION = ["", NOTE_CONTROL_SENTENCE]
+
+# The engine's ceiling on ONE element of a localised string, in BYTES, which is
+# what both arms measure the dump against. It is the ENGINE's number and not the
+# library's: FkRecipes fills a chunk to 180. Compared against, never computed
+# with.
+NOTE_ELEMENT_CEILING = 200
+
+
+def check_note_elements(arm: str, where: str, got) -> bool:
+    """Every element of one localised_description, against the 200-byte ceiling.
+
+    Returns True on a failure. Separate from the equality against the literal
+    beside it ON PURPOSE: the equality says the library chunked where it says it
+    chunks, and this says the result LOADS, which is the property a player is
+    hurt by. It runs over what the engine put in the dump, so a literal edited
+    to match a regression cannot make it pass.
+    """
+    bad = False
+    if not isinstance(got, list):
+        print(f"FAIL {arm}: `{where}` is {json.dumps(got)}, not the inline "
+              f"localised-string form this note is composed as")
+        return True
+    for i, el in enumerate(got):
+        if not isinstance(el, str):
+            print(f"FAIL {arm}: `{where}` element {i} is {json.dumps(el)} and "
+                  f"every parameter of a composed note is a string")
+            bad = True
+            continue
+        n = len(el.encode())
+        if n > NOTE_ELEMENT_CEILING:
+            bad = True
+            print(f"FAIL {arm}: `{where}` element {i} is {n} bytes, over the "
+                  f"engine's {NOTE_ELEMENT_CEILING}-byte ceiling on one "
+                  f"element.\n{'':>5}  A load carrying this prototype STOPS, "
+                  f"which is the defect FkRecipes 137f4aa closed and this arm "
+                  f"is the control for; the element is {el!r}")
+    return bad
+
+
+def joined_note(got) -> str | None:
+    """One composed note's parameters concatenated, or None if it is not one.
+
+    THE ENGINE JOINS A LOCALISED STRING'S PARAMETERS WITH NOTHING BETWEEN THEM,
+    so this is the string a player is handed and the chunk boundaries are not in
+    it. The empty first parameter is the inline form's key slot and is dropped.
+    """
+    if not isinstance(got, list) or not got or got[0] != "":
+        return None
+    if not all(isinstance(el, str) for el in got[1:]):
+        return None
+    return "".join(got[1:])
 
 
 def check_note_ceiling(factorio: str, series: str, mod_dir: Path) -> bool:
-    """The recipe channel cannot carry its own disclosure; the technology can.
+    """Both channels carry their own disclosure, and every element fits.
 
     Returns True on a failure, which is the shape main() already counts in.
-    READ THE BLOCK ABOVE BEFORE CHANGING ANYTHING HERE, and in particular
-    before making this arm green a different way: it pins a defect, it names
-    the release that must not ship while it passes, and it says what to do on
-    the day it goes red.
+    READ THE BLOCK ABOVE BEFORE CHANGING ANYTHING HERE: it says what these two
+    arms were before the library was fixed, why the first is named what it is
+    now, and which of its assertions is the one that decides whether the game
+    loads.
     """
-    print("==> the localised-string ceiling, 2 arms pinning a library defect")
+    print("==> the localised-string ceiling, 2 arms, one per channel")
     bad = False
 
-    got = run_arm("note-refused", factorio, series, mod_dir, None,
+    got = run_arm("note-recipe", factorio, series, mod_dir, None,
                   startup={RECIPE_TEXT_SETTING: NOTE_REFUSED_INGREDIENTS},
-                  expect_refusal=True)
-    # THE RETURN CODE FIRST, because it is what the other two questions are
-    # asked of: a completed load has no engine refusal to match and would fall
-    # through to a confusing message about a string that is not in its log.
-    if got["returncode"] == 0:
-        bad = True
-        print(f"FAIL note-refused: the load COMPLETED with "
-              f"`{RECIPE_TEXT_SETTING}` on `{NOTE_REFUSED_INGREDIENTS}`.\n"
-              f"{'':>5}  That is the outcome this mod's changelog and README "
-              f"promise, so it is good news and this arm is now wrong: read "
-              f"the block above check_note_ceiling and INVERT this arm "
-              f"into the load-completes assertion it should always have "
-              f"been, rather than deleting it")
-    elif NOTE_REFUSAL_ENGINE not in got["engine_text"]:
-        bad = True
-        tail = [l.strip() for l in got["engine_text"].splitlines()
-                if "Error" in l][-2:]
-        print(f"FAIL note-refused: the load failed with "
-              f"{got['returncode']}, which is expected, but not for the "
-              f"reason this arm is about.\n{'':>5}  wanted "
-              f"{NOTE_REFUSAL_ENGINE!r}\n{'':>5}  the engine's own Error "
-              f"lines end {tail!r}")
-    if got["fkrecipes_lines"] != NOTE_REFUSAL_LOG:
-        bad = True
-        print(f"FAIL note-refused: the library's log lines are "
-              f"{got['fkrecipes_lines']}\n{'':>5}  and the whole stream, "
-              f"written before the load died, has to be {NOTE_REFUSAL_LOG!r}")
-    if not bad:
-        print(f"  ok   note-refused{'':<15} exit {got['returncode']}, no dump: "
-              f"247 > 200 on bbb-balancer-part.localised_description[1]")
-        print(f"{'':>5}  said {NOTE_REFUSAL_LOG[0]!r}")
-        print(f"{'':>5}  THIS ROW PINS A DEFECT. 0.3.3 must not publish while "
-              f"it is green; see the block above check_note_ceiling")
+                  probe=lambda d: {
+                      "desc": project(
+                          d, '{recipe: ((.recipe["%s"] // {})'
+                             '.localised_description), '
+                             'tech: ((.technology["%s"] // {})'
+                             '.localised_description), '
+                             'tech_exists: (.technology["%s"] != null)}'
+                             % (OUR_PART, NOTE_TECH, NOTE_TECH)),
+                      "ings": ingredients_of(d)})
+    # ITS OWN FLAG AND NOT THE SHARED ONE, for the reason spelled out at the
+    # control arm below: an arm's summary line has to be a function of that arm,
+    # and this one is only first by accident of where it was written.
+    rec_bad = False
+    # THE LOAD COMPLETED BY CONSTRUCTION: run_arm exits the whole gate on a
+    # non-zero engine return, so reaching this line is the assertion the old
+    # arm's return-code branch used to make in the other direction.
+    if got["fkrecipes_lines"] != NOTE_RECIPE_LOG:
+        rec_bad = True
+        print(f"FAIL note-recipe: the library's log lines are "
+              f"{got['fkrecipes_lines']}\n{'':>5}  and the whole stream has to "
+              f"be {NOTE_RECIPE_LOG!r}")
+    desc = got["probe"]["desc"]["recipe"]
+    rec_bad |= check_note_elements(
+        "note-recipe", f'{OUR_PART}.localised_description', desc)
+    # WHAT A PLAYER READS, WHICH IS THE CONCATENATION AND NOT THE PIECES. The
+    # chunk boundaries are the library's business; this is the sentence.
+    joined = joined_note(desc)
+    if joined != NOTE_RECIPE_SENTENCE:
+        rec_bad = True
+        print(f"FAIL note-recipe: `{OUR_PART}`'s note reads "
+              f"{json.dumps(joined)}\n{'':>5}  and concatenated it has to be "
+              f"{json.dumps(NOTE_RECIPE_SENTENCE)}")
+    # AND THE TOOLTIP AND THE LOG END THE SAME WAY, over what the engine
+    # returned rather than over the two literals above. It is the one assertion
+    # here that would survive both literals being updated together, which is how
+    # a library letting these two drift would otherwise get past this arm.
+    for what, text in (("note", joined), ("log line", got["fkrecipes_lines"][0]
+                                          if got["fkrecipes_lines"] else None)):
+        if text is None or not text.endswith(NOTE_DESTRUCTION):
+            rec_bad = True
+            print(f"FAIL note-recipe: the {what} does not end with the "
+                  f"sentence a recipe change earns, "
+                  f"{json.dumps(NOTE_DESTRUCTION)}\n{'':>5}  it is "
+                  f"{json.dumps(text)}")
+    if len(desc or []) != len(NOTE_RECIPE_DESCRIPTION):
+        rec_bad = True
+        print(f"FAIL note-recipe: `{OUR_PART}` carries "
+              f"{len(desc or [])} localised_description elements and the "
+              f"chunked note is {len(NOTE_RECIPE_DESCRIPTION)}: an empty first "
+              f"parameter and the 247-byte sentence in two pieces")
+    elif desc != NOTE_RECIPE_DESCRIPTION:
+        rec_bad = True
+        print(f"FAIL note-recipe: `{OUR_PART}` carries the description "
+              f"{json.dumps(desc)}\n{'':>5}  and the library cuts at "
+              f"{NOTE_RECIPE_CUT} bytes, which is "
+              f"{json.dumps(NOTE_RECIPE_DESCRIPTION)}")
+    # AND THE TECHNOLOGY IN THE SAME LOAD CARRIES NOTHING, the mirror image of
+    # what the control arm says about the recipe. Nothing technology-bound fell
+    # back here, so a note on it would be a note about the wrong setting.
+    #
+    # ITS EXISTENCE IS ASKED SEPARATELY, because `.localised_description` of a
+    # technology that is not there is `null` too: without this, a load that
+    # emitted no technology at all would pass the absence. The recipe needs no
+    # such guard, its own ingredient list being asserted below.
+    if not got["probe"]["desc"]["tech_exists"]:
+        rec_bad = True
+        print(f"FAIL note-recipe: there is no `{NOTE_TECH}` technology in this "
+              f"dump at all, so the absence asserted next says nothing")
+    elif got["probe"]["desc"]["tech"] is not None:
+        rec_bad = True
+        print(f"FAIL note-recipe: `{NOTE_TECH}` carries "
+              f"{json.dumps(got['probe']['desc']['tech'])} on a load where no "
+              f"technology-bound setting fell back at all")
+    # AND THE RECIPE IS THE ONE A PLAYER WHO TYPED NOTHING GETS, which is the
+    # whole claim the library's player-fallback design makes and the one thing
+    # no assertion about a sentence can reach. The dropdown was never touched,
+    # so this is its declared default's list.
+    if got["probe"]["ings"] != RECIPE_DEFAULT:
+        rec_bad = True
+        print(f"FAIL note-recipe: the recipe is {got['probe']['ings']}\n"
+              f"{'':>5}  and a refused text has to leave the dropdown's own "
+              f"default standing, {RECIPE_DEFAULT}")
+    bad |= rec_bad
+    if not rec_bad:
+        print(f"  ok   note-recipe{'':<16} exit {got['returncode']}, and "
+              f"{OUR_PART} carries its {len(joined.encode())}-byte note in "
+              f"{len(desc) - 1} chunks of "
+              f"{', '.join(str(len(e.encode())) for e in desc[1:])} bytes")
+        print(f"{'':>5}  said {NOTE_RECIPE_LOG[0]!r}")
+        print(f"{'':>5}  and the recipe is the dropdown's own default, which "
+              f"is what a player who typed nothing gets")
 
     ctl = run_arm("note-control", factorio, series, mod_dir, None,
                   startup={TECH_PACKS_SETTING: NOTE_REFUSED_PACKS},
@@ -2541,26 +2638,39 @@ def check_note_ceiling(factorio: str, series: str, mod_dir: Path) -> bool:
                          % (NOTE_TECH, OUR_PART)))
     # ITS OWN FLAG, NOT THE SHARED ONE. A first draft printed the control
     # arm's `ok` row beside its own FAIL lines, because it compared the shared
-    # `bad` against a snapshot taken AFTER the refusal arm had already set it;
-    # the anti-vacuity proof below, where both arms fail at once, is what
-    # caught it. An arm's summary line has to be a function of that arm.
+    # `bad` against a snapshot taken AFTER the other arm had already set it;
+    # the anti-vacuity proof, where both arms fail at once, is what caught it.
+    # An arm's summary line has to be a function of that arm.
     ctl_bad = False
     if ctl["fkrecipes_lines"] != NOTE_CONTROL_LOG:
         ctl_bad = True
         print(f"FAIL note-control: the library's log lines are "
               f"{ctl['fkrecipes_lines']}\n{'':>5}  and the whole stream has to "
               f"be {NOTE_CONTROL_LOG!r}")
+    ctl_bad |= check_note_elements(
+        "note-control", f'{NOTE_TECH}.localised_description',
+        ctl["probe"]["tech"])
+    if joined_note(ctl["probe"]["tech"]) != NOTE_CONTROL_SENTENCE:
+        ctl_bad = True
+        print(f"FAIL note-control: `{NOTE_TECH}`'s note reads "
+              f"{json.dumps(joined_note(ctl['probe']['tech']))}\n{'':>5}  and "
+              f"concatenated it has to be "
+              f"{json.dumps(NOTE_CONTROL_SENTENCE)}")
     if ctl["probe"]["tech"] != NOTE_CONTROL_DESCRIPTION:
         ctl_bad = True
         print(f"FAIL note-control: `{NOTE_TECH}` carries the description "
               f"{json.dumps(ctl['probe']['tech'])}\n{'':>5}  and the pack text "
               f"falling back has to put {json.dumps(NOTE_CONTROL_DESCRIPTION)} "
-              f"on it. Without this the arm above says only that something "
-              f"refuses, not that the OTHER channel does not")
+              f"on it, in ONE piece: 138 bytes is inside the library's own "
+              f"chunk budget, which is what makes this a diff in shape as well "
+              f"as in channel")
     # AND THE RECIPE IN THE SAME LOAD CARRIES NOTHING, which is what makes the
     # pair a diff rather than two anecdotes: one run, one refused text, a note
     # on the technology and no note on the recipe -- because nothing
-    # recipe-bound fell back here, and had anything the load would have died.
+    # recipe-bound fell back here. The recipe's existence needs no separate
+    # question: the assertion above proves the technology is there, and a dump
+    # with no `bbb-balancer-part` recipe in it would fail every other arm in
+    # this file.
     if ctl["probe"]["recipe"] is not None:
         ctl_bad = True
         print(f"FAIL note-control: `{OUR_PART}` carries "
@@ -2569,8 +2679,9 @@ def check_note_ceiling(factorio: str, series: str, mod_dir: Path) -> bool:
     bad |= ctl_bad
     if not ctl_bad:
         print(f"  ok   note-control{'':<15} exit {ctl['returncode']}, and "
-              f"{NOTE_TECH} carries its 138-byte note where the recipe carries "
-              f"none")
+              f"{NOTE_TECH} carries its "
+              f"{len(joined_note(ctl['probe']['tech']).encode())}-byte note in "
+              f"one chunk where the recipe carries none")
         print(f"{'':>5}  said {NOTE_CONTROL_LOG[0]!r}")
     return bad
 
