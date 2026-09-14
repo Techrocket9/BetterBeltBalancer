@@ -1949,6 +1949,142 @@ Three shapes are available, and the threat model is what chooses between them ra
 - **The library fix**, which is not this mod's to write and which the release block waits on.
 - **The client run**, which is not this round's to close.
 
+### The round's close: the gates, the sizes, the relay and the proof
+
+Taken at HEAD `e77210f`, after the round's last commit, which is what makes every figure below the ROUND's rather than any one commit's. Five commits, `1caaf08` to `e77210f`, and what each message carries is worth stating exactly rather than as a blanket. **FOUR OF THE FIVE NAME THEIR RED PROOFS**: `ae15b4d` a table of eight, `e67a5d0` three plus a whole-file reading, `90c0b89` seven and `e77210f` five, each break made on purpose in this mod's own tree, the designed failure observed and the break reverted; `a9f6eca` is labels, changelog and README, and has no behaviour to break. **AND FOUR OF THE FIVE NAME AN ADVERSARIAL REVIEW TAKEN BEFORE THE COMMIT**: `ae15b4d` twice, four MUST-FIX and thirteen SHOULD-FIX taken, `a9f6eca` two and nine with seven notes, `90c0b89` one and four with five notes and a reviewer who re-measured the split on the engine independently, and `e67a5d0`'s named in its body rather than in a trailer, that review being what caught the one omission no gate in either repository could see. `e77210f` names none, and what it has in its place is the anti-vacuity run that found a defect in its own new arm. Factorio 2.0.77, the binary re-asked its version before any engine row (`"$FACTORIO_BIN" --version`, answering `Version: 2.0.77 (build 84539, mac-arm64, steam)`) and re-asked again by the gate itself, whose first heading prints the version it got. `FACTORIO_USERDIR` never pointed at the real user directory: the gate builds a private mods directory and a private write-data per arm, so a running game's lock cannot reach it and nothing it writes reaches a save. **Exit codes read DIRECTLY and never through a pipe.** Both sibling checkouts clean and read-only, `git status --porcelain` printing nothing in either, and this repository's tree clean before the close was written.
+
+#### The instrument did not move, and that is what makes the size figures attributable at all
+
+FkRecipes moved `21f5d89` to `221ff9c`, five commits. **FkLua's PIN did not move**: `fklua.lock` is untouched, `../FkLua/bin/fklua lock --check` reads `fklua.lock is up to date (api 2.1.17)`, and `gen-bindings --check` reads the committed bindings unmoved. **FkLua's CHECKOUT did move, and it is TWO DOCUMENTATION FILES AND NO CODE:**
+
+```
+$ cd ../FkLua && git diff --stat b88965d..01d640a
+ CLAUDE.md                 |  1 +
+ agents/engine-findings.md | 39 +++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 40 insertions(+)
+```
+
+and the binary that packaged every module measured below is that head, rebuilt and unmodified:
+
+```
+$ go version -m ../FkLua/bin/fklua | grep vcs
+	build	vcs.revision=01d640a746e4f6dd89ed28ec16541de967740c58
+	build	vcs.time=2026-09-14T00:17:13Z
+	build	vcs.modified=false
+```
+
+So no line of the PACKAGER changed under this round. That is the precondition for the attribution below, and it is the only half of the attribution that can be had this round; the half that cannot is its own paragraph.
+
+#### Every gate at its exit code
+
+Every wasm build, and the engine gate with them, runs under `GOTOOLCHAIN=go1.26.6`, for the reason in the row below the table.
+
+| gate | exit | |
+|---|---|---|
+| `cd guest/go && go test ./tune/ -count=1` | **0** | 53 tests (`-v \| grep -c '^=== RUN   Test'` reads 53), unmoved since the round's second commit |
+| `make check` | **0** | the whole of it: `go test` over the six packages (`plan`, `skin`, `carry`, `edgemode`, `engine`, `tune`), `GOOS=wasip1 GOARCH=wasm go vet ./data/` and the same over `./obs/...`, the fastbelt fixture's vet, `fklua gen-bindings --check`, `fklua lock --check`, `test/check-release-arm.sh` and the gofmt sweep |
+| `../FkLua/bin/fklua gen-bindings --check` | **0** | inside `make check`: `guest/go/fkapi/fkapi.go is up to date (4865 members bound, 5 deferred)` |
+| `../FkLua/bin/fklua lock --check` | **0** | inside `make check`: `fklua.lock is up to date (api 2.1.17)`, the api pin unmoved all round |
+| `test/check-release-arm.sh` | **0** | inside `make check` and again standalone, on the green line `14 / 30 / 8 / 4 / 2`: 14 paths differ from the cut point `cf5a78e`, master 30 ahead, 8 carrying a blob master carries byte for byte, 4 the recut's stamp, 2 its working notes |
+| `GOTOOLCHAIN=go1.26.6 make mod` | **0** | |
+| `GOTOOLCHAIN=go1.26.6 make zip` | **0** | 895,111 B; the figures are below |
+| `GOTOOLCHAIN=go1.26.6 make datastage-check` | **0** | **TWENTY-THREE engine runs and THIRTY-ONE ok lines** over `2 golden + 16 variant + 1 speed + 2 merge + 2 ceiling` arms, **real 43.93** (`/usr/bin/time -p`), no golden dirty and none re-captured |
+| `make datastage-check` with the toolchain NOT pinned | **2** | the finding below, and the reason every engine row in this table carries the variable |
+| `make test`, fourteen suites | **NOT RUN**, exit **2** | observed rather than assumed: `test/run.sh` refuses at its engine gate with `the built mod targets Factorio 2.1 and the binary is 2.0.` The packaged mod is pinned 2.1 and the binary is 2.0.77, as in every round since round one |
+| the 2.1.16 and 2.1.17 golden rows | **NOT RUN** | same reason, no 2.1 binary on this machine; the adopt commit extended each `_stale` note with this round's settings-dump move and the re-capture command |
+| the client run | **NOT REACHABLE**, owed since round three | and larger than it was; see what this round leaves open |
+| the release-to-head proof, 28 pairs | taken at the round's FIRST commit | its logs are read rather than re-run, and why that stands for HEAD is below |
+
+**THE TWENTY-THREE ENGINE RUNS AND THE THIRTY-ONE ok LINES ARE COUNTED OFF THE RUN AND NOT OFF THE SCRIPT**: each run prints one `note <arm>: a staged manifest was re-stamped for 2.0` line and `grep -c` over the log reads 23, while `grep -cE '^\s*ok '` reads 31. The five headings the run prints are `2 golden arm(s)`, `16 variant arm(s)`, `1 arm with a faster belt in it`, `2 arms with an item taken out from under them` and `2 arms pinning a library defect`; the sixteen decompose as `len(RECIPE_VARIANTS) + len(TECH_VARIANTS) + len(RECIPE_TEXT_ARMS) + len(TECH_COST_ARMS) + len(TECH_TIER_ARMS) + 1` = 5 + 2 + 4 + 1 + 3 + 1, read off the script's own constants, and `DLC` is still `{'elevated-rails': False, 'quality': False, 'space-age': False}`. **THE WALL TIME AT TWENTY-THREE ARMS IS THE THING THE FOURTH AND FIFTH COMMITS BOTH LEFT OWED HERE**, and it is **43.93 s real** against the re-adoption leg's nineteen-arm pair of 41.30 and 46.96 on 2026-09-13, so four more engine runs sit inside that pair's own spread rather than outside it.
+
+**AND `note-refused` IS GREEN, WHICH IS THE RELEASE BLOCK STILL IN FORCE.** The gate prints it with the sentence its own block wrote for whoever reads the row next: `ok note-refused exit 1, no dump: 247 > 200 on bbb-balancer-part.localised_description[1]`, and under it `THIS ROW PINS A DEFECT. 0.3.3 must not publish while it is green`.
+
+#### One environment fact this round found, and it is wider than the one it inherited
+
+**`make datastage-check` NEEDS `GOTOOLCHAIN=go1.26.6` TOO, AND NOTHING IN THIS FILE HAD SAID SO.** The re-adoption leg recorded the fact as a BUILD fact, the host's Go being go1.27.1 and TinyGo 0.41.1 refusing it, and every gate row this round wrote before the close carried the variable on `make mod` alone. Measured here, and this is a new reading rather than a transcription: run bare, the gate gets as far as the speed arm and dies, because `check_speed` builds its fastbelt fixture with TinyGo in a scratch directory on every run.
+
+```
+==> the belt-speed derivation, 1 arm with a faster belt in it
+subprocess.CalledProcessError: Command '['tinygo', 'build', '-target=wasm-unknown', '-scheduler=none',
+  '-gc=leaking', '-opt=2', '-o', '.../data.wasm', './datastage']' returned non-zero exit status 1
+make: *** [datastage-check] Error 1
+```
+
+**exit 2**, after 36.02 s and after the two golden arms and all sixteen variant arms had already printed `ok`. The same build run by hand from `test/fixtures/fastbelt` gives the one line the failure is made of, `requires go version 1.19 through 1.26, got go1.27`, exit 1. So it is the same refusal `make mod` meets, reached through a different door, and it fails LOUDLY with its own remedy in it, which is why the remedy stays out of the Makefile here for the reason the re-adoption leg gave: a pinned Go version would be this repository deciding a toolchain question for whoever builds it next. What changes is this file: the gate rows carry the variable from here on.
+
+The environment, stated once: host Go **go1.27.1**, `tinygo version` reading `0.41.1 darwin/arm64 (using go version go1.27.1 and LLVM version 20.1.1)`, Factorio **2.0.77 build 84539 mac-arm64 steam**. The Go and TinyGo are the re-adoption leg's own, unmoved.
+
+#### The goldens
+
+Read out of `test/datastage-goldens.json` at HEAD rather than off a run. **ONLY `mod_settings_sha256` MOVED IN THE WHOLE ROUND, `aa75497e55ce4333` to `b6e583e6163249ba`, THE SAME ON BOTH MOD SETS**; both `data_raw_sha256` are unmoved to the digit, `1e1fcf4f56f5ef22` on base and `e7001bf98d6c6771` on the incumbent, and both `prototype_list_checksum` values with them, `3427049257` and `223071962`. That is the adopt commit's capture standing untouched through four more commits, and `make datastage-check` at HEAD asserts it against the engine rather than against the file. Since the data-raw hash is taken over the WHOLE normalised dump, its being unmoved IS those dumps compared byte for byte: **a locale rewrite, nine label rewrites, a changelog, a README and a test fixture reach no prototype at all**, which is the property each of the four commits after the adopt claimed for itself and which is here measured once over all four.
+
+#### The release-to-head proof, 28 pairs, taken at the first commit and standing for HEAD
+
+Driver `prefs-head4.py` and comparer `compare-prefs.py` in the session scratchpad, baseline the re-adoption leg's own head extract. **THE PROOF WAS TAKEN AT `ae15b4d`, THE ROUND'S FIRST COMMIT, AND IT IS NOT RE-RUN HERE.** What makes it stand for HEAD is not an argument: no commit after the first moves a prototype or a settings prototype, and `make datastage-check` at HEAD is what says so, both `data_raw_sha256` and `mod_settings_sha256` reading at HEAD exactly what the adopt commit captured. A proof re-run at HEAD would be the same four dumps hashed again.
+
+**ALL FOURTEEN CONFIGURATIONS WERE RE-DERIVED INTO THE NEW VOCABULARY, BECAUSE THE OLD ONES ARE NO LONGER CONFIGURATIONS OF THIS MOD.** `custom` does not exist and the engine resets a stored value the running release's `allowed_values` does not list, and the two research numbers meant 20 and 15 where they now mean "the tier decides" at 0. Driving the old files would have measured the engine's reset rather than this mod.
+
+- **ZERO PROTOTYPE DIFFERENCES ON ALL 28 PAIRS.** `grep -c '    PROTO '` over the comparison log reads **0** and `grep -c IDENTICAL` reads **28**, over `ls head-fix2/*/*-owned.json | wc -l` = **28** owned extracts. That covers the default configuration, all six recipe presets, all three tiers and the four re-derived typed configurations, on both mod sets.
+- **EXACTLY 24 SETTINGS-DUMP PLACES PER PAIR**, `grep -c '    SET '` reading **672** and collapsing to 24 distinct paths at 28 each. They are the whole of the settings-prototype change and nothing else: **7 keys removed** from `double-setting/better-belt-balancer-tech-seconds` (`default_value`, `maximum_value`, `minimum_value`, `name`, `order`, `setting_type`, `type`), **8 added** under `int-setting` for the same name (those seven plus `localised_description`), **1 added**, `int-setting/better-belt-balancer-tech-count/localised_description`, **2 changed** on that same setting (`default_value` 20 to 0, `minimum_value` 1 to 0), **2 changed** `allowed_values`, one per dropdown, and **4 changed** composed `localised_description` values.
+- **ONLY THE TWO TYPED CONFIGURATIONS WRITE A LOG LINE AND EACH WRITES ONE**, `recipe-custom` and `tech-custom`, on both mod sets. Each has gained the round's own set-aside clause, `; the bbb-recipe-cost choice vanilla is set aside` and `; the bbb-tech-cost choice logistics supplies what the settings leave at default`, where the head this is compared against wrote the same line without it.
+- **AND THE RUN LOG CORROBORATES THE GOLDEN FROM THE OTHER SIDE**, which is worth one line because it is free: every one of the 28 rows carries `settings b6e583e6163249ba`, `grep -o 'settings [0-9a-f]*' | sort | uniq -c` reading 28 at that value and no other. The golden is one arm's hash; the proof is fourteen configurations' worth of the same hash, which is what a settings dump holding PROTOTYPES and not values looks like from fourteen directions.
+
+Neither log carries an `exit=` line. What stands for one, the precedent fix round 1's own table sets, is each log's last line reading `pairs: 28` and the 28 owned extracts on disk. The summary is at `fix2-bbb/proof-summary.txt` with `prefs.log` and `compare.log` beside it.
+
+#### The sizes, and the like-for-like control that is UNAVAILABLE this round
+
+Every figure by `ls -l` and `wc -c` / `wc -l` over the build `make zip` shipped, against the re-adoption leg's own close.
+
+| | the re-adoption leg, 2026-09-13 | this round's close, `e77210f` | |
+|---|--:|--:|---|
+| `dist/better-belt-balancer_0.3.3.zip` | 837,958 B | **895,111 B** | +57,153 B, **+6.82%** |
+| `fk_data_module.lua` | 4,685,165 B, 118,630 lines | **4,992,501 B, 128,322 lines** | +307,336 B, **+9,692 lines** |
+| `fk_module.lua` | 3,132,893 B, 88,844 lines | **3,132,893 B, 88,844 lines** | unmoved in both figures |
+| `dist/bbbdata.wasm` | 1,168,783 B | **1,225,590 B** | +56,807 B; not a package member, the data module is compiled out of it |
+| `dist/bbb.wasm` | 1,303,099 B | **1,303,099 B** | unmoved in size |
+
+**TWO OF THOSE ROWS SAY SOMETHING RATHER THAN NOTHING.** `fk_module.lua`'s ABSOLUTE is on record in this file at fix round 1's close, 3,132,893 B and 88,844 lines at the sync pass's close and unmoved at `4a1b233`; the re-adoption leg then recorded it unmoved again without repeating the number, so today's reading closes a chain that has now held at the sync pass's close, at fix round 1's close, through the re-adoption leg and here, four recorded points at which the control guest's packaged module is the same size to the byte. And `dist/bbb.wasm` is the same figure the re-adoption leg recorded, which is the answer that row should give: the control guest imports nothing of FkRecipes, so a library round cannot reach it. **THAT IS A SIZE AND NOT AN IDENTITY**: the previous build was not kept, so what is measured is that the byte count did not move, and **a wasm size is path-length sensitive**, which the re-adoption leg measured on this very file (the downloaded toolchain root written into the binary five times, 33 bytes longer per occurrence than a cellar path for the same version), so this figure is comparable only with another taken at the same path.
+
+**THE LIKE-FOR-LIKE CONTROL THE PREVIOUS TWO ROUNDS RAN IS UNAVAILABLE THIS ROUND, AND IT IS NAMED AS UNAVAILABLE RATHER THAN QUIETLY SKIPPED.** Round two and fix round 1 both attributed their growth by building the UNTOUCHED baseline against the new library, which separates what the library costs from what the adoption costs. **THAT CANNOT BE DONE HERE, BECAUSE THE UNTOUCHED BASELINE DOES NOT COMPILE AGAINST THE LIBRARY HEAD.** It is the round's own first sentence: four declarations in `tune.Plan()` are gone, and `git show 1caaf08:guest/go/tune/plan.go` still carries all four (`Custom: recipeIngredients` at `:337`, `Custom: &fkrecipes.CustomCost{` at `:481`, `Position: TechOptions()` at `:485`, and `techSeconds` as a `DoubleSetting` at `:285`), which is what the adopt commit's four compiler errors are. A baseline that will not build cannot be packaged, so there is no second measurement to subtract.
+
+**SO WHAT CAN BE SAID IS BOUNDED, AND IT IS SAID EXACTLY.** The instrument did not move: FkLua's code is unchanged and its binary is rebuilt at the same head, `vcs.modified=false`, and TinyGo 0.41.1 and `GOTOOLCHAIN=go1.26.6` are the re-adoption leg's own toolchains. **So the whole +307,336 B of the data module is FkRecipes' fix round 2 as linked into this guest PLUS this mod's adoption of it, and the two cannot be separated, because the adoption IS the round.** No sentence here divides them, and none should: a paragraph attributing this growth to the library alone would be the one claim this round cannot make.
+
+Two figures that are not deltas and are kept because previous rounds keep them: the report's `data_lua_bytes` is 4,992,242 against the file's 4,992,501, the 259-byte factory wrapper under the module as always, and the zip's +57,153 B is compressed and is not divided between its members, for the reason fix round 1 measured (Go's `compress/flate` is reproduced by no Python `zlib` level, so a member's share of an archive cannot be recomputed after the fact).
+
+#### The relay row
+
+Out of `dist/.fklua-mod.report.json`'s `jumps` object (`python3 -c` over the file, and the packager's own rendering of the same numbers is in `dist/.fklua-mod.log`). **A STATION is a trampoline `fklua` inserts to break a jump the emitted Lua could not otherwise make, Lua 5.2's signed 18-bit jump offset being the limit; BLOCK ROOM is how much room the module's widest single basic block has left before it reaches the span one hop covers, and it is the figure that actually bounds the module, because a block longer than a hop is a thing the relay cannot bridge at all.**
+
+| | the re-adoption leg | this round's close | |
+|---|--:|--:|---|
+| data: widest span before the relay | 1,013,809 B | **965,409 B** | in `(*fkrecipes.Lib).PlanData`, 147% of the 655,355-byte limit |
+| data: stations | 14 | **11** | 22 `::LT` labels in the module, two per station, which is the same count reached without the report |
+| data: widest span after the relay | 328,261 B | **347,663 B** | see the note below: these two are not the same measurement |
+| data: widest block, and its room | 8,858 B in `fkrecipes.probeIn`, 318,819 B of room | **8,858 B in `fkrecipes.probeIn`, 318,819 B of room (97% of the 327,677 one hop covers)** | unmoved |
+| control: widest span | 303,874 B in `main.flushLive`, no relay | **303,874 B in `main.flushLive`, no relay**, block room 316,644 B | unmoved in every field |
+
+**THE STATIONS WENT 14 TO 11 AND THE BLOCK ROOM IS UNMOVED, which is the pair worth reading.** The module grew 307,336 B while the widest span it contains SHRANK 48,400 B and needed three fewer stations, so the growth is not in the function that was near the limit; and the number that bounds the module, the widest block, did not move by a byte on either half.
+
+**AND THE AFTER-RELAY ROW IS NOT A LIKE-FOR-LIKE COMPARISON, WHICH IS WHY IT IS FLAGGED RATHER THAN QUOTED FLAT.** The previous two rounds quoted the RELAYED FUNCTION's own after-relay span, 328,253 and then 328,261, at a time when `PlanData` was still the widest span after its own relay, so the per-function and the top-level figures were the same number. They are not the same number now: `relayed_functions[0].widest_span_after_relay_bytes` is **328,108** with `PlanData`'s own block at 802 B and 326,875 B of room, while the top-level `jumps.data.widest_span_after_relay_bytes` is **347,663** (53% of the limit), so some other function is the widest span once `PlanData` is relayed. Against the previous rounds' figure the relayed function moved 328,261 to 328,108; against nothing at all, the top-level is 347,663.
+
+#### What this round leaves open
+
+Consolidated from the five commits and the five subsections above rather than restated in each, and every item re-checked against HEAD.
+
+**THE LOCALISED-STRING CEILING, AND THE 0.3.3 RELEASE BLOCK THAT FOLLOWS FROM IT.** BLOCKED, owner FkRecipes, scope B for the fallback note a player's typo reaches and scope F for the two clamp notes no player can. The arithmetic, the four engine facts under it, the grade, the committed mirror golden that pins an unloadable prototype and what the library owes in which four places are the fifth subsection above and are not repeated here. **`CLAUDE.md` CARRIES THE BLOCK AS A CRITICAL RULE WITH ITS OWN LIFT CONDITION**, which is the one rule in that file that forbids an action rather than recording one, and it expires on a library fix rather than on this round; a green `note-refused` row in `make datastage-check` is the block still in force, and this close's own run has one.
+
+**THE CLIENT RUN, OWED SINCE ROUND THREE, AND LARGER NOW THAN IT WAS.** It was two tooltip hovers. It is now two tooltip hovers and **two CLOSED DROPDOWNS**: all nine option labels moved in the round's third commit, on a truncation measured near 37 characters on one widget at one UI scale in an earlier round, and **no number in this repository has ever seen one of the nine render**. The two tooltips are `bbb-recipe-cost` at **970 characters** and `bbb-tech-cost` at **733**, the third commit's own re-measurement, and what has never been measured on either is whether it renders whole. Every figure in this round is a character or a byte count; both the dropdown cut and the tooltip wrap are by pixel width. Not this round's to close.
+
+**THE DOUBLED RUNG NAME IN THE LIBRARY'S PACKLESS REFUSAL.** `... research takes at least one, and none of automation-science-pack, automation-science-pack is a science pack here`, which is the tier's copied pack and this mod's declared `Fallback` rung being the same name asked about twice. Cosmetic, in a sentence a player reads in an error dialog, owner FkRecipes, and the fix is a de-duplication in the library's own walk order. Two tests here reach it and pin it as it is, `TestAFallbackThisModsOwnPackListCannotPayForStillRefuses` and `TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused` (`guest/go/tune/plandata_test.go:1789` and `:1843`), so a library that shortens it fails here by name rather than silently.
+
+**`TestEverySettingThisPlanDeclaresIsDescribed`'s SIX-NAME LITERAL IS STILL THE ONE PLACE A SEVENTH SETTING COULD JOIN THE PLAN WITHOUT A TEST NOTICING.** It walks a hand-written list of the six (`guest/go/tune/locale_test.go:214`, under the function at `:212`), and a plan that grew would leave the seventh unchecked for a description with nothing red. The locale commit deliberately did NOT tie its own new test to that literal, reading the enumeration off `CheckLocaleWith` against an empty locale file instead, and said so in its subsection; what it did not do is fix the older test, which is the one that still holds the literal.
+
+**THE 2.1 GOLDEN ROWS AND `make test`, BOTH NOT RUN**, both for the same reason unchanged since round one: the packaged mod is pinned 2.1 and the only binary here is 2.0.77. `make test` is exit 2 and OBSERVED, and the two golden rows' `_stale` notes carry this round's settings-dump move and the command that would re-capture them.
+
+**AND THE FOUR SMALLER THINGS THE ROUND'S OWN SUBSECTIONS NAME.** The wrap residue: the six `  type:` lines are the LIBRARY's rendering of this mod's declared lists, measure 57, 38, 62, 66, 32 and 41 characters, and the two longest still pass the 57-to-60 threshold with their continuation at the left margin, which is finding 5's residue, is the engine's, and is disclosed by the library in the same tooltip. The lost sentence: the adopt commit retired the one word-for-word pin of the no-source fallback line in a game holding `logistics-2` and `-3` and not `logistics`, recorded there as a lost SENTENCE rather than a lost property, the property itself still being asserted. The new locale test's own three blind spots, in its own comment: it reads words and not sentences, it skips a sentence's opening word in a description, and a bound setting's entries may not use a capitalised display or product name mid-sentence. And the merge and ceiling arms run with `DLC` all False on purpose, so the fixture's own two-stage shape is what they hold, the expansion measurement behind it having been taken once by hand.
+
+**WHAT IS NOT LISTED HERE IS THE RE-ADOPTION LEG'S OWN STILL-OPEN LIST**, which this round does not touch except where it is already annotated in place: the labels bullet is CLOSED by the third commit, and `bbb-tech-cost` carrying no overhaul-pack sentence where its twin does, the `Sync mods with save` route being unpromised, "a cost gates softly where a prerequisite gates hard" being reasoning rather than a probe, and the 2.0 branch's own 0.2.3 changelog entry all stand exactly as that leg left them.
+
 ## The FkLua baseline
 
 The migration was measured against a freshly rebuilt fklua so that a packaging difference could not be mistaken for a library effect.
