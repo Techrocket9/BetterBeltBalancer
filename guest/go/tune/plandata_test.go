@@ -1219,14 +1219,19 @@ func packFallbackLine(reason string) string {
 // trade this mod took. The pack field's worst case IS a refusal, and
 // [TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo]'s last row is it.
 //
-// THE SECOND ARM IS THE ONE THIS MOD CAUSED. Its dropdown labels spell DISPLAY
-// names ("Default: 4 iron plates, 2 gears, ..."), so a player copying the label
-// they were on into the field types `iron plates` -- and the language answers
-// with the internal name rather than with advice about commas. That fold exists
-// in FkRecipes because this mod's labels were the example in its design review;
-// keeping the labels as they are is the decision recorded in
-// mod-data/locale/en/better-belt-balancer.cfg, and this is what makes keeping
-// them safe.
+// THE SECOND ARM IS THE ONE THIS MOD CAUSED, AND NO LABEL OF THIS MOD'S SPELLS
+// IT ANY MORE. The fold exists in FkRecipes because these dropdown labels were
+// the example in its design review, where they read "Default: 4 iron plates, 2
+// gears, ..."; fix round 2's third commit rewrote all nine as NAMES, and
+// mod-data/locale/en/better-belt-balancer.cfg records that reversal and the
+// measurement behind it. THE ROW IS NOT WHAT RESTED ON THE LABELS. Display
+// prose still reaches this field, by shorter routes than a settings label: the
+// option table in README.md is written that way, and the game's own item name
+// for `iron-plate` is "Iron plate", a capital and a plural away from what this
+// row types.
+// So `2 iron plates` is still the likeliest single thing a player puts in this
+// field, and the answer it gets is still the internal name rather than advice
+// about commas.
 func TestATextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 	// THE WHOLE VOCABULARY LESS `transport-belt`, FOR THE LAST ROW ALONE. Built
 	// and guarded exactly as
