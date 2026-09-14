@@ -66,7 +66,7 @@ perfectly fine. A golden line whose engine does not match the binary is a SKIP
 with a message, never a failure.
 
 ...AND SIXTEEN VARIANT ARMS (ONE OF THEM THE VANILLA CONTROL), A SPEED ARM AND
-A MERGE ARM, WHICH ARE NOT HASHED.
+TWO MERGE ARMS, WHICH ARE NOT HASHED.
 
 0.3.1 made the recipe's cost, the research's cost and the hidden network's belt
 speed depend on things a golden cannot hold still. A hash is the right
@@ -119,7 +119,15 @@ never make easy. So:
   lands on a name the list already carries. What it proves is the half no host
   test can reach -- that the ENGINE accepts the merged list -- and it runs on
   the prototype's own default, no `mod-settings.dat` at all, because the player
-  it is about never opened the Startup tab. See REMOVER_LUA and check_remover.
+  it is about never opened the Startup tab. IT IS TWO ARMS SINCE FIX ROUND 2,
+  one per row of ARMS, because an arm about what a NEIGHBOURING pack does to
+  this mod's ladder had been the one arm that never ran with a neighbour
+  installed; and its fixture deletes at the data stage and sweeps what that
+  dangles at data-final-fixes, so the pack is one a stock Space Age install
+  survives. It also asserts the ABSENCE of a `localised_description` on the
+  emitted recipe, which is what says a resolved ladder is the library's
+  contract rather than a degradation it apologises for. See REMOVER_DATA_LUA
+  and check_remover.
 
 ...AND THE SIX STARTUP SETTINGS' `order` STRINGS, ON BOTH GOLDEN ARMS, WHICH
 ARE INSIDE THE HASH AND ARE ASSERTED ANYWAY. Four of the six are GENERATED names
@@ -748,7 +756,7 @@ HIDDEN_BELTS = [
 SPEED_FLOOR = 0.25
 
 # ---------------------------------------------------------------------------
-# THE MERGE ARM'S FIXTURE, and it is a Lua mod rather than a compiled guest.
+# THE MERGE ARMS' FIXTURE, and it is a Lua mod rather than a compiled guest.
 #
 # WHAT IT IS FOR. Every ladder in guest/go/tune ends at `iron-plate` and the
 # vanilla list names `iron-plate` at the top, so a pack that removes the item
@@ -766,23 +774,108 @@ SPEED_FLOOR = 0.25
 # BEFORE this mod, and a plain `data.lua` is the only thing that can be written
 # that cheaply -- no tinygo, no `fklua mod`, no compile at all. Written out at
 # run time rather than committed under test/fixtures/ because its whole content
-# is one name list, and a committed directory would be sixty-seven lines of Lua
-# nobody reads beside a constant somebody edits. SIXTY-SEVEN IS MEASURED, off
-# `REMOVER_LUA` itself and off the engine, which prints
-# `Script @__bbbt-remover__/data.lua:67` on every run of this arm.
+# is one name list, and a committed directory would be two files of Lua nobody
+# reads beside a constant somebody edits. THE ENGINE PRINTS EACH FILE'S OWN
+# `log` LINE and that is where their lengths are measured:
+# `Script @__bbbt-remover__/data.lua:17` and
+# `Script @__bbbt-remover__/data-final-fixes.lua:65`, on every run of both arms.
+#
+# TWO FILES SINCE FIX ROUND 2, AND WHICH HALF SITS IN WHICH STAGE IS MEASURED
+# RATHER THAN CHOSEN. This is remedy (i) of agents/migration-assessment-2.md.
+# The one-file fixture deleted the item AND swept everything that deletion
+# dangled, all at the data stage, which killed Space Age before this mod could
+# be judged -- so the arm was honest only with the expansions off, which is the
+# one configuration `DLC` runs. The split is what makes the fixture a pack a
+# stock install survives.
+#
+#   THE ITEM DELETION MUST STAY AT THE DATA STAGE, and it is the arm's whole
+#   premise: this mod's ingredient ladder asks the item table at ITS data
+#   stage, the fixture's name sorts first, and a deletion any later is a
+#   deletion the ladder never sees.
+#
+#   THE RECIPE SWEEP MUST MOVE, AND THE ENGINE NAMES THE FILE AND THE LINE.
+#   MEASURED on 2.0.77 (build 84539) with elevated-rails, quality and space-age
+#   all enabled and the sweep still at the data stage: `Failed to load mod
+#   "space-age": __space-age__/base-data-updates.lua:241: attempt to index
+#   field 'transport-belt' (a nil value)`, exit 1, with this mod's own data
+#   stage long finished and the merge line already written. NO SECONDS ARE
+#   QUOTED: wall clock is not reproducible (the same refusal has been re-taken
+#   at 0.553 and at 0.666) and this file already strips the engine's timestamps
+#   off everything it asserts. Line 241 of that file is
+#   `data.raw.recipe["transport-belt"].category =
+#   "pressing"`. A mod's `data-updates` is entitled to find base's prototypes
+#   whole; the engine resolves a prototype reference only after the LAST stage
+#   has run, so a sweep is safe as late as `data-final-fixes` and unsafe any
+#   earlier.
+#
+#   THE TECHNOLOGY-EFFECT SWEEP MOVES BECAUSE IT IS COMPUTED FROM THE RECIPE
+#   SWEEP. It drops the `unlock-recipe` effects naming a recipe the sweep
+#   killed, so it cannot run before that set exists. IT IS NOT A FORMALITY ON
+#   EITHER MOD SET, which is the thing a first reading of this fixture gets
+#   wrong. NO base technology unlocks `transport-belt` -- that recipe is
+#   enabled from the start -- but six base recipes CONSUME the belt, so what
+#   the sweep kills beside the belt's own recipe is `fast-transport-belt`,
+#   `lab`, `loader`, `logistic-science-pack`, `splitter` and
+#   `underground-belt`, and five technology effects go with them:
+#   `electronics/lab`, `logistic-science-pack/logistic-science-pack`,
+#   `logistics/underground-belt`, `logistics/splitter` and
+#   `logistics-2/fast-transport-belt`. On the incumbent mod set a sixth goes,
+#   `belt-balancer-1/belt-balancer-normal-belt` -- a NEIGHBOUR's technology
+#   losing a NEIGHBOUR's recipe, which is the whole class of thing the arm
+#   could not see while it only ever ran on `base`.
+#
+#   THE ENTITY-REFERENCE SWEEP IS FREE IN EITHER STAGE AND MOVES ANYWAY.
+#   MEASURED on 2.0.77 with all three expansions enabled and this half alone
+#   left behind at the data stage, the recipe and technology halves at
+#   data-final-fixes: exit 0, a dump written, every assertion of both arms
+#   green. So it is not what broke Space Age and it is not what fixes it. It
+#   moves because `minable`, `next_upgrade`, `place_result` and `placeable_by`
+#   dangle for the same reason the recipes do and are resolved at the same
+#   moment, the end of the last stage -- so ONE rule covers the whole fixture:
+#   the deletion is at the data stage and everything the deletion dangles is
+#   swept at data-final-fixes. Splitting the two halves across two stages would
+#   be a second rule bought with nothing.
+#
+#   AND THE SWEEP IS A RE-SCAN RATHER THAN A RELOCATION, which is the half a
+#   pure move would have got wrong. At data-final-fixes there are recipes that
+#   DID NOT EXIST when the item was deleted. Quality builds a recycling recipe
+#   out of a recipe at its own data-updates and a recycling recipe RETURNS what
+#   the original consumed, so `fast-transport-belt-recycling`, `lab-recycling`,
+#   `loader-recycling`, `splitter-recycling` and `underground-belt-recycling`
+#   each name the deleted item among their RESULTS and not one of them existed
+#   when data.lua ran. MEASURED off the fixture's own `swept N recipe(s)` line
+#   on 2.0.77: 7 on the base mod set with the expansions off and 12 with them
+#   on, the five being exactly the difference; 8 and 14 on the incumbent mod
+#   set, whose extra two are the stand-in's own `belt-balancer-normal-belt`
+#   and, under quality, `balancer-part-recycling`. A sweep replaying a list
+#   data.lua made would leave every one of them. `transport-belt-recycling` is
+#   the control and it is in NEITHER run: quality never built one, because the
+#   ITEM was already gone when it looked.
 #
 # THE NAME SORTS BEFORE `better-belt-balancer`, which is how it comes to run
 # first, and the arm ASSERTS that rather than trusting it: Factorio's data-stage
 # ordering is measured here (`bbbt-remover` at 0.261 against this mod at 0.266
 # on 2.0.77) and was not found documented. `bbbt-fastbelt` already depends on
-# the same ordering.
+# the same ordering. NO ORDERING IS ASSERTED FOR THE SWEEP, and the honest
+# reason is narrower than "it needs none". What the sweep has to come after is
+# in an EARLIER STAGE in every case that matters -- quality's recycling recipes
+# at data-updates, the incumbent stand-in's own recipe at the data stage -- so
+# the stage alone settles those. But `data-final-fixes` is a stage with an
+# order inside it, measured on the incumbent mod set as
+# ['bbbt-remover', 'better-belt-balancer'], and THIS MOD EMITS ITS LEGACY STUB
+# THERE, after the sweep has run. That is green because the stub is an item and
+# an entity naming nothing the fixture removes, and not because the sweep is
+# ordering-free. An assertion here would be pinning the alphabet for a
+# dependency this fixture does not have.
 #
 # ITS `pairs` WALKS ARE NOT AN ITERATION-ORDER DEPENDENCE, which this
 # repository's determinism rule would otherwise refuse. Every one of them
 # DELETES a set of keys, or rebuilds a list in `ipairs` order, so what it
 # leaves behind is a function of the set and not of the order it was walked
 # in; nothing it computes reaches a prototype field whose value could differ
-# between two clients. There is no ordered output here to be a desync.
+# between two clients. There is no ordered output here to be a desync. The
+# `dead` counter the sweep logs is a COUNT of that set and not a position in
+# it, so it is order-free for the same reason.
 #
 # IT CLEARS `minable` AND `next_upgrade` TOGETHER, WHICH IS A MEASURED TRAP.
 # Clearing the first alone refuses the load with `Error while running setup for
@@ -805,6 +898,14 @@ REMOVER_ITEM = "transport-belt"
 # key on a projection the arm already runs.
 REMOVER_ALIVE = "iron-plate"
 
+# THE SAME PAIR ONE TABLE OVER, AND IT IS WHAT SAYS THE SWEEP RAN AT ALL. Base
+# names a belt's recipe after the belt, so REMOVER_ITEM is the dead recipe's
+# name as well as the dead item's; `iron-gear-wheel` is a recipe that names
+# nothing gone and has to survive. Without the positive half a `.recipe` path
+# that went stale would read as a sweep that happened, which is the identical
+# trap REMOVER_ALIVE exists for one table over.
+REMOVER_RECIPE_ALIVE = "iron-gear-wheel"
+
 # What this mod's recipe comes out as once that item is gone, and the line the
 # library writes on the way. TRANSCRIBED, like every other expectation in this
 # file: 4 iron plates plus the two the belt ladder falls back to.
@@ -812,11 +913,12 @@ REMOVER_RECIPE = [("iron-plate", 6), ("iron-gear-wheel", 2)]
 REMOVER_LINE = ("fkrecipes: bbb-balancer-part: iron-plate is in the list twice "
                 "after the fallbacks, so the amounts are added: 4 plus 2 is 6")
 
-REMOVER_LUA = '''\
+REMOVER_DATA_LUA = '''\
 -- bbbt-remover: a pack that removed an item, at the data stage and before
 -- better-belt-balancer's. Written out by test/check-datastage.py; never
--- shipped. The ITEM and every recipe naming it go; the ENTITY stays, because
--- deleting it breaks this mod for a different reason.
+-- shipped. THE ITEM GOES HERE AND NOTHING ELSE DOES: everything the deletion
+-- dangles is swept in this fixture's data-final-fixes.lua instead, so another
+-- mod's data-updates still finds base's own prototypes whole.
 local REMOVE = { %s }
 local gone = {}
 for _, n in ipairs(REMOVE) do gone[n] = true end
@@ -828,8 +930,22 @@ for _, cls in ipairs(ITEM_CLASSES) do
   local t = data.raw[cls]
   if t then for n in pairs(gone) do t[n] = nil end end
 end
+log("bbbt-remover: removed " .. #REMOVE .. " item name(s) at the data stage")
+'''
 
-local dead_recipes = {}
+REMOVER_FINAL_LUA = '''\
+-- bbbt-remover's SWEEP, and it is at data-final-fixes deliberately. Every
+-- reference below dangles because data.lua deleted an item; the engine
+-- resolves a reference only after the last stage has run, and another mod's
+-- data-updates is entitled to find base whole until then. MEASURED: this
+-- sweep at the data stage kills space-age at base-data-updates.lua:241. It
+-- re-scans the tables where they stand rather than replaying a list data.lua
+-- made, because quality's recycling recipes did not exist when the item went.
+local REMOVE = { %s }
+local gone = {}
+for _, n in ipairs(REMOVE) do gone[n] = true end
+
+local dead_recipes, dead = {}, 0
 for rname, r in pairs(data.raw.recipe or {}) do
   local hit = gone[rname] or false
   for _, ing in pairs(r.ingredients or {}) do
@@ -840,7 +956,10 @@ for rname, r in pairs(data.raw.recipe or {}) do
   end
   if hit then dead_recipes[rname] = true end
 end
-for rname in pairs(dead_recipes) do data.raw.recipe[rname] = nil end
+for rname in pairs(dead_recipes) do
+  data.raw.recipe[rname] = nil
+  dead = dead + 1
+end
 
 for _, tech in pairs(data.raw.technology or {}) do
   if tech.effects then
@@ -879,7 +998,7 @@ for _, cls in pairs(data.raw) do
     end
   end
 end
-log("bbbt-remover: removed " .. #REMOVE .. " item name(s)")
+log("bbbt-remover: swept " .. dead .. " recipe(s) at data-final-fixes")
 '''
 
 
@@ -1083,8 +1202,14 @@ def build_remover(series: str, out: Path) -> Path:
     """Write the bbbt-remover fixture into a staged mod directory.
 
     NO TOOLCHAIN AT ALL, which is the whole difference between this and
-    build_fixture: no tinygo, no fklua, no compile. It is an info.json and a
-    data.lua, and its content is REMOVER_ITEM.
+    build_fixture: no tinygo, no fklua, no compile. It is an info.json, a
+    data.lua and a data-final-fixes.lua, and the content of both Lua files is
+    REMOVER_ITEM.
+
+    THE TWO STAGES ARE ONE DECISION AND IT IS WRITTEN DOWN WHERE THE LUA IS,
+    above REMOVER_NAME: the deletion goes in data.lua because this mod's ladder
+    has to see it, and everything the deletion dangles goes in the sweep
+    because another mod's data-updates has to not.
     """
     d = out / f"{REMOVER_NAME}_{REMOVER_VERSION}"
     d.mkdir(parents=True)
@@ -1094,8 +1219,9 @@ def build_remover(series: str, out: Path) -> Path:
         "title": "BBB item-remover fixture",
         "author": "BetterBeltBalancer",
         "factorio_version": series,
-        "description": "Deletes a named item at the data stage, for the merge "
-                       "arm of test/check-datastage.py. Never shipped.",
+        "description": "Deletes a named item at the data stage and sweeps what "
+                       "that dangles at data-final-fixes, for the merge arms "
+                       "of test/check-datastage.py. Never shipped.",
         "dependencies": [f"base >= {series}.0"],
     }, indent=2) + "\n")
     # A LIST OF ONE, because the fixture takes a list. WHAT IS GENERAL HERE IS
@@ -1109,14 +1235,34 @@ def build_remover(series: str, out: Path) -> Path:
     # than one arm printing FAIL. The fixture deletes recipes without pruning
     # the tips-and-tricks entries that name them; another item costs that
     # prune and whatever else its removal dangles, and this comment rather
-    # than the constant is where that starts.
-    (d / "data.lua").write_text(REMOVER_LUA % json.dumps(REMOVER_ITEM))
+    # than the constant is where that starts. TAKEN ON THE ONE-FILE FIXTURE,
+    # before the sweep moved to data-final-fixes, and the sweep's stage does
+    # not touch it: a tips-and-tricks item names its recipe by name and the
+    # engine resolves that after every stage either way.
+    name = json.dumps(REMOVER_ITEM)
+    (d / "data.lua").write_text(REMOVER_DATA_LUA % name)
+    (d / "data-final-fixes.lua").write_text(REMOVER_FINAL_LUA % name)
     return d
 
 
 def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
             keep: Path | None, extras: list[Path] | None = None,
-            startup: dict | None = None, probe=None) -> dict:
+            startup: dict | None = None, probe=None,
+            mod_set: str | None = None) -> dict:
+    """One --dump-data run. `arm` NAMES IT; `mod_set` SAYS WHAT IS IN IT.
+
+    THE TWO WERE ONE STRING UNTIL FIX ROUND 2 and could not stay one. A golden
+    arm is named after its mod set (`base`, `incumbent`) and `ARMS` is looked up
+    by that name, so every other arm here -- the variants, the speed arm, the
+    merge arms -- got `ARMS.get(arm, [])` missing and ran on the BASE mod set
+    whatever it was called. That is right for an arm that is about a setting and
+    wrong for one that is about a neighbour: `check_remover` runs the same
+    fixture over BOTH mod sets now, which remedy (i) does not ask for, and the
+    two runs
+    have to be told apart in the report while naming the same ARMS row. So the
+    label and the mod set are separate arguments, and a caller that passes no
+    `mod_set` keeps the old behaviour exactly -- the name IS the mod set.
+    """
     work = Path(tempfile.mkdtemp(prefix=f"bbb-datastage-{arm}-"))
     try:
         mods = work / "mods"
@@ -1130,7 +1276,7 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
         # spelled separately because the stand-in's directory under dist/obs
         # carries a version suffix and this arm's whole point is that Factorio
         # sees the incumbent under its own name.
-        staged = [(staged_mod(e), e) for e in ARMS.get(arm, [])]
+        staged = [(staged_mod(e), e) for e in ARMS.get(mod_set or arm, [])]
         staged += [(e, e.name) for e in (extras or [])]
         for extra, dest in staged:
             shutil.copytree(extra, mods / dest)
@@ -1204,15 +1350,16 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
                                 for line in text.splitlines()
                                 if "fkrecipes:" in line],
             # WHICH MODS RAN THE DATA STAGE, IN THE ORDER THE ENGINE RAN THEM,
-            # for the one arm whose whole premise is that another mod went
+            # for the two arms whose whole premise is that another mod went
             # FIRST. `check_remover` stages a mod that deletes an item ahead of
-            # this one, and Factorio's data-stage order is not something this
-            # repository found documented anywhere -- it is measured, once,
-            # here, on every run of that arm. Without it a reordered engine
-            # would make the arm pass by removing nothing at all, which is
-            # `check_speed`'s own anti-vacuity lesson met a second time. The
-            # names only: the times move every run and the versions move every
-            # release.
+            # this one, once per mod set, and Factorio's data-stage order is not
+            # something this repository found documented anywhere -- it is
+            # measured here, on every run of both. Without it a reordered engine
+            # would make them pass by removing nothing at all, which is
+            # `check_speed`'s own anti-vacuity lesson met a second time. It is
+            # also the one list here the ENGINE wrote, which is why the mod-set
+            # assertion leans on it. The names only: the times move every run
+            # and the versions move every release.
             "load_order": re.findall(r"Loading mod (\S+) \S+ \(data\.lua\)", text),
             # A SMOKE TEST AND LABELLED AS ONE. It is over the prototype LIST, so
             # it is order-insensitive (convenient) and blind to field values
@@ -1836,84 +1983,306 @@ def check_speed(factorio: str, series: str, mod_dir: Path) -> bool:
     return False
 
 
+# THE MERGE ARMS' ONE PROJECTION, and every question an arm asks is in it.
+# Five keys over one thirteen-megabyte dump, for the reason `project` gives.
+#
+# THIS MOD'S OWN RECIPE COMES BACK WHOLE, which is not an accident of
+# convenience. The arm asks that prototype two questions -- what its ingredient
+# list is, and whether it carries a `localised_description` -- and the second
+# is an assertion that something is ABSENT, so it is the one question a jq path
+# that went stale would answer the RIGHT way for the wrong reason. Fetching the
+# object once and asking both of it in Python is what makes that
+# unrepresentable: a stale path yields `null` and the INGREDIENT assertion
+# fails first, by name, so the absence question can never be reached over a
+# prototype the probe did not actually find.
+REMOVER_PROBE = ('{item: .item["%s"], alive: .item["%s"], '
+                 'dead_recipe: .recipe["%s"], alive_recipe: .recipe["%s"], '
+                 'ours: .recipe["%s"]}')
+
+
 def check_remover(factorio: str, series: str, mod_dir: Path) -> bool:
     """A pack that removed `transport-belt`, and the engine takes the merge.
 
     THE ARM THE ASSESSMENT'S FINDING 1 IS ABOUT, and the only one that can
     answer it: the host suite proves what the PLAN emits, and what refused the
-    load was the ENGINE, on a recipe naming one item twice. See REMOVER_LUA's
-    block above for the fixture and why it is Lua.
+    load was the ENGINE, on a recipe naming one item twice. The block above
+    REMOVER_NAME is the fixture, its two stages and why it is Lua.
 
     NO mod-settings.dat, DELIBERATELY. The arm runs on the prototype's own
     `default_value`, `bbb-recipe-cost = vanilla`, which is the configuration of
     the player the finding is about: one who never opened the Startup tab.
+
+    BOTH MOD SETS SINCE FIX ROUND 2, WHICH REMEDY (i) DOES NOT ASK FOR. It
+    asks for the data-final-fixes sweep and says nothing about mod sets; this
+    is an addition beside it, and the paragraph below is why it earns its run.
+    The arm used to call `run_arm("remover", ...)` and `ARMS` has no `remover`
+    row, so it staged the base mod set and said nothing about the other one --
+    the arm that is ABOUT a neighbouring pack was the one arm that never ran
+    with a neighbour installed. It runs over every row of `ARMS` now.
+
+    WHAT THIS MOD DOES IS THE SAME ON BOTH, AND THAT IS MEASURED RATHER THAN
+    ASSUMED. The incumbent owns `balancer-part`, so this mod's legacy-stub
+    branch takes its other arm and emits no stub at all (`check_legacy_stub`);
+    but the RECIPE is `bbb-balancer-part` either way, it is emitted at the DATA
+    stage either way, and the stub is a data-final-fixes item and entity that
+    no recipe of this mod names. Both arms were run on 2.0.77 and compared
+    field by field: the ingredient list, the library's whole log stream and the
+    absence of a `localised_description` are identical across them, so the
+    expectations below are one table and not two.
+
+    WHAT THE GAME DOES IS NOT THE SAME, WHICH IS WHY THE SECOND RUN IS NOT A
+    DUPLICATE. The stand-in declares its own `belt-balancer-normal-belt` recipe
+    naming the removed item, so the fixture's sweep kills a NEIGHBOUR's recipe
+    and the `belt-balancer-1/belt-balancer-normal-belt` technology effect with
+    it -- measured, 8 recipes swept here against 7 on `base` with the
+    expansions off. And that recipe is declared AFTER the fixture's data stage
+    has run, so the one-file fixture this arm used to carry cannot pass on this
+    mod set AT ALL: put the sweep back at the data stage and `remover-incumbent`
+    exits 1 on `Error in assignID: item with name 'transport-belt' does not
+    exist. It was removed by bbbt-remover. Source: belt-balancer-normal-belt
+    (recipe).` on the DLC set this gate runs. The second arm is what makes
+    remedy (i) visible without the expansions.
     """
-    print("==> the ladder merge, 1 arm with an item taken out from under it")
+    print(f"==> the ladder merge, {len(ARMS)} arms with an item taken out from "
+          f"under them")
     work = Path(tempfile.mkdtemp(prefix="bbb-remover-"))
     try:
         fixture = build_remover(series, work)
-        got = run_arm("remover", factorio, series, mod_dir, None,
-                      extras=[fixture],
-                      probe=lambda d: project(d, '{item: .item["%s"], '
-                                                 'alive: .item["%s"], '
-                                                 'ingredients: .recipe["%s"]'
-                                                 '.ingredients}'
-                                              % (REMOVER_ITEM, REMOVER_ALIVE,
-                                                 OUR_PART)))
+        probe = lambda d: project(d, REMOVER_PROBE % (
+            REMOVER_ITEM, REMOVER_ALIVE, REMOVER_ITEM, REMOVER_RECIPE_ALIVE,
+            OUR_PART))
+        got = {ms: run_arm(f"remover-{ms}", factorio, series, mod_dir, None,
+                           extras=[fixture], mod_set=ms, probe=probe)
+               for ms in sorted(ARMS)}
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
-    # ANTI-VACUITY FIRST, AND IT IS THREE QUESTIONS. Factorio's data-stage
+    bad = False
+    # THE LOOP COVERED EVERY ROW. A TRIPWIRE AND NOT AN ASSERTION, and the
+    # difference is worth stating rather than leaving for a reader to find:
+    # `got` is built by a comprehension over `sorted(ARMS)` four statements up,
+    # so on this code AS WRITTEN this can never fire, and it measures nothing
+    # the engine did. What it is for is the EDIT. The count in the heading comes
+    # from `ARMS` and the runs come from the comprehension, so a comprehension
+    # narrowed back to one mod set would print a heading saying two over a
+    # report that measured one, and nothing else here would notice -- there is
+    # no FAIL an arm that never ran can produce. This is the line that turns
+    # that edit into a failure, and it is the only claim it makes.
+    if sorted(got) != sorted(ARMS):
+        bad = True
+        print(f"FAIL remover: the arms that ran are {sorted(got)} and `ARMS` "
+              f"has {sorted(ARMS)}; a mod set that is not run is a mod set "
+              f"this gate is silent about")
+    for ms in sorted(got):
+        bad |= check_remover_arm(ms, got[ms])
+    return bad
+
+
+def check_remover_arm(mod_set: str, got: dict) -> bool:
+    """One mod set's merge arm. Returns True on a failure, as main() counts."""
+    arm = f"remover-{mod_set}"
+    # ANTI-VACUITY FIRST, AND IT IS SEVEN QUESTIONS NOW. Factorio's data-stage
     # ordering is not something this repository found documented, so the arm
     # measures it rather than resting on the alphabet; and a fixture that
     # loaded first and removed nothing would leave the vanilla recipe, which is
     # also what a library that stopped merging would emit on the FIRST of its
-    # three ladders. None of the three is asked of the dump's recipe, so all
-    # three come first.
+    # three ladders. None of the seven is asked of this mod's own recipe, so
+    # all seven come first. The `ARMS` coverage check up in `check_remover` is
+    # NOT one of them and is not counted as one: it measures nothing the engine
+    # did, for the reason its own comment gives.
     #
-    # THE ITEM QUESTION IS ASKED IN BOTH DIRECTIONS, POSITIVE FIRST. `is not
-    # None` alone would be satisfied by a jq path that stopped matching
-    # anything, so a stale probe would read as a removal that never happened;
-    # asking the same path for a name that must SURVIVE is what tells an absent
-    # item from a dead projection.
-    order, ours = got["load_order"], got["mods"][0]
-    if REMOVER_NAME not in order or ours not in order or \
-            order.index(REMOVER_NAME) > order.index(ours):
-        print(f"FAIL remover: the data stages ran {order}, and this arm needs "
+    # EACH TABLE IS ASKED IN BOTH DIRECTIONS, POSITIVE FIRST. `is not None`
+    # alone would be satisfied by a jq path that stopped matching anything, so
+    # a stale probe would read as a removal that never happened; asking the
+    # same path for a name that must SURVIVE is what tells an absent prototype
+    # from a dead projection. The ITEM pair says the data stage ran and the
+    # RECIPE pair says the data-final-fixes sweep did -- which is the half that
+    # would otherwise be invisible here, because a fixture that swept nothing
+    # refuses the load in the engine rather than in this arm.
+    #
+    # AND THE MOD SET IT ACTUALLY RAN COMES BEFORE ALL OF THEM, because the
+    # defect the fix round found was exactly this and nothing downstream could
+    # see it: the arm asked `run_arm` for a mod set whose name `ARMS` does not
+    # carry, got the empty list, and staged the base mod set under the
+    # incumbent's name. Every assertion below passed, on the wrong game.
+    #
+    # IT IS TWO QUESTIONS AND NOT ONE, BECAUSE `mods` IS NOT THE ENGINE'S LIST.
+    # `run_arm` builds it by reading back the `info.json` files this script
+    # COPIED INTO the staging directory, so it says what was STAGED and a mod
+    # staged is not yet a mod loaded. The engine's own list is `load_order`,
+    # which is scraped out of its `Loading mod X (data.lua)` lines, so the
+    # second question checks every name the first one asked for against that
+    # list. The order comparison below then needs no `in` guards of its own.
+    ours = got["mods"][0]
+    want_mods = [ours] + ARMS[mod_set] + [REMOVER_NAME]
+    if got["mods"] != want_mods:
+        print(f"FAIL {arm}: the mods staged were {got['mods']} and the "
+              f"`{mod_set}` row of ARMS asks for {want_mods}; this arm ran on "
+              f"a different game from the one it is named after")
+        return True
+
+    order = got["load_order"]
+    if not set(want_mods) <= set(order):
+        print(f"FAIL {arm}: the engine ran the data stages of {order} and "
+              f"{[n for n in want_mods if n not in order]} never ran one; "
+              f"being in the staging directory is not being in the game")
+        return True
+    if order.index(REMOVER_NAME) > order.index(ours):
+        print(f"FAIL {arm}: the data stages ran {order}, and this arm needs "
               f"{REMOVER_NAME} before {ours}; it removed nothing this mod "
               f"could have seen and proves nothing")
         return True
     if got["probe"]["alive"] is None:
-        print(f"FAIL remover: `{REMOVER_ALIVE}` is not in the item table "
+        print(f"FAIL {arm}: `{REMOVER_ALIVE}` is not in the item table "
               f"either, and the fixture never touches it: the probe reads "
               f"nothing, so the question below cannot tell a removed item "
               f"from a stale path")
         return True
     if got["probe"]["item"] is not None:
-        print(f"FAIL remover: `{REMOVER_ITEM}` is still in the item table "
+        print(f"FAIL {arm}: `{REMOVER_ITEM}` is still in the item table "
               f"after the fixture ran, so nothing was taken away and this arm "
               f"proves nothing")
         return True
+    if got["probe"]["alive_recipe"] is None:
+        print(f"FAIL {arm}: there is no `{REMOVER_RECIPE_ALIVE}` recipe "
+              f"either, and the fixture never touches it: the recipe path "
+              f"reads nothing, so the question below cannot tell a swept "
+              f"recipe from a stale path")
+        return True
+    if got["probe"]["dead_recipe"] is not None:
+        print(f"FAIL {arm}: the `{REMOVER_ITEM}` recipe survived the "
+              f"data-final-fixes sweep, so the fixture's second stage did not "
+              f"run and this arm is a one-stage fixture again -- which is the "
+              f"shape that broke Space Age (remedy (i))")
+        return True
 
-    # THE CLAIM, AND IT IS BOTH HALVES. The list alone would pass on a library
-    # that dropped the belt ingredient instead of merging it, and the line
-    # alone would pass on one that said the right thing and emitted something
-    # else -- which is why RECIPE_TEXT_ARMS asserts both too.
+    # THE CLAIM, AND IT IS THREE HALVES. The list alone would pass on a library
+    # that dropped the belt ingredient instead of merging it; the line alone
+    # would pass on one that said the right thing and emitted something else --
+    # which is why RECIPE_TEXT_ARMS asserts both too; and the TOOLTIP is the
+    # third, below.
     bad = False
-    ings = [(i["name"], i["amount"]) for i in got["probe"]["ingredients"]]
+    ours_recipe = got["probe"]["ours"]
+    if ours_recipe is None:
+        # NOT REACHABLE THROUGH THE LIBRARY AND REACHABLE THROUGH THE FIXTURE,
+        # which is why it is a message rather than a TypeError one line down.
+        # The sweep kills every recipe naming a gone item, and this mod's own
+        # recipe is one the sweep can see: a library that stopped merging and
+        # emitted `transport-belt` would have its recipe swept out from under
+        # it at data-final-fixes and the load would then succeed with no
+        # recipe at all.
+        print(f"FAIL {arm}: there is no `{OUR_PART}` recipe in the dump. The "
+              f"sweep eats a recipe that names `{REMOVER_ITEM}`, so this is "
+              f"what a ladder that did not fall back looks like from here -- "
+              f"and it is also what a stale probe looks like, which is why "
+              f"the tooltip question below can only be asked after it")
+        return True
+    ings = [(i["name"], i["amount"]) for i in ours_recipe["ingredients"]]
     if ings != REMOVER_RECIPE:
         bad = True
-        print(f"FAIL remover: with no `{REMOVER_ITEM}` in the game the recipe "
+        print(f"FAIL {arm}: with no `{REMOVER_ITEM}` in the game the recipe "
               f"is {ings}\n{'':>5}  and the fallback merged into the first "
               f"entry has to make it {REMOVER_RECIPE}")
     if got["fkrecipes_lines"] != [REMOVER_LINE]:
         bad = True
-        print(f"FAIL remover: the library's log lines are "
+        print(f"FAIL {arm}: the library's log lines are "
               f"{got['fkrecipes_lines']}\n{'':>5}  and the whole stream has to "
               f"be [{REMOVER_LINE!r}]")
+
+    # THE TOOLTIP, AND THE ASSERTION IS THAT THERE IS NONE. FkRecipes writes a
+    # trailing sentence into an emitted prototype's `localised_description` for
+    # exactly two things: a stored setting value that FELL BACK (its decision
+    # C) and a merged amount CLAMPED at the item or fluid ceiling (its decision
+    # B). THIS ARM EARNS NEITHER, and both halves of that are measured rather
+    # than argued. There is no `mod-settings.dat` in this run at all, so no
+    # stored value exists to fall back. And the merge here is `4 plus 2 is 6`
+    # against an item ceiling of 65535, which the assessment records as
+    # unreachable through this mod: every declared amount in the six presets is
+    # single-digit.
+    #
+    # SO THE LADDER MERGE ITSELF CARRIES NO NOTE, AND THAT IS THE LIBRARY'S
+    # DELIBERATE CHOICE RATHER THAN A GAP IN IT. FkRecipes'
+    # agents/implementation-notes.md, decision B: "THE LADDER GETS NO NOTE,
+    # DELIBERATELY", because a resolve-or-drop ingredient ladder is the
+    # library's advertised contract and the dropdown's own composed description
+    # already discloses it -- this mod's `bbb-recipe-cost` tooltip says "where
+    # one names something your mods do not have, the nearest thing they do have
+    # is used instead, and where that leaves one item named twice the two
+    # amounts are added" -- whereas a clamped amount is arithmetic a player can
+    # check nowhere. So a note appearing HERE would be the library reclassifying
+    # its contract as a degradation, on the load of a player who never opened
+    # the Startup tab, and that is worth failing over in either direction.
+    #
+    # AND THE KEY'S PRESENCE RATHER THAN ITS VALUE, because the absence is the
+    # claim: the library emits the key or does not emit it at all
+    # (`appendLocalised` writes nothing when there is neither a description nor
+    # a note), and a key present holding null is a different prototype from a
+    # key that is not there. MEASURED on 2.0.77: the whole prototype is seven
+    # keys -- `enabled`, `energy_required`, `ingredients`, `name`, `order`,
+    # `results`, `type` -- with no `localised_description` and no
+    # `localised_name` either, this mod declaring no `Description` on its
+    # recipe. `guest/go/tune/plandata_test.go`'s `checkFallbackNote` says the
+    # same thing from the host side.
+    # THE POSITIVE CASE CANNOT BE TAKEN OFF THIS ENGINE AT ALL, which is why
+    # the break that red-proved this assertion was made against a RECORDED
+    # dump -- the precedent OUR_SETTINGS_ORDERS' block already sets, having
+    # read its five moves off a kept `mod-settings-dump.json`. Every probe in
+    # this file is a pure function of a dump PATH, so a doctored copy is a
+    # legitimate input to the same assertion, and here it is the ONLY input.
+    # MEASURED on 2.0.77, this package and base alone with no fixture of any
+    # kind: with `better-belt-balancer-recipe-ingredients` storing
+    # `2 iron-plat`, so that a recipe-bound setting really does fall back and a
+    # note really is earned, the load is REFUSED -- `Error while loading recipe
+    # prototype "bbb-balancer-part" (recipe): Localised string key is too
+    # large: 247 > 200 (limit). in property tree at
+    # ROOT.recipe.bbb-balancer-part.localised_description[1]`, exit 1, no dump.
+    # AND THE CEILING IS 200 BYTES RATHER THAN 200 CHARACTERS, which decides
+    # whether an author could write round it. MEASURED on 2.0.77 with a
+    # throwaway Lua fixture hanging a `localised_description` on base's
+    # `iron-gear-wheel` recipe: 200 ASCII characters load and 201 refuse
+    # (`201 > 200`), and 100 `e` acutes -- 100 characters, 200 UTF-8 bytes --
+    # load while 101 refuse reporting `202 > 200`. A character counter would
+    # have said 101.
+    #
+    # ALL THREE OF THE LIBRARY'S TRAILING SENTENCES ARE OVER, not only the one
+    # above, and the arithmetic is off its own committed source (`fallbackNote`,
+    # `withDestruction`, `clampedItemNote`, `clampedFluidNote` in
+    # FkRecipes go/data.go). The fallback RECIPE note is 208 bytes before the
+    # setting's name goes in it, so no name is short enough to bring one into
+    # range; the clamped ITEM note with the same destruction tail is 229 before
+    # the item's name and the clamped FLUID note 246 before the fluid's, so
+    # those two are over BEFORE any name at all. Handed to the engine verbatim
+    # on the same fixture: `iron-plate` refuses at `239 > 200` and `water` at
+    # `251 > 200`. The library's TECHNOLOGY note is 107 before the name, 138
+    # here, and it loads -- measured twice, through this mod with
+    # `better-belt-balancer-tech-packs` storing `2 flurb-pack` (exit 0, a dump,
+    # and the two-element description on `bbb-balancer`) and on the fixture.
+    #
+    # THAT IS A LIBRARY FINDING AND NOT THIS GATE'S TO FIX. It is recorded here
+    # because it is why the absence this arm asserts has no engine-side
+    # positive control to sit beside it, and because an arm asserting the
+    # positive is an arm nothing could make green. IT ALSO MAKES THE SENTENCE
+    # BELOW UNREACHABLE IN ONE DIRECTION: a note this library would really have
+    # written stops the load before any assertion here runs, so what the gate
+    # prints in that case is `run_arm`'s own `--dump-data exited 1`. The gate
+    # still goes red, which is what matters; this arm just does not get to say
+    # why.
+    if "localised_description" in ours_recipe:
+        bad = True
+        print(f"FAIL {arm}: the `{OUR_PART}` recipe carries a "
+              f"localised_description\n{'':>5}  "
+              f"{json.dumps(ours_recipe['localised_description'])}\n{'':>5}  "
+              f"and a plain ladder merge earns none: nothing was stored to "
+              f"fall back and nothing was clamped, so the library's own rule "
+              f"(its decision B, THE LADDER GETS NO NOTE) says the "
+              f"resolve-or-drop contract is disclosed in the dropdown's "
+              f"description and not here")
+
     if not bad:
-        print(f"  ok   remover{'':<20} {ings}, and the engine loaded it")
+        print(f"  ok   {arm:<26} {ings}, and the engine loaded it")
         print(f"{'':>5}  said {REMOVER_LINE!r}")
+        print(f"{'':>5}  and the recipe carries no localised_description, "
+              f"which is what a ladder that resolved earns")
     return bad
 
 
