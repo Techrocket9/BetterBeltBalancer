@@ -68,13 +68,25 @@
 #         rather than passing
 #   iact  THE INTERACTIVE CHECKLIST'S OWN WORLD. test/interactive/ stages the
 #         five player-gesture rigs and the five mod-portal demo scenes, all of
-#         them single-edge; nothing headless can make the gestures, but every
+#         them single-edge; the PIXELS are what is left for a human, but every
 #         rig has to LAND and every one has to be legal. One `--create`, and it
 #         fails on a placement the engine refused, a shape that is not the one
 #         the geometry intended, or any refusal at all -- the gestures create
 #         the refusals and the staging must not
+#   curs  THE GESTURES THEMSELVES, FROM A PLAYER'S CURSOR. The second suite with
+#         no `--create`, and for `mig21`'s reason turned round: that one's world
+#         cannot be built by the binary here, and this one's cannot be built by
+#         a MAP GENERATOR at all, because a `game.players` entry exists only
+#         where somebody once connected. So phase one is a committed save a
+#         CLIENT made (test/fixtures-player/, cut by `make player-fixture`) and
+#         this suite adds its rigs to it and drives seven gestures through
+#         `build_from_cursor` and `mine_entity`: a fast replace onto a loaded
+#         belt, one onto the end of a line, a belt over a part twice, a second
+#         belt on a part that has one, the bridge, the sixty-fifth belt with and
+#         without room to hand it back, and the miner's pocket both field
+#         reports. See CLAUDE.md's `curs` section
 #
-# FOURTEEN OF THE FIFTEEN RUN ON EITHER ENGINE, and three of them ANSWER
+# FIFTEEN OF THE SIXTEEN RUN ON EITHER ENGINE, and three of them ANSWER
 # DIFFERENTLY on each. The estate was rebuilt for the one-belt-per-part rule in
 # four tranches and `mig` was the last of them, because it is the only suite
 # whose ANSWER the rule changed rather than whose geometry -- see the SUITES line
@@ -253,7 +265,7 @@ MOD_SERIES="$(sed -n 's/.*"factorio_version": *"\([^"]*\)".*/\1/p' "$MOD_DIR/inf
 #   INTERACTIVE checklist stages. It runs here because a rig that stopped
 #   landing, or one this mod refuses, costs a human a session to discover and
 #   costs this a single `--create` to catch.
-SUITES="${*:-m1 sedge mig21 flip m2 m3 mar upg curv edge mix plat qual mig iact}"
+SUITES="${*:-m1 sedge mig21 flip m2 m3 mar upg curv edge mix plat qual mig iact curs}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.
@@ -747,6 +759,56 @@ LUA
 JSON
 }
 
+# --- the curs suite's staging -----------------------------------------------
+#
+# THE SECOND SUITE WITH NO `--create`, and the reason is the opposite of
+# `mig21`'s. Those worlds cannot be REBUILT by the binary on this machine; this
+# one cannot be built by a map generator at all, on any binary, because what it
+# needs out of a save is a PLAYER -- and a `game.players` entry exists only where
+# somebody once connected. So phase one is test/fixtures-player/'s committed
+# save, cut from a client's own by `make player-fixture`.
+#
+# What differs from `stage_fixture` above is everything that suite needs and this
+# one does not. There is no test mod to stage for its data stage and no control
+# stage to neutralize: the fixture is recorded against BASE ALONE and holds no
+# prototype anybody has to keep alive. The observer BUILDS the world, exactly as
+# every `--create` suite's does, into a save that has a player in it.
+#
+# THE FIXTURE IS CHOSEN BY THE ENGINE IT WAS RECORDED ON, and a 2.0 save loads on
+# 2.1 as `mig21`'s do. There is one file; it is globbed rather than named so that
+# a re-cut on another series drops in beside it.
+stage_curs() {
+  local work="$1" fixture="" f
+  for f in "$ROOT"/test/fixtures-player/player-*.zip; do
+    [ -f "$f" ] && fixture="$f"
+  done
+  [ -n "$fixture" ] || {
+    echo "no fixture under test/fixtures-player/." >&2
+    echo "Cut one from a save a Factorio client made:" >&2
+    echo "  make player-fixture SAVE=<path>" >&2
+    exit 1; }
+
+  rm -rf "$work"
+  mkdir -p "$work/mods"
+  cp -R "$MOD_DIR" "$work/mods/"
+  copy_testmod bbb-curs-test "$work/mods/bbb-curs-test"
+  stamp_engine "$work/mods/bbb-curs-test"
+  cp "$fixture" "$work/map.zip"
+  echo "==> fixture $(basename "$fixture")"
+  cat > "$work/mods/mod-list.json" <<JSON
+{
+  "mods": [
+    { "name": "base", "enabled": true },
+    { "name": "elevated-rails", "enabled": false },
+    { "name": "quality", "enabled": false },
+    { "name": "space-age", "enabled": false },
+    { "name": "$MOD_NAME", "enabled": true },
+    { "name": "bbb-curs-test", "enabled": true }
+  ]
+}
+JSON
+}
+
 # load_fixture <workdir> <ticks> -- the benchmark phase on its own.
 #
 # `--benchmark` never saves, so there is nothing after this and, the fixture
@@ -1167,6 +1229,24 @@ for suite in $SUITES; do
       run "$TMP/sedge" "${BBB_SEDGE_TICKS:-3500}"
       echo "==> asserting the rule and its refusals"
       python3 "$ROOT/test/assert-sedge.py" "$TMP/sedge/create.log" "$TMP/sedge/run.log"
+      ;;
+    curs)
+      # THE GESTURES THAT NEED A PLAYER, DRIVEN FROM ONE. Every section of
+      # CLAUDE.md that ends "only the TRIGGER is unverifiable headlessly" is
+      # about this suite now: the fast-replace cursor, the miner's pocket, the
+      # over-limit hand-back and its full-inventory negative.
+      #
+      # THE PLAYER IS IN THE GOD CONTROLLER AND NOT IN A CHARACTER, which is a
+      # measurement rather than a shortcut: a save written by a headless server
+      # holds every player DISCONNECTED, a disconnected player cannot be given a
+      # character back, and one in the character controller builds nothing. God
+      # mode produces the same event trace, the same mine buffer and the same
+      # inventory arithmetic -- guest/go/obs/curs's header is the table.
+      echo "=== curs: the player gestures, from a real cursor ==="
+      stage_curs "$TMP/curs"
+      load_fixture "$TMP/curs" "${BBB_CURS_TICKS:-1800}"
+      echo "==> asserting the cursor gestures"
+      python3 "$ROOT/test/assert-curs.py" "$TMP/curs/run.log"
       ;;
     mig21)
       # A FACTORIO 2.0 MULTI-EDGE SAVE, OPENED ON 2.1. The one suite with no

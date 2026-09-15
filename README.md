@@ -151,7 +151,7 @@ make test     # headless verification in a real Factorio
 | `guest/go/` | the control guest; `data/` is the settings and data stages, `plan/` the network planner, `tune/` what the cost settings and the belt-speed derivation decide plus the FkRecipes plan, `fkapi/` the generated FkLua bindings |
 | `mod-data/` | the assets the package carries verbatim: graphics, locale, changelog, thumbnail |
 | [`bench/`](bench/README.md) | the head-to-head benchmark harness, its setup mod and the results |
-| `test/` | the headless suites and their assertion scripts; `fixtures/` holds a small mod, also written in Go, that a data-stage check builds and stages; [`test/interactive/`](test/interactive/README.md) is the checklist for the seven things a headless run cannot check, and the mod that stages both its rigs and the demo scenes |
+| `test/` | the headless suites and their assertion scripts; `fixtures/` holds a small mod, also written in Go, that a data-stage check builds and stages, and `fixtures-player/` a small save with a player in it, so that the suites can drive a real cursor; [`test/interactive/`](test/interactive/README.md) is the checklist for the things a headless run cannot check, and the mod that stages both its rigs and the demo scenes |
 | `fklua.toml` | mod identity, the API pin, guest language, GC mode and the data module |
 | `CLAUDE.md`, `agents/` | maintainer design notes and the full measurement record |
 

@@ -1,8 +1,10 @@
 # The interactive checklist
 
-Seven things a headless Factorio cannot check, and the scenes the mod portal's animations are captured from. Five of the seven need a real player: `game.get_player` resolves to nothing during `--create`, the player events cannot be raised from script, and a script build is not a cursor. The headless suites pin the arithmetic, the quantities and the negative cases; this checklist pins the triggers. The `bbb-interactive-setup` mod stages a rig for gestures A to E beside spawn on a fresh world, so each of those costs about thirty seconds, and stages the five demo scenes in a second column east of them. `make interactive-install` builds and installs it; this file is the checklist it exists for. It stages and asserts nothing; the assertions are what you see and the `[BBB]` log lines listed below.
+Seven things a headless Factorio cannot check, and the scenes the mod portal's animations are captured from. What a headless run cannot check is what a screen shows: where a message appears, what colour it is, whether a cursor shows a build preview or a red block, and whether a sound plays. The gestures themselves are driven by the headless suites, which build their rigs into a committed save that has a player in it and then click and mine from that player's own cursor; every count, every log line and every inventory below is asserted there. This checklist is what is left.
 
-Gestures F and G need no staged rig and no player. They need your own save and your own graphical client, which is what the suites do not have.
+The `bbb-interactive-setup` mod stages a rig for gestures A to E beside spawn on a fresh world, so each of those costs about thirty seconds, and stages the five demo scenes in a second column east of them. `make interactive-install` builds and installs it; this file is the checklist it exists for. It stages and asserts nothing; the assertions are what you see and the `[BBB]` log lines listed below.
+
+Gestures F and G need no staged rig. They need your own save and your own graphical client.
 
 Every rig here is built to Factorio 2.1's rule: **a balancer part connects to one belt**. A 4-in/4-out balancer is eight parts, a west column carrying the inputs and an east column carrying the outputs, and the smallest balancer is two parts. That rule is also why two of the gestures work the way they do: a part that already has its belt cannot be given another, so a belt that is meant to change a balancer's port count has to land on a part with nothing against it. Both rigs that need one stage a spare part for exactly that purpose. The design behind the rule is in [`agents/single-edge.md`](../../agents/single-edge.md).
 
@@ -17,11 +19,11 @@ Enable both mods and start a new freeplay world with any settings (the setup mod
 
 Afterwards, grep `factorio-current.log` in your Factorio user directory for the lines named under each gesture. They are verbose-level `[BBB]` lines, so the mod must be the default build rather than `QUIET=1`.
 
-The staged world itself is verified headlessly by `test/run.sh iact`, which fails on a rig that did not land, a rig that compiled to a shape other than the one intended, or any refusal at all. The refusals below are the gestures' doing; a rig that arrives already refused would waste your session.
+The staged world itself is verified headlessly by `test/run.sh iact`, which fails on a rig that did not land, a rig that compiled to a shape other than the one intended, or any refusal at all. The refusals below are the gestures' doing; a rig that arrives already refused would waste your session. `test/run.sh curs` is the other half: the same gestures, driven from a cursor against a committed save with a player in it, asserted on the world and on the mod's own lines.
 
 ## A. Mining a balancer part by part (y = -24)
 
-A saturated 4-in/4-out balancer over eight parts, two columns of four, with its outputs dead-ended so it stays full. Mine it one part at a time. At every step, not only at the last part, the drained items must land in your inventory rather than on the ground. A full inventory must still spill the remainder, which is vanilla's rule too.
+A saturated 4-in/4-out balancer over eight parts, two columns of four, with its outputs dead-ended so it stays full. Mine it one part at a time. At every step, not only at the last part, the drained items must land in your inventory rather than on the ground. A full inventory must still spill the remainder, which is vanilla's rule too. What this adds to the headless run is the feel of it: the items arriving stack by stack in a real inventory, with no pile on the floor behind you.
 
 Log line: `offered ... items to player ... before the floor`.
 
