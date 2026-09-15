@@ -91,7 +91,10 @@ TOLD = re.compile(
 # without them a suite could say a message was sent and nothing at all about
 # whether it pointed anywhere.
 PINGS = re.compile(
-    r"multi-edge rule, (\d+) pings(, list truncated)?"
+    # ` in N lines` appears only when the list took more than one chat line.
+    # ` (list truncated)` is the guest's own spelling; this pattern said
+    # `, list truncated` until 2026-09-15 and could never have matched it.
+    r"multi-edge rule, (\d+) pings(?: in \d+ lines)?( \(list truncated\))?"
     r"(?:, first \[gps=(-?\d+),(-?\d+),(\S+?)\])?"
     r", charted (\d+)"
 )

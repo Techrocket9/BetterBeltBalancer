@@ -61,7 +61,10 @@ REQUEUED = re.compile(
 )
 TOLD = re.compile(
     r"\[BBB\] single-edge: told force (\d+) about (\d+) balancers built to the "
-    r"multi-edge rule, (\d+) pings(?:, first \[gps=(-?\d+),(-?\d+),(\S+?)\])?"
+    # ` in N lines` and ` (list truncated)` are non-capturing so that the group
+    # numbers every check below reads by index do not move.
+    r"multi-edge rule, (\d+) pings(?: in \d+ lines)?(?: \(list truncated\))?"
+    r"(?:, first \[gps=(-?\d+),(-?\d+),(\S+?)\])?"
     r", charted (\d+)(?: from (-?\d+),(-?\d+) to (-?\d+),(-?\d+))?(.*)"
 )
 # THE CHART TRIPWIRE. `is_chunk_charted` answers false for everything on a

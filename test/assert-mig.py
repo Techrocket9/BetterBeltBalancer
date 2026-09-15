@@ -167,7 +167,11 @@ GFFAILED = re.compile(r"could not be written")
 # without them a suite could say a message was sent and nothing at all about
 # whether it pointed anywhere.
 PINGS = re.compile(
-    r"multi-edge rule, (\d+) pings(, list truncated)?"
+    # ` in N lines` is written only when the list took more than one chat line,
+    # so a message that fits reads exactly as it always did. ` (list truncated)`
+    # is the guest's own spelling -- this pattern said `, list truncated` until
+    # 2026-09-15, so its optional group could never have matched anything.
+    r"multi-edge rule, (\d+) pings(?: in \d+ lines)?( \(list truncated\))?"
     r"(?:, first \[gps=(-?\d+),(-?\d+),(\S+?)\])?"
     # AND WHAT IT CHARTED. A `[gps=]` opens the map at a coordinate whether or
     # not the force has ever seen it, and an uncharted coordinate is BLACK, so a

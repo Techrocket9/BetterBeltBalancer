@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.4
+Date: 2026-09-15
+  Bugfixes:
+    - The chat message that lists your balancers after an update now points at every one of them. It carried about the first thirty-five map pings and stopped there, with no sign that it had, while the sentence above them went on naming the exact number: a base with more balancers than that was handed a checklist shorter than it said, and which ones fell off it was not something you could predict. The rest of the list now follows on further lines, as many as it takes, and the map is revealed around every balancer named. Thanks to Gamer433 for the report.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.3
 Date: 2026-09-14
   Bugfixes:

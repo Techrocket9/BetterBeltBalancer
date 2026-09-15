@@ -1162,7 +1162,13 @@ func boxAffected() {
 	}
 }
 
-// tellAffected says one thing to each force that owns an affected balancer.
+// The second and every later chat line of one force's checklist. SHARED BY ALL
+// THREE PRODUCERS, because what a continuation says does not depend on which
+// pass opened the list -- see printAffected.
+const msgPingContinued = "bbb.ping-list-continued"
+
+// tellAffected says one thing to each force that owns an affected balancer, over
+// as many chat lines as its pings take.
 //
 // `withPings` is what separates the two messages rather than a second function:
 // the 2.1 one is a checklist of machines to rebuild and every one of them is
@@ -1175,11 +1181,22 @@ func boxAffected() {
 // true of every producer at once: the veto, the grandfather and the 2.1
 // migration summary all arrive here. See chartAffected.
 //
+// EVERY AFFECTED BALANCER IS PINGED AND CHARTED, over however many chat lines
+// that takes, since 2026-09-15. It used to be every one that fitted in 900 bytes
+// -- about thirty-five -- and the sentence above the list went on naming the
+// exact count, so a player with sixty-six stopped balancers was handed a
+// checklist of thirty-five and nothing that said so. The report that found it is
+// the mod portal's ("Some locations where this also happened were not pinged").
+// The buffer is unchanged and so is its reserve; what changed is what happens
+// when the next ping does not fit.
+//
 // THE FORCE IS RESOLVED BEFORE THE PING LOOP RATHER THAN AFTER IT, which is the
 // one structural change the charting made. Charting needs the LuaForce and the
 // ping loop is where a cluster is decided to be pinged at all, so the two have
 // to happen together or the second pass would have to re-derive which clusters
-// the first one accepted -- two copies of the cap rule, one edit apart.
+// the first one accepted -- two copies of one rule, one edit apart. It is also
+// what lets a chunk be SENT from inside that loop, which is the whole of the
+// chunking: the handle is already in hand.
 //
 // `heading` AND `what` ARE THE CALLER'S, because the log line below is not this
 // function's statement -- it is the producer's, and there are two of them now.
@@ -1217,28 +1234,39 @@ func tellAffected(msgKey string, withPings bool, heading, what string) {
 			continue
 		}
 		gpsReset()
+		lines, failed := 0, false
 		if withPings {
 			for j := range affected {
 				if affected[j].force != f {
 					continue
 				}
-				// CHARTED ONLY IF IT WAS REALLY PINGED. The cap is what decides,
-				// and asking it once keeps the promise exact: every ping in the
-				// message a player can click lands on ground their force has seen.
-				if gpsAdd(&affected[j]) {
+				added, full := gpsAdd(&affected[j])
+				if full {
+					// THE LIST HAS REACHED WHAT ONE CHAT LINE HOLDS AND THERE IS
+					// MORE OF IT. What is here goes out, the buffer starts again,
+					// and this ping opens the next line -- a fresh buffer always
+					// takes one, which is what makes the retry below terminate.
+					if printAffected(lf, msgKey, count, true, lines == 0) != nil {
+						failed = true
+					}
+					lines++
+					gpsNewLine()
+					added, _ = gpsAdd(&affected[j])
+				}
+				// CHARTED ONLY IF IT WAS REALLY PINGED, which is now all of them
+				// but the one a surface name cannot be read for: every ping in
+				// the message a player can click lands on ground their force has
+				// seen.
+				if added {
 					chartAffected(lf, &affected[j])
 				}
 			}
 		}
-		limMsg[0] = fkapi.OfString(msgKey)
-		limMsg[1] = fkapi.OfNumber(float64(count))
-		nparam := 1
-		if withPings {
-			limMsg[2] = fkapi.OfString(gpsString())
-			nparam = 2
+		err := printAffected(lf, msgKey, count, withPings, lines == 0)
+		if err != nil {
+			failed = true
 		}
-		msg := fkapi.Value{Tag: fkapi.TagArray, Array: limMsg[:1+nparam]}
-		err := lf.Print(msg, nil)
+		lines++
 		// The one half of this a headless run can see. `force.print` writes to the
 		// game's chat, which no script can read back and which `--benchmark` does
 		// not log -- so without this line a suite could say the migration happened
@@ -1255,19 +1283,23 @@ func tellAffected(msgKey string, withPings bool, heading, what string) {
 		logS(what)
 		if withPings {
 			// HOW MANY PINGS REALLY WENT OUT, beside how many balancers were
-			// named. The two are equal until a base has more affected balancers
-			// than one readable chat line can point at, and the cap is silent in
-			// the CHAT by design -- the count in the sentence stays exact, which is
-			// what a player reads. It may not be silent HERE: this line is the
-			// assertion surface, and a suite that could not tell a full list from a
-			// truncated one could not tell either from a broken one.
+			// named. They are equal now whenever every surface name resolved, and
+			// the LINE COUNT beside them is what says a list too long for one chat
+			// line was sent as several rather than cut: it is written only when
+			// there was more than one, so a message that fits reads exactly as it
+			// always did and no golden log in the estate moves.
 			logS(", ")
 			logU(uint32(gpsCount))
 			logS(" pings")
+			if lines > 1 {
+				logS(" in ")
+				logU(uint32(lines))
+				logS(" lines")
+			}
 			if gpsCut {
 				logS(" (list truncated)")
 			}
-			if gpsFirstEnd > 0 {
+			if gpsFirstLen > 0 {
 				logS(", first ")
 				logS(gpsFirst())
 			}
@@ -1291,16 +1323,42 @@ func tellAffected(msgKey string, withPings bool, heading, what string) {
 				logI(int32(chartFirst.RightBottom.Y))
 			}
 		}
-		if err != nil {
+		if failed {
 			logS(" -- print FAILED")
 		}
 		logEnd()
 	}
 	// limMsg[1] and [2] are the refusal's parameters too, and it writes its own
-	// numbers before every use; [0] is rewritten by every caller. Leaving a string
-	// in [2] would keep whatever the last summary borrowed alive, so it is put
-	// back to a number.
+	// numbers into them with `.Number =`, which moves the field and not the tag;
+	// [0] is rewritten by every caller. So BOTH are put back to numbers here. [2]
+	// was always the summary's ping list; [1] became a string the day a
+	// continuation line used it, and a refusal that inherited that would render a
+	// stale ping list where its belt count belongs.
+	limMsg[1] = fkapi.OfNumber(0)
 	limMsg[2] = fkapi.OfNumber(0)
+}
+
+// printAffected sends one chat line.
+//
+// The FIRST carries the producer's own message -- its exact count and the first
+// chunk of pings -- and every line after it carries the shared continuation key
+// and nothing but its chunk, so a checklist too long for one line still reads as
+// one checklist. One key for all three producers: what a continuation says is
+// "the line above goes on", which is the same sentence whichever pass opened it.
+func printAffected(lf fkapi.LuaForce, msgKey string, count uint32, withPings, first bool) error {
+	if !first {
+		limMsg[0] = fkapi.OfString(msgPingContinued)
+		limMsg[1] = fkapi.OfString(gpsString())
+		return lf.Print(fkapi.Value{Tag: fkapi.TagArray, Array: limMsg[:2]}, nil)
+	}
+	limMsg[0] = fkapi.OfString(msgKey)
+	limMsg[1] = fkapi.OfNumber(float64(count))
+	nparam := 1
+	if withPings {
+		limMsg[2] = fkapi.OfString(gpsString())
+		nparam = 2
+	}
+	return lf.Print(fkapi.Value{Tag: fkapi.TagArray, Array: limMsg[:1+nparam]}, nil)
 }
 
 // ---------------------------------------------------------------------------
@@ -1315,26 +1373,37 @@ func tellAffected(msgKey string, withPings bool, heading, what string) {
 // A separate buffer from logline's, because a log line written between building
 // this and sending it would otherwise overwrite it.
 //
-// TRUNCATED RATHER THAN GROWN, and the truncation is a policy here rather than a
-// backstop: a base with two hundred affected balancers would produce a chat line
-// nobody can read, so the list stops at what fits and the count in the sentence
-// -- which is exact -- says how many there really are.
+// CHUNKED RATHER THAN GROWN OR CUT. A base with two hundred affected balancers
+// would produce a chat line nobody can read, so the list stops at what one line
+// holds -- and then starts another. It was CUT there until 2026-09-15, which is
+// the mod portal's report: the sentence kept its exact count and the list under
+// it named about the first thirty-five, in the rebuild's own cluster order,
+// which a player cannot predict. The count being exact is what made it look
+// whole. See tellAffected.
+
+const (
+	// What the chunk boundary reserves. It is comfortably more than the longest
+	// ping a real surface name can produce, which is what lets one ping never be
+	// written half-way and lets a fresh buffer always take one.
+	gpsReserve = 128
+)
 
 var (
 	gpsBuf    [900]byte
 	gpsLen    int
 	gpsDigits [12]byte
-	// How many pings this list really carries, and whether the cap cut it short.
-	// Read by tellAffected for the log line, which is the only place the
-	// truncation is stated: the chat sentence keeps an exact COUNT and a list
-	// that fits, which is the discipline the 2.1 migration summary already ships.
+	// How many pings this message really carries, over however many lines it
+	// took, and whether any ping was DROPPED -- which has one cause left since
+	// the chunking: a surface whose name could not be read. Both are read by
+	// tellAffected for the log line, which is where a run can see them at all.
 	gpsCount int
 	gpsCut   bool
-	// Where the FIRST ping ends, so the log line can carry it verbatim. The
-	// whole list cannot go there -- logline.go's buffer is 512 bytes and this one
-	// is 900 -- and one real ping is what makes "the pings name cluster tiles" a
-	// measurement rather than an inference from a count.
-	gpsFirstEnd int
+	// The FIRST ping, COPIED rather than borrowed, so the log line can carry it
+	// verbatim. It was an offset into gpsBuf, which was exact while a message was
+	// one line; a second chunk overwrites those bytes, so the offset would name
+	// the start of a later line instead of the first ping of the list.
+	gpsFirstBuf [gpsReserve]byte
+	gpsFirstLen int
 	// One-entry surface-name memo. Consecutive clusters are almost always on the
 	// same surface, and a name is a host call and a string copy.
 	gpsSurfIdx  uint32
@@ -1346,7 +1415,7 @@ func gpsReset() {
 	gpsLen = 0
 	gpsCount = 0
 	gpsCut = false
-	gpsFirstEnd = 0
+	gpsFirstLen = 0
 	gpsSurfOK = false
 	// The chart memo and its tally go with it. A surface handle is an entity
 	// reference and this guest keeps none across a dispatch; both memos live for
@@ -1356,12 +1425,17 @@ func gpsReset() {
 	chartFirst = fkapi.BoundingBox{}
 }
 
-// gpsFirst is the first ping of the list, borrowed exactly as gpsString is.
+// gpsNewLine starts the next chat line of one message: the buffer goes back to
+// empty and every tally carries on, because a ping on the second line is a ping.
+func gpsNewLine() { gpsLen = 0 }
+
+// gpsFirst is the first ping of the whole list, borrowed as gpsString is -- out
+// of its own buffer, which is the one thing a chunk boundary must not overwrite.
 func gpsFirst() string {
-	if gpsFirstEnd == 0 {
+	if gpsFirstLen == 0 {
 		return ""
 	}
-	return unsafe.String(&gpsBuf[0], gpsFirstEnd)
+	return unsafe.String(&gpsFirstBuf[0], gpsFirstLen)
 }
 
 func gpsS(s string) { gpsLen += copy(gpsBuf[gpsLen:], s) }
@@ -1384,23 +1458,28 @@ func gpsI(v int32) {
 	gpsLen += copy(gpsBuf[gpsLen:], gpsDigits[i:])
 }
 
-// gpsAdd appends one ping, and stops appending once the buffer is nearly full.
-// The reserve is comfortably more than the longest ping a real surface name can
-// produce, so a ping is never written half-way.
-func gpsAdd(c *affCluster) bool {
-	if gpsLen > len(gpsBuf)-128 {
-		gpsCut = true
-		return false
+// gpsAdd appends one ping.
+//
+// `added` is whether it was written. `full` is whether the line has no room for
+// it, which is the caller's cue to send what it has and start another -- and
+// never a reason to drop the ping: the retry lands in an empty buffer, which the
+// reserve guarantees takes one.
+func gpsAdd(c *affCluster) (added, full bool) {
+	if gpsLen > len(gpsBuf)-gpsReserve {
+		return false, true
 	}
 	name, ok := gpsSurfaceName(c.surf)
 	if !ok {
+		// The one ping still lost, and the log line's `(list truncated)` is now
+		// about this alone.
 		gpsCut = true
-		return false
+		return false, false
 	}
 	gpsCount++
 	if gpsLen > 0 {
 		gpsS(" ")
 	}
+	start := gpsLen
 	gpsS("[gps=")
 	gpsI(c.x)
 	gpsS(",")
@@ -1408,10 +1487,10 @@ func gpsAdd(c *affCluster) bool {
 	gpsS(",")
 	gpsS(name)
 	gpsS("]")
-	if gpsFirstEnd == 0 {
-		gpsFirstEnd = gpsLen
+	if gpsFirstLen == 0 {
+		gpsFirstLen = copy(gpsFirstBuf[:], gpsBuf[start:gpsLen])
 	}
-	return true
+	return true, false
 }
 
 // ---------------------------------------------------------------------------
