@@ -704,3 +704,87 @@ func TestTheRatesASuiteShouldAssert(t *testing.T) {
 		}
 	}
 }
+
+// TestPriorityCapacityIsRecorded. A toggle is a recompile, a recompile hands
+// the drained items to the network that succeeds it, and what that network
+// cannot hold spills on the ground beside the cluster. So the difference
+// between the two capacities is the bound on what a toggle can put there, and
+// it only goes one way: turning a priority port ON grows the network and can
+// never spill, turning the last one OFF shrinks it and can.
+//
+// agents/priority.md carries the whole table and what it means for a player.
+func TestPriorityCapacityIsRecorded(t *testing.T) {
+	for _, c := range []struct {
+		n, m, q     int
+		plain, prio int
+	}{
+		{2, 2, 1, 112, 192},
+		{4, 4, 1, 320, 736},
+		{4, 4, 2, 320, 608},
+		{8, 8, 1, 832, 2016},
+		{8, 8, 4, 832, 1792},
+		{16, 16, 1, 2048, 5152},
+		{32, 32, 1, 4864, 12576},
+	} {
+		pl, _, _ := Build(nil, edges(c.n, c.m), 0, 0)
+		if got := Capacity(pl); got != c.plain {
+			t.Errorf("%d->%d plain holds %d item positions, recorded %d",
+				c.n, c.m, got, c.plain)
+		}
+		pr, _, _ := Build(nil, prioEdges(c.n, c.m, c.q), 0, 0)
+		if got := Capacity(pr); got != c.prio {
+			t.Errorf("%d->%d q=%d holds %d item positions, recorded %d "+
+				"(update agents/priority.md in the same commit)",
+				c.n, c.m, c.q, got, c.prio)
+		}
+		if Capacity(pr) <= Capacity(pl) {
+			t.Errorf("%d->%d q=%d is not bigger than the plain network, and the "+
+				"whole toggle-on-never-spills claim rests on that", c.n, c.m, c.q)
+		}
+	}
+}
+
+// TestTheInputPriorityMirrorIsTheSameShape is not a test of anything shipped:
+// nothing sets InPrio, and ShapeEdges refuses an input marked Prio. It is the
+// probe that says WHY the refusal is a missing construction rather than a
+// missing line, and it is here so that agents/priority.md's claim about the
+// mirror is pinned rather than remembered.
+//
+// A butterfly whose every splitter has its INPUT priority on the smaller y
+// drains its low rows first. With one output to drain into, it takes a whole
+// belt from the first input and nothing from the rest -- which is exactly what
+// a de-concentrator should do. With TWO, it takes a belt from each of two
+// inputs rather than a belt and a half from the first: the mirror of the
+// [1, 0, 1, 0] a priority butterfly produces on the output side, and the same
+// thing it says -- a de-concentrator alone spreads over a SET of inputs, so it
+// needs a balancing butterfly and a pair of input-side tiers around it.
+func TestTheInputPriorityMirrorIsTheSameShape(t *testing.T) {
+	for _, c := range []struct {
+		n, m int
+		want []float64
+	}{
+		{4, 1, []float64{1, 0, 0, 0}},
+		{8, 1, []float64{1, 0, 0, 0, 0, 0, 0, 0}},
+		{4, 2, []float64{1, 0, 1, 0}},
+	} {
+		ops, _, ok := Build(nil, edges(c.n, c.m), 0, 0)
+		if !ok {
+			t.Fatalf("%d->%d refused", c.n, c.m)
+		}
+		for i := range ops {
+			if ops[i].Proto == ProtoSplitter {
+				ops[i].InPrio = PrioLeft
+			}
+		}
+		_, tak, conv := Simulate(ops, evenInputs(c.n, 1), freeOutputs(c.m))
+		if !conv {
+			t.Fatalf("%d->%d: no convergence", c.n, c.m)
+		}
+		for i, v := range tak {
+			if math.Abs(v-c.want[i]) > 1e-9 {
+				t.Fatalf("%d->%d with every splitter drawing from the smaller y "+
+					"first: intake %v, want %v", c.n, c.m, tak, c.want)
+			}
+		}
+	}
+}
