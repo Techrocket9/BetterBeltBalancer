@@ -227,6 +227,13 @@ func recoverPriority(f uint32) {
 		if pvar[skinNode[i]] != 0 || !skinRead[i].Has {
 			continue
 		}
+		// IT ONLY EVER RAISES THE FLAG, and there is no `else` because both
+		// states that reach here with pprio already set are states the REGISTRY
+		// is right about: a fresh node's flag is 0, and the one other way to
+		// arrive at pvar 0 is the settings paste, which set the flag from the
+		// source a statement earlier. Clearing it on a variation that disagreed
+		// would let the engine's own copy of a picture overrule what this guest
+		// was just told.
 		if skin.IsPriority(skinRead[i].V) {
 			pprio[skinNode[i]] = 1
 			skinWant[i] = skin.Variation(maskAt(skinTile[i], f), true)

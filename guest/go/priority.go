@@ -46,8 +46,10 @@ import (
 )
 
 // InputTogglePriority is the custom-input prototype guest/go/data/priority.go
-// defines and the name this guest subscribes under. One string, two modules, and
-// guest/go/obs/protos is where a test observer gets it from.
+// defines and the name this guest subscribes under. The two modules cannot share
+// a constant -- the control guest may not import `guest/go/tune` and the data
+// guest may not import `fkapi` -- so it is written twice, which is the shape
+// `PartName` already has, and each copy names the other.
 const InputTogglePriority = "bbb-toggle-priority"
 
 // The locale keys, in mod-data/locale/en/better-belt-balancer.cfg.

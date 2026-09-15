@@ -922,7 +922,14 @@ def main():
     # more: that setting is defined on BOTH engines, so it is the first method
     # here a suite can drive on the engine trunk targets, and the `m2` suite
     # does.
-    want_iface = {"audit", "set-multi-edge-parts", "set-curved-exits"}
+    # `set-part-priority` joined it with the priorities feature, and the argument
+    # is the sharpest of the four: a part's priority flag is set by a KEYBIND, a
+    # keypress cannot be issued from a script (`script.raise_event` refuses a
+    # custom input outright), and a headless run has no player to press one. So
+    # without this method the whole feature is reachable by a human and by
+    # nothing else.
+    want_iface = {"audit", "set-multi-edge-parts", "set-curved-exits",
+                  "set-part-priority"}
     if set(iface.group(1).split(",")) != want_iface:
         fail("the remote interface exposes %r, expected exactly %s"
              % (iface.group(1), ",".join(sorted(want_iface))))
