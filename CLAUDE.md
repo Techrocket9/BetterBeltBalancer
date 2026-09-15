@@ -1193,7 +1193,7 @@ make mod      # fklua mod: identity, deps, mod-data/ and the DATA MODULE all
 make zip      # the same, as dist/<name>_<version>.zip -- a complete
               # installable mod, both guests included
 make install  # into $MODS_DIR (defaults to the Factorio user mods dir)
-make test     # headless verification, SIXTEEN suites, and the DEFAULT is all
+make test     # headless verification, SEVENTEEN suites, and the DEFAULT is all
               # of them. WHICH FACTORIO IS ON THE MACHINE IS AN INPUT: this mod
               # ships on two engine arms out of one tree, test/run.sh reads the
               # series off the binary and stamps every staged mod's info.json
@@ -1203,8 +1203,8 @@ make test     # headless verification, SIXTEEN suites, and the DEFAULT is all
               # mod is GATED rather than stamped: its bindings are pinned to one
               # API and the ABI marshals event payloads BY NAME, so a mismatch
               # with the binary is a defect and is reported as one.
-              # (m1 m2 m3 upg curv plat mar edge mix mig qual sedge mig21 flip
-              # iact curs
+              # (m1 m2 m3 upg curv prio plat mar edge mix mig qual sedge
+              # mig21 flip iact curs
               # -- plat is
               # the only one needing Space Age, and carries the platform rig,
               # the belt-stacking leg and the stacked-sushi band; mar and edge
@@ -1221,13 +1221,18 @@ make test     # headless verification, SIXTEEN suites, and the DEFAULT is all
               # --create; and flip drives `bbb-multi-edge-parts` through all
               # four of its transitions, which only Factorio 2.0 has; and
               # curv is the only suite whose two phases are two BUILDS rather
-              # than one build wearing two stamps -- see `make prestate`; and
-              # curs is the SECOND suite with no --create, and the only world in
-              # the estate a map generator could not have made: what it needs is
-              # a PLAYER, and a game.players entry exists only where somebody
-              # once connected, so its phase one is a committed save a graphical
-              # client made -- test/fixtures-player/, cut by
-              # `make player-fixture`)
+              # than one build wearing two stamps -- see `make prestate`;
+              # and prio is OUTPUT PRIORITY, sixteen rate rigs at the loads
+              # that separate the two tiers, the toggle, the four refusals
+              # and the spill guard from both sides, in two legs of which the
+              # second runs under `bump_build` because on a fresh heap the
+              # only place a part's flag survives is its own
+              # `graphics_variation`; and curs is the SECOND suite with no
+              # --create, and the only world in the estate a map generator
+              # could not have made: what it needs is a PLAYER, and a
+              # game.players entry exists only where somebody once connected,
+              # so its phase one is a committed save a graphical client made
+              # -- test/fixtures-player/, cut by `make player-fixture`)
 make prestate # THE PRE-STATE FIXTURE, and the one thing in this build that is
               # a second full guest. The same source with `-tags prestate`, so
               # that `fk_state_version` reports 0 the way every build up to

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless verification. Fifteen suites, all real Factorio runs, not models:
+# Headless verification. Sixteen suites, all real Factorio runs, not models:
 #
 #   M1  do balancer parts merge and split correctly?
 #   M2  does the compiled hidden network actually balance?
@@ -66,6 +66,15 @@
 #         setting straight back on without touching the world -- and OFF again
 #         once nothing is left to veto, which sticks. On 2.1 it prints a SKIP
 #         rather than passing
+#   prio  A PORT THAT IS FED FIRST. Sixteen rate rigs at the loads that separate
+#         the two tiers -- a flagged port carries min(S/q, 1) and every other one
+#         min(max(S-q, 0)/(M-q), 1), exact at every load -- with the load set by
+#         belt TIER, so one rig walks the three regimes. Plus the toggle on a
+#         running balancer, the four refusals, and the spill guard from both
+#         sides: a machine too full to shrink refused, and the same machine let
+#         go of the tick it drains under the successor's capacity. Two legs, the
+#         second under `bump_build`, because on a fresh heap the only place a
+#         flag survives is the part's own `graphics_variation`
 #   iact  THE INTERACTIVE CHECKLIST'S OWN WORLD. test/interactive/ stages the
 #         five player-gesture rigs and the five mod-portal demo scenes, all of
 #         them single-edge; the PIXELS are what is left for a human, but every
