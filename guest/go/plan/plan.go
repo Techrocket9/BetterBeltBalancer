@@ -161,6 +161,15 @@ type Op struct {
 	OutPrio, InPrio int8
 }
 
+// Priority values for Op.OutPrio and Op.InPrio. Every hidden splitter faces
+// East, so the engine's "left" is North, which is the smaller y of the two
+// tiles a splitter spans, and "right" is South.
+const (
+	PrioNone  int8 = 0
+	PrioLeft  int8 = -1
+	PrioRight int8 = 1
+)
+
 // Edge is one belt touching the cluster: a tile of the cluster, and the
 // direction the linked belt placed there must face.
 //
