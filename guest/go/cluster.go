@@ -75,7 +75,20 @@ var (
 	// for the parts whose PICTURE actually changed: a part added to the edge of
 	// a 200-part balancer costs a handful of calls, not four hundred. See
 	// skin.go.
-	pvar   []uint8
+	pvar []uint8
+	// pprio is the part's INPUT/OUTPUT PRIORITY flag, 1 for on and 0 for off,
+	// and it is a property of the PART rather than of the belt: every edge the
+	// tile carries reads it, which on an engine that lets a part carry two
+	// belts is both of them. It decides what plan.Build wires -- a priority
+	// output is fed before the others and a priority input is drained before
+	// them -- so it is in the compile fingerprint, and toggling it is a
+	// recompile like any other edge edit.
+	//
+	// ONE BYTE, NOT A BOOL, because it is written into the sprite variation
+	// beside the shape (skin.go) and read back out of it, and because a bool
+	// slice costs the same byte. Zero for a fresh node, like every other slice
+	// here: a part nobody has flagged is not a priority part.
+	pprio  []uint8
 	freeID []uint32 // reusable slots, LIFO -- deterministic
 	// gen is the current flood-fill generation: every fill increments it and
 	// stamps `mark`, so a fill needs no clearing pass over a slice that is as
@@ -121,6 +134,7 @@ func initRegistry() {
 	alive = alive[:0]
 	mark = mark[:0]
 	pvar = pvar[:0]
+	pprio = pprio[:0]
 	freeID = freeID[:0]
 	q = q[:0]
 	gen = 0
@@ -135,6 +149,7 @@ func initRegistry() {
 	alive = append(alive, false)
 	mark = append(mark, 0)
 	pvar = append(pvar, 0)
+	pprio = append(pprio, 0)
 }
 
 func newNode(k key, f uint32) uint32 {
@@ -144,7 +159,7 @@ func newNode(k key, f uint32) uint32 {
 		parent[id], csize[id], ppos[id], alive[id], mark[id] = id, 1, k, true, 0
 		pforce[id] = f
 		// A reused slot knows nothing about the entity now standing on it.
-		pvar[id] = 0
+		pvar[id], pprio[id] = 0, 0
 		return id
 	}
 	id := uint32(len(parent))
@@ -155,6 +170,7 @@ func newNode(k key, f uint32) uint32 {
 	alive = append(alive, true)
 	mark = append(mark, 0)
 	pvar = append(pvar, 0)
+	pprio = append(pprio, 0)
 	return id
 }
 

@@ -11,26 +11,27 @@ import (
 // They are here so that a change made on one side fails on both, which is the
 // only thing keeping the sheet's cell order and this file's numbering together.
 func TestAnchors(t *testing.T) {
-	if Variation(0) != 1 {
-		t.Fatalf("the lone part is cell 1, got %d", Variation(0))
+	if Variation(0, false) != 1 {
+		t.Fatalf("the lone part is cell 1, got %d", Variation(0, false))
 	}
-	if Variation(N|E|S|W) != 16 {
+	if Variation(N|E|S|W, false) != 16 {
 		t.Fatalf("the fully enclosed part with no diagonals is cell 16, got %d",
-			Variation(N|E|S|W))
+			Variation(N|E|S|W, false))
 	}
-	if Variation(0xFF) != Count {
-		t.Fatalf("the deep interior is the last cell (%d), got %d", Count, Variation(0xFF))
+	if Variation(0xFF, false) != Count {
+		t.Fatalf("the deep interior is the last cell (%d), got %d", Count, Variation(0xFF, false))
 	}
 }
 
 // Every mask must land inside the sheet, and the canonical ones must be exactly
-// Count of them -- a variation above the count silently WRAPS in the engine
-// (measured: 48 draws cell 1, 255 draws cell 20), so an off-by-one here is a
-// wrong picture rather than an error anyone would see.
+// Count of them -- a variation above the SHEET's count silently WRAPS in the
+// engine (measured on 2.0.77 with variation_count = 94: 95 draws cell 1 and 255
+// draws cell 67), so an off-by-one here is a wrong picture rather than an error
+// anyone would see.
 func TestEveryMaskIsInTheSheet(t *testing.T) {
 	seen := map[uint8]bool{}
 	for m := 0; m < 256; m++ {
-		v := Variation(uint8(m))
+		v := Variation(uint8(m), false)
 		if v < 1 || v > Count {
 			t.Fatalf("mask %d -> variation %d, outside 1..%d", m, v, Count)
 		}
@@ -69,7 +70,7 @@ func TestDiagonalsOnlyMatterBetweenTwoConnectedSides(t *testing.T) {
 			if uint8(m)&a != 0 && uint8(m)&b != 0 {
 				continue
 			}
-			if Variation(uint8(m)) != Variation(uint8(m)|d) {
+			if Variation(uint8(m), false) != Variation(uint8(m)|d, false) {
 				t.Fatalf("mask %d changes picture when %d is added, "+
 					"but a touching side is missing", m, d)
 			}
@@ -114,7 +115,7 @@ func vars(tiles []tile) string {
 				m |= n.bit
 			}
 		}
-		out = append(out, strconv.Itoa(int(Variation(m))))
+		out = append(out, strconv.Itoa(int(Variation(m, false))))
 	}
 	return strings.Join(out, ",")
 }
@@ -163,4 +164,69 @@ func ring4() []tile {
 		}
 	}
 	return out
+}
+
+// ---------------------------------------------------------------------------
+// The priority half.
+//
+// A part's priority flag rides in the same byte its shape does, so these are
+// what stop the two halves from colliding -- which would be a priority part
+// drawing a different shape rather than anything louder.
+// ---------------------------------------------------------------------------
+
+func TestThePriorityHalfIsTheShapesAgain(t *testing.T) {
+	for m := 0; m < 256; m++ {
+		plain, prio := Variation(uint8(m), false), Variation(uint8(m), true)
+		if prio != plain+Count {
+			t.Fatalf("mask %d: priority is %d and the shape is %d, want %d apart",
+				m, prio, plain, Count)
+		}
+		if prio < 1 || prio > Cells {
+			t.Fatalf("mask %d: priority variation %d is outside 1..%d", m, prio, Cells)
+		}
+	}
+}
+
+// The two halves must not overlap, or a priority part would draw somebody
+// else's shape. This is the property the sheet's own size rests on.
+func TestNoShapeSharesACellWithAMarkedOne(t *testing.T) {
+	used := map[uint8]uint8{} // cell -> how many (mask, prio) pairs reach it
+	for m := 0; m < 256; m++ {
+		for _, p := range []bool{false, true} {
+			used[Variation(uint8(m), p)]++
+		}
+	}
+	if len(used) != Cells {
+		t.Fatalf("the two halves reach %d cells, want %d", len(used), Cells)
+	}
+	for v := uint8(1); v <= Cells; v++ {
+		if used[v] == 0 {
+			t.Fatalf("cell %d is in the sheet and nothing reaches it", v)
+		}
+	}
+}
+
+// IsPriority is what reads the flag back off an entity the guest did not write
+// -- a blueprint paste, a clone, or a world an older build of this mod left
+// behind. It has to agree with Variation in both directions and say nothing
+// about anything else.
+func TestIsPriorityReadsBackWhatVariationWrote(t *testing.T) {
+	for m := 0; m < 256; m++ {
+		if IsPriority(Variation(uint8(m), false)) {
+			t.Fatalf("mask %d: an ordinary part's cell %d reads as priority",
+				m, Variation(uint8(m), false))
+		}
+		if !IsPriority(Variation(uint8(m), true)) {
+			t.Fatalf("mask %d: a priority part's cell %d does not read back",
+				m, Variation(uint8(m), true))
+		}
+	}
+	// 0 is what `pvar` holds for a part whose picture the guest has never
+	// written, and it must not be read as a flag.
+	if IsPriority(0) {
+		t.Fatal("variation 0 -- we have not set one -- reads as priority")
+	}
+	if IsPriority(Cells + 1) {
+		t.Fatalf("variation %d is outside the sheet and reads as priority", Cells+1)
+	}
 }

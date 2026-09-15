@@ -16,12 +16,32 @@ package main
 //   - each of those costs one `find_entity` and one `graphics_variation =`.
 //     There is no per-tick anything, no rendering object, and no second entity.
 //
+// AND THE VARIATION CARRIES THE PRIORITY FLAG AS WELL AS THE SHAPE, which makes
+// this file the place a part's priority is PERSISTED rather than merely drawn:
+// `skin.Variation` puts an ordinary part in cells 1..47 and a priority one in
+// 48..94, the engine keeps that byte, and `recoverPriority` below reads it back
+// off a world this guest did not write. A flag kept only in the guest heap would
+// not survive a mod update, because the heap is declined on every rebuilt guest.
+//
 // WHY THIS IS NOT DONE IN THE BUILD EVENT, where the entity is already in hand:
 // a part appearing changes its NEIGHBOURS' pictures too, and their handles are
 // not. So this follows the guest's standing rule (CLAUDE.md): work that reads
 // only the event's own payload happens in the event, work that reads the world
 // happens in the flush. The picture is therefore correct one tick after the
 // part is placed, which is 17 ms and which nobody can see.
+//
+// THE EDITOR'S VARIATION PICKER, which is the one place this can be driven from
+// outside. `simple-entity-with-force` has a `pictures` set, so the map editor's
+// entity dialog offers a variation picker -- that is the standard editor UI for
+// any entity with one and 2.0.77 has no prototype field that suppresses it. A
+// hand-picked cell survives until something changes the cluster's SHAPE, because
+// restyle compares against `pvar` rather than reading the entity back. SINCE
+// PRIORITIES THAT IS ONE STEP LOUDER THAN IT WAS: a cell above 47 picked by hand
+// is a priority cell, so the next pass that does not know what is drawn there --
+// a mod update's rebuild-from-world, which is the only one -- reads it back as
+// the flag and the balancer really does gain a priority port. An editor pick
+// below 47 on a priority part loses the flag the same way. Neither is worth a
+// host call per part per flush to defend against.
 //
 // THE FORCE CHECK IN maskAt IS NOT COSMETIC. Two forces' parts touching are two
 // balancers -- they never merge, they compile separately -- so they must not
@@ -45,6 +65,12 @@ var (
 	skinTile []key
 	skinWant []uint8
 	skinNode []uint32
+	// skinEnt is the entity each candidate resolved to, parallel to the three
+	// above once restyle has compacted away the parts the world does not have.
+	// Held rather than re-found because the priority read below wants every
+	// handle at once.
+	skinEnt  []fkapi.Object
+	skinRead []fkapi.BulkOptUint8
 	skinSort []key
 )
 
@@ -86,7 +112,7 @@ func restyle(root uint32) {
 		if !ok {
 			continue
 		}
-		v := skin.Variation(maskAt(tiles[i], f))
+		v := skin.Variation(maskAt(tiles[i], f), pprio[id] != 0)
 		if pvar[id] == v {
 			continue
 		}
@@ -102,22 +128,48 @@ func restyle(root uint32) {
 	if !ok {
 		return
 	}
-	set := uint32(0)
+
+	// One query per part whose picture changed, never per part; the alternative
+	// -- one area query for the whole cluster and a position read per entity --
+	// costs O(parts) whatever changed. `findOnTile` rather than `find_entity`,
+	// because a part at any quality but normal is invisible to a bare-name
+	// `find_entity` (findpart.go) -- and this loop was the WORST home that trap
+	// had: a part it can never find is left at pvar 0 and re-queried on every
+	// flush that touches its cluster, forever, so an uncommon balancer drew the
+	// lone-part picture on every tile AND paid a host call per part per flush
+	// for it.
+	//
+	// A part the world does not have is COMPACTED AWAY rather than skipped
+	// later, so that skinEnt stays parallel to the other three and the bulk read
+	// below can hand the host one contiguous run of handles.
+	skinEnt = skinEnt[:0]
+	unknown, n := 0, 0
 	for i := range skinTile {
-		// One query per part whose picture changed, never per part; the
-		// alternative -- one area query for the whole cluster and a position
-		// read per entity -- costs O(parts) whatever changed. `findOnTile`
-		// rather than `find_entity`, because a part at any quality but normal
-		// is invisible to a bare-name `find_entity` (findpart.go) -- and this
-		// loop was the WORST home that trap had: a part it can never find is
-		// left at pvar 0 and re-queried on every flush that touches its
-		// cluster, forever, so an uncommon balancer drew the lone-part picture
-		// on every tile AND paid a host call per part per flush for it.
 		o, found, ferr := findOnTile(surf, PartName, skinTile[i].x, skinTile[i].y)
 		if ferr != nil || !found {
 			continue
 		}
-		if err := (fkapi.LuaEntity{Object: o}).SetGraphicsVariation(skinWant[i]); err != nil {
+		skinTile[n], skinWant[n], skinNode[n] = skinTile[i], skinWant[i], skinNode[i]
+		skinEnt = append(skinEnt, o)
+		if pvar[skinNode[n]] == 0 {
+			unknown++
+		}
+		n++
+	}
+	skinTile, skinWant, skinNode = skinTile[:n], skinWant[:n], skinNode[:n]
+	if unknown > 0 {
+		recoverPriority(f)
+	}
+
+	set := uint32(0)
+	for i := range skinTile {
+		// recoverPriority may have found the world already showing what we
+		// want, which is what a whole balancer pasted from a blueprint looks
+		// like: same shapes, same flags, nothing to write.
+		if pvar[skinNode[i]] == skinWant[i] {
+			continue
+		}
+		if err := (fkapi.LuaEntity{Object: skinEnt[i]}).SetGraphicsVariation(skinWant[i]); err != nil {
 			continue
 		}
 		// Only after the engine took it. A part the world does not have (a
@@ -127,6 +179,64 @@ func restyle(root uint32) {
 		set++
 	}
 	logSkin(root, tiles, set)
+}
+
+// recoverPriority reads the PRIORITY flag back off parts whose picture this
+// guest has never written, and it is the whole reason the flag lives in the
+// sprite variation at all.
+//
+// A part arrives with a variation nobody here chose in three ways and all three
+// land on `pvar == 0`, which is what that zero means: a ghost revived from a
+// BLUEPRINT (measured on 2.0.77 -- a blueprint over a simple-entity-with-force
+// with a placeable_by carries `variation`, and the revived entity comes back
+// wearing it), an entity CLONED from another surface, and a whole world arriving
+// on a FRESH HEAP, which is every load of a rebuilt guest. Without this the
+// first restyle would overwrite all three with the unflagged shape and the flag
+// would be gone -- silently, because the picture it would write is a perfectly
+// good picture.
+//
+// ONLY THE FLAG IS TAKEN, NEVER THE SHAPE. A pasted part's neighbourhood is not
+// its source's, so the shape is recomputed from the registry as it always is;
+// `skin.IsPriority` is the only thing read out of the recovered byte.
+//
+// ONE HOST CALL FOR THE WHOLE CLUSTER and no allocation per part: the bulk form
+// of the getter takes the run of handles skinEnt already holds and writes two
+// bytes per element into a buffer this file keeps. The ordinary getter returns a
+// *uint8, which under -gc=leaking is a permanent allocation per part, on a path
+// a blueprint paste drives once per part pasted.
+//
+// A PART WHOSE PICTURE THE GUEST DOES KNOW IS READ AND IGNORED. It is in the run
+// because splitting the handles into two buffers would cost more than the
+// engine's own read, and ignoring it is not an oversight: a variation that moved
+// under a pvar we trust is either a settings paste, which has its own event and
+// its own handler, or somebody picking a cell by hand in the map editor -- and
+// an editor pick silently flipping a balancer's port priority on the next flush
+// is worse than an editor pick that only looks wrong.
+func recoverPriority(f uint32) {
+	if cap(skinRead) < len(skinEnt) {
+		skinRead = make([]fkapi.BulkOptUint8, len(skinEnt))
+	}
+	skinRead = skinRead[:len(skinEnt)]
+	if _, err := fkapi.LuaEntityGraphicsVariationBulk(skinEnt, skinRead); err != nil {
+		return
+	}
+	for i := range skinTile {
+		// An element the host could not read comes back as the zero value with
+		// Has false, never as the previous crossing's number, so a dead handle
+		// leaves the flag alone.
+		if pvar[skinNode[i]] != 0 || !skinRead[i].Has {
+			continue
+		}
+		if skin.IsPriority(skinRead[i].V) {
+			pprio[skinNode[i]] = 1
+			skinWant[i] = skin.Variation(maskAt(skinTile[i], f), true)
+		}
+		if skinRead[i].V == skinWant[i] {
+			// The world already shows what this part should show, so there is
+			// nothing to write and pvar can simply start where it is.
+			pvar[skinNode[i]] = skinWant[i]
+		}
+	}
 }
 
 // logSkin is the assertion surface for the headless suite: the whole cluster's

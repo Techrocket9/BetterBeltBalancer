@@ -5,8 +5,8 @@
 // draw the piece of the outline that its own position in the blob calls for:
 // no border where it touches a sibling, a border where the balancer ends, and a
 // rounded fillet where the outline turns around a hole. The prototype ships 47
-// pictures; the runtime picks one per part through
-// `LuaEntity.graphics_variation`. There is no per-tick cost, no extra entity,
+// shapes (and, since priorities, each of them a second time with a badge on it);
+// the runtime picks one per part through `LuaEntity.graphics_variation`. There is no per-tick cost, no extra entity,
 // and no rendering object -- the engine draws a different sprite from an array
 // it already had.
 //
@@ -53,11 +53,34 @@
 //
 // `tools/make-graphics.py` enumerates masks 0..255 ascending, keeps the
 // canonical ones and draws them in that order, 8 per row. This file numbers
-// them the same way, from 1, because `graphics_variation` is 1-based (measured:
-// setting 0 raises, and a value above the count wraps modulo it). Neither side
+// them the same way, from 1, because `graphics_variation` is 1-based (measured
+// on 2.0.77 against a 94-cell prototype: setting 0 is refused with "allowed
+// values are from 1 to 256", 94 reads back 94, and 95 reads back 1 -- the
+// engine wraps modulo the count rather than clamping or raising). Neither side
 // stores a table; both run the same six-line enumeration, and the three anchors
 // asserted in skin_test.go are asserted in the generator too, so a change made
 // on one side fails on both.
+//
+// # The sheet is 94 cells, and the second 47 are the same shapes MARKED
+//
+// A part carries an input/output PRIORITY flag as well as a shape, and the
+// variation is where that flag lives: [Variation] is the shape for an ordinary
+// part and the shape plus [Count] for a priority one. One byte in the entity
+// carries both.
+//
+// THAT IS NOT A PACKING TRICK, IT IS WHERE THE FLAG HAS TO LIVE. The guest heap
+// is DECLINED on every rebuilt guest -- `fk_migrate` is a notification on a
+// fresh heap and `rebuildFromWorld` re-derives everything from the world -- so a
+// flag held only in the heap would be lost on every release of this mod. The
+// engine persists `graphics_variation`, and a blueprint carries it: measured on
+// 2.0.77, a blueprint taken over a `simple-entity-with-force` that has a
+// `placeable_by` holds `variation = 50` and a revived ghost comes back at 50. So
+// the flag survives an update, a blueprint and a copy-paste for free, and it is
+// the in-world indicator at the same time.
+//
+// The SHAPE half of a recovered variation is never trusted -- a pasted part's
+// neighbourhood is not the source's -- so [IsPriority] is the only thing the
+// guest reads back out of it.
 package skin
 
 // The mask bits, in the order they are numbered. The guest builds a mask by
@@ -73,8 +96,14 @@ const (
 	NW
 )
 
-// Count is how many pictures the prototype must ship.
+// Count is how many SHAPES there are: the canonical neighbour masks, and the
+// offset between an ordinary part's variation and the same shape marked.
 const Count = 47
+
+// Cells is how many pictures the prototype must ship -- the shapes, then the
+// shapes again with a priority badge on them. `variation_count` in
+// guest/go/data/entity.go and the sheet's own cell count are both this.
+const Cells = 2 * Count
 
 // variation[m] is the 1-based sprite index for a canonical mask, and 0 for a
 // mask that is not canonical. Nothing indexes it without going through Canon,
@@ -104,7 +133,7 @@ var countIsRight [Count - 47]struct{}
 //
 // Two neighbourhoods that differ only in those bits are the same shape as far
 // as this part's own outline is concerned, and giving them one variation is
-// what keeps the sheet at 47 cells instead of 256.
+// what keeps the sheet at 47 shapes instead of 256.
 func Canon(m uint8) uint8 {
 	c := m & (N | E | S | W)
 	if m&NE != 0 && c&N != 0 && c&E != 0 {
@@ -122,6 +151,23 @@ func Canon(m uint8) uint8 {
 	return c
 }
 
-// Variation is the 1-based sprite index for a neighbour mask. Total order, no
-// error case: every one of the 256 masks canonicalises into the 47.
-func Variation(m uint8) uint8 { return variation[Canon(m)] }
+// Variation is the 1-based sprite index for a neighbour mask and a priority
+// flag. Total order, no error case: every one of the 256 masks canonicalises
+// into the 47, and the flag chooses which half of the sheet.
+func Variation(m uint8, prio bool) uint8 {
+	v := variation[Canon(m)]
+	if prio {
+		v += Count
+	}
+	return v
+}
+
+// IsPriority reads the flag back out of a variation standing on an entity the
+// guest did not write -- a blueprint paste, a clone, or a world this build of
+// the mod has never seen.
+//
+// A value outside 1..Cells says nothing and answers false: the only way to get
+// one is a hand-picked cell in the map editor, and the engine wraps those
+// modulo the count on the way in, so anything this reads back is in range by
+// construction.
+func IsPriority(v uint8) bool { return v > Count && v <= Cells }

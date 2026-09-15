@@ -10,13 +10,30 @@ tile boundary into the neighbour -- and the trim appears only where the blob
 actually ends.
 
     python3 tools/make-graphics.py                    # or: make graphics
+    python3 tools/make-graphics.py --priority          # or: make graphics-priority
     python3 tools/make-graphics.py --preview /tmp/look.png [--half]
 
 Outputs (committed, so `make mod` works without Python):
 
-    mod-data/graphics/entity/balancer-part-variants.png   512x384, 8x6 cells of 64
+    mod-data/graphics/entity/balancer-part-variants.png   512x768, 8x12 cells of 64
     mod-data/graphics/icons/balancer-part.png             64x64
     mod-data/graphics/entity/io-arrows.png                256x32, 8 cells of 32
+
+THE SHEET IS 94 CELLS AND ONLY THE FIRST 47 ARE SHAPES. Cell 47+i is cell i with
+a priority badge composited onto it, because the guest encodes a part's PRIORITY
+flag in the same `graphics_variation` the shape lives in: variation = shape for
+an ordinary part and shape + 47 for a priority one (guest/go/skin). One byte in
+the entity carries both, the engine persists it, and a blueprint carries it --
+which is the whole reason the flag is stored there and not only in the guest
+heap, which every mod update throws away.
+
+`--priority` is the mode that builds the second half, and it is the ONLY mode
+that may be run against a sheet an artist drew: it READS the committed sheet's
+first 47 cells and writes them back unchanged, so running it on a 94-cell sheet
+is idempotent and running it on an artist's 47-cell sheet badges their work
+rather than replacing it. The default mode below regenerates the placeholder
+art from scratch and would overwrite an artist's cells, which is what it has
+always done.
 
 `--preview` writes nothing into the mod: it assembles the five named shapes into
 one image the way the game would, which is the only honest way to judge whether
@@ -53,7 +70,12 @@ is not worth a dependency.
 
 FOR A FUTURE ARTIST: replace the PNGs, keep the cell order. The only contract is
 "cell i is the shape whose canonical mask is the i-th ascending one, 64x64,
-laid out 8 per row". `variant_masks()` prints the list.
+laid out 8 per row", and cell 47+i is that same shape MARKED. `variant_masks()`
+prints the list. Draw the first 47 and run `--priority` to get the rest, or draw
+all 94 by hand -- the badge below is a computed triangle and is the crudest
+thing in this file. What it has to survive is `scale = 0.5`, which puts a 64 px
+cell on screen as 32: whatever replaces it has to be readable at about eleven
+pixels across, against plating that is already blue-grey and already lit.
 """
 
 import math
@@ -250,7 +272,72 @@ def draw_cell(mask, showcase=False):
 # --- PNG ---------------------------------------------------------------------
 
 
-def write_png(path, rows):
+def read_png(path):
+    """The committed sheet, back as rows of (r, g, b, a).
+
+    Written here rather than reached for from Pillow for the reason the writer
+    gives: Pillow is not installed on this machine and is not worth a dependency
+    for one file. 8-bit RGBA, non-interlaced, which is what every PNG in this
+    repository is and what the writer below emits; anything else is refused by
+    name rather than half-read.
+    """
+    d = open(path, "rb").read()
+    if d[:8] != b"\x89PNG\r\n\x1a\n":
+        raise SystemExit("%s is not a PNG" % path)
+    idat, w, h, srgb = bytearray(), 0, 0, None
+    i = 8
+    while i < len(d):
+        n = struct.unpack(">I", d[i:i + 4])[0]
+        tag, body = d[i + 4:i + 8], d[i + 8:i + 8 + n]
+        if tag == b"IHDR":
+            w, h, depth, colour, comp, filt, inter = struct.unpack(">IIBBBBB", body)
+            if (depth, colour, comp, filt, inter) != (8, 6, 0, 0, 0):
+                raise SystemExit(
+                    "%s is depth %d colour %d interlace %d; this reader does "
+                    "8-bit RGBA non-interlaced only" % (path, depth, colour, inter))
+        elif tag == b"IDAT":
+            idat += body
+        elif tag == b"sRGB":
+            srgb = body
+        i += 12 + n
+
+    raw = zlib.decompress(bytes(idat))
+    stride = w * 4
+    rows, prev = [], bytes(stride)
+    at = 0
+    for _ in range(h):
+        ft = raw[at]
+        line = bytearray(raw[at + 1:at + 1 + stride])
+        at += 1 + stride
+        # The five PNG filters. An artist's exporter picks per scanline and this
+        # has to undo whatever it picked, so all five are here even though the
+        # writer below only ever emits None.
+        if ft == 1:
+            for j in range(4, stride):
+                line[j] = (line[j] + line[j - 4]) & 0xFF
+        elif ft == 2:
+            for j in range(stride):
+                line[j] = (line[j] + prev[j]) & 0xFF
+        elif ft == 3:
+            for j in range(stride):
+                a = line[j - 4] if j >= 4 else 0
+                line[j] = (line[j] + ((a + prev[j]) >> 1)) & 0xFF
+        elif ft == 4:
+            for j in range(stride):
+                a = line[j - 4] if j >= 4 else 0
+                c = prev[j - 4] if j >= 4 else 0
+                b = prev[j]
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                pr = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                line[j] = (line[j] + pr) & 0xFF
+        elif ft != 0:
+            raise SystemExit("%s: unknown PNG filter %d" % (path, ft))
+        prev = bytes(line)
+        rows.append([tuple(line[j:j + 4]) for j in range(0, stride, 4)])
+    return rows, srgb
+
+
+def write_png(path, rows, srgb=None):
     w, h = len(rows[0]), len(rows)
     raw = bytearray()
     for row in rows:
@@ -264,6 +351,11 @@ def write_png(path, rows):
 
     png = b"\x89PNG\r\n\x1a\n"
     png += chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+    if srgb is not None:
+        # Carried through rather than dropped, so that a sheet that has been
+        # through --priority differs from the artist's in its pixels and in
+        # nothing else a viewer can see.
+        png += chunk(b"sRGB", srgb)
     png += chunk(b"IDAT", zlib.compress(bytes(raw), 9))
     png += chunk(b"IEND", b"")
 
@@ -337,6 +429,108 @@ def arrow_strip():
 # --- looking at it ------------------------------------------------------------
 
 
+# --- the priority badge ------------------------------------------------------
+#
+# Cell 47+i is cell i with this drawn over its hub: an up-pointing triangle in
+# the same amber the OUTPUT arrow uses, with a dark outline so it survives being
+# on top of lit plating. It says "this port is served first" and it says nothing
+# about a direction, which is why it is not a chevron -- the I/O arrows are
+# chevrons and a second chevron on the same machine would read as one.
+#
+# It is CENTRED rather than tucked into a corner, and that is the one thing about
+# it that is not arbitrary: the plating, the seams and the conduits all run
+# across a tile boundary on purpose (that is the whole 47-cell trick), so a badge
+# near an edge lands on the seam between two parts and reads as belonging to
+# neither. The hub is the one place in the cell that is the part's own.
+#
+# Coverage is supersampled 4x4 and composited into the RGB rather than into the
+# alpha: every one of the 47 cells is opaque, and a badge that introduced partial
+# alpha would put a hole in the machine.
+
+PRIO_FILL = ARROW_OUT          # the amber an output arrow already uses
+PRIO_EDGE = (10, 14, 20)
+
+# Apex and base half-width of the two triangles, in px from the cell centre. The
+# outer one is the outline; the difference between them is its thickness.
+PRIO_OUTER = (12.2, 9.8, 13.4)   # up, down, half-width
+PRIO_INNER = (9.6, 7.6, 10.6)
+PRIO_SS = 4                      # supersamples per axis
+
+
+def in_triangle(px, py, tri):
+    """Is (px, py) inside the up-pointing triangle, centre-relative."""
+    up, down, half = tri
+    if py < -up or py > down:
+        return False
+    # Linear taper from the apex to the base.
+    t = (py + up) / (up + down)
+    return abs(px) <= half * t
+
+
+def prio_coverage(x, y, tri):
+    """How much of pixel (x, y) the triangle covers, 0..1."""
+    n = 0
+    for sy in range(PRIO_SS):
+        py = y + (sy + 0.5) / PRIO_SS - (CELL / 2.0)
+        for sx in range(PRIO_SS):
+            px = x + (sx + 0.5) / PRIO_SS - (CELL / 2.0)
+            if in_triangle(px, py, tri):
+                n += 1
+    return n / float(PRIO_SS * PRIO_SS)
+
+
+def badge_cell(cell):
+    """One cell with the badge over it. The input is not modified."""
+    out = []
+    for y in range(CELL):
+        row = []
+        for x in range(CELL):
+            r, g, b, a = cell[y][x]
+            co = prio_coverage(x, y, PRIO_OUTER)
+            if co <= 0.0:
+                row.append((r, g, b, a))
+                continue
+            c = lerp((r, g, b), PRIO_EDGE, co)
+            ci = prio_coverage(x, y, PRIO_INNER)
+            if ci > 0.0:
+                c = lerp(c, PRIO_FILL, ci)
+            row.append((c[0], c[1], c[2], a))
+        out.append(row)
+    return out
+
+
+def priority_sheet():
+    """Rewrite the committed sheet as 94 cells: 47 shapes, then 47 badged.
+
+    IDEMPOTENT, and that is what makes it safe to run against whatever is
+    committed: it takes the FIRST 47 cells whether the file it reads holds 47 or
+    94, so a second run re-badges the same unbadged source and produces the same
+    bytes. Cells 1..47 come back pixel for pixel as they went in, which is the
+    property that matters when they are an artist's and not this file's.
+    """
+    path = os.path.join(GFX, "entity", "balancer-part-variants.png")
+    src, srgb = read_png(path)
+    have = (len(src[0]) // CELL) * (len(src) // CELL)
+    if len(src[0]) != COLS * CELL or have < len(variant_masks()):
+        raise SystemExit(
+            "%s is %dx%d (%d cells of %d); --priority wants %d columns and at "
+            "least %d cells" % (path, len(src[0]), len(src), have, CELL, COLS,
+                                len(variant_masks())))
+
+    n = len(variant_masks())
+    lines = (2 * n + COLS - 1) // COLS
+    sheet = [[(0, 0, 0, 0)] * (COLS * CELL) for _ in range(lines * CELL)]
+    for i in range(n):
+        sx, sy = (i % COLS) * CELL, (i // COLS) * CELL
+        cell = [src[sy + y][sx:sx + CELL] for y in range(CELL)]
+        for half, art in ((0, cell), (n, badge_cell(cell))):
+            ox, oy = ((i + half) % COLS) * CELL, ((i + half) // COLS) * CELL
+            for y in range(CELL):
+                sheet[oy + y][ox:ox + CELL] = art[y]
+    write_png(path, sheet, srgb)
+    print("%d shapes, %d cells, %d per row" % (n, 2 * n, COLS))
+
+
 def preview(path, half=False):
     """Assemble the five named shapes into one image, as the game would.
 
@@ -402,6 +596,10 @@ def main():
         for y in range(CELL):
             sheet[oy + y][ox:ox + CELL] = cell[y]
     write_png(os.path.join(GFX, "entity", "balancer-part-variants.png"), sheet)
+    # ...and then the priority half, over what was just written. The prototype
+    # declares 94 cells (guest/go/data/entity.go, skin.Cells), so a default run
+    # that stopped at 47 would leave a sheet the engine refuses to load.
+    priority_sheet()
 
     # The icon is the lone part with its conduits lit anyway, so that an item in
     # an inventory says "this connects" without a neighbour to connect to.
@@ -417,5 +615,7 @@ if __name__ == "__main__":
     if "--preview" in sys.argv:
         i = sys.argv.index("--preview")
         preview(sys.argv[i + 1], half="--half" in sys.argv)
+    elif "--priority" in sys.argv:
+        priority_sheet()
     else:
         main()

@@ -200,7 +200,7 @@ FKRECIPES_SRC := $(shell find ../FkRecipes/go -name '*.go' -not -name '*_test.go
 DATA_GUEST_SRC := $(shell find guest/go/data guest/go/engine guest/go/skin guest/go/tune -name '*.go' -not -name '*_test.go') guest/go/go.mod $(FKRECIPES_SRC)
 DATA_SRC  := $(shell find mod-data -type f)
 
-.PHONY: all guest mod zip install test check datastage-check clean graphics observers bench-setup player-fixture
+.PHONY: all guest mod zip install test check datastage-check clean graphics graphics-priority observers bench-setup player-fixture
 
 all: mod
 
@@ -354,12 +354,21 @@ $(MOD_DIR).zip: $(WASM) $(DATA_WASM) $(DATA_SRC) fklua.toml $(PERSIST_STAMP) $(G
 	$(call fklua_mod,$(WASM),--zip -o $(DIST))
 	@ls -l $(MOD_DIR).zip
 
-# The 47-variant sprite sheet and the icon, both computed rather than drawn.
+# The 94-cell sprite sheet and the icon, both computed rather than drawn.
 # Outputs are committed, so neither `make mod` nor a contributor without Python
 # needs this; it is here so that a re-theme is one edit and one command. The cell
 # ORDER is a contract with guest/go/skin -- see the header of either file.
+#
+# `graphics` REGENERATES THE PLACEHOLDER ART and will overwrite an artist's
+# cells, which is what it has always done. `graphics-priority` is the one to
+# reach for against art somebody drew: it reads the committed sheet's first 47
+# cells and writes them back unchanged with the badged half beside them, so it
+# is idempotent and it cannot lose a cell.
 graphics:
 	python3 tools/make-graphics.py
+
+graphics-priority:
+	python3 tools/make-graphics.py --priority
 
 # --- install -----------------------------------------------------------------
 

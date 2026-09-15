@@ -104,23 +104,31 @@ func entity() {
 		// byte.
 		//
 		// THE CELL COUNT COMES FROM guest/go/skin AND IS NOT WRITTEN DOWN TWICE.
-		// It is the number of canonical neighbour masks, and the sheet, the
-		// generator and the runtime all have to agree about it -- which is
-		// exactly the drift a literal 47 in a Lua file could not be checked
-		// against. `skin.Count` is proved by that package's own tests to be the
-		// count of what `skin.Canon` actually produces, so a re-theme that
-		// changed the enumeration would move this prototype with it.
+		// It is the number of canonical neighbour masks TWICE OVER, and the
+		// sheet, the generator and the runtime all have to agree about it --
+		// which is exactly the drift a literal 94 in a Lua file could not be
+		// checked against. `skin.Count` is proved by that package's own tests to
+		// be the count of what `skin.Canon` actually produces, and `skin.Cells`
+		// is that doubled, so a re-theme that changed the enumeration would move
+		// this prototype with it.
+		//
+		// THE SECOND HALF IS THE FIRST HALF MARKED, and it is where a part's
+		// input/output PRIORITY flag lives: the guest writes shape + skin.Count
+		// for a priority part. The entity is the only place that flag can live,
+		// because the guest heap is declined on every rebuilt guest and a
+		// blueprint carries `variation` (measured on 2.0.77; see skin).
 		//
 		// Laid out 8 per row, in the order tools/make-graphics.py and
-		// guest/go/skin both enumerate: canonical neighbour masks ascending.
-		// 64 px at scale 0.5 is exactly one 32 px tile. `pictures` takes priority
-		// over `picture` and `animations`, so this is the only art the entity has.
+		// guest/go/skin both enumerate: canonical neighbour masks ascending, then
+		// the same list again. 64 px at scale 0.5 is exactly one 32 px tile.
+		// `pictures` takes priority over `picture` and `animations`, so this is
+		// the only art the entity has.
 		f("pictures", obj(f("sheet", obj(
 			f("filename", str(partVariants)),
 			f("priority", str("high")),
 			f("width", num(64)),
 			f("height", num(64)),
-			f("variation_count", num(skin.Count)),
+			f("variation_count", num(skin.Cells)),
 			f("line_length", num(8)),
 			f("scale", num(0.5)),
 		)))),
