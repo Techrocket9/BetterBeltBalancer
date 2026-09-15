@@ -1087,7 +1087,7 @@ func compile(root uint32) bool {
 	// heard about (CLAUDE.md, "The failure envelope") -- and limit.go tells the
 	// player and offers the piece back. See agents/maxports.md §4.
 	if pt, over := overLimitShape(edges); over {
-		refuseOverLimit(root, fp, pt, tiles, force)
+		refuseShape(root, fp, pt, tiles, force)
 		return false
 	}
 	// AND THE ONE-BELT-PER-PART RULE IS ASKED IN THE SAME PLACE, for the same

@@ -495,6 +495,16 @@ func onEventBody(id, ptr uint32) {
 	case fkapi.EventOnPreBuild:
 		notePreBuild(fkapi.ReadOnPreBuild(ptr))
 		return
+	case fkapi.EventCustomInputEvent:
+		// The keybind. One handler per payload descriptor is all Factorio gives
+		// -- every custom input encodes through this same one -- so the handler
+		// reads `input_name` to tell them apart, and this mod has one.
+		ev := fkapi.ReadCustomInputEvent(ptr)
+		onTogglePriority(&ev)
+		return
+	case fkapi.EventOnEntitySettingsPasted:
+		onSettingsPasted(ptr)
+		return
 	case fkapi.EventOnRuntimeModSettingChanged:
 		// EVERY MOD'S SETTINGS ARRIVE HERE -- the event takes no filter -- so the
 		// handler's first act is to compare the name, and `Setting` is a Go string

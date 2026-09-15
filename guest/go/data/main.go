@@ -131,6 +131,10 @@ func onData() {
 	entity()
 	hidden()
 	sprites()
+	// The keybind. A custom-input prototype is a prototype like any other and
+	// this is the ordinary stage for one; the control guest subscribes to it by
+	// name. See priority.go.
+	priorityInput()
 
 	// THE ITEM, THE RECIPE AND THE TECHNOLOGY, planned by FkRecipes out of
 	// guest/go/tune. It is the whole of what a player crafts and researches,

@@ -75,6 +75,23 @@ const (
 	// turns the rule off over a running save and asserts what happens to the
 	// balancer whose only outputs were curves.
 	callSetCurvedExits = 3
+
+	// AND THE ONLY SCRIPT ROUTE TO A PART'S PRIORITY FLAG.
+	//
+	// The argument here is not Factorio's -- nothing stops a mod writing this
+	// mod's per-part state, because there is no such state to write; it is the
+	// guest heap's. The argument is the one `bbb-audit` made first: the flag's
+	// own door is a KEYBIND, a keypress cannot be issued from a script on 2.0.77
+	// (`script.raise_event` refuses a custom input outright, measured by FkLua's
+	// own fixture), and a headless run has no player to press one. So without
+	// this method the whole feature is reachable by a human and by nothing else,
+	// which is the condition this file exists to end.
+	//
+	// It reaches the SAME `setPartPriority` the keybind reaches, with no branch
+	// below that can tell them apart except the player there is to tell -- so a
+	// suite driving this is evidence about the keybind, exactly as
+	// `remote.call(..., 'audit')` is evidence about `/bbb-audit`.
+	callSetPartPriority = 4
 )
 
 // The names. `CmdAudit` deliberately matches the marker prototype's name --
@@ -110,7 +127,8 @@ func init() {
 	fkapi.AddInterface(RemoteIface,
 		fkapi.InterfaceMethod{Name: "audit", ID: callAudit},
 		fkapi.InterfaceMethod{Name: "set-multi-edge-parts", ID: callSetMultiEdge},
-		fkapi.InterfaceMethod{Name: "set-curved-exits", ID: callSetCurvedExits})
+		fkapi.InterfaceMethod{Name: "set-curved-exits", ID: callSetCurvedExits},
+		fkapi.InterfaceMethod{Name: "set-part-priority", ID: callSetPartPriority})
 }
 
 // fk_on_call is the whole inbound surface for both: one export, id-dispatched,
@@ -139,6 +157,37 @@ func onCall(id, argp, retp uint32) uint32 {
 		}
 		logEnd()
 		fkapi.WriteDyn(retp, fkapi.OfBool(ok))
+
+	case callSetPartPriority:
+		// (surface_index, tile_x, tile_y, on). The surface is an INDEX rather
+		// than a name because that is what the registry is keyed by and a name
+		// would be a string crossing for a lookup that then has to walk the
+		// surface list; a caller holds `surface.index` already.
+		//
+		// TRUE FOR A CALLER WHO NAMES NO MODE, which is the one a method called
+		// `set-part-priority` is reached for, and each method here states its own
+		// (see the two above).
+		s, x, y, ok := argTile(argp)
+		on := prioOn
+		if !argBoolAt(argp, 3, true) {
+			on = prioOff
+		}
+		done := ok && setPartPriority(key{s, x, y}, on, 0)
+		logStart("remote set-part-priority ")
+		logU(s)
+		logS(":")
+		logI(x)
+		logS(",")
+		logI(y)
+		logS("=")
+		logB(on == prioOn)
+		if !ok {
+			logS(" REFUSED: the call did not name a surface and a tile")
+		} else if !done {
+			logS(" REFUSED: no part there, or the shape would not fit")
+		}
+		logEnd()
+		fkapi.WriteDyn(retp, fkapi.OfBool(done))
 
 	case callSetMultiEdge:
 		// FALSE FOR A CALLER WHO NAMES NO MODE, which is this setting's own
@@ -184,6 +233,36 @@ func onCall(id, argp, retp uint32) uint32 {
 	// the safe-point violation it exists to avoid.
 	gcArmIfNeeded()
 	return 0
+}
+
+// argTile reads the first three arguments as a surface index and a tile.
+//
+// A NUMBER THAT IS NOT A WHOLE TILE IS NOT REFUSED, it is floored, because a
+// caller with an entity in hand has its POSITION and a part's centre is tile
+// plus a half. Anything that is not three numbers is refused, which is the
+// difference between a caller who passed the wrong thing and one who passed a
+// position.
+func argTile(argp uint32) (s uint32, x, y int32, ok bool) {
+	v := fkapi.ReadDyn(argp)
+	if v.Tag != fkapi.TagArray || len(v.Array) < 3 {
+		return 0, 0, 0, false
+	}
+	for i := 0; i < 3; i++ {
+		if v.Array[i].Tag != fkapi.TagNumber {
+			return 0, 0, 0, false
+		}
+	}
+	return uint32(v.Array[0].Number),
+		int32(floorF(v.Array[1].Number)), int32(floorF(v.Array[2].Number)), true
+}
+
+// argBoolAt is argBool at an index other than the first.
+func argBoolAt(argp uint32, i int, def bool) bool {
+	v := fkapi.ReadDyn(argp)
+	if v.Tag != fkapi.TagArray || len(v.Array) <= i || v.Array[i].Tag != fkapi.TagBool {
+		return def
+	}
+	return v.Array[i].Bool
 }
 
 // argBool reads the first argument of a remote call as a bool, answering `def`

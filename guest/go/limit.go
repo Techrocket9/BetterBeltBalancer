@@ -410,6 +410,25 @@ func refuseAdmit(root uint32, fp uint64) int {
 	return refuseSpeak
 }
 
+// refuseShape is the one place a shape `plan.ShapeEdges` refused chooses which
+// sentence to say, and the caller deliberately does not know which bound fired:
+// `ShapeEdges` answers one question -- can this be built -- and the two bounds
+// behind it are the port cap and, since priorities, the room a priority network
+// needs in its slot.
+//
+// A refusal whose Ports carries a PRIORITY PORT is the priority one. That is the
+// right way round even though a cluster can break both bounds at once: past
+// sixty-four belts the machine is too big however it is wired, but a player who
+// has just flagged a port and been refused wants to hear about the port they
+// flagged, and taking the flag off is the fix that works in both cases.
+func refuseShape(root uint32, fp uint64, pt plan.Ports, tiles []key, force uint32) {
+	if pt.QIn+pt.QOut > 0 {
+		refusePriority(root, fp, pt, tiles, force)
+		return
+	}
+	refuseOverLimit(root, fp, pt, tiles, force)
+}
+
 // refuseOverLimit is compile()'s answer when a cluster's edge list has outgrown
 // plan.MaxPorts.
 //
