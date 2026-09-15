@@ -258,6 +258,20 @@ var rigs = []rigCfg{
 		feed: []tier{express, express, express, express}, prio: []int{1}, deadEnd: true},
 	{name: "pin", rows: 2, ins: 2, outs: 2, feed: []tier{express, express}},
 
+	// THE COLLAPSE. `ShapeEdges` reports a side whose every port is flagged as
+	// having none -- two tiers where the second is empty is one tier -- so a
+	// balancer with every output ticked compiles to the plain butterfly byte for
+	// byte, and the compile fingerprint has to agree or the gesture is a full
+	// teardown and rebuild of an identical thing.
+	//
+	// `pcol1` is a 1 -> 1, which is the smallest balancer there is and the only
+	// shape where ticking the LAST port is a single toggle: M = 1, so one flag is
+	// every flag. `pcol2` is the 2 -> 2 form, where it takes two toggles in ONE
+	// TICK -- the flush sees the end state and the state in the middle never
+	// compiles.
+	{name: "pcol1", rows: 1, ins: 1, outs: 1, feed: []tier{express}},
+	{name: "pcol2", rows: 2, ins: 2, outs: 2, feed: []tier{express, express}},
+
 	// THE BOUNDARY RIG. pfull above is the guard refusing outright; this one is
 	// the guard LETTING GO. It fills the same way, is then unblocked with its
 	// feed cut, and the clear is asked over and over as it drains -- so the tick
@@ -918,6 +932,33 @@ func nudge() {
 	out.Open("nudged pbig: a belt two tiles from a part, which is an edge of nothing").End()
 }
 
+// collapse ticks EVERY output of a rig inside one tick and then drains the queue.
+//
+// What must come of it is NOTHING. The flush sees a side whose every port is
+// flagged, `ShapeEdges` reports it as having none, and the network that would be
+// built is the plain butterfly already standing -- so a fingerprint that agrees
+// skips, and one that does not tears a saturated balancer down and puts an
+// identical one back.
+//
+// The toggles are in one tick because a 2 -> 2 cannot reach the collapsed state
+// in a single one: q = 1 in the middle is a real priority network, and a flush
+// between the two would compile it. A 1 -> 1 needs no such care, which is why
+// both shapes are here.
+func collapse(tag, rig string, outs int) {
+	c, i := rigByName(rig)
+	gb, lb := countAround(c.base)
+	for row := 0; row < outs; row++ {
+		setPrio(tag, rig, harness.XY{X: 1, Y: c.base + row}, true)
+	}
+	harness.Audit(harness.Surface(surf), -20, c.base)
+	ga, la := countAround(c.base)
+	out.Open("items t=").S(tag).S(" rig=").S(rig).
+		S(" ground ").I(gb).S("->").I(ga).
+		S(" lines ").I(lb).S("->").I(la).
+		S(" total ").I(gb + lb).S("->").I(ga + la).End()
+	variation(tag, rig, built[i].flag)
+}
+
 // ---------------------------------------------------------------------------
 // the boundary poll
 // ---------------------------------------------------------------------------
@@ -1041,26 +1082,36 @@ var schedule = []harness.Step{
 	}},
 	{Tick: 5860, Do: func() { auditNow(0) }},
 
+	// --- the collapse -------------------------------------------------------
+	//
+	// Each is bracketed by a report, because what it asserts is a COUNT of the
+	// mod's own teardown and compile lines between two positions in the log.
+	{Tick: 5870, Do: func() { report("col-pre") }},
+	{Tick: 5880, Do: func() { collapse("col1", "pcol1", 1) }},
+	{Tick: 5890, Do: func() { report("col-mid") }},
+	{Tick: 5900, Do: func() { collapse("col2", "pcol2", 2) }},
+	{Tick: 5910, Do: func() { report("col-post") }},
+
 	// --- the spill guard ----------------------------------------------------
 	//
 	// pfull has been dead-ended and fed hard since tick 0, so by now every belt
 	// and every splitter in it is stationary and it is carrying more than the
-	// plain network it would become could hold.
-	{Tick: 5900, Do: func() { toggleCheck("spill-refused", "pfull", false) }},
-	{Tick: 5920, Do: func() { auditNow(0) }},
-	{Tick: 5940, Do: func() { openAndCut("pfull") }},
+	// plain network it would become can take back.
+	{Tick: 5920, Do: func() { toggleCheck("spill-refused", "pfull", false) }},
+	{Tick: 5940, Do: func() { auditNow(0) }},
+	{Tick: 5960, Do: func() { openAndCut("pfull") }},
 	// Long enough for four express belts to empty a stopped network into four
 	// chests with nothing left feeding it.
-	{Tick: 6460, Do: func() { toggleCheck("spill-cleared", "pfull", false) }},
-	{Tick: 6480, Do: func() { report("spill-after") }},
+	{Tick: 6480, Do: func() { toggleCheck("spill-cleared", "pfull", false) }},
+	{Tick: 6500, Do: func() { report("spill-after") }},
 
 	// --- the boundary, and the three holds ----------------------------------
-	{Tick: 6500, Do: measureBelts},
-	{Tick: 6520, Do: func() {
+	{Tick: 6520, Do: measureBelts},
+	{Tick: 6540, Do: func() {
 		for _, r := range measured {
 			openAndCut(r)
 		}
-		bndFrom = 6560
+		bndFrom = 6580
 	}},
 	{Tick: 7100, Do: measureDrained},
 	{Tick: 7140, Do: func() { auditNow(0) }},

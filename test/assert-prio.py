@@ -66,8 +66,8 @@ BOUNDARY = re.compile(r"\[BBB-PRIO\] boundary try=(\d+) tick=(\d+) accepted=(\S+
 # THE WORLD, WRITTEN DOWN HERE RATHER THAN READ OFF THE GUEST. `mar`'s own red
 # proof is why: an injected defect that halved a rig passed every assertion that
 # suite had, because every number it checked came from the classification it had
-# broken. Twenty clusters over one hundred and seventy-nine parts.
-CLUSTERS, PARTS = 20, 179
+# broken. Twenty-two clusters over one hundred and eighty-five parts.
+CLUSTERS, PARTS = 22, 185
 
 # The main rate window. Both ends are reported and the delta between them is
 # what a rig delivered; a balancer has a pipeline several linked-belt hops long,
@@ -119,6 +119,10 @@ EXPECT = {
     "mq22":  [None, None],
     "mp44":  [None, None, None, None],
     "pfull": [None, None, None, None],
+    # The two collapse rigs are PLAIN for the whole main window: their flags
+    # go on at the end of the run and collapse the moment they do.
+    "pcol1": [1],
+    "pcol2": [1, 1],
 }
 
 # The toggle rig, either side of the flag. It is the same 2 -> 2 fed one express
@@ -333,7 +337,7 @@ def main():
     # picture would lose every one of them on the next load.
     badged = {"p4lo", "p4mid", "p4sat", "p2lo", "p2mid", "p2sat", "pq2", "p35",
               "p32", "pblk", "plane", "pfull", "pgrow", "pbnd", "mq22"}
-    plain = {"ptog", "pin", "pbig", "mp22", "mp44"}
+    plain = {"ptog", "pin", "pbig", "mp22", "mp44", "pcol1", "pcol2"}
     for m in (m for m in (VAR.search(l) for l in create) if m and m.group(1) == "create"):
         rig, v = m.group(2), int(m.group(5))
         if not 1 <= v <= CELLS:
@@ -521,6 +525,10 @@ def main():
     print("\n  the spill guard:")
     spill_guard(run, fail)
 
+    # ------------------------------------------------------------ the collapse
+    print("\n  ticking every output, which is the plain balancer:")
+    collapse(run, fail)
+
     # ------------------------------------------------- the boundary, and the holds
     print("\n  the boundary the guard lets go on:")
     boundary(run, fail)
@@ -703,16 +711,16 @@ def spill_guard(run, fail):
         fail.append("no `the balancer holds` refusal in the log")
     else:
         got = re.search(r"holds (\d+) items and the network this would build "
-                        r"holds (\d+) item positions", hold[0])
+                        r"can take back (\d+)", hold[0])
         if not got:
             fail.append("the holding refusal did not carry its two numbers")
         else:
             held, room = int(got.group(1)), int(got.group(2))
-            print("    refused: the balancer holds %d items, the successor holds "
-                  "%d positions" % (held, room))
+            print("    refused: the balancer holds %d items and the successor "
+                  "can take back %d" % (held, room))
             if room <= 0:
-                fail.append("the successor was reported as holding %d item "
-                            "positions, which is not a network at all" % room)
+                fail.append("the successor was reported as taking back %d, which "
+                            "is not a network at all" % room)
             if held <= room:
                 fail.append(
                     "the balancer held %d items against %d positions, so the "
@@ -845,6 +853,55 @@ def holds(run, fail):
                 "and fed from tick 0, so a jammed balancer holding nothing is a "
                 "rig that never filled and every bound derived from this number "
                 "would be derived from noise" % (rig, held))
+
+
+def collapse(run, fail):
+    """Ticking every output of a balancer must cost nothing at all.
+
+    `ShapeEdges` reports a side whose every port is flagged as having none -- two
+    tiers where the second is empty is one tier -- so the network is the plain
+    butterfly either way. The compile fingerprint has to agree, or the gesture is
+    a full teardown and rebuild of an identical thing, draining a saturated
+    balancer and reinserting the lot for no change.
+
+    A 1 -> 1 reaches the collapsed state in ONE toggle, which is the shape the
+    defect was named for; a 2 -> 2 takes two in one tick, because q = 1 in the
+    middle is a real priority network and a flush between them would compile it.
+    """
+    for tag, rig, lo, hi in (("col1", "pcol1", "col-pre", "col-mid"),
+                             ("col2", "pcol2", "col-mid", "col-post")):
+        m = [x for x in (FLAG.search(l) for l in run) if x and x.group(1) == tag]
+        if not m:
+            fail.append("%s: the collapse was never asked for" % rig)
+            continue
+        if any(x.group(6) != "true" for x in m):
+            fail.append("%s: a flag was refused. Every output flagged is the "
+                        "plain balancer, which is the network this mod already "
+                        "builds" % rig)
+        for rx, what in ((TEARDOWN, "teardown"), (COMPILED, "compile")):
+            got = between(run, lo, hi, rx)
+            if got is None:
+                fail.append("%s: the %s window was not reported at both ends"
+                            % (rig, what))
+                continue
+            print("    %-6s %d flag(s), %d %ss" % (rig, len(m), len(got), what))
+            if got:
+                fail.append(
+                    "%s: ticking every output cost %d %ss. The network before and "
+                    "after is the same plain butterfly, so the fingerprint cannot "
+                    "move -- and a teardown here drains a saturated balancer and "
+                    "puts an identical one back" % (rig, len(got), what))
+        it = one(run, ITEMS, tag)
+        if it and int(it.group(4)) != int(it.group(3)):
+            fail.append("%s: %d items reached the ground ticking every output"
+                        % (rig, int(it.group(4)) - int(it.group(3))))
+        v = one(run, VAR, tag)
+        if v and int(v.group(5)) <= BADGE:
+            fail.append(
+                "%s's part is not drawing a badged cell after its flag went on. "
+                "The flag is the PART's and it really did move; what collapses is "
+                "what the planner reads, and the picture follows the part"
+                % rig)
 
 
 if __name__ == "__main__":
