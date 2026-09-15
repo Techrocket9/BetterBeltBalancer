@@ -244,8 +244,12 @@ var (
 	kvBuf  [5]fkapi.KeyValue
 	posBuf [2]fkapi.Value
 
-	beltTypeVals [6]fkapi.Value
+	// The six edge types, and the probe's seventh after them. One array, two
+	// spans: `beltTypes` is what the edge query filters on and `probeTypes` what
+	// the curve probe does. See linkedBeltType.
+	beltTypeVals [7]fkapi.Value
 	beltTypes    fkapi.Value
+	probeTypes   fkapi.Value
 
 	// probeEnts is the curve arm's own result buffer, and it is separate from
 	// anything classifySide holds because the probe runs while that function's
@@ -285,6 +289,25 @@ var beltTypeNames = [6]string{
 	"loader-1x1",
 	"loader",
 }
+
+// linkedBeltType is the SEVENTH type, and it belongs to the curve probe alone.
+//
+// IT MUST NEVER REACH `findByPos`. curvesFromCluster's tests 1 and 2 exist
+// because the edge query cannot see a linked belt, and every visible interface
+// this mod places is one: a linked belt in the edge list would make a cluster's
+// own output an edge of itself. The registry answers for those tiles instead.
+//
+// THE PROBE HAS TO SEE ONE, and that is the gap this closes. The tests the probe
+// makes are about what feeds a belt's REAR, and the engine counts a linked
+// belt's output end there like any other feeder -- measured on 2.0.77, a belt
+// with one perpendicular feeder and a linked belt output end pointing into its
+// rear reads `belt_shape = straight` where the same belt with an empty rear
+// reads `right`. A linked belt of ours can never stand on a probe tile (an
+// interface stands on a part tile, and a part tile is refused two tests
+// earlier), so what this admits is somebody else's placeable one -- WormholeBelts
+// is one such mod. Without it the probe called that rear empty, classified the
+// belt, and put a half-lane side-load on a port.
+const linkedBeltType = "linked-belt"
 
 func init() { initBuffers() }
 
@@ -342,7 +365,9 @@ func initBuffers() {
 	for i := range beltTypeNames {
 		beltTypeVals[i] = fkapi.OfString(beltTypeNames[i])
 	}
-	beltTypes = fkapi.Value{Tag: fkapi.TagArray, Array: beltTypeVals[:]}
+	beltTypeVals[len(beltTypeNames)] = fkapi.OfString(linkedBeltType)
+	beltTypes = fkapi.Value{Tag: fkapi.TagArray, Array: beltTypeVals[:len(beltTypeNames)]}
+	probeTypes = fkapi.Value{Tag: fkapi.TagArray, Array: beltTypeVals[:]}
 
 	findByPos = fkapi.EntitySearchFilters{}
 	findByPos.Position = &searchPos
@@ -352,8 +377,9 @@ func initBuffers() {
 	// returned, and an interface is never placed where it could not connect.
 	findByPos.Force = &forceFilter
 
-	// THE PROBE'S FILTER IS THE SAME QUERY WITHOUT THE FORCE TERM, and that is a
-	// correctness matter rather than a saving. Whether a belt curves is the
+	// THE PROBE'S FILTER IS THE SAME QUERY WITHOUT THE FORCE TERM AND WITH
+	// LINKED-BELT IN IT, and both differences are correctness rather than
+	// savings. The type list is linkedBeltType's header; the force is this: Whether a belt curves is the
 	// ENGINE's decision and the engine does not care whose belt the feeder is,
 	// measured on 2.0.77 rather than assumed: items pushed onto one force's belt
 	// arrive on another force's belt three tiles further down the same line, and
@@ -369,7 +395,7 @@ func initBuffers() {
 	// the right answer either way.
 	findAnyByPos = fkapi.EntitySearchFilters{}
 	findAnyByPos.Position = &searchPos
-	findAnyByPos.Type = &beltTypes
+	findAnyByPos.Type = &probeTypes
 
 	findByName = fkapi.EntitySearchFilters{}
 	findByName.Area = &searchArea
@@ -767,7 +793,9 @@ func classifyStraight(e fkapi.LuaEntity, t string, d, dir, back uint32) (out boo
 //	3, 4  nothing standing on either tile points into B. This is classifySide's
 //	      own reading asked at the probe tile, so an underground's input end, a
 //	      loader's input type and a belt facing away all correctly fail to count
-//	      as a feeder without a second list of types to keep in step.
+//	      as a feeder without a second list of types to keep in step -- plus a
+//	      LINKED BELT, which is the one type the probe knows and the edge query
+//	      does not. See probeFeeds.
 //
 // A SIDE-LOADED EXIT IS EXCLUDED ON PURPOSE, and it is the one shape a player
 // might expect and not get. A belt whose rear is fed shares itself between two
@@ -827,10 +855,12 @@ func curvesFromCluster(surf fkapi.LuaSurface, si uint32, bx, by int32, dir, d ui
 // writes into a buffer it keeps and the type is compared on the HOST.
 //
 // The `d != back` skip is not a shortcut past the switch, it is the switch's own
-// shape said once: every one of classifyStraight's six types answers "feeds the
-// tile on my `pdir` side" with `d == back` and nothing else, so an entity
+// shape said once: every one of the seven types probeFeeds knows answers "feeds
+// the tile on my `pdir` side" with `d == back` and nothing else, so an entity
 // pointing anywhere else cannot be a feeder whatever it turns out to be. A type
 // added there whose feeding arm reads some other direction has to move this too.
+// Measured for the seventh as well as read off the six: a linked belt output end
+// at a belt's rear facing AWAY leaves that belt curving.
 func feedsTile(surf fkapi.LuaSurface, px, py int32, pdir uint32) bool {
 	searchPos.X = float64(px) + 0.5
 	searchPos.Y = float64(py) + 0.5
@@ -853,18 +883,44 @@ func feedsTile(surf fkapi.LuaSurface, px, py int32, pdir uint32) bool {
 		if d != back {
 			continue
 		}
-		for n := range beltTypeNames {
-			is, err := e.TypeIs(beltTypeNames[n])
-			if err != nil || !is {
-				continue
-			}
-			if out, found := classifyStraight(e, beltTypeNames[n], d, pdir, back); found && !out {
-				return true
-			}
-			break
+		if probeFeeds(e, d, pdir, back) {
+			return true
 		}
 	}
 	return false
+}
+
+// probeFeeds is feedsTile's reading of ONE entity already known to point at the
+// tile in question. The six edge types are classifySide's own reading asked at
+// the probe tile; the seventh is this function's alone.
+//
+// A LINKED BELT'S ARM IS HERE AND NOT IN classifyStraight, because the two
+// functions answer different questions of different type lists: that one reads
+// an EDGE, and an edge is never a linked belt (linkedBeltType's header). Its end
+// type decides it the way an underground's does -- an OUTPUT end emits into the
+// tile it faces and an INPUT end swallows -- and both arms are measured on
+// 2.0.77 rather than reasoned from the underground: a connected output end at a
+// belt's rear reads `belt_shape = straight` and an input end in the same place
+// reads `right`, i.e. still curving.
+//
+// WHETHER IT IS CONNECTED DOES NOT COME INTO IT, which is measured as well and
+// is why nothing here reads `linked_belt_neighbour`: an UNCONNECTED output end
+// at the rear reads `straight` too. The engine decides a belt's shape from what
+// is standing beside it, not from where the items come from.
+func probeFeeds(e fkapi.LuaEntity, d, pdir, back uint32) bool {
+	for n := range beltTypeNames {
+		is, err := e.TypeIs(beltTypeNames[n])
+		if err != nil || !is {
+			continue
+		}
+		out, found := classifyStraight(e, beltTypeNames[n], d, pdir, back)
+		return found && !out
+	}
+	if is, err := e.TypeIs(linkedBeltType); err != nil || !is {
+		return false
+	}
+	isOut, err := e.LinkedBeltTypeIs(linkTypeOutput)
+	return err == nil && isOut
 }
 
 // fingerprint is FNV-1a over the edge list. See netInfo.fp for why a hash and
