@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless verification. Sixteen suites, all real Factorio runs, not models:
+# Headless verification. Seventeen suites, all real Factorio runs, not models:
 #
 #   M1  do balancer parts merge and split correctly?
 #   M2  does the compiled hidden network actually balance?
