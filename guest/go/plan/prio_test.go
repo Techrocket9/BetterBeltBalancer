@@ -705,42 +705,86 @@ func TestTheRatesASuiteShouldAssert(t *testing.T) {
 	}
 }
 
-// TestPriorityCapacityIsRecorded. A toggle is a recompile, a recompile hands
-// the drained items to the network that succeeds it, and what that network
-// cannot hold spills on the ground beside the cluster. So the difference
-// between the two capacities is the bound on what a toggle can put there, and
-// it only goes one way: turning a priority port ON grows the network and can
-// never spill, turning the last one OFF shrinks it and can.
+// TestPriorityCapacityIsRecorded pins agents/priority.md's capacity table, both
+// columns and the residual bound between them, and pins the shape-only form
+// against the built one on every row.
 //
-// agents/priority.md carries the whole table and what it means for a player.
+// Those are two different claims. `capacityOf` counts an op list, which is what
+// the table was measured with; `Capacity` takes a Ports and builds the shape
+// itself, which is what the guest asks on a keypress, and the only thing that
+// says the two agree is comparing them on every row.
+//
+// The residual bound is the difference: a toggle is a recompile, a recompile
+// hands the drained items to the network that succeeds it, and what that
+// successor cannot hold spills beside the cluster.
 func TestPriorityCapacityIsRecorded(t *testing.T) {
 	for _, c := range []struct {
-		n, m, q     int
-		plain, prio int
+		n, m, q            int
+		plain, prio, resid int
 	}{
-		{2, 2, 1, 112, 192},
-		{4, 4, 1, 320, 736},
-		{4, 4, 2, 320, 608},
-		{8, 8, 1, 832, 2016},
-		{8, 8, 4, 832, 1792},
-		{16, 16, 1, 2048, 5152},
-		{32, 32, 1, 4864, 12576},
+		{2, 2, 1, 112, 192, 80},
+		{4, 4, 1, 320, 736, 416},
+		{4, 4, 2, 320, 608, 288},
+		{3, 5, 1, 720, 1456, 736},
+		{5, 3, 1, 752, 1312, 560},
+		{8, 8, 1, 832, 2016, 1184},
+		{8, 8, 2, 832, 2064, 1232},
+		{8, 8, 4, 832, 1792, 960},
+		{16, 16, 1, 2048, 5152, 3104},
+		{32, 32, 1, 4864, 12576, 7712},
 	} {
-		pl, _, _ := Build(nil, edges(c.n, c.m), 0, 0)
-		if got := Capacity(pl); got != c.plain {
+		pl, ptPl, _ := Build(nil, edges(c.n, c.m), 0, 0)
+		if got := capacityOf(pl); got != c.plain {
 			t.Errorf("%d->%d plain holds %d item positions, recorded %d",
 				c.n, c.m, got, c.plain)
 		}
-		pr, _, _ := Build(nil, prioEdges(c.n, c.m, c.q), 0, 0)
-		if got := Capacity(pr); got != c.prio {
+		pr, ptPr, _ := Build(nil, prioEdges(c.n, c.m, c.q), 0, 0)
+		if got := capacityOf(pr); got != c.prio {
 			t.Errorf("%d->%d q=%d holds %d item positions, recorded %d "+
 				"(update agents/priority.md in the same commit)",
 				c.n, c.m, c.q, got, c.prio)
 		}
-		if Capacity(pr) <= Capacity(pl) {
-			t.Errorf("%d->%d q=%d is not bigger than the plain network, and the "+
-				"whole toggle-on-never-spills claim rests on that", c.n, c.m, c.q)
+		if got := c.prio - c.plain; got != c.resid {
+			t.Errorf("%d->%d q=%d leaves a residual bound of %d, recorded %d",
+				c.n, c.m, c.q, got, c.resid)
 		}
+		if got := Capacity(ptPl); got != c.plain {
+			t.Errorf("%d->%d plain: Capacity(Ports) says %d and the built ops "+
+				"hold %d -- the guest asks the first and the teardown fills the "+
+				"second", c.n, c.m, got, c.plain)
+		}
+		if got := Capacity(ptPr); got != c.prio {
+			t.Errorf("%d->%d q=%d: Capacity(Ports) says %d and the built ops "+
+				"hold %d", c.n, c.m, c.q, got, c.prio)
+		}
+	}
+}
+
+// TestAPriorityToggleCanShrinkTheNetworkInEitherDirection is why the guest's
+// spill guard compares two capacities rather than asking which way the flag
+// moved.
+//
+// Turning a port's priority ON is bigger than the plain network on every row of
+// the table above, which is where the design's "toggling ON never spills" came
+// from -- and it is a claim about plain against priority, not about q against
+// q+1. A 4x4's second priority port is SMALLER than its first: one priority
+// port leaves three normal ones and a square butterfly over three ports is four
+// rows with a loopback in it, where two and two are a pair of single-splitter
+// blocks. So a toggle ON shrinks the network there, and a guard that only
+// watched the OFF direction would let that one spill.
+func TestAPriorityToggleCanShrinkTheNetworkInEitherDirection(t *testing.T) {
+	one, _ := ShapeEdges(prioEdges(4, 4, 1))
+	two, _ := ShapeEdges(prioEdges(4, 4, 2))
+	if Capacity(two) >= Capacity(one) {
+		t.Fatalf("4->4 holds %d positions at q=1 and %d at q=2; the guard's "+
+			"whole reason for comparing capacities is that the second is smaller",
+			Capacity(one), Capacity(two))
+	}
+	plain, _ := ShapeEdges(edges(4, 4))
+	if Capacity(two) <= Capacity(plain) {
+		t.Fatalf("4->4 q=2 holds %d positions and the plain network holds %d; "+
+			"a priority network smaller than the plain one would make the very "+
+			"first toggle a spill", Capacity(two), Capacity(plain))
 	}
 }
 

@@ -334,34 +334,3 @@ func track(worst float64, p *float64, v float64) float64 {
 	}
 	return worst
 }
-
-// Capacity is how many items the network can hold, in item positions.
-//
-// A teardown drains what is STANDING in the network and the flush hands it to
-// whatever cluster succeeds it; what the successor cannot hold spills on the
-// visible surface beside the cluster (carry.go, "A recompile is not a
-// removal"). So the difference between two networks' capacities is the bound on
-// what a recompile between them can put on the ground, and toggling a priority
-// port on or off is exactly such a recompile.
-//
-// The arithmetic is the belt's: an item occupies 0.25 of a tile along a lane,
-// so a tile of belt holds four positions a lane and eight in both, and a
-// splitter is two belts wide. It counts the VISIBLE interfaces too, because the
-// teardown drains the cluster's box as well as the slot.
-//
-// It is a bound on the items and not a measurement of them: a network is only
-// this full when every line in it is compressed, which is the saturated case
-// and the worst one.
-func Capacity(ops []Op) int {
-	const perTile = 8
-	n := 0
-	for _, o := range ops {
-		switch o.Proto {
-		case ProtoSplitter, ProtoLaneSplitter:
-			n += 2 * perTile
-		default:
-			n += perTile
-		}
-	}
-	return n
-}

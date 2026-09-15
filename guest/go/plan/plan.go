@@ -909,3 +909,88 @@ func PropagateLoop(ext []float64, pt Ports) (rows []float64, ok bool) {
 	}
 	return f, false
 }
+
+// ---------------------------------------------------------------------------
+// How much a network can hold
+// ---------------------------------------------------------------------------
+
+// Capacity is how many item positions the network for a shape can hold.
+//
+// A teardown drains what is STANDING in a network and the flush hands it to
+// whatever cluster succeeds it; what the successor cannot hold spills on the
+// visible surface beside the cluster (carry.go, "A recompile is not a
+// removal"). That is the right answer for a machine a player took apart and the
+// wrong one for a flag they ticked, so the guest asks this before it moves a
+// priority flag and refuses a change the successor could not swallow. The
+// difference between two capacities is the bound on what that recompile could
+// otherwise put on the ground.
+//
+// IT BUILDS THE SHAPE RATHER THAN COUNTING IT. The op count of a priority
+// network is the head, two butterflies, a tap per rank and two tier balancers,
+// and an arithmetic version of that would be a second copy of the layout that
+// could drift from the one buildPrio lays. Positions are a function of the
+// SHAPE alone -- where an edge sits decides where a visible interface goes and
+// never how many there are -- so a synthetic edge list of N inputs and M
+// outputs with QOut of them flagged builds the same entity count the real one
+// does.
+//
+// It is for a keypress and not for a compile: it allocates on its first call at
+// a size no earlier call reached, it clobbers this package's working buffers the
+// way Build does, and it costs a whole Build. The guest calls it from
+// setPartPriority, which is an outermost dispatch, and from nowhere else.
+//
+// A shape with no inputs or no outputs, and one that does not fit, hold nothing:
+// neither has a network.
+func Capacity(pt Ports) int {
+	if pt.N <= 0 || pt.M <= 0 {
+		return 0
+	}
+	capEdges = capEdges[:0]
+	for i := 0; i < pt.N; i++ {
+		capEdges = append(capEdges, Edge{Dir: East})
+	}
+	for i := 0; i < pt.M; i++ {
+		capEdges = append(capEdges, Edge{Dir: East, Out: true, Prio: i < pt.QOut})
+	}
+	ops, _, ok := Build(capOps[:0], capEdges, 0, 0)
+	capOps = ops
+	if !ok {
+		return 0
+	}
+	return capacityOf(ops)
+}
+
+// capEdges and capOps are Capacity's own, so that a capacity question cannot
+// overwrite an op list a caller is still holding. Slices rather than arrays for
+// the reason the buffer block above gives: an array of MaxPorts ops would be
+// tens of kilobytes of GLOBALS, which the conservative collector re-scans at
+// every paced step, where a slice header is three words and its backing array is
+// ordinary heap.
+var (
+	capEdges []Edge
+	capOps   []Op
+)
+
+// capacityOf is the item positions an op list holds.
+//
+// The arithmetic is the belt's: an item occupies 0.25 of a tile along a lane, so
+// a tile of belt holds four positions a lane and eight in both, and a splitter
+// is two belts wide. The VISIBLE interfaces count, because a teardown drains the
+// cluster's box as well as the slot.
+//
+// It is a bound on the items and not a measurement of them: a network is only
+// this full when every line in it is compressed, which is the saturated case and
+// the worst one.
+func capacityOf(ops []Op) int {
+	const perTile = 8
+	n := 0
+	for i := range ops {
+		switch ops[i].Proto {
+		case ProtoSplitter, ProtoLaneSplitter:
+			n += 2 * perTile
+		default:
+			n += perTile
+		}
+	}
+	return n
+}
