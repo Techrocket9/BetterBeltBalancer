@@ -553,6 +553,7 @@ OBS_MIG21_DIR := $(OBS_DIST)/bbb-mig21-observer_0.1.0
 OBS_QUAL_DIR  := $(OBS_DIST)/bbb-qual-test_0.1.0
 OBS_FLIP_DIR  := $(OBS_DIST)/bbb-flip-test_0.1.0
 OBS_CURV_DIR  := $(OBS_DIST)/bbb-curv-test_0.1.0
+OBS_PRIO_DIR  := $(OBS_DIST)/bbb-prio-test_0.1.0
 OBS_MIX_DIR   := $(OBS_DIST)/bbb-mix-test_0.1.0
 OBS_PLAT_DIR  := $(OBS_DIST)/bbb-plat-test_0.1.0
 OBS_MIG_DIR   := $(OBS_DIST)/bbb-mig-test_0.1.0
@@ -587,7 +588,7 @@ OBS_CURS_DIR      := $(OBS_DIST)/bbb-curs-test_0.1.0
 
 observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR) $(OBS_MAR_DIR) $(OBS_MIG21_DIR) \
            $(OBS_QUAL_DIR) $(OBS_MIX_DIR) $(OBS_PLAT_DIR) $(OBS_MIG_DIR) \
-           $(OBS_FLIP_DIR) $(OBS_CURV_DIR) $(OBS_CURS_DIR) \
+           $(OBS_FLIP_DIR) $(OBS_CURV_DIR) $(OBS_PRIO_DIR) $(OBS_CURS_DIR) \
            $(OBS_M2_DIR) $(OBS_M3_DIR) $(OBS_EDGE_DIR) $(OBS_IACT_DIR) \
            $(OBS_BB2_DIR) $(OBS_FOREIGN_DIR) $(OBS_BENCH_DIR) \
            $(OBS_FIXPLAYER_DIR)
@@ -728,6 +729,17 @@ $(OBS_CURV_DIR): $(DIST)/obs-curv.wasm $(DIST)/obs-curvdata.wasm Makefile
 	  --name bbb-curv-test --version 0.1.0 \
 	  --title "BBB curved-exit upgrade verification" \
 	  --description "Builds balancers whose networks were compiled before a belt could turn as it left one, then hands the save to a guest that has the rule -- which must keep every one of them exactly as it stood and turn the setting off for that save. Asserts nothing itself." \
+	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
+	  -o .
+
+$(OBS_PRIO_DIR): $(DIST)/obs-prio.wasm $(DIST)/obs-priodata.wasm Makefile
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-prio.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-priodata.wasm) \
+	  --name bbb-prio-test --version 0.1.0 \
+	  --title "BBB output-priority verification" \
+	  --description "Builds balancers with a port that is fed before the others, at the loads that separate the two tiers, and drives the four ways asking for one is refused. Asserts nothing itself." \
 	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
 	  -o .
 

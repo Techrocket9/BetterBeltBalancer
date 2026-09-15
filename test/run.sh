@@ -265,7 +265,7 @@ MOD_SERIES="$(sed -n 's/.*"factorio_version": *"\([^"]*\)".*/\1/p' "$MOD_DIR/inf
 #   INTERACTIVE checklist stages. It runs here because a rig that stopped
 #   landing, or one this mod refuses, costs a human a session to discover and
 #   costs this a single `--create` to catch.
-SUITES="${*:-m1 sedge mig21 flip m2 m3 mar upg curv edge mix plat qual mig iact curs}"
+SUITES="${*:-m1 sedge mig21 flip m2 m3 mar upg curv prio edge mix plat qual mig iact curs}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.
@@ -1069,6 +1069,33 @@ for suite in $SUITES; do
       run "$TMP/mar" "${BBB_MAR_TICKS:-5020}"
       echo "==> fitting the slopes"
       python3 "$ROOT/test/assert-marathon.py" "$TMP/mar/create.log" "$TMP/mar/run.log"
+      ;;
+    prio)
+      # OUTPUT PRIORITY: a port that is fed before the others, and the four ways
+      # asking for one is refused. Every rate is read against a bare express belt
+      # in the same save, and the load is set with belt TIERS -- a normal-tier
+      # run is exactly a third of an express one -- which is `m2`'s `tslow`
+      # technique used to walk a rig through the three regimes the two formulas
+      # separate. agents/priority.md is the design.
+      echo "=== prio: a port that is fed first ==="
+      stage "$TMP/prio" bbb-prio-test
+      run "$TMP/prio" "${BBB_PRIO_TICKS:-6400}"
+      echo "==> asserting the priority rates, the toggle and the refusals"
+      python3 "$ROOT/test/assert-prio.py" "$TMP/prio/create.log" "$TMP/prio/run.log"
+
+      # ...AND THE SAME WORLD ON A DISCARDED GUEST HEAP, which is `upg`'s
+      # question asked of a priority save. `pprio` is zero for every node on a
+      # fresh heap, so the only place the flag survives is the part's own
+      # `graphics_variation` and `recoverPriority` is what reads it back. A
+      # rebuild that did not would ADOPT every network anyway -- the interfaces
+      # are in the same places -- and the loss would be silent until the first
+      # audit found the fingerprint moved.
+      echo "=== prio: ... and a priority save whose guest heap is discarded ==="
+      stage "$TMP/prioupg" bbb-prio-test
+      BETWEEN=bump_build run "$TMP/prioupg" "${BBB_PRIO_TICKS:-6400}"
+      echo "==> asserting that the flags came back out of the world"
+      python3 "$ROOT/test/assert-prio.py" --leg upgrade \
+        "$TMP/prioupg/create.log" "$TMP/prioupg/run.log"
       ;;
     edge)
       # Correctness under churn: every edit that lands while a network is

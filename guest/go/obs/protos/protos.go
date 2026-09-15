@@ -61,6 +61,7 @@ const (
 	IactLoader  = "bbbi-loader"
 	FlipLoader  = "bbbf-loader"
 	CurvLoader  = "bbbc-loader"
+	PrioLoader  = "bbbp-loader"
 	CursLoader  = "bbbcurs-loader"
 )
 
