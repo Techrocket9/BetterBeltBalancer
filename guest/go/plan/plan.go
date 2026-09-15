@@ -165,6 +165,12 @@ type Edge struct {
 	TileX, TileY int32
 	Dir          uint32
 	Out          bool
+	// Prio marks a PRIORITY port: an output that is fed before the others, or
+	// an input that is drained before the others, two-tier and boolean. It is
+	// a property of the part the belt stands against (cluster.go's pprio), so
+	// on an engine that lets a part carry two belts both of them read it. A
+	// network with no Prio edge at all is the plain butterfly, byte for byte.
+	Prio bool
 }
 
 // The column layout, left to right:
@@ -227,6 +233,48 @@ type Ports struct {
 	// Loop is how many spare output ports are wired back into spare input
 	// ports. Output ports [M, M+Loop) feed input ports [N, N+Loop).
 	Loop int
+	// QIn and QOut count the Prio inputs and outputs among N and M. Both zero
+	// is the plain butterfly.
+	QIn, QOut int
+}
+
+// SlotWidth and SlotHeight are the hidden-surface slot a network must fit in,
+// in tiles, and they are the PLANNER'S bound rather than compile.go's: a slot's
+// box is what a teardown sweeps, so an entity outside it survives its own
+// rebuild as a ghost nothing owns and is destroyed by its neighbour's. Every
+// shape ShapeEdges says fits must place every op inside [0,SlotWidth) x
+// [0,SlotHeight), and plan_test.go is what holds that.
+const (
+	SlotWidth  = 32
+	SlotHeight = 72
+)
+
+// ShapeEdges sizes a network for an edge list and says whether it can be built
+// at all -- the port cap and, for a shape with priority ports, the slot. It is
+// the ONE check compile() makes before it touches anything and the one Build
+// repeats, so the two cannot disagree; a cluster with no inputs or no outputs
+// is a legitimate half-built state and fits at any size.
+func ShapeEdges(edges []Edge) (pt Ports, fits bool) {
+	n, m, qi, qo := 0, 0, 0, 0
+	for i := range edges {
+		if edges[i].Out {
+			m++
+			if edges[i].Prio {
+				qo++
+			}
+		} else {
+			n++
+			if edges[i].Prio {
+				qi++
+			}
+		}
+	}
+	pt = Shape(n, m)
+	pt.QIn, pt.QOut = qi, qo
+	if pt.N == 0 || pt.M == 0 {
+		return pt, true
+	}
+	return pt, pt.P <= MaxPorts
 }
 
 // Shape sizes a network for n inputs and m outputs.
@@ -315,21 +363,13 @@ func permutation(from, to []int) []int {
 // compile rather than build a network that overruns its slot.
 func Build(dst []Op, edges []Edge, ox, oy int32) (ops []Op, pt Ports, ok bool) {
 	ops = dst[:0]
-	n, m := 0, 0
-	for _, e := range edges {
-		if e.Out {
-			m++
-		} else {
-			n++
-		}
-	}
-	pt = Shape(n, m)
+	pt, fits := ShapeEdges(edges)
 	if pt.N == 0 || pt.M == 0 {
 		// Nothing to balance: a cluster with no inputs or no outputs is a
 		// legitimate half-built state, not an error.
 		return ops, pt, true
 	}
-	if pt.P > MaxPorts {
+	if !fits {
 		return ops, pt, false
 	}
 

@@ -211,23 +211,15 @@ func forgetBuildNotes() { buildNotes = buildNotes[:0] }
 
 // overLimitShape is the check compile() makes BEFORE it touches anything.
 //
-// It mirrors `plan.Build`'s own two tests exactly, and the mirroring is the
-// point: a cluster with no inputs or no outputs is a legitimate half-built
+// It IS `plan.Build`'s own test since the priority pass -- one function,
+// `plan.ShapeEdges`, called from both places -- where it used to mirror it: a cluster with no inputs or no outputs is a legitimate half-built
 // state that Build accepts at any size, so refusing one here would refuse
 // every single-sided cluster in the world. Build keeps its `!fits` branch as an
 // unreachable backstop, and reaching it is an `error:` because the two have
 // disagreed.
 func overLimitShape(edges []plan.Edge) (plan.Ports, bool) {
-	n, m := 0, 0
-	for i := range edges {
-		if edges[i].Out {
-			m++
-		} else {
-			n++
-		}
-	}
-	pt := plan.Shape(n, m)
-	return pt, pt.N > 0 && pt.M > 0 && pt.P > plan.MaxPorts
+	pt, fits := plan.ShapeEdges(edges)
+	return pt, !fits
 }
 
 // refusalDelivered asks the feedback gate a yes/no: has a refusal for this root

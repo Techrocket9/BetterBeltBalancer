@@ -59,8 +59,8 @@ func protoName(p plan.Proto) string {
 // what a teardown sweeps, and an entity outside them would survive a rebuild as
 // a ghost network nothing owns.
 const (
-	slotW    = 32
-	slotH    = 72
+	slotW    = plan.SlotWidth
+	slotH    = plan.SlotHeight
 	slotCols = 64
 )
 
