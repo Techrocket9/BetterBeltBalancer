@@ -18,7 +18,7 @@ require (
 	// dev-only replace onto the sibling checkout that stood here until the
 	// library was published came out on 2026-09-14; a developer who wants the
 	// sibling's working tree again adds it back locally and does not commit it.
-	github.com/Techrocket9/fkrecipes/go v0.1.0
+	github.com/Techrocket9/fkrecipes/go v0.1.1
 )
 
 // FkLua is a sibling checkout, not a published module. The mod and the compiler
