@@ -101,6 +101,21 @@ guest/go/                the Go guest, its own module (//go:wasmimport is
                          written, the ten lines both runtime-global bools
                          share -- sedge.go keeps the capability gate on its
                          write and the tri-state its fold wants,
+                         priority.go is the PLAYER'S SIDE OF A PRIORITY PORT:
+                         three doors (a keybind, a remote method and a settings
+                         paste) onto one function, `setPartPriority`, which is
+                         the only thing that moves `pprio`. The flag is in the
+                         compile fingerprint, so a toggle is a RECOMPILE and
+                         never a removal, and the file's two pre-teardown checks
+                         are why: `plan.ShapeEdges` asked with the flag
+                         speculatively flipped, so a shape that could not be
+                         built leaves the balancer alone, and
+                         `prioFitsWhatIsStanding`, which refuses a change that
+                         would build a network smaller than what the machine is
+                         carrying rather than putting the difference on the
+                         ground. Read its header before adding a fourth door or
+                         a fifth refusal ("Priorities: a port that is fed
+                         first"),
                          lifecycle.go is
                          everything that changes several things at once (clones,
                          surface deletion, rebuild-from-world, the audit),
@@ -132,7 +147,12 @@ guest/go/                the Go guest, its own module (//go:wasmimport is
                          where that setting does not exist, and
                          `set-curved-exits` since 2026-09-07, which is the
                          first of them a suite can drive on EITHER engine and
-                         is what the `m2` suite flips,
+                         is what the `m2` suite flips -- and
+                         `set-part-priority`, which is not a setting at all and
+                         is there for the sharpest version of the same
+                         argument: the flag's own door is a KEYBIND, a keypress
+                         cannot be issued from a script, and a headless run has
+                         no player to press one,
                          probe.go is the `bbb-insert-probe` marker: it asks
                          a CHEST the question the pocket asks a player, so
                          the one half of that path that never needed a
@@ -223,10 +243,30 @@ guest/go/plan/           the network planner: edges in, entities out. PURE Go,
                          tripwire, because swapping it for a plain belt
                          moved no count and failed no test, while spike S1
                          measured what it costs: a left-lane-only feed
-                         parks 4/0 on every output without it
+                         parks 4/0 on every output without it.
+                         SINCE THE PRIORITIES FEATURE IT BUILDS TWO SHAPES.
+                         `Edge.Prio`, `Ports.QIn/QOut` and `Op.OutPrio` are the
+                         seam; `ShapeEdges` is the ONE pre-teardown check and is
+                         safe to ask from a keypress (it allocates nothing and
+                         reads counts); `buildPrio` is the two-butterfly
+                         construction behind a priority output; and `Capacity`
+                         says how many item positions a shape's network holds,
+                         which is what lets the guest refuse a toggle that would
+                         spill rather than spilling. INPUT priority is refused
+                         at every size -- the construction for it is not built
+                         and an approximation is the one outcome this repo's own
+                         rule forbids. agents/priority.md is the whole of it
 guest/go/skin/           the sprite-variant mapping: a neighbour mask in, one
-                         of 47 pictures out. Pure Go for the same reason, and
-                         `make check` runs its five named shapes too
+                         of 47 pictures out -- or one of 94, because the second
+                         half of the sheet is the same 47 shapes with a PRIORITY
+                         BADGE on them and `skin.Cells` is what the prototype's
+                         `variation_count` and the committed PNG's cell count
+                         both are. `Variation` and `IsPriority` are the two ends
+                         of that: the flag rides in `graphics_variation`, which
+                         is per-entity state the ENGINE persists, so it survives
+                         a blueprint and a rebuilt guest where the heap does
+                         not. Pure Go for the same reason, and `make check` runs
+                         its five named shapes and the sheet's own header
 guest/go/carry/          the carry-pool IDENTITY: `Region` (surface, force,
                          inclusive tile box) and the ONE predicate over it.
                          Pure Go for the third time, and it exists because
@@ -297,7 +337,14 @@ guest/go/data/           THE DATA GUEST: this mod's SETTINGS and DATA stages, an
                          nothing here wants one and a hook that is not exported
                          gets no file. main.go is the hooks, value.go the
                          prototype-table shorthands, and one file per prototype
-                         family beside them -- MINUS item.go, which is gone
+                         family beside them -- PLUS priority.go, which is the
+                         one custom-input prototype this mod defines
+                         (`bbb-toggle-priority`, ALT + P) and therefore the one
+                         thing that makes the control guest's `SubscribeNamed`
+                         succeed: a name that does not match is a keybind that
+                         silently never fires, and the name is written twice
+                         because neither guest may import the other's packages
+                         -- and MINUS item.go, which is gone
                          since round two of the FkRecipes migration: the item is
                          a `LegacyItem` declaration in guest/go/tune's plan and
                          main.go's fk_data hook calls `EmitData` after entity(),
@@ -1710,7 +1757,7 @@ M2 proves item conservation across ONE recompile of a saturated 2x2. This suite 
 | **every part of that rig mined** — the cluster DISSOLVES, which is a removal | **118 items spilled back to the world**, 90 of them on the ground. This is the other half of the policy and it is asserted in the same suite so the two cannot drift apart. It reaches the dissolve by a `script_raised_destroy`, so it is also the **fallback** assertion for the miner's pocket: no player, no beneficiary, today's spill |
 | **a saturated TEN-PART rig taken apart ONE PART PER TICK — the way a PLAYER does it**, nine shrinks and a dissolve | **110 items on the ground from the nine shrinks and 0 from the dissolve**, out of 168 spilled. The order is the spare row and then row by row, west part then east part: every prefix leaves a CONNECTED cluster, and eight of the nine shrinks leave a machine with at least one input and one output, so P really does come down 4 → 2 → 1 rather than the machine simply dying. This is the 2026-08-02 field report's own gesture and the quantity the miner's pocket redirects; the assertion is a FLOOR, so a leg where every shrink happened to fit fails rather than passing vacuously. With a player all 110 go to the miner. See "The shrink was the whole feature" |
 | **the miner's-pocket INSERT, asked of a steel chest** — `insert` is a `LuaControl` member and a chest is a `LuaControl`, so the pocket's own call needs no player | four legs through the same `insertOne` from inside the same deferred flush: **50/50/50, 37/37/37, 23/23/23, 7/7/7** (asked/took/held), each cross-checked from Lua. A count arriving as **1** — the signature of an `ItemStackDefinition` whose `count` never reached the engine — fails by name |
-| **the operator seam** -- the console command and the remote interface | `/bbb-audit` is in Factorio's own `commands.commands`; the interface exposes exactly `{audit, set-multi-edge-parts, set-curved-exits}`, as an exact SET because a method here is public API another mod can come to depend on; `remote.call` returns **14 clusters**, equal to the count of the audit that same call ran. Red-proven: renaming the command fails the suite |
+| **the operator seam** -- the console command and the remote interface | `/bbb-audit` is in Factorio's own `commands.commands`; the interface exposes exactly `{audit, set-multi-edge-parts, set-curved-exits, set-part-priority}`, as an exact SET because a method here is public API another mod can come to depend on; `remote.call` returns **14 clusters**, equal to the count of the audit that same call ran. Red-proven: renaming the command fails the suite |
 | **a ONE-BELT-PER-PART refusal anywhere in the run** | **exactly one, and it is `frepd`'s.** Every other rig here is laid so that no tile ever carries two belts and every other edit is aimed at a spare part, at an edge the rig already has, or at a tile with nothing on it, so a second refusal would mean a rig or an edit had quietly stopped being the thing it is named for while every count above went on passing. The three ways of reaching that refusal from a BELT are the `sedge` suite's; the fourth is a PART REMOVAL and it is this suite's |
 | **the two walls that stop the pocket's TRIGGER being tested here**, probed in the same tick | `script.raise_event(on_player_mined_entity)` **refused** — *"can't be raised through script"* — and `game.get_player(1)` nil over `players=0`. Both asserted, so the day either falls the suite says to write the real test |
 | **a pocket anywhere in the run** | **0**, and `m3` asserts the same over its own dozen removal paths. Every removal in either suite is a script destroy, a death, a robot, a merge or a surface event, so the beneficiary must never be consulted |
@@ -2649,7 +2696,7 @@ And the engine control with no balancer within ten tiles, which is what says the
 
 **NOTHING FLUSHES IN THE HANDLER**, for the multi-edge handler's reason: the remote method's write is dispatched at the outermost level, but a player's keypress can arrive anywhere, so it queues and asks for the next tick's flush exactly as an ordinary event does. And there is no ANCHOR here, unlike the multi-edge fold: the handler reads the cached value BEFORE invalidating it, so a write of the value already there -- which Factorio raises this event for -- costs a re-read and nothing else.
 
-**`set-curved-exits` JOINS THE REMOTE INTERFACE**, for `set-multi-edge-parts`' reason and one more. The reason is that Factorio refuses `settings.global[k] = v` from anybody but the mod that DEFINED the setting and a runtime-global has no owning player, so without the method the flip handler is reachable by a human and by nothing else. The one more is that this setting exists on both engines, so it is the first method there that a suite can drive on the engine trunk targets. `edge` asserts the method list as an exact SET and it is `{audit, set-multi-edge-parts, set-curved-exits}`.
+**`set-curved-exits` JOINS THE REMOTE INTERFACE**, for `set-multi-edge-parts`' reason and one more. The reason is that Factorio refuses `settings.global[k] = v` from anybody but the mod that DEFINED the setting and a runtime-global has no owning player, so without the method the flip handler is reachable by a human and by nothing else. The one more is that this setting exists on both engines, so it is the first method there that a suite can drive on the engine trunk targets. `edge` asserts the method list as an exact SET and it is `{audit, set-multi-edge-parts, set-curved-exits}` (plus `set-part-priority` since the priorities feature, which is the fourth method and the only one that is not a setting).
 
 ### What the `m2` suite measures
 
@@ -2804,6 +2851,107 @@ The locale entry names the menu row verbatim so the player can turn the rule on 
 
 **And two regexes could never have caught it either**: `assert-mig.py` and `assert-mig21.py` spelled the marker `, list truncated` where the guest writes ` (list truncated)`, so their optional truncation groups had never matched anything.
 
+## Priorities: a port that is fed first
+
+**A player ticks a balancer part and the belt it serves is filled before the others. It is a compile-time decision and it runs no script**, which is the rule above all of this: the ticked port is a vanilla splitter with `splitter_output_priority` set on it at create time, and a shape that cannot be expressed that way is REFUSED rather than emulated. There is no `on_tick` handler, there never was one, and this feature did not add one.
+
+**The construction is two butterflies and a pair of tier balancers.** The plain butterfly BALANCES; the same schedule with every splitter's output priority on the smaller y CONCENTRATES, because a splitter that fills one side first is a merge and a tree of merges is a sorter; so the network balances, then sorts, then taps rank `r` into one of two square sub-balancers, priority ports first. [`agents/priority.md`](agents/priority.md) is the whole of it, including the mirror probe that says what INPUT priority would take and why it is not built.
+
+**The semantics are two formulas and they are exact at every load**, which is the whole reason this mod exists rather than an approximation. With S belts arriving and q of the M outputs ticked, a ticked port carries `min(S/q, 1)` and every other port carries `min(max(S - q, 0) / (M - q), 1)`. 1,568 cases over every shape with n, m <= 8, every legal q and seven loads deliver that to 1e-9 with the intake spread exactly 0, against a flow model with capacity and back-pressure in it that reproduces `PropagateLoop` on every plain shape. **NOTHING HAS BEEN RUN IN FACTORIO**, which is the one thing not to take from those numbers.
+
+### The flag, and why a toggle is a recompile
+
+`pprio`, one byte a node in `cluster.go`'s parallel slices beside `pvar`. It is the PART'S rather than the belt's: `classifyEdges` reads it once per tile and stamps it onto every edge that tile carries, which on an engine that lets a part hold two belts is both of them.
+
+**It is in the compile FINGERPRINT**, and it has to be. The flag is the only thing that moves when a player presses the key and nothing in the world does, so a hash blind to it would make the gesture a silent no-op -- the same shape as a belt turned around with no event, which `m3`'s `swap` rig is about. It costs the `Dir` field one more bit of shift and no more mixing.
+
+**So a toggle takes the path an edge edit takes and it is NOT A REMOVAL.** `compile` sees the fingerprint move, calls `teardownForRebuild`, and the pool that teardown opens is claimed by the network the same flush builds, matched by root because a cluster that had a network is its own successor. The items go back INSIDE the balancer. `noteMinedByPlayer` is never called from `priority.go`, so `settleCarry` has nobody to offer anything to and the reinsertion is the only outcome -- a claim is what makes a removal's leftovers somebody's property, and a toggle is not a removal.
+
+### Where the flag survives, measured
+
+**In `graphics_variation`**, which is the one piece of per-entity state this mod already writes and the engine already persists. Cells 1..47 are the shapes and 48..94 are the same shapes badged, so the byte is the in-world indicator at the same time. The guest heap is declined on every rebuilt guest, so a flag kept only there would be lost on every release of this mod and a player's factory would quietly go back to balancing evenly.
+
+Measured on 2.0.77 against a prototype declaring `variation_count = 94`:
+
+| written | reads back |
+|---|---|
+| 94 | 94 |
+| 95 | **1** |
+| 255 | **67** |
+| 0 | refused, `allowed values are from 1 to 256` |
+
+so the engine wraps modulo the count and there is no way to store a byte it will not give back.
+
+**The blueprint round trip keeps the flag with nothing asked of the guest.** A blueprint over a `simple-entity-with-force` with a `placeable_by` carries `variation = 50` and a revived ghost comes back at 50. Driven end to end on 2.0.77 through the remote method on a 2x2: the part at 10,10 flips and `restyle` writes variation **21 -> 68**, which is 21 + 47; off again writes **68 -> 21**, one teardown and one rebuild each way. A blueprint taken over the result carries **68** for the flagged part and 17, 27, 35 for the other three; pasted elsewhere and revived, the cluster comes up `skin cluster=5 parts=4 set=0 vars=68,27,17,35` -- `recoverPriority` found the world already showing what it wanted and made no write at all. **With `recoverPriority` stubbed out the same paste comes up `set=4 vars=21,...` and the flag is gone**, which is the defect it exists for.
+
+`recoverPriority` (`skin.go`) reads the variation back only for parts whose picture this guest has never written, and takes ONLY the flag: a pasted part's neighbourhood is not its source's, so the shape is recomputed from the registry as always. One host call for the whole cluster through the bulk getter, skipped entirely when every candidate's picture is already known.
+
+### The four refusals
+
+`plan.ShapeEdges` answers one question, can this be built, and three bounds sit behind it; the fourth is the guest's own and is about the MOMENT rather than the shape. `refuseShape` (`limit.go`) is the one place a refused `Ports` chooses, and each refusal has one sentence for a toggle or a pair for a build, plus one log line.
+
+| | when it fires | the toggle's key | the build's |
+|---|---|---|---|
+| over the port limit | more than `plan.MaxPorts` belts, whatever is flagged | unreachable: a flag cannot add a belt | `over-port-limit` |
+| too big for a priority port | the construction does not fit the slot, which is P = 64 | `priority-refused` | `priority-too-big` |
+| a priority input | `QIn > 0` after the collapse, at ANY size | `priority-input-refused` | `priority-input` |
+| too full to shrink | the successor holds fewer positions than the balancer is carrying | `priority-holding` | unreachable: a build cannot make a standing network smaller |
+
+Each build key has a second with `-unconnected` on it, for the robot or script build that leaves the piece standing rather than handing it back, and `tellRefusal`'s hand-back line names the bound that fired for both. A shape carrying a priority port takes a priority sentence; among those a priority INPUT wins over a size, because a cluster can break more than one bound at once and taking the flag off is the fix in every case.
+
+**A TOGGLE IS REFUSED BEFORE THE FLAG MOVES.** `ShapeEdges` is asked with the flag speculatively flipped, so a shape the compiler could not build leaves the flag, the network and the items exactly as they were. Refusing after the flip would save the network too -- the check is in front of the teardown -- and would leave the cluster standing refused until the player guessed to toggle back, which is a worse answer to the same question.
+
+**TICKING EVERY PORT COLLAPSES RATHER THAN REFUSING.** `ShapeEdges` reports `QOut = 0` for M flagged outputs and `QIn = 0` for N flagged inputs, so a player who ticks all 64 outputs of a 64-port balancer gets the plain network to the byte instead of a refusal, and a balancer whose every input is flagged is not an input refusal at all. Two tiers where the second is empty is one tier.
+
+**INPUT PRIORITY IS THE ONE THAT IS NOT ABOUT SIZE, and it is a decision.** The mirror construction is measured to be the same shape -- a de-concentrator, the tiers moved to the input side -- and what does not fit is the COMBINATION: input and output priority in one network is `DE-CONCENTRATE + BALANCE + CONCENTRATE` in series, 9k-3 columns, which is 33 at P=16 against a 32-column slot. An approximation would be the one outcome this repository's own rule forbids, a network that compiled, ran, balanced and quietly ignored the flag a player set.
+
+### The spill guard, and the one number it protects
+
+**A priority change never puts anything on the ground.** The fourth decision of "A recompile is not a removal" spills what a materially smaller successor cannot hold, which is right for a machine a player MINED and wrong for a flag they ticked. So `prioFitsWhatIsStanding` asks `plan.Capacity` for the successor's item positions and for the predecessor's, and when the successor is smaller it counts what the standing network is holding and refuses the change rather than making it. Nothing is torn down, nothing is said in chat, and the player is told to let the balancer empty.
+
+The number it protects against is the last column of `agents/priority.md`'s capacity table: **416 positions on a 4->4 and 1,184 on an 8->8** at q = 1. It needs a balancer whose every output is blocked, and a jammed network really is near capacity -- this repo records a saturated dead-ended 4x4 draining **232 items** against the 320 positions the table computes for it, and M2's full 2x2 draining **72** against 112.
+
+**THE DIRECTION IS NOT THE QUESTION**, which is what the design had wrong and a test now holds. "Turning a priority port ON never spills" is true of the plain network against a priority one and false of q against q+1: a 4x4 holds **736** positions at q=1 and **608** at q=2, because one priority port leaves three normal ports and a square butterfly over three ports is four rows with a loopback in it, where two and two are a pair of single-splitter blocks. So a toggle ON shrinks that network, and the guard compares two capacities rather than asking which way the flag went (`TestAPriorityToggleCanShrinkTheNetworkInEitherDirection`).
+
+**The count is items and the capacity is positions**, and under belt stacking those are not the same unit: a stacked position holds up to four items, so the count can exceed the positions occupied and the guard can refuse a change that would have fitted. That is the side to be wrong on. On every force that cannot stack, which is all of base Factorio, one item is one position and the comparison is exact.
+
+**The reading is the drain's own, made without draining**: the hidden slot's box and the visible cluster's box, through `sweep`'s four names and its prebuilt filter, one host call per transport line and nothing crossing the boundary. It runs on a keypress, only when the capacity shrinks, and only when a network is standing.
+
+**WHAT IT DOES NOT COVER**, because neither is a flag changing: a belt MINED off a priority port shrinks the machine too and keeps the miner's-pocket contract, offering what will not fit to the miner before the floor; and a blueprint or paste that lands a flagged part into a balancer that is then too big is refused by `compile` in front of its own teardown, so there is nothing standing to lose. The only other writer of the flag is `recoverPriority`, which raises one on a part that has just arrived in the world with its belts, so the cluster it lands in is recompiled by the BUILD it came in on.
+
+### The fit, and the bound that is the slot
+
+| P | band 0 width | worst extent | fits |
+|---|--:|--:|---|
+| 2 | 5 | 6 x 3 | yes |
+| 4 | 11 | 11 x 8 | yes |
+| 8 | 17 | 17 x 16 | yes |
+| 16 | 23 | 23 x 32 | yes |
+| 32 | 29 | 29 x 64 | yes |
+| **64** | **35** | **35 x 128** | **no** |
+
+Against a 32 x 72 slot, so **a priority port is allowed at every size under P = 64 and refused at 64**, and the boundary is not a constant anybody chose: P=64 wants 35 columns of a 32-column slot and there is no packing of two 64-row blocks that is not also 128 rows of a 72-row slot. The tests measure the extent off the ops rather than off the rule and check it is exactly tight, because a loose bound would refuse shapes that fit.
+
+**AN OPEN DECISION, NOT TAKEN HERE.** The fit rule admits a 32->32 with one priority port, which is **1,267 entities** -- larger than the 1,152-entity P=64 plain network `agents/maxports.md` measures at 155 ms empty and ~390 ms saturated for one teardown-and-rebuild. A recompile is linear in entities, so the largest network this mod would build under the shipped rule is one a belt edit rebuilds in about four hundred milliseconds, and the HITCH rather than the slot may be the bound that should refuse. The bound shipped is the slot. Deciding otherwise means measuring a priority recompile in a game first, which nothing has.
+
+### The player's side
+
+**ALT + P over the part under the cursor**, and the letter is the only part of that with a choice in it: a `--dump-data` of base, quality, elevated-rails and space-age on 2.0.77 has **14 custom inputs, twelve of them `ALT + <letter>`** over A B C D E F G L R T U Y, one on TAB and one unbound. P is free. The engine's own compiled-in bindings are not prototypes and no dump lists them, which is said in the prototype's comment rather than glossed.
+
+Three doors reach `setPartPriority` and nothing else does: the keybind, `remote.call('better-belt-balancer', 'set-part-priority', surface, x, y, on)`, and a settings paste. The remote method is not a convenience -- a keypress cannot be issued from a script and a headless run has no player to press one, so without it the whole feature is reachable by a human and by nothing else, which is the condition `commands.go` exists to end.
+
+**The settings paste takes the flag from the REGISTRY and clears `pvar`**, which is two statements for two things the engine did. Measured on 2.0.77, a script `copy_settings` between two of these entities moves `graphics_variation` itself, so the destination is wearing the SOURCE's shape on a neighbourhood that is not the source's; zeroing `pvar` is what makes `restyle` look rather than compare against a memory that is now wrong. Reading the flag back out of that variation would work today and would rest on an engine behaviour nobody promised.
+
+**The editor's variation picker gains a second half.** M5 records that a variation picked by hand in the map editor persists until something changes the cluster's shape, because `restyle` compares its own answer against `pvar` rather than reading the entity. That is still true and it now has a way to be wrong that matters: a hand-picked cell in 48..94 is a priority badge. `recoverPriority` will not act on it -- it reads only parts whose picture the guest has never written, and an editor pick leaves `pvar` set -- so the picture is wrong and the port is not. The reverse of the trap, and the better direction to be wrong in.
+
+**THE DUMP GOLDENS MOVE AND ARE NOT RE-CAPTURED HERE.** Two prototype changes reach the data stage: the custom input `bbb-toggle-priority`, which is a prototype like any other, and `variation_count` going 47 to 94 on `bbb-balancer-part`. Both are `data.raw`, so **both `data_raw_sha256` arms move on every engine and `mod_settings_sha256` does not** -- this feature declares no setting. A golden whose engine does not match the binary is a SKIP by construction, so the capture belongs to whoever next runs `test/check-datastage.py --capture` on a binary, beside the `prio` suite.
+
+### What is NOT done
+
+- **Input priority.** Refused at every size, with its own sentence. The mirror construction and what building it would take are in `agents/priority.md`.
+- **Nothing has been run in Factorio.** Every rate in this section is the flow model's, anchored on the plain shapes to `PropagateLoop`, which is what the M2 rigs were measured against. The `prio` suite is somebody's next job and `agents/priority.md` carries the rig table and the log lines it should key on.
+- **The 94-cell sheet has not been seen by a graphical client.** `skin/sheet_test.go` reads the committed PNG's header and compares its cell count against `skin.Cells`, which is the class of defect a headless gate can catch; whether the badge reads as a badge at native scale is a human's.
+- **The recompile hitch at the fit rule's ceiling**, above.
 
 ## Fast replace — a part goes over a belt, and a belt goes over a part
 
@@ -3738,6 +3886,7 @@ Design fixed 2026-07-31: **compile, don't interpret** -- balancer clusters compi
 | **...and a belt may TURN as it leaves one** | A belt laid across a part's free face with nothing behind it is that part's output, and the engine bends it towards the interface: a corner no longer needs a tile of straight belt first, and it carries both lanes. `agents/design.md`'s inherited limitation, *a belt curving away at the edge is not an output*, is retired. A belt that something else already feeds is still declined, deliberately -- it would be a half-lane port, and a half-lane port breaks the exact balance everything here rests on. Measured: a 2->2 whose two outputs are both corners delivers **1.998x one belt at 0.15% spread** with both lanes occupied on every sample, and the side-load beside it takes **exactly 0**. Nothing on any hot path moves, and the `mar` suite gained a leg to say so. "A belt that turns as it leaves" |
 | **...and a player who did not want that can turn it off** | The curve rule changes what a STANDING factory means, so it is behind `bbb-curved-exits`, a map setting defaulting to ON and defined on both engines -- unlike `bbb-multi-edge-parts`, because what a belt at a face means is this mod's decision rather than the engine's. The flip needs no restart and re-classifies the whole save: every cluster is re-queued and each one skips on the fingerprint it never lost. Measured on the `m2` suite over a running world: with the rule off the two corners of a 2->2 take **16 and 19 items against a live port's 300** and the audit reads `nets=22` of 23 clusters with `unbuilt` and `refused` still 0 -- a cluster with no outputs is a half-built state, not a refusal -- and turning it back on rebuilds that one network and delivers **300 and 300, 1.000x each at 0.00% spread**. One teardown, one spill and one compile over both flips. With the rule off `classifySide` makes neither of the probe's host calls, which leg H holds at **384 B/iter either way**. "The curve rule is a setting" |
 | **...and a factory that already existed is not changed under its owner** | The curve rule changed what a WORLD means, so the first load of a save built before it turns the setting OFF for that save. **The trigger is the save's own state version** -- `fk_state_version`, which FkLua stamps and hands back to `fk_migrate`, and which every build up to 0.3.2 left at 0 by not exporting it -- so a load that is reading such a world decides at the first curve edge any classification in it produces, whatever else is true of the cluster. It replaced a SHAPE (an adoption failure of one exact list) that three ordinary old saves failed silently: a half-built cluster with a belt running past compiled 1 -> 1 and put **807 items** into a chest nobody connected, one whose output belt had been mined while the mod was uninstalled misrouted **819**, and one with an extra input laid the same way was condemned and refused with **12 items on the ground** and the MULTI-EDGE grandfather then writing `bbb-multi-edge-parts = true` for a save that never used it. Over the `curv` suite's eight named rigs and its band of forty, on two surfaces and two forces: **45 adopted and 3 rebuilt, and the three are rebuilt because the WORLD changed under them** -- 47 balancers kept, two forces told with a ping and a chart each, all six mains at 1.000x one belt and every curve chest at exactly 0. "A save from before the curve rule keeps the reading it was built to" and the `curv` suite |
+| **A port can be fed first, and it still costs no script** | A balancer part ticked with ALT + P gives its belt priority: with S belts arriving and q of the M outputs ticked, a ticked port carries `min(S/q, 1)` and every other port `min(max(S - q, 0) / (M - q), 1)`, exact at every load. It is a compile-time decision -- two butterflies, a sorter and a pair of tier balancers, with `splitter_output_priority` set at create time -- so there is still no `on_tick` handler and there never may be one. **1,568 cases** over every shape with n, m <= 8, every legal q and seven loads deliver it to 1e-9 with the intake spread exactly 0, against a flow model anchored on the plain shapes to the one the M2 rigs were measured with. The flag rides in `graphics_variation`, so it survives a blueprint, a settings paste and a rebuilt guest (measured: **21 -> 68** on a toggle, **68** in the blueprint, and `set=0` on the revived paste because the world already showed it). A change that would build a smaller network than the balancer is carrying is REFUSED rather than spilling the difference, which is the one number in the design that was not small: **416 positions on a jammed 4->4 and 1,184 on an 8->8**. INPUT priority is refused at every size and is a later version. **NOTHING HAS BEEN RUN IN FACTORIO** -- the `prio` suite does not exist yet. "Priorities: a port that is fed first" and [`agents/priority.md`](agents/priority.md) |
 | **A Belt Balancer 2 or 3 save becomes one of ours** | Uninstall the incumbent and every `balancer-part` it left standing becomes one of this mod's, at load, once per save: 31 parts across 3 surfaces and 2 forces into 9 clusters, **at the health and the quality they were standing at**, of which the ones laid ONE BELT PER PART deliver 2.000x and 3.997x one belt and the ones laid the incumbent's way are refused on Factorio 2.1 -- their geometry cannot function there under any design, so what a player gets is their parts, their items and a rebuild checklist, with the items on the belts conserved exactly (48 copper before and after), the item stacks surviving and placing our parts, and the technology granted. Nothing at all happens while the incumbent is installed, or while any other mod owns the name -- **including an incumbent that arrives AFTER this mod, on a save this mod has already converted**, where the balancers we own keep running and a `balancer-part` the newcomer places stays theirs. All four incumbent names are exercised, and so is the stranger being uninstalled in his turn. Proved against the real Belt Balancer 2 as well as the harness stand-in. "Adopting a Belt Balancer 2 or 3 save" |
 | **...and the compatibility item it leaves behind does not hang anybody** | The stub `balancer-part` item places the stub ENTITY, which the next flush swaps for a real part. Pointing it at `bbb-balancer-part` instead put the two names into each other's engine-derived `items_to_place_this`, and a neighbour that walks that graph while mutating its own table froze a player's game permanently -- no crash, no log line, reproduced headlessly at 97-99% of a core on his own save and mod set. Four candidate shapes were measured in the engine before one was picked. The dump gate asserts the graph on both mod sets now and the `mig` suite reads the engine's own list instead of a `place_result` that stopped moving. "The two-element cycle that froze a game" |
 | **A part at any quality is a part** | Every place the guest asks the world for one of its own entities by name is quality-blind since 2026-08-20 -- `findOnTile`, one helper for all five sites, after the migration pass found `find_entity` resolves a bare name as normal quality only. An uncommon balancer draws its shape, balances at 2.000x with 0.00% spread, is refused past the port limit WITH the refusal delivered, and survives a scripted colliding belt without losing a registry entry. The tenth suite (`qual`) is every part of that, red-proven against the pre-fix guest in one run. "A part at uncommon quality is a part" |
@@ -5333,5 +5482,6 @@ Two isolated ~0.85 ms ticks at t=600 and t=1200 are **the harness's, not ours**,
 | [`agents/migration-assessment-2.md`](agents/migration-assessment-2.md) | **The SECOND adversarial migration assessment, 2026-09-13**, run on BBB `29bad4f` against FkRecipes `21f5d89` and FkLua `b88965d`, after the fix cycle answered the first one. The same seven attack surfaces and the same rubric, with **all twelve of the first assessment's findings regraded by number**: six are CLEAN now (the ladder merges and the engine takes it, no text a player types refuses the load, the scoped recipe description, the Custom prerequisite that no longer moves, the `release/2.0` sentence, and the nine-value headline still intact with the library's new self-product line measured NOT to fire here), one moved MISLED to AWKWARD, four are unchanged and one BLOCKED stands. **Six new findings**, three of them BLOCKED: a preset research tier copies a technology's unit without checking the packs are usable, so a pack whose science pack is not a `tool` stops the load on the DEFAULT setting with no `fkrecipes:` line at all; the fallback's own stated boundary, where the load still stops and the screen the message names cannot be reached from the error dialog; and a NaN in the seconds, which the library now handles correctly and the ENGINE then aborts on, with a bare crash dialog and no in-game recovery. **The client was reached AND typed into for the first time**: the 13-line tooltip photographed (the 557-character line wraps to ten visual lines and nothing clips, but a wrapped `type:` line's tail loses its indent), the text field typed into and its rendered tooltip captured, the error dialog walked to `Manage mods` and back and `Restart` pressed, and the measurement this file's finding 15 rests on, that `bbb-tech-cost` has NO info icon and no tooltip on a stock install because its composed description names two `technology-name` keys no shipped locale file defines, established with a control probe that restores the icon |
 | [`agents/migration-assessment-3.md`](agents/migration-assessment-3.md) | **The THIRD adversarial migration assessment, 2026-09-14**, run on BBB `731f13d` against FkRecipes `61ac80c` and FkLua `16f0986`, and **the first graded to a written scope**: FkRecipes' [`../FkRecipes/agents/threat-model.md`](../FkRecipes/agents/threat-model.md), whose seven in-scope situations A to G, five out-of-scope ones H to L, and rubric with an OWNER and a SCOPE letter on every finding are what every grade here is made against. **All eighteen earlier findings regraded by number**, fifteen now CLEAN: the `custom` withdrawal makes a rollback a BYTE IDENTITY at all eleven steps of a head-to-0.2.2-and-back trip, all nine published dropdown values still migrate with prototypes byte-identical, 70 of 70 stored texts and numbers load, the changelog now discloses that a typo is a recipe change, both numeric ranges are on the screen, and a NaN has no field this mod declares to sit in. **Seven remain above CLEAN and the chain does not stop**: 13 and 14 BLOCKED, where a pack that demotes one science pack still stops the load on the DEFAULT tier because every pack name in this mod's technology declaration is `automation-science-pack` with no ladder, and the refusal is still a lock-out; 19 MISLED, the round's centre, where a refused text falls back to the DROPDOWN'S CURRENT PRESET while the recipe tooltip, the log line and four FkRecipes documents all say it falls back to the mod's own default; 22 MISLED, where the scope document's own scope F sentence is false on three clauses and cites a disclosure the library does not compose; 20 and 21 AWKWARD, a cost ladder that strips a prerequisite with no note and a note that replaces this mod's own technology description; and 23 AWKWARD, a settings file a newer engine wrote replaced with defaults on a rollback of the GAME with nothing anywhere a player looks. **The client was NOT REACHABLE**: window capture fails on Factorio's GPU-composited window and full-screen control went unanswered, so a control-stage `localised_print` probe resolving every composed string through the engine's own locale resolver stands in for it, and an eight-item client checklist is owed |
 | [`agents/estate-port.md`](agents/estate-port.md) | **The test estate, in Go.** The programme for removing the last hand-written Lua in the repository: fourteen suites' observer mods, the interactive staging mod, two data-stage-only stand-ins and the bench harness, in NINE phases, ALL DONE: eight on 2026-08-25 and phase 9 (`flip`) on 2026-08-26, on a 2.0 binary. What an observer is and the two shipped-guest rules it does not inherit, the one-module/N-mains layout and the measurement that says an observer cannot bloat the mod, the packaging recipe (a neutral working directory, every identity a flag, `--api` not optional), the `copy_testmod` staging seam, the `[BBB-OBS] error:` gate that replaces Lua's `error()`, the six gates every phase must clear, the harness surface, and a record per phase -- the PILOT (`m1`, `sedge`), phase 2 (`mar`, `mig21`, `qual`), phase 3 (`mix`, `plat`, `mig`), phase 4 (`m2`, `m3`, `edge`) phase 5 (the interactive staging mod, which was never a suite), phase 6 (the two data-stage-only stand-ins, the first packages here with NO CONTROL STAGE), phase 7 (the `bench/` harness's setup mod) and PHASE 8, the RUST re-port of `mig21` that closed the programme: every tagged log line byte-identical in order, a red proof each, the api-check verdicts that turned the stamped-vs-gated asymmetry into a number and produced the first `impacted` observer, phase 3's verification of `fkapi.Log(Value)` against a golden profiler line and phase 5's of `fkapi.RemoteCall` -- both before anything was built on them. **Phase 7's gate is not a golden log**: `bench/` is MEASUREMENT INFRASTRUCTURE, so what it owes is a COMPARABILITY run -- the same cells, both setup mods, interleaved in one session against one dist/ -- and it is where the `--persist=table` decision, the missing `on_nth_tick` binding and two engine findings about Factorio 2.1.16 are written up. **Phase 8's gate is CROSS-LANGUAGE TRANSCRIPT IDENTITY** -- 51 lines over two fixtures, byte-identical, no mask -- and it is where the one-manifest/two-outputs layout decision, the Rust build recipe's two necessary halves, and the red proof that the assertion script passed while the golden diff caught it are written up. **THE RUST ARM IS REVERTED**, 2026-08-26, on the user's decision that continuous Rust coverage for FkLua belongs to the fklua-ports repositories: the parity measurement stands as a completed measurement, phase 8's record is unchanged, and the reversion has a dated section of its own at the end of that file |
+| [`agents/priority.md`](agents/priority.md) | **Priority ports, both halves.** The promise stated as two formulas and why one priority butterfly is the wrong answer (a priority splitter is a MERGE and a tree of merges is a concentrator); the construction that follows from it -- balance, concentrate, tap per rank, two square tier balancers -- and the loopback past the last output port, which a failing test found rather than the design; the flow model with capacity and back-pressure in it, what it proves and what it does not (nobody has run one in Factorio) and why it lives in a `_test.go` file down to the 1,103 bytes it would otherwise cost the wasm; the fit table and why the slot rather than the port cap binds it; the entity and item-position costs per shape; the GUEST's half -- the per-part flag, the fingerprint, the `graphics_variation` it survives in with the 2.0.77 wrap table, the three doors, the four refusals and the spill guard; and what INPUT priority would take, with the mirror probe that says the construction is the same shape and the combination is what does not fit |
 | [`agents/maxports.md`](agents/maxports.md) | The 64-port cap: where it comes from (our slot geometry, not the engine), the three constraints an uncap must clear (size-class slots, heap buffers vs the root-scan gate, the per-edit hitch bound) — and §4, DONE 2026-08-04, what hitting the cap does now, with the before/after measurement and the one shape (a merge into an over-limit cluster) still not covered |
 | [`agents/single-edge.md`](agents/single-edge.md) | **DESIGN, not implemented.** The Factorio 2.1 port: 2.1's fixed collision-mask validation closes the `not_colliding_with_itself` door the edge interfaces stand on (boskid's report and answer, 2026-08-23/24), so the rule becomes one belt per part — the multi-edge setting (runtime-global, 2.0 only, default off, script-grandfathered UP on the first load of a save updating from the first GA release: dirty saves keep multi-edge and are warned once, clean saves land on the new default), the limit.go-style refusal, the migration of multi-edge saves, the interactive/GIF world rework, packaging as two releases from one tree. The two gating S2 probes are MEASURED: a 2.1 load of a 2.0 save silently deletes all but one belt-connectable per tile (no crash, no log line, hidden network intact, crippled delivery), and a fresh single-edge network on 2.1.14 runs at full rate. The 2.0.77 fixture saves are committed under `test/fixtures-2.0/` and cannot be regenerated without a 2.0 binary |
