@@ -2360,6 +2360,13 @@ The settings move is three settings and nowhere else, every part of it read out 
 
 **NOTHING ON THE PREVIOUS ROUND'S STILL-OPEN LIST IS CLOSED BY THIS LEG.** The client run, owed since round three, is one question larger again rather than smaller: three composed lines of 256, 268 and 269 bytes join three tooltips that no number in this repository has ever seen render, measured off the settings dump. Everything else that round left open stands exactly as it left it.
 
+
+### Halted, 2026-09-14: what landed, what is parked, and where the chain stopped
+
+The operator halted the fix-and-assess chain during this round and asked for a triage rather than a fourth cycle. On master the round is `fe2042f`, the adoption, fully gated, with the settings golden moved for the three composed lines and the data hashes unmoved on both mod sets. The fallback rung on `FallbackUnit()`'s single pack is on the local branch `wip/fix-round-3` at `3cafe59`, host-green and NEITHER engine-gated NOR adversarially reviewed; it is not to be fast-forwarded without the demoted-pack gate arm and a review, and the operator has said the modpack it answers (a pack that takes the automation science pack out of the tool list while repairing the base game around it) is esoteric enough that the outcome there is not worth deciding now. What this round leaves as a backlog rather than a queue: that gate arm, the `bbb-tech-cost` tooltip clause for the packless outcome (the composed description says nothing about it, read out of the dump), `make zip`, the 28-pair proof and the controlled size pair at this head. The changelog row for a settings file a newer game wrote (finding 23) is written in the halt commit, because it is a disclosure a player reads and costs one line.
+
+On a stock install nothing this chain touched changed the mod's default behaviour: every owned prototype on the default configuration is identical to the 0.3.2 release but `place_result`, this mod's own freeze fix, and the data-raw hashes have not moved since `cb89891`. The question the chain was opened for, whether stored preferences and saves migrate, was CLEAN in all three assessments and a byte identity in the third.
+
 ## The FkLua baseline
 
 The migration was measured against a freshly rebuilt fklua so that a packaging difference could not be mistaken for a library effect.
