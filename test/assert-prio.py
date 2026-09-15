@@ -59,6 +59,7 @@ ITEMS = re.compile(
     r"\[BBB-PRIO\] items t=(\S+) rig=(\S+) ground (\d+)->(\d+) lines (\d+)->(\d+) "
     r"total (\d+)->(\d+)")
 LANE = re.compile(r"\[BBB-PRIO\] lane t=(\d+) out=(\d+) left=(\d+) right=(\d+)")
+AUDIT_TAG = re.compile(r"\[BBB-PRIO\] audit t=(\S+)")
 BELTS = re.compile(r"\[BBB-PRIO\] belts rig=(\S+) items=(\d+)")
 DRAINED = re.compile(r"\[BBB-PRIO\] drained rig=(\S+) rows=(\d+) chests=(\d+)")
 BOUNDARY = re.compile(r"\[BBB-PRIO\] boundary try=(\d+) tick=(\d+) accepted=(\S+)")
@@ -305,6 +306,29 @@ def audit_tuples(lines):
             for m in (AUDIT.search(l) for l in lines) if m]
 
 
+def audit_at(lines, tag):
+    """The audit tuple that follows the observer's own tag for it.
+
+    A run takes a dozen audits and half of them are inside a toggle, where the
+    marker is what makes the two item counts one atomic sample. Counting from the
+    top and indexing picks a toggle's audit and reports it as the one after the
+    paste, which reads as a defect in the mod.
+    """
+    at = None
+    for i, l in enumerate(lines):
+        m = AUDIT_TAG.search(l)
+        if m and m.group(1) == tag:
+            at = i
+            break
+    if at is None:
+        return None
+    for l in lines[at:]:
+        m = AUDIT.search(l)
+        if m:
+            return tuple(int(g) for g in m.groups())
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--leg", default="fresh", choices=("fresh", "upgrade"))
@@ -536,35 +560,18 @@ def main():
     holds(run, fail)
 
     # ------------------------------------------------------------- the audits
-    steady = audit_tuples(run)
-    if not steady:
-        fail.append("no audit in the benchmark phase")
-    else:
-        if steady[0] != AUDIT_STEADY:
-            fail.append("the steady-state audit is %s and the rigs build %s"
-                        % (steady[0], AUDIT_STEADY))
-        # THE PASTE CHANGED NOTHING, which is the whole of leg (b): a flag the
-        # planner refused must not reach the registry by the back door, and the
-        # engine has by then already written the source's badged picture onto the
-        # destination. The audit two ticks after the queueing edit is what says
-        # the next COMPILE read the registry rather than that picture.
-        if len(steady) > 1 and steady[1] != AUDIT_PASTE:
-            fail.append(
-                "the audit after the settings paste is %s and nothing about that "
-                "cluster may have moved: it is %s. A paste onto a balancer no "
-                "priority port fits is refused, so the flag stays down -- and a "
-                "refusal that left the part WEARING the source's badge can be "
-                "read back as a flag by the next restyle, which is a priority "
-                "port nobody asked for on a machine that cannot have one"
-                % (steady[1], AUDIT_PASTE))
-        if steady[-1] != AUDIT_REFUSED:
-            fail.append(
-                "the final audit is %s and the rigs leave %s: pgrow's flagged "
-                "output has been made unbuildable by a BUILD, which compile() "
-                "refuses in front of its own teardown -- so its network is still "
-                "standing, its stored fingerprint no longer describes the world, "
-                "and it is counted refused and not unbuilt"
-                % (steady[-1], AUDIT_REFUSED))
+    for tag, want in (("steady", AUDIT_STEADY),
+                      ("post-paste", AUDIT_PASTE),
+                      ("post-grow", AUDIT_REFUSED),
+                      ("post-unflag", AUDIT_REFUSED),
+                      ("final", AUDIT_REFUSED)):
+        got = audit_at(run, tag)
+        if got is None:
+            fail.append("no audit tagged %r in the benchmark phase" % tag)
+        elif got != want:
+            fail.append("the %s audit is %s and the rigs leave %s" % (tag, got, want))
+    if audit_at(create, "create") is None and not audit_tuples(create):
+        fail.append("no audit in the create phase")
 
     # ---------------------------------------------------------- the negatives
     if [l for l in run if OVER_LIMIT.search(l)] or [l for l in create if OVER_LIMIT.search(l)]:
@@ -625,26 +632,41 @@ def refusals(run, fail):
         if var and int(var.group(5)) > BADGE:
             fail.append("pbig's part is drawing a badged cell after a refusal")
 
-    # A SETTINGS PASTE ONTO A BALANCER NO PRIORITY PORT FITS. The third door onto
-    # the flag, and the only one that can put one on a part the player never
-    # pointed at. The handler asks the same pre-teardown check a keypress asks and
-    # is refused -- and by then the ENGINE has already copied the source's badged
-    # `graphics_variation` onto the destination, so what must not happen is that
-    # picture being read back as a flag by the next restyle.
+    # A SETTINGS PASTE ONTO A BALANCER NO PRIORITY PORT FITS, and what it turns
+    # out to measure is the DOOR rather than the handler behind it.
+    #
+    # `LuaEntity::copy_settings` declares no `raises` in either pinned runtime
+    # description -- 89 methods there do and this is not one of them -- and
+    # `on_entity_settings_pasted` carries a mandatory `player_index`. So a
+    # scripted copy moves the destination's `graphics_variation` and tells this
+    # guest NOTHING, and the shift-click gesture is behind the same wall the
+    # keybind and the miner's pocket are.
+    #
+    # What is asserted is therefore what really happens: the engine copies the
+    # picture, the registry does not move, and nothing is refused. The handler
+    # itself is on the interactive checklist.
     v = one(run, VAR, "paste")
     if not v:
         fail.append("the paste destination's picture was never read back")
     else:
-        print("    paste:  pbig's part at %s,%s is drawing cell %s"
-              % (v.group(3), v.group(4), v.group(5)))
-        if int(v.group(5)) > BADGE:
+        badged_now = int(v.group(5)) > BADGE
+        print("    paste:  pbig's part at %s,%s is drawing cell %s%s"
+              % (v.group(3), v.group(4), v.group(5),
+                 " (the source's badge, copied by the engine)" if badged_now else ""))
+        if not badged_now:
             fail.append(
-                "pbig's part is drawing cell %s after a REFUSED settings paste, "
-                "and a cell over %d is a priority badge. The flag did not move, "
-                "so the picture has to come back to the shape the part actually "
-                "has -- a badge left standing there is read back as a flag by the "
-                "next restyle, on a balancer that cannot carry one"
-                % (v.group(5), BADGE))
+                "pbig's part is drawing cell %s after a settings paste FROM a "
+                "flagged part, and a cell over %d is a priority badge. The engine "
+                "copies `graphics_variation` itself, so this leg measures nothing "
+                "if the picture did not move" % (v.group(5), BADGE))
+    told = [l for l in run if PRIO_REFUSED.search(l)
+            and ("at part %s,%s" % (v.group(3), v.group(4))) in l] if v else []
+    if told:
+        fail.append(
+            "the mod was told about a scripted settings paste: %s. That would be "
+            "the handler running, which needs a player -- and this leg's audit "
+            "assertion above is written for a guest that heard nothing"
+            % told[0].strip())
 
     # A BUILD that makes a standing priority network unbuildable, and then a flag
     # taken OFF it. pgrow is a 32 -> 3 carrying two priority ports; a 33rd input

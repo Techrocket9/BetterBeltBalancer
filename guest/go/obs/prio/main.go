@@ -788,6 +788,19 @@ func sampleLanes(tick uint64) {
 
 func auditNow(y int) { harness.Audit(harness.Surface(surf), -20, y) }
 
+// auditTag names the audit that follows it, so that an assertion about a TUPLE
+// can find the one it means.
+//
+// A run takes a dozen audits and half of them are inside `toggleCheck`, where
+// the marker is what makes the two item counts one atomic sample. Counting
+// audits from the top of the log and indexing was wrong the first time it was
+// tried, and wrong in the direction that reads as a defect in the mod: the
+// second audit in the run is a toggle's, not the one after the paste.
+func auditTag(tag string, y int) {
+	out.Open("audit t=").S(tag).End()
+	auditNow(y)
+}
+
 // ---------------------------------------------------------------------------
 // the schedule
 // ---------------------------------------------------------------------------
@@ -1022,7 +1035,7 @@ var schedule = []harness.Step{
 	{Tick: 3540, Do: func() { report("t2") }},
 	// The steady-state audit: every rig has been standing untouched since the
 	// save was written, so the world and the registry must agree exactly.
-	{Tick: 3560, Do: func() { auditNow(0) }},
+	{Tick: 3560, Do: func() { auditTag("steady", 0) }},
 
 	// --- the toggle, on a running balancer ----------------------------------
 	//
@@ -1064,10 +1077,10 @@ var schedule = []harness.Step{
 	// audit looks.
 	{Tick: 5340, Do: func() { pasteSettings("p2sat", "pbig") }},
 	{Tick: 5350, Do: nudge},
-	{Tick: 5360, Do: func() { auditNow(0) }},
+	{Tick: 5360, Do: func() { auditTag("post-paste", 0) }},
 	{Tick: 5370, Do: func() { variation("paste", "pbig", pasteTile()) }},
 	{Tick: 5380, Do: grow},
-	{Tick: 5400, Do: func() { auditNow(0) }},
+	{Tick: 5400, Do: func() { auditTag("post-grow", 0) }},
 	{Tick: 5420, Do: func() { report("ref-a") }},
 	{Tick: 5820, Do: func() { report("ref-b") }},
 	// TAKING A FLAG OFF A BALANCER THAT ALREADY DOES NOT FIT. pgrow is carrying
@@ -1078,9 +1091,16 @@ var schedule = []harness.Step{
 	{Tick: 5840, Do: func() {
 		_, i := rigByName("pgrow")
 		setPrio("unflag", "pgrow", built[i].flag, false)
+	}},
+	{Tick: 5860, Do: func() { auditTag("post-unflag", 0) }},
+	// AFTER THE FLUSH AND NOT IN THE TICK THAT ASKED. A toggle queues the
+	// cluster and asks for a flush; the badge is restyle's and arrives with it,
+	// one tick later, which is a latency nobody can see and an assertion taken
+	// too early reads as a flag that did not move.
+	{Tick: 5865, Do: func() {
+		_, i := rigByName("pgrow")
 		variation("unflag", "pgrow", built[i].flag)
 	}},
-	{Tick: 5860, Do: func() { auditNow(0) }},
 
 	// --- the collapse -------------------------------------------------------
 	//
@@ -1114,7 +1134,7 @@ var schedule = []harness.Step{
 		bndFrom = 6580
 	}},
 	{Tick: 7100, Do: measureDrained},
-	{Tick: 7140, Do: func() { auditNow(0) }},
+	{Tick: 7140, Do: func() { auditTag("final", 0) }},
 	{Tick: 7160, Do: func() { report("final") }},
 }
 
