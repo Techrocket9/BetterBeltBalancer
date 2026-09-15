@@ -944,6 +944,14 @@ func fingerprint(edges []plan.Edge) uint64 {
 			v >>= 8
 		}
 	}
+	// THE FLAG THE PLANNER READS AND NOT THE ONE THE PART CARRIES. ShapeEdges
+	// collapses a side whose every port is flagged back to none -- two tiers
+	// where the second is empty is one tier -- so a balancer with every output
+	// ticked compiles to the plain butterfly byte for byte. Mixing the raw flag
+	// made ticking the last port move this hash over a network that did not
+	// move: a full teardown and rebuild of an identical thing, with the drain
+	// and the reinsertion that go with it, for no change at all.
+	outAll, inAll := plan.PrioCollapses(edges)
 	for i := range edges {
 		e := edges[i]
 		mix(uint64(uint32(e.TileX)))
@@ -958,7 +966,7 @@ func fingerprint(edges []plan.Edge) uint64 {
 		// shape as a belt turned around with no event, which the `m3` suite's
 		// `swap` rig is about. It costs the Dir field one more bit of shift and
 		// no more mixing.
-		if e.Prio {
+		if e.Prio && !(e.Out && outAll) && !(!e.Out && inAll) {
 			b |= 2
 		}
 		mix(b)

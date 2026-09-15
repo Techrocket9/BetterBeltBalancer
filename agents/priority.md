@@ -238,6 +238,8 @@ Until then, `Op.InPrio` is a field nothing sets. `TestOnlySplittersCarryAPriorit
 
 It is in the compile FINGERPRINT (`compile.go`), which is what makes a toggle a recompile: the flag is the only thing that moves, nothing in the world does, and a hash blind to it would make the gesture a silent no-op -- the shape `m3`'s `swap` rig is about. It costs the `Dir` field one more bit of shift and no more mixing.
 
+**AND WHAT IT MIXES IS THE FLAG THE PLANNER READS, which is not always the flag the part carries.** `ShapeEdges` collapses a side whose every port is flagged back to none, so a balancer with every output ticked compiles to the plain butterfly byte for byte -- and a hash over the raw flags moved on the tick a player ticked the LAST port, tearing an identical network down and building it again, with the drain and the reinsertion of a full one for no change at all. `plan.PrioCollapses` is the same rule read off the same counts, beside `ShapeEdges` where it is decided, and `TestPrioCollapsesIsShapeEdgesOwnRule` is what holds the two together.
+
 ### Where it survives
 
 In `graphics_variation`, which is the one piece of per-entity state this mod already writes and the engine already persists. Cells 1..47 are the shapes and 48..94 are the same shapes badged, so the byte is the in-world indicator at the same time. The guest heap is declined on every rebuilt guest, so a flag kept only there would be lost on every release of this mod and a player's factory would quietly go back to balancing evenly.

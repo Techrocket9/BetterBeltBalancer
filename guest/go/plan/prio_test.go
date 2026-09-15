@@ -705,6 +705,64 @@ func TestTheRatesASuiteShouldAssert(t *testing.T) {
 	}
 }
 
+// TestPrioCollapsesIsShapeEdgesOwnRule pins the helper the guest's compile
+// fingerprint reads against the collapse ShapeEdges actually applies.
+//
+// The two have to agree or the hash moves over a network that does not. Every
+// output ticked is the plain butterfly, so a hash that saw the flags would tear
+// a byte-identical network down and build it again -- and the drain and
+// reinsertion of a full one with it -- for no change at all.
+func TestPrioCollapsesIsShapeEdgesOwnRule(t *testing.T) {
+	for n := 1; n <= 8; n++ {
+		for m := 1; m <= 8; m++ {
+			for q := 0; q <= m; q++ {
+				es := prioEdges(n, m, q)
+				out, in := PrioCollapses(es)
+				if out != (q == m) {
+					t.Fatalf("%d->%d q=%d: collapse says %v", n, m, q, out)
+				}
+				if in {
+					t.Fatalf("%d->%d q=%d: no input is flagged and the input "+
+						"side reports a collapse", n, m, q)
+				}
+				pt, _ := ShapeEdges(es)
+				want := q
+				if out {
+					want = 0
+				}
+				if pt.QOut != want {
+					t.Fatalf("%d->%d q=%d: ShapeEdges reports QOut %d and the "+
+						"collapse rule says it should report %d",
+						n, m, q, pt.QOut, want)
+				}
+			}
+		}
+	}
+	// And the input side, which prioEdges never flags: every input ticked is
+	// the plain butterfly too, and one short of every input is the refusal.
+	for n := 1; n <= 8; n++ {
+		for qi := 0; qi <= n; qi++ {
+			es := prioEdges(n, 2, 0)
+			for i := 0; i < qi; i++ {
+				es[i].Prio = true
+			}
+			_, in := PrioCollapses(es)
+			if in != (qi == n) {
+				t.Fatalf("%d inputs, %d flagged: collapse says %v", n, qi, in)
+			}
+			pt, fits := ShapeEdges(es)
+			if in && pt.QIn != 0 {
+				t.Fatalf("%d inputs all flagged: ShapeEdges reports QIn %d",
+					n, pt.QIn)
+			}
+			if qi > 0 && !in && fits {
+				t.Fatalf("%d inputs, %d flagged: a priority input is not built "+
+					"and this fits", n, qi)
+			}
+		}
+	}
+}
+
 // TestPriorityCapacityIsRecorded pins agents/priority.md's capacity table, both
 // columns and the residual bound between them, and pins the shape-only form
 // against the built one on every row.

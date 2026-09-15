@@ -2870,6 +2870,8 @@ The locale entry names the menu row verbatim so the player can turn the rule on 
 
 **It is in the compile FINGERPRINT**, and it has to be. The flag is the only thing that moves when a player presses the key and nothing in the world does, so a hash blind to it would make the gesture a silent no-op -- the same shape as a belt turned around with no event, which `m3`'s `swap` rig is about. It costs the `Dir` field one more bit of shift and no more mixing.
 
+**WHAT GOES IN IS THE FLAG THE PLANNER READS, NOT THE ONE THE PART CARRIES**, which is the same collapse the refusals get: every output ticked is the plain butterfly byte for byte, so a hash over the raw flags moved on the tick a player ticked the LAST port and tore an identical network down to build it again, draining and reinserting a full one for no change. `plan.PrioCollapses` is that rule, kept beside `ShapeEdges` because that is where it is decided.
+
 **So a toggle takes the path an edge edit takes and it is NOT A REMOVAL.** `compile` sees the fingerprint move, calls `teardownForRebuild`, and the pool that teardown opens is claimed by the network the same flush builds, matched by root because a cluster that had a network is its own successor. The items go back INSIDE the balancer. `noteMinedByPlayer` is never called from `priority.go`, so `settleCarry` has nobody to offer anything to and the reinsertion is the only outcome -- a claim is what makes a removal's leftovers somebody's property, and a toggle is not a removal.
 
 ### Where the flag survives, measured

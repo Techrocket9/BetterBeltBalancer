@@ -332,6 +332,38 @@ func ShapeEdges(edges []Edge) (pt Ports, fits bool) {
 	return pt, w <= SlotWidth && h <= SlotHeight
 }
 
+// PrioCollapses reports whether EVERY output edge carries a priority flag, and
+// whether every input edge does -- the two states ShapeEdges reports as
+// QOut = 0 and QIn = 0 with flags standing on every port.
+//
+// It exists because a caller that has to agree with what gets BUILT cannot read
+// the flags directly. Two tiers where the second is empty is one tier, so a
+// balancer with every output ticked compiles to the plain butterfly byte for
+// byte; a guest hash that mixed the raw flags would see a difference the planner
+// does not, and would tear a byte-identical network down and build it again
+// every time a player ticked the last port. The collapse rule belongs beside
+// ShapeEdges, which is the only place it is decided.
+//
+// No allocation and no state: one pass over the counts, the same property that
+// makes ShapeEdges safe to ask from a keypress.
+func PrioCollapses(edges []Edge) (out, in bool) {
+	n, m, qi, qo := 0, 0, 0, 0
+	for i := range edges {
+		if edges[i].Out {
+			m++
+			if edges[i].Prio {
+				qo++
+			}
+		} else {
+			n++
+			if edges[i].Prio {
+				qi++
+			}
+		}
+	}
+	return qo == m, qi == n
+}
+
 // prioExtent is the bounding box of the priority construction, in tiles: the
 // two bands buildPrio lays, measured rather than asserted by
 // TestEveryPriorityShapeStaysInsideItsSlot.
