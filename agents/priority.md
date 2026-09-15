@@ -314,6 +314,7 @@ The guest's half is log lines, and the suite drives every one of them through `r
 | the flag moved | `priority part=X,Y on` / `priority part=X,Y off` |
 | the picture followed | `skin cluster=...` with the flagged part's cell 47 above its unflagged one |
 | a shape too big | `alert: priority refused for cluster N at part X,Y: ... does not fit; the flag was not set` |
+| over the port limit | `alert: priority refused for cluster N at part X,Y: ... is over the port limit of 64; the flag was not set`, which is what a flag going ON gets on a cluster already past the cap |
 | a priority input | `alert: priority refused for cluster N at part X,Y: ... is a priority input, which this version does not build; the flag was not set` |
 | too full to shrink | `alert: priority refused for cluster N at part X,Y: the balancer holds H items and the network this would build can take back C; the flag was not set` |
 | a build reaching the same bounds | `alert: cluster N cannot be built with Q priority outputs over n->m ports; refused` and `alert: cluster N asks for Q priority inputs over n->m ports, which this version does not build; refused` |
