@@ -416,6 +416,49 @@ func TestAPackWithoutTransportBeltMergesRatherThanDuplicating(t *testing.T) {
 	}
 }
 
+// ingredientlessNote is the sentence the LIBRARY writes into a RECIPE's own
+// tooltip when every entry that recipe declared was put to the game and every
+// ladder ran out, and ingredientlessLine is the ERROR line that goes with it.
+// They are [packlessNote] and [packlessLine] one prototype kind over, and
+// FkRecipes 933d4d3 composed both.
+//
+// LITERALS RATHER THAN [PartName], for the reason [packlessNote] is one: a
+// renamed constant must FAIL a sentence a player reads rather than be carried
+// through it.
+//
+// THE NOTE ALWAYS CARRIES THE DESTRUCTION TAIL AND THE LINE NEVER DOES, and
+// that is the library's rule rather than this pair drifting. FkRecipes
+// docs/migration.md:417 states it with no condition on it: the tooltip carries
+// the sentence "followed by the sentence about emptied input slots", and the
+// ERROR line it spells beside it ends on `costs nothing to craft`. What moved
+// here IS the ingredient list and it moved as far as a list can, which is why
+// the tail is unconditional on this note where [fallbackLine] takes it only on
+// the recipe channel.
+//
+// AND NEITHER NAMES A SETTING, because nobody typed anything. This is the mod
+// set having none of the names the recipe offers, so a sentence sending the
+// player to a field would be advice about a field that is not the problem.
+const (
+	ingredientlessNote = "This game has none of the ingredients this recipe " +
+		"names, so it costs nothing to craft. The reason is in the log. " +
+		"Changing a recipe empties an assembling machine's input slots of " +
+		"anything the new list does not use."
+	ingredientlessLine = "fkrecipes: ERROR: bbb-balancer-part: this game has " +
+		"none of the ingredients this recipe names, so it is emitted with no " +
+		"ingredients and costs nothing to craft"
+)
+
+// dropLine is the library's exhausted-ladder sentence, whose only moving part
+// is the rung list inside it.
+//
+// A LITERAL WITH ONE PARAMETER, for [mergeLine]'s reason. The rungs are what
+// differs between the presets below, and they are also what a ladder walked in
+// the wrong order, or cut short, would get wrong.
+func dropLine(rungs string) string {
+	return "fkrecipes: bbb-balancer-part: none of " + rungs +
+		" is present, so the ingredient is dropped"
+}
+
 // TestAGameWithNoIngredientsIsAnEmptyRecipeRatherThanAnInventedOne is the
 // degenerate pack: no iron plate either.
 //
@@ -429,15 +472,100 @@ func TestAPackWithoutTransportBeltMergesRatherThanDuplicating(t *testing.T) {
 // fallback; it is a TOOL now and `withItems` does not touch the tools, so this
 // world is what its name says. See
 // [TestAnUnreachedFallbacksPackIsNeverProbed], which is where that finding was
-// closed.
+// closed. The stream comparison below is what says it a second way: not one of
+// the lines in it is about the technology.
+//
+// THE LINE AND THE NOTE WENT UNPINNED BECAUSE THIS TEST THREW THE STREAM AWAY.
+// It compared the ingredient count and discarded the logs, so a library that
+// emptied this recipe and said NOTHING anywhere passed it. FkRecipes 933d4d3
+// writes both halves here, and the technology's identical degradation got a
+// unit, a prerequisite, a composed note and an ordered whole-stream comparison
+// in [TestAReachedFallbackWithNoPackInTheGameIsEmittedFreeAndDisclosed]; this
+// is the recipe's half of that shape and it is asserted the same way.
+//
+// SIX PRESETS, ONE LINE AND ONE NOTE EACH, MEASURED. [RecipeOptions] is six and
+// each row is its own load, so the ERROR line closes that row's stream once and
+// never twice; the note is 213 bytes and comes out 178 + 35, which is the
+// library's 180-byte budget cut after the last space inside it.
+//
+// THE STREAMS ARE WHERE FIVE ROWS OF SIX DIFFER, and what differs is the
+// dropdown's own fallback rather than anything about this degradation: a chosen
+// plan that resolves to nothing takes the DEFAULT plan's, so five presets drop
+// their own rungs, say so, and then drop vanilla's three as well. Comparing the
+// whole stream in order is what says the recipe went empty by exhausting its
+// ladders rather than by some shorter route that happens to end in the same
+// line.
 func TestAGameWithNoIngredientsIsAnEmptyRecipeRatherThanAnInventedOne(t *testing.T) {
-	for _, option := range RecipeOptions() {
+	// The three lines VANILLA's own ladders write in this world. Every row
+	// writes them, because vanilla is the plan the other five fall through to,
+	// and on the vanilla row they are the whole of the stream before the ERROR.
+	vanillaDrops := []string{
+		dropLine("iron-plate"),
+		dropLine("iron-gear-wheel, iron-plate"),
+		dropLine("transport-belt, iron-plate"),
+	}
+
+	// TRANSCRIBED FROM THE PLANS BY HAND, in the order [RecipeOptions] returns
+	// them, for the reason every expectation in this file is: a table walked
+	// off [RecipePlan] would agree with a defect in [RecipePlan]. `own` is what
+	// the CHOSEN preset's ladders say before that preset gives up, and it is
+	// empty on the vanilla row, which gives up into itself.
+	for _, tc := range []struct {
+		option string
+		own    []string
+	}{
+		{RecipeVanilla, nil},
+		{RecipeCheap, []string{
+			dropLine("iron-plate"),
+			dropLine("transport-belt, iron-plate")}},
+		{RecipeBeltFast, []string{
+			dropLine("iron-plate"),
+			dropLine("iron-gear-wheel, iron-plate"),
+			dropLine("fast-transport-belt, transport-belt, iron-plate")}},
+		{RecipeBeltExpress, []string{
+			dropLine("steel-plate, iron-plate"),
+			dropLine("iron-gear-wheel, iron-plate"),
+			dropLine("express-transport-belt, fast-transport-belt, " +
+				"transport-belt, iron-plate")}},
+		{RecipeSplitter, []string{
+			dropLine("splitter, transport-belt, iron-plate"),
+			dropLine("iron-plate")}},
+		{RecipeSplitterExpress, []string{
+			dropLine("express-splitter, fast-splitter, splitter, " +
+				"transport-belt, iron-plate"),
+			dropLine("steel-plate, iron-plate")}},
+	} {
 		w := everythingWorld().
-			withStartup(SettingRecipeCost, option).
+			withStartup(SettingRecipeCost, tc.option).
 			withItems()
-		protos, _ := extendsOf(t, dataOps(t, w))
-		if got := ingredientsOf(t, protoOf(t, protos, "recipe", PartName)); len(got) != 0 {
-			t.Errorf("%s invented %v in a game with no ingredients at all", option, got)
+		protos, logs := extendsOf(t, dataOps(t, w))
+		got := protoOf(t, protos, "recipe", PartName)
+
+		if list := ingredientsOf(t, got); len(list) != 0 {
+			t.Errorf("%s invented %v in a game with no ingredients at all",
+				tc.option, list)
+		}
+
+		// THE CUT IS DERIVED FROM THE TAIL RATHER THAN TRANSCRIBED AS A SECOND
+		// LITERAL, which is [checkFallbackNote]'s own device: the head is the
+		// whole sentence less exactly this, so the two chunks cannot drift
+		// from the whole by a typing error.
+		const tail = "anything the new list does not use."
+		checkComposedNote(t, tc.option, got, "recipe", PartName,
+			ingredientlessNote, []string{
+				ingredientlessNote[:len(ingredientlessNote)-len(tail)], tail})
+
+		want := append([]string{}, tc.own...)
+		if len(tc.own) > 0 {
+			want = append(want, "fkrecipes: bbb-balancer-part: the "+
+				tc.option+" ingredients name nothing this game has, so the "+
+				"vanilla ingredients apply")
+		}
+		want = append(want, vanillaDrops...)
+		want = append(want, ingredientlessLine)
+		if !reflect.DeepEqual(logs, want) {
+			t.Errorf("%s in a game with no ingredients at all said\n got  %q"+
+				"\n want %q", tc.option, logs, want)
 		}
 	}
 }
@@ -486,7 +614,8 @@ func TestAGameWithNoIngredientsIsAnEmptyRecipeRatherThanAnInventedOne(t *testing
 // source carrying a unit ends the question; the library filters a COPIED unit's
 // own packs through `ToolExists` now, so a game with no tool at all loses the
 // tier's pack as well and lands on the fallback after all. That is a different
-// property, and [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused] is
+// property, and
+// [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndTheResearchIsEmittedFree] is
 // where it is pinned. What is left here is the narrow claim the lazy resolve
 // was asked for, and it is sharper for it: the name in the FALLBACK is absent
 // from this game and the load is clean.
@@ -513,41 +642,116 @@ func TestAnUnreachedFallbacksPackIsNeverProbed(t *testing.T) {
 	}
 }
 
-// TestAReachedFallbackWithNoPackInTheGameIsRefused is the other half, and it is
-// what the lazy probe MOVED rather than removed.
+// packlessNote is the sentence the LIBRARY writes into a technology's own
+// tooltip when every science pack it named was put to the game and the game had
+// none of them, and packlessLine is the ERROR line that goes with it.
+//
+// LITERALS RATHER THAN [TechName] AND [FallbackUnit], which is this file's rule
+// for a sentence a player reads: a renamed constant must FAIL the sentence
+// rather than be carried through it.
+//
+// THE RUNG LIST IN THE LINE IS ONE NAME IN ALL THREE WORLDS THAT REACH IT, so
+// it is written into the constant rather than taken as a parameter. This mod
+// declares its fallback pack as `automation-science-pack` with no ladder under
+// it, and the tier whose copied pack is lost first is priced in that same name,
+// which the library deduplicates: FkRecipes `f2df7ab` names each rung once
+// however many times the walk asked about it, and the two tests that used to
+// pin the doubled form are below.
+//
+// THE NOTE NAMES NO RUNG AND THE LINE NAMES THEM ALL, and that split is the
+// library's own. The names are what an author reading a log can act on; a
+// player hovering the research screen cannot act on a list of prototype names
+// their mod set has not got.
+//
+// AND NEITHER NAMES A SETTING, because nobody typed anything. This is an
+// ENVIRONMENTAL degradation -- the mod set is missing what the plan names --
+// so a sentence telling the player to go and fix a field would be advice about
+// a field that is not the problem.
+const (
+	packlessNote = "This game has none of the science packs this research " +
+		"names, so it takes no science pack at all. The reason is in the log."
+	packlessLine = "fkrecipes: ERROR: bbb-balancer: none of " +
+		"automation-science-pack is a science pack this game has, so the " +
+		"research is emitted with no science pack and completes for free"
+)
+
+// TestAReachedFallbackWithNoPackInTheGameIsEmittedFreeAndDisclosed is the other
+// half, and it is what the lazy probe MOVED rather than removed.
 //
 // The pack question did not go away: it moved to the one game that has to
 // answer it, which is the game where the fallback is what prices the research.
 // There the pack is walked as a ladder and dropped if nothing on it is a tool
 // (FkRecipes c7a806e gave [fkrecipes.Pack] a `Fallbacks` list for exactly
-// that), and a unit that loses every pack is refused rather than emitted --
-// because a research with no packs is not a cheap research, it is a free one,
-// which the engine loads without complaint.
+// that). THIS MOD DECLARES ITS FALLBACK PACK WITH NO LADDER, one rung named
+// `automation-science-pack`, so a game without red science loses it and has
+// nothing else to try.
 //
-// THIS MOD DECLARES ITS FALLBACK PACK WITH NO LADDER, one rung named
-// `automation-science-pack`, so this is the whole of what a game without red
-// science does to it: a refusal naming the technology, at plan time, which
-// `EmitData` routes through `fkdata.Raise`. That is a load this mod fails and
-// it is the right answer -- the alternative is a technology a player finishes
-// by opening the research screen.
-func TestAReachedFallbackWithNoPackInTheGameIsRefused(t *testing.T) {
+// THE NAME SAID "IsRefused" UNTIL FkRecipes 97a4493, AND WHAT IT PINNED WAS
+// REAL: a unit that lost every pack refused the load by name, and this header
+// argued the refusal was the right answer because the alternative is a
+// technology a player finishes by opening the research screen. The library
+// weighed the two costs against each other and took the other one. A refusal
+// here is a mod set that does not load, from an `Error loading mods` dialog
+// with no route to the Mod Settings screen; the escape that dialog does have
+// was measured on a client and is Reset mod settings TOGETHER WITH Disable
+// listed mods, which costs every startup preference in the file and leaves the
+// mod off -- six steps, then re-enable and restart
+// (agents/migration-assessment.md:93-108, which walked the five buttons and
+// the checkbox). An empty research unit is a FREE research rather than a stuck
+// one, measured in play on 2.0.77. So the technology is EMITTED and the load
+// completes.
+//
+// THAT IS NOT A GOOD OUTCOME AND THIS TEST DOES NOT SAY IT IS. A research this
+// mod's player finishes by opening a screen is a balance change nobody chose,
+// and it is one this mod would rather not ship. What the library bought is that
+// it is DISCLOSED instead of silent: one ERROR line naming every rung the walk
+// asked the game about, and one sentence in the technology's own tooltip, above
+// the description this mod wrote for it rather than over the top of it. What
+// would stop it happening here at all is a second rung under the declared pack,
+// which plan.go's own block declines and which is the next commit's subject.
+//
+// THE UNIT KEEPS [FallbackUnit]'s NUMBERS AND LOSES ONLY THE PACKS, asserted
+// because it is separable: 20 and 15 are what this technology has cost in every
+// save this mod has ever been in, and a unit that lost those too would be a
+// second balance change riding on the first.
+//
+// AND IT CARRIES NO PREREQUISITE, which is the fallback arm's own signature and
+// is what says this is the fallback rather than a tier that went wrong: no
+// technology in this game carries a unit, so there is nothing to hang the
+// research off and nothing is invented to hang it off.
+//
+// THE WHOLE STREAM IN ORDER, three lines and not one. The fallback announces
+// itself, the pack ladder announces the drop, and the ERROR announces what is
+// left; a plan that emitted the free research with only the first two lines
+// would pass a search for the third and fail this comparison.
+func TestAReachedFallbackWithNoPackInTheGameIsEmittedFreeAndDisclosed(t *testing.T) {
 	// No technology at all, so no rung of any ladder carries a unit and the
 	// fallback IS the price; and no tool, so the one pack it names resolves to
 	// nothing.
-	_, err := Plan().PlanData(everythingWorld().withTechs().withTools())
-	if err == nil {
-		t.Fatal("a game with no science pack priced this mod's research " +
-			"anyway: a research that costs nothing is one a player finishes " +
-			"by opening the screen")
+	const what = "a reached fallback with no pack in the game"
+	protos, logs := extendsOf(t, dataOps(t, everythingWorld().withTechs().withTools()))
+	got := protoOf(t, protos, "technology", TechName)
+
+	checkUnit(t, what, got, customUnit(20, 15))
+	if v, ok := got["prerequisites"]; ok {
+		t.Errorf("%s: the technology carries prerequisites %s, and no "+
+			"technology in this game carries a unit to be one", what,
+			showValue(v))
 	}
-	// THE SENTENCE NAMES THE RUNGS IT TRIED, which it did not before this
-	// library round: one name here, because this mod declares its fallback
-	// pack with no ladder under it.
-	want := "fkrecipes: the technology bbb-balancer has no science pack the " +
-		"game has; research takes at least one, and none of " +
-		"automation-science-pack is a science pack here"
-	if err.Error() != want {
-		t.Errorf("the refusal reads\n got  %q\n want %q", err.Error(), want)
+	checkComposedNote(t, what, got, "technology", TechName,
+		packlessNote, []string{packlessNote})
+
+	want := []string{
+		"fkrecipes: bbb-balancer: no source for the logistics cost carries a " +
+			"unit, so the fallback cost applies and the technology has no " +
+			"prerequisite",
+		"fkrecipes: bbb-balancer: none of automation-science-pack is present, " +
+			"so the science pack is dropped",
+		packlessLine,
+	}
+	if !reflect.DeepEqual(logs, want) {
+		t.Errorf("%s: the plan's log stream is\n got  %q\n want %q",
+			what, logs, want)
 	}
 }
 
@@ -743,6 +947,79 @@ func TestAnUnofferedStoredValueIsRefusedByName(t *testing.T) {
 		if err.Error() != want {
 			t.Errorf("%s: the refusal reads\n got  %q\n want %q",
 				setting, err.Error(), want)
+		}
+	}
+}
+
+// TestARefusalRaisedAfterAFallbackSaysWhatTheStoredValueDid is the one sentence
+// the library adds on behalf of a player whose typed value was set aside on the
+// way to a refusal, and nothing in this repository pinned it until now.
+//
+// WHY IT IS OWED AT ALL. The log lines the library accumulates never reach the
+// host on a refused load: they are collected through the whole resolution and
+// turned into ops only after every post-resolution check has passed, so a plan
+// that refuses hands the engine ONE message and nothing else. Without this
+// sentence a player would read a refusal about this mod's own declaration with
+// nothing anywhere to say that the field they edited had been set aside.
+//
+// IT IS A FACT AND NOT A ROUTE, which is what separates it from the three lines
+// the library writes on a load that SUCCEEDS. Those end by sending the player
+// to Settings > Mod settings > Startup; this one cannot, because the client
+// cannot reach that screen from an `Error loading mods` dialog -- re-measured
+// by FkRecipes on 2.0.77: the dialog offers Disable listed mods, Disable all
+// mods, Manage mods, Restart, Exit and a Reset mod settings checkbox, Manage
+// mods has no Mod settings button and its Back returns to the same dialog. So
+// the sentence states what became of the value and sends nobody anywhere.
+//
+// THE REFUSAL IT RIDES ON IS THE UNOFFERED DROPDOWN VALUE, and it is the only
+// one this mod's own declarations can still reach after resolution. The
+// packless refusal that used to carry this sentence was deleted in FkRecipes
+// 97a4493 and is a free research now; the three `already exists in data.raw`
+// probes are raised BEFORE resolution and so carry nothing; and this recipe's
+// crafting time is the literal 1 rather than a settings reference, so the
+// crafting-time floor is unreachable from here. NOTHING IN THE FIXTURE IS BENT
+// TO GET HERE: this is [TestAnUnofferedStoredValueIsRefusedByName]'s world with
+// one more hand-edited row in it.
+//
+// AND BOTH ROWS ARE HAND-EDITED FILE STATES RATHER THAN THINGS A PLAYER DOES.
+// Factorio RESETS a stored value the running release's `allowed_values` does
+// not list before the data stage runs, with no line in the log, so the dropdown
+// half is reachable only through an edited `mod-settings.dat`; the text half is
+// something a player types every day. That the two can be true at once is what
+// this refusal is for.
+//
+// THE SENTENCE NAMES THE TEXT FIELD AND NOT THE DROPDOWN, which is the claim
+// with the most in it. Only a value that FELL BACK is named; the dropdown was
+// REFUSED rather than fallen back on, and the library keeps the two in
+// different places. A library that named the refused setting here would be
+// telling the player their dropdown was set aside, which is the opposite of
+// what happened to it.
+func TestARefusalRaisedAfterAFallbackSaysWhatTheStoredValueDid(t *testing.T) {
+	const unoffered = "not-an-option"
+	for _, tc := range []struct{ dropdown, field, typed string }{
+		// The ingredient pair, whose typed name no mod in this game defines.
+		{SettingRecipeCost, SettingRecipeIngredients, "3 tungsten-plate"},
+		// The research pair, whose typed name is a fluid the fixture stocks.
+		{SettingTechCost, SettingTechPacks, "1 water"},
+	} {
+		w := everythingWorld().
+			withStartup(tc.dropdown, unoffered).
+			withStartup(tc.field, tc.typed)
+		_, err := Plan().PlanData(w)
+		if err == nil {
+			t.Errorf("%s holding %q planned cleanly beside a text this game "+
+				"cannot answer", tc.dropdown, unoffered)
+			continue
+		}
+		// THE WHOLE STRING, which is what makes the added sentence part of the
+		// claim rather than something a substring search would find either way.
+		want := "fkrecipes: " + tc.dropdown + ` holds "` + unoffered +
+			`", which is not one of its values. The stored value of ` +
+			tc.field + " could not be used and was set aside, so what " +
+			"applied is what that field gives when it is left alone."
+		if err.Error() != want {
+			t.Errorf("%s: the refusal reads\n got  %q\n want %q",
+				tc.dropdown, err.Error(), want)
 		}
 	}
 }
@@ -1173,10 +1450,20 @@ func fallbackLine(reason string) string {
 
 // packFallbackLine is the same line without the recipe's second sentence, which
 // is what a science-pack text gets.
+//
+// THE MIDDLE CLAUSE MOVED IN FkRecipes ca4c344 AND THE ADVICE DID NOT. It used
+// to say the mod loaded with its own default instead, which beside a dropdown
+// is false on five presets of six: what applies is the row the player is
+// standing on, not the list this mod declares for the field. What is true on
+// all six, and beside a field with no dropdown, is that the field behaved as
+// though it had been left alone. The route at the end is unchanged, and it is
+// usable here for the reason it is unusable in a refusal: this is a LOG line on
+// a load that SUCCEEDED, so the player is in the game and the Mod Settings
+// screen is two clicks away.
 func packFallbackLine(reason string) string {
 	return "fkrecipes: ERROR: " + reason +
-		". The mod loaded with its own default instead; fix the text under " +
-		"Settings > Mod settings > Startup, then restart."
+		". The mod loaded as though that text had been left alone; fix the " +
+		"text under Settings > Mod settings > Startup, then restart."
 }
 
 // TestATextTheGameCannotAnswerFallsBackAndSaysSo pins the three texts a player
@@ -1219,15 +1506,20 @@ func packFallbackLine(reason string) string {
 // to the WHOLE typed list when one entry cannot be used: it is set aside for the
 // author's declaration rather than taking the load down with it.
 //
-// THE FALLBACK IS NOT TOTAL AND NO ROW HERE IS THE EXCEPTION. What the text
-// falls back TO is this mod's own declaration -- the preset behind the row the
-// player is on -- and a mod set where THAT cannot produce a legal result still
-// stops the load. Every ladder resolves in all
-// four worlds here, the fourth by merging; the recipe field's own worst case
-// is not a refusal at all but an empty ingredient list, which
+// WHAT THE TEXT FALLS BACK TO CAN STILL BE DEGRADED, WHICH IS NOT THE SAME AS
+// A REFUSAL AND USED TO BE. What the text falls back TO is this mod's own
+// declaration -- the preset behind the row the player is on -- and a mod set
+// where THAT cannot produce a legal result degrades it further. Every ladder
+// resolves in all four worlds here, the fourth by merging; the recipe field's
+// own worst case is an empty ingredient list, which
 // [TestAGameWithNoIngredientsIsAnEmptyRecipeRatherThanAnInventedOne] pins as the
-// trade this mod took. The pack field's worst case IS a refusal, and
-// [TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo]'s last row is it.
+// trade this mod took, and the pack field's is a research priced in no science
+// pack, which
+// [TestAFallbackThisModsOwnPackListCannotPayForIsEmittedFreeBesideTheSetAsideText]
+// pins as the trade FkRecipes 97a4493 took on this mod's behalf. NEITHER STOPS
+// THE LOAD ANY MORE. What still does is an author's declaration the library
+// cannot use at all, and after a fallback that refusal carries a sentence of
+// its own: [TestARefusalRaisedAfterAFallbackSaysWhatTheStoredValueDid].
 //
 // THE SECOND ARM IS THE ONE THIS MOD CAUSED, AND NO LABEL OF THIS MOD'S SPELLS
 // IT ANY MORE. The fold exists in FkRecipes because these dropdown labels were
@@ -1396,81 +1688,178 @@ func TestATextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 // ERROR line, which is what keeps the tooltip and the log from drifting apart,
 // and [fallbackLine] is this file's other reader of it.
 //
-// AN AUTHOR'S OWN `Description` WOULD SIT AT SLOT 1 WITH THE NOTE AFTER IT, and
-// neither this mod's recipe nor its technology declares one, so everything
-// after the empty first parameter here is the note. A prototype nothing fell
-// back on carries NO `localised_description` at all, which
-// [TestTheRecipeIsTheOneThatShipped] and [TestTheTechnologyIsTheOneThatShipped]
-// say by listing the fields those two may have.
+// THE AUTHOR'S OWN DESCRIPTION IS COMPOSED ABOVE THE NOTE SINCE FkRecipes
+// 121aafc, AND THAT IS FINDING 21 OF agents/migration-assessment-3.md CLOSED.
+// The note used to be the WHOLE `localised_description`, so a prototype whose
+// description lives in a locale file -- which is both of this mod's, the
+// technology by `technology-description.bbb-balancer` and the recipe by
+// `recipe-description.bbb-balancer-part` -- had that description REPLACED by
+// the disclosure the moment anything fell back: the player was told why the
+// research was not what they typed and lost what the research is. The library
+// now writes the engine's own key for the prototype it is emitting into slot 1,
+// in the ALTERNATIVES form with a trailing newline INSIDE the alternative, and
+// the note follows it. A consumer that declared no such key renders the note
+// alone, because a concatenation group holding an undefined key is itself a
+// failed alternative and the newline dies with it -- measured by the library on
+// 2.0.77 build 84539, which is what makes this shape and not the flatter one
+// that leaves a dangling newline on every consumer who wrote no entry.
+//
+// A PROTOTYPE NOTHING FELL BACK ON CARRIES NO `localised_description` AT ALL,
+// which has not changed and is what [TestTheRecipeIsTheOneThatShipped] and
+// [TestTheTechnologyIsTheOneThatShipped] say by listing the fields those two
+// may have. The wrapper arrives WITH the note and never on its own.
 //
 // THE NOTE IS CHUNKED ACROSS PARAMETERS SINCE FkRecipes `137f4aa`, AND THAT IS
-// WHY THE RECIPE'S IS THREE ELEMENTS AND THE TECHNOLOGY'S TWO. The engine
+// WHY THE RECIPE'S NOTE IS TWO ELEMENTS AND THE TECHNOLOGY'S ONE. The engine
 // refuses a localised-string element over 200 BYTES and stops the whole load
 // (measured on 2.0.77 build 84539 by both repositories), which is what this
-// mod's own release block was about: the recipe sentence is 247 bytes with this
+// mod's own release block was about: the recipe sentence is 268 bytes with this
 // mod's 39-byte setting name in it, so before the library chunked it a typo in
-// the ingredients field could not be disclosed at all. The library now fills a
-// chunk to 180 bytes and cuts after the last space inside it, so the 247 comes
-// out 176 + 71 and the technology's 138 stays in one piece.
+// the ingredients field could not be disclosed at all. The library fills a
+// chunk to 180 bytes and cuts after the last space inside it, so the 268 comes
+// out 179 + 89 and the technology's 159 stays in one piece. BOTH NUMBERS MOVED
+// IN ca4c344 and they moved because the SENTENCE did: it was 247 bytes cut
+// 176 + 71, and the clause that replaced "so this mod's own choice applies
+// instead" is longer than it was.
 //
-// THREE SEPARATELY BREAKABLE THINGS, IN THIS ORDER, because only the first two
-// are properties a player can be hurt by and the third is where the library
-// chose to cut:
+// FOUR SEPARATELY BREAKABLE THINGS, IN THIS ORDER, because the first two are
+// the properties a player can be hurt by, the third is what a player reads and
+// the fourth is where the library chose to cut:
 //
-//   - EVERY ELEMENT IS AT OR UNDER THE ENGINE'S CEILING. This is the one that
-//     decides whether the game loads, and it is asserted here as well as in
-//     `test/check-datastage.py`'s `note-recipe` arm, where a real engine is
-//     what answers.
+//   - THE AUTHOR'S OWN DESCRIPTION IS STILL THERE, at slot 1, naming the key
+//     for the prototype kind and the emitted name this note is riding on. This
+//     is finding 21's assertion: a library that went back to replacing the
+//     description fails here rather than in a research screen.
+//   - EVERY STRING THE COMPOSITION HOLDS, AT ANY DEPTH, IS AT OR UNDER THE
+//     ENGINE'S CEILING. This is the one that decides whether the game loads,
+//     and it is asserted here as well as in `test/check-datastage.py`'s
+//     `note-recipe` arm, where a real engine is what answers. The walk
+//     DESCENDS into the wrapper at slot 1 rather than stepping over it, and
+//     the reason is the locale KEY inside it: a key is one element by
+//     definition and cannot be chunked, the engine polices it at the same 200
+//     bytes, and FkRecipes DROPS the wrapper rather than compose one that
+//     would not fit -- at an emitted recipe name over 181 bytes or a
+//     technology name over 177 (FkRecipes docs/usage.md:333). This walk used
+//     to step over slot 1 by index, so the claim that every string element was
+//     measured was false for exactly that key. `check_note_elements` in the
+//     Python twin descends for this reason and says so, and the two halves
+//     agree now.
 //   - THE ELEMENTS CONCATENATED ARE THE SENTENCE, BYTE FOR BYTE. The engine
 //     joins a localised string's parameters with nothing between them, so this
 //     is what says the chunking is invisible to whoever reads the tooltip.
 //   - AND THE CUT FALLS WHERE THIS LIBRARY HEAD PUTS IT. Pinned so a library
 //     that re-chunks fails here by name rather than moving a tooltip silently;
-//     it is the weakest of the three and the first to give way if the budget
+//     it is the weakest of the four and the first to give way if the budget
 //     ever moves for a reason.
 func checkFallbackNote(t *testing.T, what string, proto map[string]fkrecipes.Value, setting string, recipe bool) {
+	t.Helper()
+	// The tail the library's own chunker breaks before, spelled once so the
+	// expected head below is the sentence minus exactly this.
+	const recipeTail = "recipe empties an assembling machine's input slots " +
+		"of anything the new list does not use."
+	note := "The stored value of " + setting + " could not be used, so the " +
+		"game loaded as though that setting had been left alone. The reason " +
+		"is in the log."
+	kind, name := "technology", TechName
+	// 179 bytes ending in the space after `Changing a`, then the 89-byte tail.
+	chunks := []string{note}
+	if recipe {
+		note += " Changing a " + recipeTail
+		kind, name = "recipe", PartName
+		chunks = []string{note[:len(note)-len(recipeTail)], recipeTail}
+	}
+	checkComposedNote(t, what, proto, kind, name, note, chunks)
+}
+
+// checkElementCeiling measures EVERY STRING one localised string holds, at any
+// depth, against the engine's ceiling on a single element.
+//
+// IT DESCENDS RATHER THAN STEPPING OVER A TABLE, and the reason is the one slot
+// that cannot be chunked. A `descriptionRef` wrapper's deepest string is the
+// author's own locale key; the engine polices a key slot at the same 200 bytes
+// it polices a literal at, and FkRecipes answers that by DROPPING the wrapper
+// rather than composing a key over the ceiling (FkRecipes docs/usage.md:333
+// gives the two name lengths at which it does). A walk that skipped the wrapper
+// could not see either side of that decision. `check_note_elements` in
+// `test/check-datastage.py` descends for this reason over a real dump; this is
+// the same claim made on the host, and the two are meant to read alike.
+//
+// ANYTHING THAT IS NEITHER A STRING NOR AN ARRAY IS A FAILURE, because neither
+// the engine nor this library has a third thing to put in a localised string.
+func checkElementCeiling(t *testing.T, what string, v fkrecipes.Value, path string) {
 	t.Helper()
 	// The engine's, not the library's: the library fills to 180 and this is
 	// the number that refuses a load. Compared against and never computed with.
 	const elementCeiling = 200
-	// The tail the library's own chunker breaks before, spelled once so the
-	// expected head below is the sentence minus exactly this.
-	const recipeTail = "assembling machine's input slots of anything the " +
-		"new list does not use."
 
-	note := "The stored value of " + setting + " could not be used, so this " +
-		"mod's own choice applies instead. The reason is in the log."
-	if recipe {
-		note += " Changing a recipe empties an " + recipeTail
+	switch v.Kind {
+	case fkrecipes.KindStr:
+		if len(v.Str) > elementCeiling {
+			t.Errorf("%s: localised_description%s is %d bytes, over the "+
+				"engine's %d-byte ceiling on one element: a load carrying "+
+				"this prototype STOPS, which is the defect the library's "+
+				"chunker closed\n  %q",
+				what, path, len(v.Str), elementCeiling, v.Str)
+		}
+	case fkrecipes.KindArr:
+		for i, el := range v.Arr {
+			checkElementCeiling(t, what, el, path+"["+strconv.Itoa(i)+"]")
+		}
+	default:
+		t.Errorf("%s: localised_description%s is %s, and a localised string "+
+			"holds strings and tables of them and nothing else",
+			what, path, showValue(v))
 	}
-	// 176 bytes ending in the space after `an`, then the 71-byte tail.
-	chunks := []string{note}
-	if recipe {
-		chunks = []string{note[:len(note)-len(recipeTail)], recipeTail}
-	}
+}
 
+// checkComposedNote is the whole of what the header above describes, asked of
+// ANY note this library composes onto a prototype rather than of a fallback's
+// alone.
+//
+// IT IS A FUNCTION OF ITS OWN BECAUSE THERE ARE TWO KINDS OF NOTE NOW AND ONE
+// SHAPE. A stored value the player typed and could not be used gets
+// [checkFallbackNote]'s sentence; a science pack the GAME does not have gets
+// the packless one, which nobody typed and which names no field to go and fix.
+// Both ride in the same wrapper over the same author key with the same chunker
+// under them, so the shape is asserted once and the sentence is the caller's.
+func checkComposedNote(t *testing.T, what string, proto map[string]fkrecipes.Value, kind, name, note string, chunks []string) {
+	t.Helper()
 	got := proto["localised_description"]
-	if got.Kind != fkrecipes.KindArr || len(got.Arr) == 0 ||
+	if got.Kind != fkrecipes.KindArr || len(got.Arr) < 2 ||
 		!reflect.DeepEqual(got.Arr[0], fkrecipes.Str("")) {
 		t.Errorf("%s: the prototype's localised_description is %s\n want the "+
 			"inline form, an array opening with an empty string parameter",
 			what, showValue(got))
 		return
 	}
+
+	// SLOT 1 IS THE AUTHOR'S OWN DESCRIPTION AND NOT THE NOTE. Written out here
+	// rather than built by a helper shared with plan_test.go's [localeRef]:
+	// this is a DIFFERENT shape, the key nested inside a concatenation group
+	// with the separator newline in it, and the two are only alike enough to be
+	// confused.
+	wantRef := fkrecipes.Arr(
+		fkrecipes.Str("?"),
+		fkrecipes.Arr(
+			fkrecipes.Str(""),
+			fkrecipes.Arr(fkrecipes.Str(kind+"-description."+name)),
+			fkrecipes.Str("\n")),
+		fkrecipes.Str(""))
+	if !reflect.DeepEqual(got.Arr[1], wantRef) {
+		t.Errorf("%s: localised_description element 1 is %s\n want %s\n  the "+
+			"note joins this mod's own locale description rather than "+
+			"replacing it", what, showValue(got.Arr[1]), showValue(wantRef))
+	}
+
+	checkElementCeiling(t, what, got, "")
+
 	joined := ""
-	for i, el := range got.Arr[1:] {
+	for i, el := range got.Arr[2:] {
 		if el.Kind != fkrecipes.KindStr {
 			t.Errorf("%s: localised_description element %d is %s, and every "+
-				"parameter of a composed note is a string", what, i+1,
-				showValue(el))
+				"parameter of a composed note below the author's own "+
+				"description is a string", what, i+2, showValue(el))
 			return
-		}
-		if len(el.Str) > elementCeiling {
-			t.Errorf("%s: localised_description element %d is %d bytes, over "+
-				"the engine's %d-byte ceiling on one element: a load carrying "+
-				"this prototype STOPS, which is the defect the library's "+
-				"chunker closed\n  %q",
-				what, i+1, len(el.Str), elementCeiling, el.Str)
 		}
 		joined += el.Str
 	}
@@ -1479,7 +1868,7 @@ func checkFallbackNote(t *testing.T, what string, proto map[string]fkrecipes.Val
 			"the parameters with nothing between them, so the concatenation "+
 			"is what a player sees", what, joined, note)
 	}
-	params := []fkrecipes.Value{fkrecipes.Str("")}
+	params := []fkrecipes.Value{fkrecipes.Str(""), wantRef}
 	for _, c := range chunks {
 		params = append(params, fkrecipes.Str(c))
 	}
@@ -1746,7 +2135,13 @@ func TestOneFieldMovedTakesTheOtherTwoFromTheTier(t *testing.T) {
 // THE THIRD IS THE WORD THE RECIPE FIELD ACCEPTS AND THIS ONE DOES NOT. `none`
 // is a recipe with no ingredients, which is a thing; a research with no science
 // pack is one a player finishes by opening the screen, and the library will not
-// emit it on this mod's behalf.
+// take that instruction from a text field. IT WILL EMIT ONE WHERE THE GAME
+// LEAVES IT NO CHOICE, which is the distinction FkRecipes 97a4493 drew and not
+// a contradiction: a player TYPING `none` is refused because they are asking
+// for a free research, and a mod set that has none of the packs this mod names
+// gets one anyway because the alternative there is a load that stops.
+// [TestAReachedFallbackWithNoPackInTheGameIsEmittedFreeAndDisclosed] is that
+// side.
 //
 // THE FOURTH IS THE FLUID, and it is the recipe field's fluid case with a
 // different second clause: there the category rule rejects it, here research
@@ -1755,10 +2150,12 @@ func TestOneFieldMovedTakesTheOtherTwoFromTheTier(t *testing.T) {
 // player likeliest to reach for the same name in the second; the fixture stocks
 // `water` for exactly this row and the recipe's.
 //
-// THE FALLBACK IS NOT TOTAL AND NONE OF THESE FOUR ROWS IS THE EXCEPTION,
-// because this game has the science pack the declaration names.
-// [TestAFallbackThisModsOwnPackListCannotPayForStillRefuses] is the game that
-// does not.
+// ALL FOUR ROWS LAND ON A TIER THIS GAME CAN PAY FOR, which is what keeps them
+// about the TEXT.
+// [TestAFallbackThisModsOwnPackListCannotPayForIsEmittedFreeBesideTheSetAsideText]
+// is the game that cannot: the same `1 water` where the tier's pack and this
+// mod's declared one are both absent, and the research comes out free with the
+// player's line last in a stream of five.
 func TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 	for _, tc := range []struct {
 		text   string
@@ -1810,77 +2207,97 @@ func TestAPackTextTheGameCannotAnswerFallsBackAndSaysSo(t *testing.T) {
 	}
 }
 
-// TestAFallbackThisModsOwnPackListCannotPayForStillRefuses is the BOUNDARY of
-// the contract the two tests above pin, and it is the library's own claim
-// rather than this mod's inference: "A VALUE THE PLAYER TYPES NEVER INTRODUCES
-// A REFUSAL A PLAYER WHO TYPED NOTHING WOULD NOT ALSO HAVE HIT; AN INPUT THE
-// AUTHOR DECLARES STILL REFUSES" (FkRecipes go/customize.go, playerFallback).
+// TestAFallbackThisModsOwnPackListCannotPayForIsEmittedFreeBesideTheSetAsideText
+// is where a PLAYER'S fallback and the ENVIRONMENT'S degradation meet on one
+// technology, and it is what the library's boundary became.
 //
-// TWO THINGS SEPARATE THIS WORLD FROM THE TEST ABOVE, AND THE SECOND IS WHAT
-// DECIDES IT. The science packs are `logistic-science-pack` alone, AND the
-// dropdown sits at its own default `logistics` rather than at `logistics-2`.
-// The tier is what makes the difference: `logistics-2` is priced in a pack this
-// game HAS, so driving it here makes the refusal disappear entirely, where
-// `logistics` is priced in `automation-science-pack` and loses it.
+// IT USED TO BE A REFUSAL AND IT USED TO BE THE BOUNDARY ITSELF. The claim this
+// test carried was the library's own: "A VALUE THE PLAYER TYPES NEVER
+// INTRODUCES A REFUSAL A PLAYER WHO TYPED NOTHING WOULD NOT ALSO HAVE HIT; AN
+// INPUT THE AUTHOR DECLARES STILL REFUSES", and this world was the second half
+// of it -- the author's own declared pack had nothing to land on either, so the
+// load stopped. FkRecipes 97a4493 deleted that refusal: the packless unit is
+// EMITTED now, so what stands here is the first half of the claim alone, and
+// the whole boundary moved to
+// [TestARefusalRaisedAfterAFallbackSaysWhatTheStoredValueDid].
 //
-// SO THE WALK IS TWO STEPS AND NOT ONE. `1 water` is the same unusable text the
-// first row of the test above drives, so the typed list is set aside; the
-// chosen tier's COPIED pack is then dropped because this game has it as
-// nothing at all; and only THEN is this mod's declared fallback reached, one
-// `automation-science-pack`, which has nothing to land on either. The load
-// stops. It stops for a player who typed
-// NOTHING in that same game too, which is the whole of what makes this refusal
-// legitimate where a refusal on the typed text would not be:
-// [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused] is that player, and
-// README says it in their terms.
+// THE WALK IS THREE STEPS AND EVERY ONE OF THEM SAYS SO. `1 water` is the same
+// unusable text the first row of the test above drives, so the typed list is
+// set aside; the chosen tier's COPIED pack is then dropped because this game
+// has `automation-science-pack` as nothing at all; this mod's declared fallback
+// is reached, one `automation-science-pack`, which has nothing to land on
+// either; and what comes out is a research that costs 20 of nothing over 15
+// seconds. The tier is the dropdown's own default `logistics` rather than
+// `logistics-2`, which is what makes the second step happen at all:
+// `logistics-2` is priced in a pack this game HAS, so driving it here would
+// leave nothing for the ladder to lose.
 //
-// AND THE REFUSAL CARRIES A SECOND SENTENCE THE UNTOUCHED ONE DOES NOT. The
-// library appends what became of the stored value, so a player is not left
-// reading a refusal about science packs while wondering what happened to the
-// text they typed. That sentence is the whole difference between this refusal
-// and the untouched arm's, and asserting the WHOLE string is what pins it: a
-// library that fell back silently and then refused would produce the shorter
-// sentence and fail here.
+// FIVE LINES IN ORDER AND THE ORDER IS THE CLAIM. The player's own ERROR line
+// comes LAST rather than first, which is the opposite of the recipe field's
+// (see [TestATextTheGameCannotAnswerFallsBackAndSaysSo], where it comes first),
+// and it is not a detail: the pack text is read where the research cost is
+// priced, so the tier walk that set the packs aside has already run and written
+// its four lines by the time the typed value is reported. A stream comparison
+// is what pins that; a search for each line would pass on any ordering.
 //
-// IT POINTS NOWHERE, AND THAT IS A CORRECTION RATHER THAN A LOSS. It used to
-// end by telling the player to correct the setting under Settings then Mod
-// settings then Startup; the `Error loading mods` dialog has no route to that
-// screen (measured by the library on 2.0.77), so the advice was unusable while
-// the fact in front of it was true. The fact stayed and the route went.
+// THE RUNG NAME APPEARS ONCE, AND IT USED TO APPEAR TWICE. This game asks about
+// `automation-science-pack` for two different reasons, once as the pack the
+// chosen tier's unit was copied with and once as the rung this mod's declared
+// fallback names. Until FkRecipes `f2df7ab` the sentence carried both askings
+// and read as a stutter, and this test was one of the two here that pinned it
+// that way on purpose so a library shortening it would fail by name. It did,
+// and this is the name it failed by. The property survived the refusal that
+// used to carry it -- the same deduplicated list is in [packlessLine] now -- so
+// it is still pinned here.
 //
-// THE NAME APPEARS ONCE IN THE LIST OF RUNGS, AND IT USED TO APPEAR TWICE. This
-// game asks about `automation-science-pack` twice for two different reasons:
-// once as the pack the chosen tier's own unit was copied with, and once as the
-// rung this mod's declared fallback names. Until FkRecipes `f2df7ab` the
-// sentence carried both askings and read as a stutter, and this test was one of
-// the two here that pinned it that way on purpose, so that a library shortening
-// it would fail by name rather than quietly. It did, and this is the name it
-// failed by. The rule now has one writer in each language half: names are
-// deduplicated where the packless state is recorded and keep FIRST-SEEN order,
-// the copied unit's lost packs before the declared ladders.
-func TestAFallbackThisModsOwnPackListCannotPayForStillRefuses(t *testing.T) {
+// ONLY ONE OF THE TWO FACTS REACHES THE TOOLTIP, AND IT IS THE ENVIRONMENT'S.
+// The budget is one line per prototype and FkRecipes documents that on both
+// sides separately: "One line per prototype, naming the first setting the walk
+// set aside" of a player's fallback (docs/usage.md:301) and "A prototype
+// carries at most one of these lines: the first the walk reaches" of an
+// environmental degradation (docs/usage.md:327). NEITHER SENTENCE SAYS WHICH
+// KIND WINS WHEN ONE OF EACH IS TRUE, which is exactly this technology, so that
+// the ENVIRONMENT'S note takes the slot is MEASURED HERE and cited nowhere: the
+// packless note is written while the cost is being resolved, and the typed pack
+// list is reported after. So a player in this mod set reads "This game has none
+// of the science packs this research names" on the research screen and is told
+// NOTHING there about the text they typed: that fact is in the log alone, which
+// is not one of the three places a player looks. It is the library's own
+// still-open limitation rather than this mod's to fix.
+func TestAFallbackThisModsOwnPackListCannotPayForIsEmittedFreeBesideTheSetAsideText(t *testing.T) {
+	const what = "a typed pack list set aside onto a declared list nothing pays for"
 	w := everythingWorld().
 		withStartup(SettingTechPacks, "1 water").
 		withTools("logistic-science-pack")
 
-	_, err := Plan().PlanData(w)
-	if err == nil {
-		t.Fatal("a game with no automation science pack in it priced this " +
-			"mod's declared research anyway: the fallback landed on a pack " +
-			"nobody defined, which is a load error with this mod's name on it")
+	protos, logs := extendsOf(t, dataOps(t, w))
+	got := protoOf(t, protos, "technology", TechName)
+
+	checkUnit(t, what, got, customUnit(20, 15))
+	checkPrereqs(t, what, got, TechLogistics)
+	checkComposedNote(t, what, got, "technology", TechName,
+		packlessNote, []string{packlessNote})
+
+	want := []string{
+		"fkrecipes: bbb-balancer: automation-science-pack is not a science " +
+			"pack this game has, so it is left out of the logistics cost",
+		"fkrecipes: ERROR: bbb-balancer: the logistics cost names no science " +
+			"pack this game has, so this mod's own declared cost applies instead",
+		"fkrecipes: bbb-balancer: none of automation-science-pack is present, " +
+			"so the science pack is dropped",
+		packlessLine,
+		packFallbackLine(`better-belt-balancer-tech-packs, entry 1 ` +
+			`("1 water"): water is a fluid, and research takes science packs only`),
 	}
-	const want = "fkrecipes: the technology bbb-balancer has no science pack " +
-		"the game has; research takes at least one, and none of " +
-		"automation-science-pack is a science pack here. The stored value of " +
-		"better-belt-balancer-tech-packs could not be used, so the mod's own " +
-		"declaration applied."
-	if err.Error() != want {
-		t.Errorf("the refusal is\n got  %q\n want %q", err.Error(), want)
+	if !reflect.DeepEqual(logs, want) {
+		t.Errorf("%s: the plan's log stream is\n got  %q\n want %q",
+			what, logs, want)
 	}
 }
 
-// TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused is the OTHER side of
-// the tool question, and it is not the same as the refusal above.
+// TestAPackTheGameHasOnlyAsAnItemIsDroppedAndTheResearchIsEmittedFree is the
+// OTHER side of the tool question, and it is the test above with nobody typing
+// anything.
 //
 // A player who typed nothing gets the DECLARED pack list, whose ladder is
 // walked through `ToolExists` and whose rungs are DROPPED rather than refused
@@ -1894,42 +2311,59 @@ func TestAFallbackThisModsOwnPackListCannotPayForStillRefuses(t *testing.T) {
 // and nowhere else, and a ladder asking ItemExists would sail through. That is
 // exactly the shape FkRecipes' own go/world.go warns a consumer's fixture
 // about: "a fixture that names a science pack only in its items will see every
-// hand-rolled research cost lose its packs".
+// hand-rolled research cost lose its packs". It is the in-miniature form of the
+// demoted-pack mod set agents/migration-assessment-2.md measured on a real
+// engine as finding 13, and agents/migration-assessment-3.md re-measured
+// unchanged in outcome, where a pack this mod names is a plain item after
+// another mod has had its say.
 //
-// AND WHAT A LOST LAST PACK GETS IS A REFUSAL, not a free research. It is the
-// same refusal [TestAReachedFallbackWithNoPackInTheGameIsRefused] pins, AND
-// SINCE FkRecipes `f2df7ab` IT IS THE SAME SENTENCE RATHER THAN ONE RUNG
-// LONGER. The two games are still not the same game: there no technology
-// carries a unit at all, so the only rung ever asked about is this mod's
-// declared fallback pack; here the chosen tier DOES carry a unit, its copied
-// `automation-science-pack` is asked about and lost first, and the declared
-// fallback then names the same name a second time. The library names each pack
-// once however many times the walk asked about it, so the two sentences
-// converge, and what separates these two tests is the walk rather than the
-// wording. The drop itself is a log line the library writes on the way, and it
-// is not asserted here because a refused plan hands back the refusal and no ops
-// at all.
-func TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused(t *testing.T) {
+// AND WHAT A LOST LAST PACK GETS IS A FREE RESEARCH WITH A LINE AND A NOTE,
+// where until FkRecipes 97a4493 it got a refusal; the name said so and does not
+// any more.
+// [TestAReachedFallbackWithNoPackInTheGameIsEmittedFreeAndDisclosed] carries
+// the measurement that decided it. The two games are still not the same game:
+// there no technology carries a unit at all, so the only rung ever asked about
+// is this mod's declared fallback pack and the technology comes out with no
+// prerequisite; here the chosen tier DOES carry a unit, its copied
+// `automation-science-pack` is asked about and lost first, the declared
+// fallback then names the same name a second time, and the prerequisite the
+// tier gave the technology STAYS. What separates the two tests is the walk
+// rather than the wording, and the walk is what the stream below pins.
+//
+// THE DROP LINES ARE ASSERTABLE NOW, WHICH THEY WERE NOT. A refused plan hands
+// back the refusal and no ops at all, so the four lines this walk writes were
+// invisible to this test while it expected a refusal; it said so in as many
+// words. They are here.
+func TestAPackTheGameHasOnlyAsAnItemIsDroppedAndTheResearchIsEmittedFree(t *testing.T) {
+	const what = "a science pack this game has only as an ordinary item"
 	w := everythingWorld().
 		withItems(append(ladderVocabulary(), "automation-science-pack")...).
 		withTools("logistic-science-pack")
 
-	_, err := Plan().PlanData(w)
-	if err == nil {
-		t.Fatal("a game holding this mod's science pack as an ordinary item " +
-			"priced its research anyway: the pack ladder is asking ItemExists, " +
-			"and the engine takes tool-type items in a unit and nothing else")
+	protos, logs := extendsOf(t, dataOps(t, w))
+	got := protoOf(t, protos, "technology", TechName)
+
+	checkUnit(t, what, got, customUnit(20, 15))
+	checkPrereqs(t, what, got, TechLogistics)
+	checkComposedNote(t, what, got, "technology", TechName,
+		packlessNote, []string{packlessNote})
+
+	// THE TEST ABOVE'S STREAM LESS ITS LAST LINE, because nothing was typed
+	// here. Written out rather than shared with it: the two streams being the
+	// same four lines is the claim, and a helper composing both would assert
+	// itself.
+	want := []string{
+		"fkrecipes: bbb-balancer: automation-science-pack is not a science " +
+			"pack this game has, so it is left out of the logistics cost",
+		"fkrecipes: ERROR: bbb-balancer: the logistics cost names no science " +
+			"pack this game has, so this mod's own declared cost applies instead",
+		"fkrecipes: bbb-balancer: none of automation-science-pack is present, " +
+			"so the science pack is dropped",
+		packlessLine,
 	}
-	// THE SAME SENTENCE THE FALLBACK ARM GETS, LESS THE STORED-VALUE CLAUSE,
-	// because nothing here was typed. The rung list names the pack ONCE for
-	// [TestAFallbackThisModsOwnPackListCannotPayForStillRefuses]'s reason: the
-	// tier's copied pack and the declared fallback's one rung are the same
-	// name asked about twice, and the library names each rung once.
-	want := "fkrecipes: the technology bbb-balancer has no science pack the " +
-		"game has; research takes at least one, and none of " +
-		"automation-science-pack is a science pack here"
-	if err.Error() != want {
-		t.Errorf("the refusal reads\n got  %q\n want %q", err.Error(), want)
+	if !reflect.DeepEqual(logs, want) {
+		t.Errorf("%s: the plan's log stream is\n got  %q\n want %q",
+			what, logs, want)
 	}
 }
 

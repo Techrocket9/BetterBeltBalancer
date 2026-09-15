@@ -133,14 +133,18 @@ never make easy. So:
   that falls back makes FkRecipes compose a sentence into the emitted
   prototype's own localised_description, and the engine refuses any element of
   a localised string over 200 BYTES and stops the load. On this mod's recipe
-  that sentence is 247 bytes, which is why the recipe arm PINNED A DEFECT until
+  that sentence is 268 bytes, which is why the recipe arm PINNED A DEFECT until
   FkRecipes 137f4aa chunked it; it is a POSITIVE CONTROL now, asserting a load
-  that completes, three elements of 176 and 71 bytes under the ceiling, the
-  library's own log line, and the recipe a player who typed nothing would have
-  got. The second arm is the same shape on the PACK text, where the sentence is
-  138 bytes and stays one piece, and each arm asserts that the OTHER channel's
-  prototype in its own load carries nothing. See check_note_ceiling, whose
-  block carries the arithmetic and the history.
+  that completes, two chunks of 179 and 89 bytes under the ceiling, the
+  author's own locale key composed ABOVE them, the library's own log line, and
+  the recipe a player who typed nothing would have got. The second arm is the
+  same shape on the PACK text, where the sentence is 159 bytes and stays one
+  piece, and each arm asserts that the OTHER channel's prototype in its own load
+  carries nothing. THE LOCALE KEY IS WHERE MIGRATION FINDING 21 LANDS, and it
+  bites on the TECHNOLOGY, the one of the two this mod really writes a
+  description entry for: a note composed without that key stands in the entry's
+  place for the whole load. See check_note_ceiling, whose block carries the
+  arithmetic and the history.
 
 ...AND THE SIX STARTUP SETTINGS' `order` STRINGS, ON BOTH GOLDEN ARMS, WHICH
 ARE INSIDE THE HASH AND ARE ASSERTED ANYWAY. Four of the six are GENERATED names
@@ -2278,8 +2282,9 @@ def check_remover_arm(mod_set: str, got: dict) -> bool:
     # of a dump PATH, so a doctored copy is a legitimate input to the same
     # assertion, and at the time it was the ONLY input. The reason was that a
     # note this library really composes onto a RECIPE could not be emitted at
-    # all: FkRecipes' fallback sentence is 208 bytes before a setting name goes
-    # into it and 247 with this mod's, against a ceiling of 200 BYTES per
+    # all: FkRecipes' fallback sentence was 208 bytes before a setting name went
+    # into it and 247 with this mod's -- it is 229 and 268 since the library's
+    # fix round 3 rewrote the sentence -- against a ceiling of 200 BYTES per
     # element, so the load was refused before any assertion here could run.
     # FkRecipes 137f4aa chunks it, `note-recipe` is that positive control, and
     # the two arms' own block is where all of it lives now.
@@ -2350,31 +2355,67 @@ def check_remover_arm(mod_set: str, got: dict) -> bool:
 # cuts after the last space inside it. The chunks concatenated are the input
 # byte for byte, and the engine joins a localised string's parameters with
 # nothing between them, so a player reads what they always would have. The
-# arithmetic in this mod's case: the recipe sentence is 208 bytes of library
-# constant plus this mod's 39-byte setting name, 247 in all, which comes out
-# 176 + 71; the technology sentence is 107 plus 31, 138 in all, which is inside
+# arithmetic in this mod's case: the recipe sentence is 229 bytes of library
+# constant plus this mod's 39-byte setting name, 268 in all, which comes out
+# 179 + 89; the technology sentence is 128 plus 31, 159 in all, which is inside
 # the budget and stays one piece. THE TWO ARMS ARE THEREFORE A DIFF IN SHAPE AS
-# WELL AS IN CHANNEL: three elements on the recipe, two on the technology, and
-# the same composer behind both.
+# WELL AS IN CHANNEL: two chunks on the recipe, one on the technology, and the
+# same composer behind both.
+#
+# AND THE NOTE NO LONGER STANDS IN THE AUTHOR'S DESCRIPTION'S PLACE, which is
+# the one STRUCTURAL move in this region and is this repository's own finding
+# 21 answered. A prototype's `localised_description` field WINS OVER the
+# `[recipe-description]` or `[technology-description]` entry an author wrote in
+# their .cfg, so until FkRecipes' fix round 3 a refused pack text replaced
+# `bbb-balancer`'s whole tooltip -- measured: "Balancers of any shape, built
+# one tile at a time." was gone and only the note was drawn. A prototype that
+# carries a note and declares no `Description` in the PLAN, which is both of
+# this mod's, now opens its description with the engine's own alternatives form
+# over its own locale key:
+#
+#     ["?", ["", ["<kind>-description.<emitted name>"], "\n"], ""]
+#
+# The separator newline rides INSIDE the alternative so it dies with an
+# undefined key, and the raw fallback is the EMPTY STRING because there is
+# nothing to say where the author wrote no entry.
+#
+# BOTH ARMS SEE THE WRAPPER AND ONLY ONE OF THEM HAS A KEY BEHIND IT, and that
+# asymmetry is the shape rather than a bug in it. The library cannot READ a
+# .cfg, so it composes the key on every note it writes; this mod's
+# `mod-data/locale/en/better-belt-balancer.cfg` has a `[technology-description]`
+# section and NO `[recipe-description]` one (the `bbb-balancer-part` entry it
+# does write is an `[item-description]`, which is a different prototype), so on
+# the technology the wrapper restores the author's sentence and on the recipe it
+# resolves to nothing and the note stands alone exactly as it did before. That
+# is finding 21's own table: the recipe had nothing to lose and the technology
+# lost everything.
+#
+# THE GATE CANNOT SEE EITHER RESOLUTION: a dump holds the key, never the .cfg's
+# text, so what is asserted here is the SHAPE AND THE EXACT KEY, and a library
+# that dropped the wrapper again -- the finding-21 regression -- is what
+# check_description_ref fails on by name.
 #
 # WHAT EACH ARM ASSERTS THAT THE OTHER CANNOT.
 #
-#   `note-recipe` is the channel that used to be unreachable, and it asks SIX
-#   separately breakable questions. EVERY ELEMENT AT OR UNDER 200 BYTES, over
-#   what the engine returned rather than over the literal above it, which is
-#   the property that decides whether the game loads. THE CONCATENATION IS THE
-#   SENTENCE, which is what a player actually reads, the engine joining the
-#   parameters with nothing between them. THE ELEMENT COUNT AND THE TWO CHUNKS
-#   WHOLE, so a library that re-chunks fails here by name. THE LIBRARY'S OWN
-#   ERROR LINE, whole and in order, which is the half that says the degradation
-#   RAN. THE TOOLTIP AND THE LOG ENDING THE SAME WAY, which is the only one of
-#   the six that two literals updated in step could not fake. And THE RECIPE
-#   ITSELF, which is the claim the whole fallback design rests on and which no
-#   assertion about a sentence can reach: a player who typed a typo gets the
-#   recipe a player who typed nothing gets.
+#   `note-recipe` is the channel that used to be unreachable, and it asks SEVEN
+#   separately breakable questions. EVERY STRING ELEMENT AT OR UNDER 200 BYTES,
+#   over what the engine returned rather than over the literal above it, which
+#   is the property that decides whether the game loads, and it walks INTO the
+#   description wrapper because the engine polices a KEY SLOT at the same 200
+#   bytes and a key cannot be chunked. THE AUTHOR'S OWN DESCRIPTION KEY, shape
+#   and spelling, which is finding 21's regression caught by name. THE
+#   CONCATENATION IS THE SENTENCE, which is what a player actually reads of the
+#   NOTE, the engine joining the parameters with nothing between them. THE
+#   ELEMENT COUNT AND THE TWO CHUNKS WHOLE, so a library that re-chunks fails
+#   here by name. THE LIBRARY'S OWN ERROR LINE, whole and in order, which is the
+#   half that says the degradation RAN. THE TOOLTIP AND THE LOG ENDING THE SAME
+#   WAY, which is the only one of the seven that two literals updated in step
+#   could not fake. And THE RECIPE ITSELF, which is the claim the whole fallback
+#   design rests on and which no assertion about a sentence can reach: a player
+#   who typed a typo gets the recipe a player who typed nothing gets.
 #
 #   `note-control` is the same shape on the other channel, and its own note is
-#   asserted concatenated AND in one piece, the second half being what says 138
+#   asserted concatenated AND in one piece, the second half being what says 159
 #   bytes is inside the library's budget. Each arm asserts that the OTHER
 #   channel's prototype in its own load carries nothing, so between them one
 #   refused text lands its note on one prototype and leaves the other untouched,
@@ -2419,6 +2460,35 @@ NOTE_REFUSED_PACKS = "2 flurb-pack"
 # constant for those uses is not a refactor of them.
 NOTE_TECH = "bbb-balancer"
 
+
+def description_ref(kind: str, name: str) -> list:
+    """The wrapper FkRecipes composes ABOVE a note when the plan declares none.
+
+    THE SHAPE IS THE ENGINE'S ALTERNATIVES FORM WITH THE SEPARATOR INSIDE IT. A
+    concatenation group holding an undefined key is itself a failed alternative,
+    so the newline dies with the key and an author who wrote no entry gets no
+    dangling blank line; the raw fallback is the EMPTY STRING because there is
+    nothing to say in that case.
+
+    THE SHAPE IS QUOTED FROM WHAT THE LIBRARY DOCUMENTS RATHER THAN FROM WHAT IT
+    SAYS TO ITSELF, which is this repository's own rule at
+    agents/fkrecipes-migration.md:2188. FkRecipes docs/migration.md:418 writes it
+    out: a recipe or a technology that carries a trailing line and declares no
+    `Description` "opens with `{"?", {"", {"<kind>-description.<emitted name>"},
+    "\n"}, ""}`". docs/usage.md:333 is the same shape in prose and carries the
+    measurement under it. Spelled here so a regression is a diff against a shape
+    rather than against a paragraph.
+
+    A FUNCTION AND NOT TWO LITERALS, because the two arms' expected descriptions
+    below and check_description_ref's failure message all have to be the same
+    shape: a wrapper transcribed three times could drift twice.
+
+    IT SITS AMONG THE CONSTANTS RATHER THAN WITH THE OTHER HELPERS because the
+    constants below CALL it at import, which is the whole reason it is here.
+    """
+    return ["?", ["", [f"{kind}-description.{name}"], "\n"], ""]
+
+
 # THE SENTENCE BOTH CHANNELS SHARE, AND IT IS SPELLED ONCE FOR A REASON. The
 # library appends it to a RECIPE's note and to a recipe's ERROR line alike, and
 # to neither of the technology's, because a repriced research destroys nothing.
@@ -2432,45 +2502,93 @@ NOTE_DESTRUCTION = ("Changing a recipe empties an assembling machine's input "
 # WHAT THE LIBRARY SAID, whole and in order. Both arms pin this because it is
 # the half that says the degradation RAN: the language read the field, refused
 # the name, chose the fallback and composed its line.
+#
+# THE MIDDLE CLAUSE MOVED IN FkRecipes' FIX ROUND 3 AND THE ROUTE DID NOT. The
+# line used to say the mod loaded with its own default instead, and that is
+# false wherever a preset dropdown sits beside the field: the set-aside value
+# leaves the dropdown's CURRENTLY CHOSEN preset deciding, which on this mod is
+# five of six presets. Saying the field behaves as though it had been left
+# alone is true on all six and beside a field with no dropdown at all. The
+# `Settings > Mod settings > Startup` half is unchanged, because this line is
+# written on a load that SUCCEEDED and the screen really is reachable.
 NOTE_RECIPE_LOG = [
     'fkrecipes: ERROR: better-belt-balancer-recipe-ingredients, entry 1 '
-    '("2 iron-plat"): no item or fluid is named iron-plat. The mod loaded with '
-    'its own default instead; fix the text under Settings > Mod settings > '
-    'Startup, then restart. ' + NOTE_DESTRUCTION]
+    '("2 iron-plat"): no item or fluid is named iron-plat. The mod loaded as '
+    'though that text had been left alone; fix the text under Settings > Mod '
+    'settings > Startup, then restart. ' + NOTE_DESTRUCTION]
 NOTE_CONTROL_LOG = [
     'fkrecipes: ERROR: better-belt-balancer-tech-packs, entry 1 '
-    '("2 flurb-pack"): no science pack is named flurb-pack. The mod loaded '
-    'with its own default instead; fix the text under Settings > Mod settings '
-    '> Startup, then restart.']
+    '("2 flurb-pack"): no science pack is named flurb-pack. The mod loaded as '
+    'though that text had been left alone; fix the text under Settings > Mod '
+    'settings > Startup, then restart.']
 
 # THE NOTE THE RECIPE CARRIES, WHOLE, which is a DIFFERENT sentence from the log
-# line above and shares only the tail. 247 bytes: 208 of library constant plus
-# this mod's 39-byte setting name.
+# line above and shares only the tail. 268 bytes: 229 of library constant plus
+# this mod's 39-byte setting name. The 229 is 128 bytes of sentence, one space
+# and the 100 bytes of NOTE_DESTRUCTION.
+#
+# IT NAMES NO TARGET SINCE FkRecipes' FIX ROUND 3, for the reason the log line's
+# own comment above gives: it used to say this mod's own choice applied instead,
+# and the migration assessment measured all six presets of this mod's ingredient
+# dropdown giving six different recipes under one byte-identical note.
 NOTE_RECIPE_SENTENCE = (
     "The stored value of better-belt-balancer-recipe-ingredients could not be "
-    "used, so this mod's own choice applies instead. The reason is in the log. "
-    + NOTE_DESTRUCTION)
+    "used, so the game loaded as though that setting had been left alone. The "
+    "reason is in the log. " + NOTE_DESTRUCTION)
 
 # AND WHERE THE LIBRARY CUTS IT, which is the one number here that is the
 # LIBRARY'S choice rather than the engine's. It fills an element to 180 bytes
-# and cuts after the last space inside that, so the 247 comes out 176 and 71 and
+# and cuts after the last space inside that, so the 268 comes out 179 and 89 and
 # element 1 ENDS IN A SPACE. Written as an offset into the sentence above rather
 # than as two more literals, so the concatenation cannot drift from the whole by
 # a transcription error; what a reader wants to see spelled out is in the arm's
 # `ok` row, which prints the byte counts off the dump.
-NOTE_RECIPE_CUT = 176
+#
+# DERIVED FROM THE RULE RATHER THAN TRANSCRIBED FROM A DUMP, which is what the
+# expression below is: fill 180 bytes, cut after the last space inside them,
+# and the space ENDS the chunk it was found in. It is still a PIN and not a
+# follower -- the 180 is spelled here, so a library that moved its budget or its
+# break rule would build different chunks from the ones the dump holds and the
+# equality further down would fail by name -- and writing it as the rule rather
+# than as the number means the arithmetic in the comment above cannot be a lie
+# about a number typed in by hand.
+#
+# BYTES AND CHARACTERS COINCIDE HERE, which is why a character slice is allowed
+# to stand in for the library's byte one: every byte of this sentence and of
+# this mod's setting name is ASCII. The ceiling walk downstream counts encoded
+# bytes and does not rely on that.
+#
+# AND THE COINCIDENCE IS ASSERTED RATHER THAN NOTED, because it is the one thing
+# that would make the slice below silently wrong: a non-ASCII byte anywhere in
+# the sentence or in this mod's setting name puts the library's 180-BYTE cut
+# somewhere this 180-CHARACTER slice does not reach, and the whole-description
+# equality downstream would then fail with two chunks that look almost right.
+# One line here says which of the two moved.
+assert NOTE_RECIPE_SENTENCE.isascii(), (
+    "NOTE_RECIPE_CUT slices CHARACTERS and the library cuts BYTES; they agree "
+    "only while this sentence is ASCII, and it is not: " + NOTE_RECIPE_SENTENCE)
+NOTE_RECIPE_CUT = NOTE_RECIPE_SENTENCE[:180].rindex(" ") + 1
 NOTE_RECIPE_DESCRIPTION = ["",
+                           description_ref("recipe", OUR_PART),
                            NOTE_RECIPE_SENTENCE[:NOTE_RECIPE_CUT],
                            NOTE_RECIPE_SENTENCE[NOTE_RECIPE_CUT:]]
 
-# And the note the control arm proves lands on the OTHER channel. Two elements:
-# 138 bytes, the library's 107-byte constant plus this mod's 31-byte setting
+# And the note the control arm proves lands on the OTHER channel. One chunk:
+# 159 bytes, the library's 128-byte constant plus this mod's 31-byte setting
 # name, which is inside the chunk budget and is therefore one piece, and no
 # destruction tail because a repriced research destroys nothing.
+#
+# THE WRAPPER ABOVE IT IS THE ONE THAT HAS A KEY BEHIND IT on this package:
+# `[technology-description] bbb-balancer` is in this mod's own .cfg, so this is
+# the element that carries "Balancers of any shape, built one tile at a time."
+# back into a fallback load's tooltip. See the block above.
 NOTE_CONTROL_SENTENCE = (
     "The stored value of better-belt-balancer-tech-packs could not be used, so "
-    "this mod's own choice applies instead. The reason is in the log.")
-NOTE_CONTROL_DESCRIPTION = ["", NOTE_CONTROL_SENTENCE]
+    "the game loaded as though that setting had been left alone. The reason is "
+    "in the log.")
+NOTE_CONTROL_DESCRIPTION = ["",
+                           description_ref("technology", NOTE_TECH),
+                           NOTE_CONTROL_SENTENCE]
 
 # The engine's ceiling on ONE element of a localised string, in BYTES, which is
 # what both arms measure the dump against. It is the ENGINE's number and not the
@@ -2479,35 +2597,92 @@ NOTE_CONTROL_DESCRIPTION = ["", NOTE_CONTROL_SENTENCE]
 NOTE_ELEMENT_CEILING = 200
 
 
-def check_note_elements(arm: str, where: str, got) -> bool:
-    """Every element of one localised_description, against the 200-byte ceiling.
+def check_note_elements(arm: str, where: str, got, path: str = "") -> bool:
+    """Every STRING element of one localised_description, against the ceiling.
 
     Returns True on a failure. Separate from the equality against the literal
     beside it ON PURPOSE: the equality says the library chunked where it says it
     chunks, and this says the result LOADS, which is the property a player is
     hurt by. It runs over what the engine put in the dump, so a literal edited
     to match a regression cannot make it pass.
+
+    IT DESCENDS INTO NESTED TABLES SINCE FkRecipes' FIX ROUND 3, and it descends
+    rather than skipping because THE ENGINE POLICES A KEY SLOT AT THE SAME 200
+    BYTES and a key is one element by definition: it cannot be chunked. The one
+    nesting a note carries is `descriptionRef`'s alternatives wrapper over the
+    author's own locale key, whose deepest string is that key, and the library
+    DROPS the wrapper rather than composing a key that would not fit -- which is
+    a decision this walk should be able to see the other side of. A chunk after
+    the wrapper is walked exactly as it was before, so the ceiling check cannot
+    be skipped by the wrapper's presence.
+
+    WHAT IT NO LONGER SAYS IS THAT EVERY PARAMETER IS A STRING, and the shape it
+    stopped policing is policed harder elsewhere: check_description_ref pins the
+    wrapper's nesting and its exact key, and each arm's whole-description
+    equality pins every element in order. Anything that is neither a string nor
+    a table is still a failure here, because neither the engine nor this library
+    has a third thing to put in a localised string.
     """
     bad = False
     if not isinstance(got, list):
-        print(f"FAIL {arm}: `{where}` is {json.dumps(got)}, not the inline "
-              f"localised-string form this note is composed as")
+        print(f"FAIL {arm}: `{where}`{path} is {json.dumps(got)}, not the "
+              f"inline localised-string form this note is composed as")
         return True
     for i, el in enumerate(got):
+        here = f"{path}[{i}]"
+        if isinstance(el, list):
+            bad |= check_note_elements(arm, where, el, here)
+            continue
         if not isinstance(el, str):
-            print(f"FAIL {arm}: `{where}` element {i} is {json.dumps(el)} and "
-                  f"every parameter of a composed note is a string")
+            print(f"FAIL {arm}: `{where}`{here} is {json.dumps(el)} and every "
+                  f"parameter of a composed note is a string or a nested "
+                  f"localised string")
             bad = True
             continue
         n = len(el.encode())
         if n > NOTE_ELEMENT_CEILING:
             bad = True
-            print(f"FAIL {arm}: `{where}` element {i} is {n} bytes, over the "
+            print(f"FAIL {arm}: `{where}`{here} is {n} bytes, over the "
                   f"engine's {NOTE_ELEMENT_CEILING}-byte ceiling on one "
                   f"element.\n{'':>5}  A load carrying this prototype STOPS, "
                   f"which is the defect FkRecipes 137f4aa closed and this arm "
                   f"is the control for; the element is {el!r}")
     return bad
+
+
+def check_description_ref(arm: str, where: str, got, kind: str,
+                          name: str) -> bool:
+    """The author's own locale key still opens the description. True on failure.
+
+    THIS IS FINDING 21 HELD DOWN, and it is asked separately from the
+    whole-description equality beside it so that the regression it names fails
+    by its own name. A prototype's `localised_description` field WINS OVER the
+    `[<kind>-description]` entry an author wrote in their .cfg, so a note
+    composed alone DELETES that sentence for the whole of that load: measured on
+    this package, a refused pack text left `bbb-balancer`'s tooltip reading the
+    note and nothing else, with "Balancers of any shape, built one tile at a
+    time." gone. FkRecipes' fix round 3 composes the key above the note instead.
+
+    THE DUMP CANNOT SHOW THE RESOLUTION, only the reference: the engine resolves
+    the key against the .cfg on the CLIENT, and a data dump holds the composed
+    table verbatim. So the key and its nesting are what is asserted, and they
+    are asserted WHOLE rather than by a substring, because a wrapper that lost
+    its inner group or put its raw fallback first would resolve to something
+    else entirely while still mentioning the right key.
+    """
+    want = description_ref(kind, name)
+    have = got[1] if isinstance(got, list) and len(got) >= 2 else None
+    if have == want:
+        return False
+    print(f"FAIL {arm}: `{where}` does not open with the author's own "
+          f"description key.\n{'':>5}  Element 1 has to be "
+          f"{json.dumps(want)}\n{'':>5}  and it is "
+          f"{json.dumps(have) if have is not None else 'not there at all'}"
+          f"\n{'':>5}  A note composed without it REPLACES the "
+          f"[{kind}-description] entry an author wrote for the whole of that "
+          f"load, which is this repository's own migration finding 21 and what "
+          f"FkRecipes' fix round 3 closed")
+    return True
 
 
 def joined_note(got) -> str | None:
@@ -2516,12 +2691,29 @@ def joined_note(got) -> str | None:
     THE ENGINE JOINS A LOCALISED STRING'S PARAMETERS WITH NOTHING BETWEEN THEM,
     so this is the string a player is handed and the chunk boundaries are not in
     it. The empty first parameter is the inline form's key slot and is dropped.
+
+    AND THE DESCRIPTION WRAPPER IS DROPPED WITH IT, DELIBERATELY, because this
+    function means WHAT A PLAYER READS OF THE NOTE and the wrapper is not part
+    of the note. The engine resolves that element to the author's own
+    `[<kind>-description]` entry plus a newline where they wrote one, and to
+    NOTHING where they did not; either way the bytes it resolves to are in a
+    .cfg and are not in the dump, so joining it would be comparing a sentence
+    against a key. The wrapper's own shape and key are asserted by
+    check_description_ref instead.
+
+    ONLY A LEADING TABLE IS DROPPED, AND ONLY ONE, which is where
+    `appendLocalised` puts it and nowhere else: a table anywhere further along
+    is a shape this file does not know, and None here fails the arm rather than
+    quietly shortening the sentence it hands back.
     """
     if not isinstance(got, list) or not got or got[0] != "":
         return None
-    if not all(isinstance(el, str) for el in got[1:]):
+    params = got[1:]
+    if params and isinstance(params[0], list):
+        params = params[1:]
+    if not all(isinstance(el, str) for el in params):
         return None
-    return "".join(got[1:])
+    return "".join(params)
 
 
 def check_note_ceiling(factorio: str, series: str, mod_dir: Path) -> bool:
@@ -2562,8 +2754,18 @@ def check_note_ceiling(factorio: str, series: str, mod_dir: Path) -> bool:
     desc = got["probe"]["desc"]["recipe"]
     rec_bad |= check_note_elements(
         "note-recipe", f'{OUR_PART}.localised_description', desc)
-    # WHAT A PLAYER READS, WHICH IS THE CONCATENATION AND NOT THE PIECES. The
-    # chunk boundaries are the library's business; this is the sentence.
+    # AND THE AUTHOR'S OWN DESCRIPTION KEY IS STILL ABOVE THE NOTE, which is
+    # finding 21 held down on the channel that had nothing to lose by it. This
+    # mod ships no `[recipe-description]` entry, so on the RECIPE the wrapper
+    # resolves to nothing and a player sees exactly what they saw before; the
+    # library composes it all the same, because it cannot read a .cfg and cannot
+    # know. Asserting it here is what keeps the two channels one shape.
+    rec_bad |= check_description_ref(
+        "note-recipe", f'{OUR_PART}.localised_description', desc,
+        "recipe", OUR_PART)
+    # WHAT A PLAYER READS OF THE NOTE, WHICH IS THE CONCATENATION AND NOT THE
+    # PIECES. The chunk boundaries are the library's business; this is the
+    # sentence. The wrapper is not in it: see joined_note.
     joined = joined_note(desc)
     if joined != NOTE_RECIPE_SENTENCE:
         rec_bad = True
@@ -2587,7 +2789,8 @@ def check_note_ceiling(factorio: str, series: str, mod_dir: Path) -> bool:
         print(f"FAIL note-recipe: `{OUR_PART}` carries "
               f"{len(desc or [])} localised_description elements and the "
               f"chunked note is {len(NOTE_RECIPE_DESCRIPTION)}: an empty first "
-              f"parameter and the 247-byte sentence in two pieces")
+              f"parameter, the author's own description key, and the 268-byte "
+              f"sentence in two pieces")
     elif desc != NOTE_RECIPE_DESCRIPTION:
         rec_bad = True
         print(f"FAIL note-recipe: `{OUR_PART}` carries the description "
@@ -2622,10 +2825,15 @@ def check_note_ceiling(factorio: str, series: str, mod_dir: Path) -> bool:
               f"default standing, {RECIPE_DEFAULT}")
     bad |= rec_bad
     if not rec_bad:
+        # THE CHUNKS ARE desc[2:] AND NOT desc[1:] SINCE THE WRAPPER LANDED:
+        # slot 0 is the inline form's key slot and slot 1 is the author's own
+        # description key, so the byte counts printed here are the note's and
+        # nothing else, which is what the arithmetic in the block above is about.
         print(f"  ok   note-recipe{'':<16} exit {got['returncode']}, and "
               f"{OUR_PART} carries its {len(joined.encode())}-byte note in "
-              f"{len(desc) - 1} chunks of "
-              f"{', '.join(str(len(e.encode())) for e in desc[1:])} bytes")
+              f"{len(desc) - 2} chunks of "
+              f"{', '.join(str(len(e.encode())) for e in desc[2:])} bytes, "
+              f"under the author's own recipe-description key")
         print(f"{'':>5}  said {NOTE_RECIPE_LOG[0]!r}")
         print(f"{'':>5}  and the recipe is the dropdown's own default, which "
               f"is what a player who typed nothing gets")
@@ -2650,6 +2858,15 @@ def check_note_ceiling(factorio: str, series: str, mod_dir: Path) -> bool:
     ctl_bad |= check_note_elements(
         "note-control", f'{NOTE_TECH}.localised_description',
         ctl["probe"]["tech"])
+    # AND THE AUTHOR'S OWN DESCRIPTION KEY IS STILL ABOVE THE NOTE. THIS IS THE
+    # CHANNEL FINDING 21 WAS MEASURED ON: `[technology-description] bbb-balancer`
+    # is an entry this mod really ships, so before FkRecipes' fix round 3 this
+    # very load left `bbb-balancer`'s tooltip reading the note and nothing else,
+    # with "Balancers of any shape, built one tile at a time." gone for the whole
+    # of it. The wrapper asserted here is what puts that sentence back.
+    ctl_bad |= check_description_ref(
+        "note-control", f'{NOTE_TECH}.localised_description',
+        ctl["probe"]["tech"], "technology", NOTE_TECH)
     if joined_note(ctl["probe"]["tech"]) != NOTE_CONTROL_SENTENCE:
         ctl_bad = True
         print(f"FAIL note-control: `{NOTE_TECH}`'s note reads "
@@ -2661,7 +2878,7 @@ def check_note_ceiling(factorio: str, series: str, mod_dir: Path) -> bool:
         print(f"FAIL note-control: `{NOTE_TECH}` carries the description "
               f"{json.dumps(ctl['probe']['tech'])}\n{'':>5}  and the pack text "
               f"falling back has to put {json.dumps(NOTE_CONTROL_DESCRIPTION)} "
-              f"on it, in ONE piece: 138 bytes is inside the library's own "
+              f"on it, in ONE piece: 159 bytes is inside the library's own "
               f"chunk budget, which is what makes this a diff in shape as well "
               f"as in channel")
     # AND THE RECIPE IN THE SAME LOAD CARRIES NOTHING, which is what makes the
@@ -2681,7 +2898,8 @@ def check_note_ceiling(factorio: str, series: str, mod_dir: Path) -> bool:
         print(f"  ok   note-control{'':<15} exit {ctl['returncode']}, and "
               f"{NOTE_TECH} carries its "
               f"{len(joined_note(ctl['probe']['tech']).encode())}-byte note in "
-              f"one chunk where the recipe carries none")
+              f"one chunk under the author's own technology-description key, "
+              f"where the recipe carries none")
         print(f"{'':>5}  said {NOTE_CONTROL_LOG[0]!r}")
     return bad
 

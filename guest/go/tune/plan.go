@@ -265,14 +265,19 @@ func Plan() *fkrecipes.Lib {
 	// is base's own name and an overhaul is free to remove it; no other name is
 	// likelier to be present, so a second rung would be a guess dressed as a
 	// ladder. What happens without one is the library's and is pinned by
-	// [TestAReachedFallbackWithNoPackInTheGameIsRefused] and by
-	// [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused]: the ladder is
-	// walked through `ToolExists`, a pack no rung answers for is DROPPED with a
-	// line, and a unit that loses every pack is refused by name rather than
-	// emitted free. THE LADDER IS REACHED THROUGH THE `Fallback`, not through
-	// the text field: beside a tier an untouched pack text takes the TIER's own
-	// science packs, and this list is what prices the research when the tier
-	// has none left.
+	// [TestAReachedFallbackWithNoPackInTheGameIsEmittedFreeAndDisclosed] and by
+	// [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndTheResearchIsEmittedFree]: the
+	// ladder is walked through `ToolExists`, a pack no rung answers for is
+	// DROPPED with a line, and a unit that loses every pack is EMITTED with an
+	// empty ingredient list, one ERROR line naming every rung the walk asked
+	// about and one sentence in the technology's own tooltip. Until FkRecipes
+	// 97a4493 that last one was a refusal by name; the header of the first test
+	// carries the measurement that moved it, and this mod's answer to a free
+	// research is still owed rather than given.
+	//
+	// THE LADDER IS REACHED THROUGH THE `Fallback`, not through the text field:
+	// beside a tier an untouched pack text takes the TIER's own science packs,
+	// and this list is what prices the research when the tier has none left.
 	//
 	// WHY A MAXIMUM IS DECLARED AT ALL, since neither bound is a balance
 	// opinion. The engine RESETS a stored number outside its own bounds to the
@@ -409,12 +414,36 @@ func Plan() *fkrecipes.Lib {
 	// validateCostChoices), which is the right split: a count of zero is this
 	// mod's own mistake. What the lazy resolve MOVED rather than removed is the
 	// other half -- where the fallback IS the price its packs are walked as
-	// ladders, and a unit that loses every one of them is refused with
-	// `fkrecipes: the technology bbb-balancer has no science pack the game has;
-	// research takes at least one, and none of automation-science-pack is a
-	// science pack here`, which [TestAReachedFallbackWithNoPackInTheGameIsRefused]
-	// pins word for word. That refusal is the right answer and not a
-	// regression: a research with no packs is not a cheap one, it is free.
+	// ladders, and a unit that loses every one of them is DEGRADED rather than
+	// refused.
+	//
+	// THAT LAST STEP IS FkRecipes 97a4493, THE FIRST COMMIT OF FIX ROUND 3, AND
+	// IT DELETED A REFUSAL THIS BLOCK USED TO QUOTE. The sentence `fkrecipes:
+	// the technology bbb-balancer has no science pack the game has; research
+	// takes at least one, and none of automation-science-pack is a science pack
+	// here` is gone from the library, and so is the argument that stood here
+	// for it -- that a research with no packs is free rather than cheap, so a
+	// refusal was the right answer. The library weighed that against what a
+	// refusal costs the player and took the other side. AN `Error loading mods`
+	// DIALOG HAS NO ROUTE TO THE MOD SETTINGS SCREEN, and the escape it does
+	// have was walked on a client: five buttons (Disable listed mods, Disable
+	// all mods, Manage mods, Restart, Exit) and a Reset mod settings checkbox,
+	// `Manage mods` reaching a Mods screen with no Mod settings button whose
+	// Back returns to the same dialog, and the one route out being Reset mod
+	// settings TOGETHER WITH Disable listed mods, which costs every startup
+	// preference in the file and leaves the mod off -- six steps, then
+	// re-enable and restart (agents/migration-assessment.md:93-108). An empty
+	// research unit is a FREE research rather than a stuck one, measured in
+	// play on 2.0.77. So the technology is emitted with an empty unit, the
+	// load completes, one ERROR line names every rung the walk asked the game
+	// about, and the technology's own tooltip says the research takes no
+	// science pack at all -- above this mod's own locale description rather
+	// than over the top of it.
+	// [TestAReachedFallbackWithNoPackInTheGameIsEmittedFreeAndDisclosed] pins
+	// all of it word for word. A FREE RESEARCH IS STILL A BALANCE CHANGE THIS
+	// MOD DID NOT CHOOSE; what is better is that it is disclosed rather than
+	// that it is good, and the block above about the missing `Fallbacks` rung
+	// is where the answer to it would go.
 	//
 	// `max_level` TRAVELS WITH THE UNIT. It lives on the TECHNOLOGY rather than
 	// in the unit, and `CostBy` copies the source's, where the hand-rolled

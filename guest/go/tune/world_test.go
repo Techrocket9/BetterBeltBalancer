@@ -222,8 +222,8 @@ func (w fixtureWorld) RecipeExists(name string) bool { return has(w.recipes, nam
 // of a chosen tier's own unit, and every name a player types into
 // `better-belt-balancer-tech-packs`. All three ask this and not
 // [fixtureWorld.ItemExists], which is what
-// [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndThenRefused] pins from the
-// outside.
+// [TestAPackTheGameHasOnlyAsAnItemIsDroppedAndTheResearchIsEmittedFree] pins
+// from the outside.
 func (w fixtureWorld) ToolExists(name string) bool { return has(w.tools, name) }
 
 // FluidExists is asked only about a name a PLAYER typed into
