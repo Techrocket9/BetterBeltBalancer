@@ -200,7 +200,7 @@ FKRECIPES_SRC := $(shell find ../FkRecipes/go -name '*.go' -not -name '*_test.go
 DATA_GUEST_SRC := $(shell find guest/go/data guest/go/engine guest/go/skin guest/go/tune -name '*.go' -not -name '*_test.go') guest/go/go.mod $(FKRECIPES_SRC)
 DATA_SRC  := $(shell find mod-data -type f)
 
-.PHONY: all guest mod zip install test check datastage-check clean graphics observers bench-setup
+.PHONY: all guest mod zip install test check datastage-check clean graphics observers bench-setup player-fixture
 
 all: mod
 
@@ -568,17 +568,41 @@ OBS_FOREIGN_DIR := $(OBS_DIST)/bbb-mig-foreign_0.1.0
 # setup mod, and `bench/run.sh` stages it. `make observers` builds it all the
 # same, so that target still means "everything the estate compiles".
 OBS_BENCH_DIR   := $(OBS_DIST)/bbb-bench-setup_0.1.0
+# THE SECOND PACKAGE `test/run.sh` NEVER STAGES, and the only one here that is
+# not a test mod at all: it is the FIXTURE CUTTER that `make player-fixture`
+# runs over a save a graphical client made. Its product is a file in
+# test/fixtures-player/, and the `curs` suite loads that file rather than this
+# package.
+OBS_FIXPLAYER_DIR := $(OBS_DIST)/bbb-fixplayer_0.1.0
+OBS_CURS_DIR      := $(OBS_DIST)/bbb-curs-test_0.1.0
 
 observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR) $(OBS_MAR_DIR) $(OBS_MIG21_DIR) \
            $(OBS_QUAL_DIR) $(OBS_MIX_DIR) $(OBS_PLAT_DIR) $(OBS_MIG_DIR) \
-           $(OBS_FLIP_DIR) $(OBS_CURV_DIR) \
+           $(OBS_FLIP_DIR) $(OBS_CURV_DIR) $(OBS_CURS_DIR) \
            $(OBS_M2_DIR) $(OBS_M3_DIR) $(OBS_EDGE_DIR) $(OBS_IACT_DIR) \
-           $(OBS_BB2_DIR) $(OBS_FOREIGN_DIR) $(OBS_BENCH_DIR)
+           $(OBS_BB2_DIR) $(OBS_FOREIGN_DIR) $(OBS_BENCH_DIR) \
+           $(OBS_FIXPLAYER_DIR)
 
 # `bench/run.sh` builds THIS ONE TARGET rather than `observers`, for the reason
 # `interactive-install` names one package rather than all fourteen: a benchmark
 # cell must not relink the estate, and a matrix run is dozens of cells.
 bench-setup: $(OBS_BENCH_DIR)
+
+# THE FIXTURE THE `curs` SUITE LOADS, cut from a save a graphical client made.
+#
+# It is a target rather than a committed one-off because the fixture is
+# REGENERABLE: any client save will do, the script says which engine recorded the
+# one it produces, and the product replaces test/fixtures-player/'s file. Run it
+# when a Factorio series changes under the estate, or when the committed one has
+# to be re-cut for any other reason.
+#
+#   make player-fixture SAVE="$$HOME/Library/Application Support/factorio/saves/my.zip"
+#
+# The source save is copied before anything touches it and the user's own
+# directories are read-only to the script; test/make-player-fixture.sh is the
+# long form.
+player-fixture: $(OBS_FIXPLAYER_DIR)
+	FACTORIO_BIN="$(FACTORIO_BIN)" SAVE="$(SAVE)" test/make-player-fixture.sh
 
 $(OBS_M1_DIR): $(DIST)/obs-m1.wasm Makefile
 	@mkdir -p $(OBS_DIST)
@@ -896,6 +920,48 @@ $(OBS_FOREIGN_DIR): $(DIST)/obs-foreigndata.wasm $(shell find test/obs-data/bbb-
 	  --title "A stranger who owns the name" \
 	  --description "The mig suite's NEGATIVE: a mod that is not any fork of the incumbent and that defines \`balancer-part\` anyway. Nothing of this mod's may ever be converted, and the guard that says so is the bbb-legacy-stub marker prototype, which this mod's presence stops the data stage defining." \
 	  --dependency "base >= 2.1.0" \
+	  -o .
+
+# THE CURSOR SUITE. It loads a committed fixture that has a PLAYER in it and
+# drives, from that player's cursor, every gesture CLAUDE.md used to call
+# interactive-only. `better-belt-balancer` is a hard dependency rather than a
+# mod-list entry alone: this observer places the mod's own part, mines its
+# clusters and reads its log lines, and there is nothing for it to do in a game
+# without it.
+$(OBS_CURS_DIR): $(DIST)/obs-curs.wasm $(DIST)/obs-cursdata.wasm Makefile
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-curs.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-cursdata.wasm) \
+	  --name bbb-curs-test --version 0.1.0 \
+	  --title "BBB player-cursor verification" \
+	  --description "Drives the gestures that need a player -- a fast replace from the cursor, the miner's pocket, the refusal hand-backs -- against a committed save that has one. Asserts nothing itself." \
+	  --dependency "base >= 2.0.0" --dependency "better-belt-balancer" \
+	  -o .
+
+# THE FIXTURE CUTTER. No `better-belt-balancer` dependency and no data stage: it
+# runs over a save a graphical client made, whose mod set is whatever that player
+# had, and all it does to that world is empty it.
+#
+# --persist=none, WHICH IS THE ONE PACKAGE HERE THAT KEEPS NO HEAP AT ALL, and it
+# is a correctness matter rather than a saving. This guest runs a SCHEDULE keyed
+# off the first tick it sees, and `make player-fixture` runs it TWICE over the
+# same world -- the second pass loading the save the first one wrote. Under
+# `packed` the second pass adopts the first's heap, `start` comes back holding
+# the first pass's tick, every step of the schedule is already behind it, and the
+# run does nothing but log its last line: measured, pass 2 wrote no save at all.
+# A one-shot cutter has no state worth carrying across a save, so it carries
+# none.
+$(OBS_FIXPLAYER_DIR): $(DIST)/obs-fixplayer.wasm Makefile
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-fixplayer.wasm) \
+	  --persist=none --gc=leaking --api=$(MOD_API) \
+	  --factorio-version $(MOD_SERIES) --author BetterBeltBalancer \
+	  --name bbb-fixplayer --version 0.1.0 \
+	  --title "BBB player-fixture cutter" \
+	  --description "Reduces a save a Factorio client made to one player on a small nauvis and writes it back, so that test/fixtures-player/ can hold a committable save with a player in it. Run by \`make player-fixture\` and by nothing else." \
+	  --dependency "base >= 2.0.0" \
 	  -o .
 
 # --- housekeeping ------------------------------------------------------------
