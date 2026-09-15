@@ -133,7 +133,7 @@ const (
 // one is always at a part a player is pointing at, limit.go's is at a piece they
 // just built.
 var (
-	prioMsg  [2]fkapi.Value
+	prioMsg  [3]fkapi.Value
 	prioPos  fkapi.MapPosition
 	prioText fkapi.LuaPlayerCreateLocalFlyingTextArgs
 	// The amber the priority badge on the sprite is drawn in
@@ -171,7 +171,12 @@ func init() {
 	fkapi.Subscribe(fkapi.EventOnEntitySettingsPasted)
 
 	prioMsg[0] = fkapi.OfString(msgPrioOn)
+	// Both number slots, because only the numbers move afterwards: a caller
+	// writes `.Number` and never the tag, so a slot left at its zero value
+	// would cross as whatever Tag 0 is rather than as a number. The second is
+	// the port cap's, which is the one sentence here that takes two.
 	prioMsg[1] = fkapi.OfNumber(0)
+	prioMsg[2] = fkapi.OfNumber(0)
 	prioText.Position = &prioPos
 	prioText.Color = &prioColor
 }
@@ -663,12 +668,30 @@ func tellPriorityToggled(k key, on bool, player uint32) {
 // for the reason limit.go's messages do: the 2026-08-05 field report was about a
 // sentence that narrated a transaction the player never saw.
 //
+// THE PORT CAP IS NAMED FIRST, the way refuseShape names it on the build side.
+// `ShapeEdges` refuses a cluster past sixty-four belts before it looks at a flag
+// at all, so a toggle on one of those arrives here -- and a player told their
+// balancer is too big for a priority port, when the truth is that it is too big
+// for this mod, takes the flag off and is refused again for a reason nobody
+// mentioned. It is the one bound here whose remedy is a belt rather than a flag.
+//
 // An input priority takes no number with it. Where the bound falls for a SIZE is
 // something a player can act on; that this version does not build an input
 // priority at all is true at every size, and a number beside it would suggest a
 // smaller balancer were the way out.
 func tellPriorityRefused(k key, pt plan.Ports, player uint32) {
 	if player == 0 {
+		return
+	}
+	if pt.P > plan.MaxPorts {
+		side := pt.N
+		if pt.M > side {
+			side = pt.M
+		}
+		prioMsg[0] = fkapi.OfString(msgOverLimit)
+		prioMsg[1].Number = float64(plan.MaxPorts)
+		prioMsg[2].Number = float64(side)
+		flyRefusal(k, prioMsg[:3], player)
 		return
 	}
 	if pt.QIn > 0 {
@@ -747,8 +770,10 @@ func logPriorityToggle(k key, on bool) {
 }
 
 // logPriorityRefused is the toggle's own refusal, and it ends in the reason so
-// that the two are one line apart for a suite to key on: a shape that does not
-// fit is about the machine's size and an input priority is about this version.
+// that a suite can key on it: the port cap is about the belts on the machine, a
+// shape that does not fit is about the room a priority network needs, and an
+// input priority is about this version. The order is refuseShape's -- the cap
+// first, because it is the only one of the three a flag cannot fix.
 //
 // `alert:` and not `error:` for the reason limit.go gives: a player asking for a
 // balancer the mod does not build is an expected condition with a defined
@@ -763,9 +788,13 @@ func logPriorityRefused(root uint32, k key, pt plan.Ports) {
 	logS(" priority inputs and ")
 	logU(uint32(pt.QOut))
 	logS(" priority outputs ")
-	if pt.QIn > 0 {
+	switch {
+	case pt.P > plan.MaxPorts:
+		logS("is over the port limit of ")
+		logU(plan.MaxPorts)
+	case pt.QIn > 0:
 		logS("is a priority input, which this version does not build")
-	} else {
+	default:
 		logS("does not fit")
 	}
 	logS("; the flag was not set")

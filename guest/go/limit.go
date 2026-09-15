@@ -417,13 +417,24 @@ func refuseAdmit(root uint32, fp uint64) int {
 // a priority INPUT, which is refused at every size because the construction for
 // it is not built (agents/priority.md, "What input priority does").
 //
-// A refusal whose Ports carries a PRIORITY PORT is the priority one, and
-// refusePriority then picks between the last two. That is the right way round
-// even though a cluster can break more than one bound at once: past sixty-four
-// belts the machine is too big however it is wired, but a player who has just
-// flagged a port and been refused wants to hear about the port they flagged, and
-// taking the flag off is the fix that works in every case.
+// THE PORT CAP IS NAMED FIRST, whatever is flagged, and this used to dispatch on
+// the flag instead. A cluster can break more than one bound at once, and a
+// sixty-five-belt balancer with a flag on it told about its priority port is
+// told something it cannot act on: taking the flag off leaves it sixty-five
+// belts and refused, and it hears about the cap only once the flag is gone. The
+// port cap is the one bound that is true however the machine is wired and it is
+// the one whose remedy is a belt, so it goes first; the same order compile()
+// already asks its two checks in, and the same one `setPartPriority` says at
+// toggle time.
+//
+// Among the priority bounds refusePriority picks, and there a priority INPUT
+// wins over a size, because taking the flag off is the fix in either case and it
+// is the flag the player last touched.
 func refuseShape(root uint32, fp uint64, pt plan.Ports, tiles []key, force uint32) {
+	if pt.P > plan.MaxPorts {
+		refuseOverLimit(root, fp, pt, tiles, force)
+		return
+	}
 	if pt.QIn+pt.QOut > 0 {
 		refusePriority(root, fp, pt, tiles, force)
 		return

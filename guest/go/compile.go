@@ -1135,8 +1135,25 @@ func compile(root uint32) bool {
 		logU(root)
 		logS(" needs ")
 		logU(uint32(pt.P))
-		logS(" ports, over the limit of ")
-		logU(plan.MaxPorts)
+		logS(" ports")
+		// NAMING THE BOUND THAT FIRED, because there are three of them behind
+		// `fits` since the priority pass and this line said "over the limit of
+		// 64" for all of them. A cracked mirror is worth reading, and a
+		// backstop that misreports which half cracked is worth less than one
+		// that says nothing.
+		switch {
+		case pt.P > plan.MaxPorts:
+			logS(", over the limit of ")
+			logU(plan.MaxPorts)
+		case pt.QIn > 0:
+			logS(" with ")
+			logU(uint32(pt.QIn))
+			logS(" priority inputs, which this version does not build")
+		default:
+			logS(" with ")
+			logU(uint32(pt.QOut))
+			logS(" priority outputs, which does not fit the slot")
+		}
 		logS("; not compiled, and the early refusal did not catch it")
 		logEnd()
 		releaseSlot(slot)

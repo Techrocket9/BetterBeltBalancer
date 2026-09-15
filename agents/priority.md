@@ -131,7 +131,7 @@ So **a priority port is refused at P = 64 and allowed at every size under it**, 
 
 **Ticking EVERY output is the plain balancer**, and `ShapeEdges` reports it as `QOut = 0`. Two tiers where the second is empty is one tier, and one tier is the network this mod already builds -- so a player who ticks all 64 outputs of a 64-port balancer gets a network rather than a refusal, and gets the plain one to the byte. The same collapse applies to the inputs.
 
-The port cap still comes first: a cluster past `MaxPorts` is refused as over the port limit whether or not anything is ticked.
+The port cap comes first: a cluster past `MaxPorts` is refused as over the port limit whether or not anything is ticked, and that is true of the sentence a TOGGLE gets as well as of the one a build gets. It is the only one of the three bounds a flag cannot fix, so naming a priority bound instead would send the player to take a flag off and leave them refused for a reason nobody mentioned.
 
 ## What it costs
 
@@ -273,14 +273,16 @@ The settings paste takes the flag from the REGISTRY and not from the pasted vari
 
 `plan.ShapeEdges` answers one question, can this be built, and three bounds sit behind it; the fourth is the guest's own and is about the moment rather than the shape. Each has one sentence for a player and one log line.
 
+The order is the port cap, then a priority input, then a size, and it is the same order on both sides.
+
 | | when | toggle | build |
 |---|---|---|---|
-| **over the port limit** | more than `MaxPorts` belts, whatever is flagged | unreachable: a flag cannot add a belt | `over-port-limit` |
+| **over the port limit** | more than `MaxPorts` belts, whatever is flagged | `over-port-limit`, for a flag going ON; a flag coming off is allowed through | `over-port-limit` |
 | **too big for a priority port** | the priority construction does not fit the slot, which is P = 64 | `priority-refused` | `priority-too-big` |
 | **a priority input** | `QIn > 0` after the collapse, at any size | `priority-input-refused` | `priority-input` |
 | **too full to shrink** | the successor could take back less than the balancer is carrying | `priority-holding` | unreachable: a build cannot make a standing network smaller |
 
-Each build row has a second key with `-unconnected` on it, for the robot or script build that leaves the piece standing rather than handing it back, and `refuseShape` (`limit.go`) is the one place a refused `Ports` chooses. A shape carrying a priority port takes a priority sentence; among those, a priority INPUT wins over a size. A cluster can break more than one bound at once, and taking the flag off is the fix in every case.
+Each build row has a second key with `-unconnected` on it, for the robot or script build that leaves the piece standing rather than handing it back, and `refuseShape` (`limit.go`) is the one place a refused `Ports` chooses. A cluster can break more than one bound at once. The port cap is named first because it is the only one taking a flag off does not fix; among the priority bounds a priority INPUT wins over a size, because there taking the flag off is the fix either way and it is the flag the player last touched.
 
 **A TOGGLE IS REFUSED BEFORE THE FLAG MOVES.** `ShapeEdges` is asked with the flag speculatively flipped, so a shape the compiler could not build leaves the flag, the network and the items exactly as they were. Refusing after the flip would save the network too -- the check is in front of the teardown -- and would leave the cluster standing refused until the player guessed to toggle back.
 

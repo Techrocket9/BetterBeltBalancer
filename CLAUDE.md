@@ -2897,12 +2897,14 @@ so the engine wraps modulo the count and there is no way to store a byte it will
 
 | | when it fires | the toggle's key | the build's |
 |---|---|---|---|
-| over the port limit | more than `plan.MaxPorts` belts, whatever is flagged | unreachable: a flag cannot add a belt | `over-port-limit` |
+| over the port limit | more than `plan.MaxPorts` belts, whatever is flagged | `over-port-limit`, for a flag going ON | `over-port-limit` |
 | too big for a priority port | the construction does not fit the slot, which is P = 64 | `priority-refused` | `priority-too-big` |
 | a priority input | `QIn > 0` after the collapse, at ANY size | `priority-input-refused` | `priority-input` |
 | too full to shrink | the successor holds fewer positions than the balancer is carrying | `priority-holding` | unreachable: a build cannot make a standing network smaller |
 
-Each build key has a second with `-unconnected` on it, for the robot or script build that leaves the piece standing rather than handing it back, and `tellRefusal`'s hand-back line names the bound that fired for both. A shape carrying a priority port takes a priority sentence; among those a priority INPUT wins over a size, because a cluster can break more than one bound at once and taking the flag off is the fix in every case.
+Each build key has a second with `-unconnected` on it, for the robot or script build that leaves the piece standing rather than handing it back, and `tellRefusal`'s hand-back line names the bound that fired for both.
+
+**THE PORT CAP IS NAMED FIRST ON BOTH SIDES**, which `refuseShape` had the other way round: it dispatched on the flag, so a sixty-five-belt balancer with one flagged port was told about the priority port, and a player who took the flag off was refused again for a reason nobody had mentioned. A cluster can break more than one bound at once and the cap is the only one taking a flag off does not fix. Among the priority bounds a priority INPUT wins over a size, because there taking the flag off is the fix either way and it is the flag the player last touched.
 
 **A TOGGLE IS REFUSED BEFORE THE FLAG MOVES.** `ShapeEdges` is asked with the flag speculatively flipped, so a shape the compiler could not build leaves the flag, the network and the items exactly as they were. Refusing after the flip would save the network too -- the check is in front of the teardown -- and would leave the cluster standing refused until the player guessed to toggle back, which is a worse answer to the same question.
 
