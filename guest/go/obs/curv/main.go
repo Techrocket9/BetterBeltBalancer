@@ -63,6 +63,15 @@
 // plus `ctrl`, a bare express belt from the same kind of source to the same
 // kind of sink, which is the yardstick every rate here is read against.
 //
+// AND THE BAND, which is forty more of A's shape laid only to be COUNTED. The
+// checklist the load hands a player is one `[gps=...]` per affected balancer
+// built into a chat line, and about thirty-five of them fill one; every suite in
+// the estate had at most seven, so no run had ever produced a second line -- and
+// until 2026-09-15 there was no second line to produce, the list being cut at
+// what fitted while the sentence above it went on naming every balancer (mod
+// portal report). Forty-seven affected balancers is what makes `pings ==
+// balancers` a real assertion. Nothing in the band is fed, drained or timed.
+//
 // NOTHING HERE ASSERTS. What is measured is the mod's own log and the chests,
 // and this observer reports them.
 package main
@@ -107,11 +116,13 @@ func init() {
 }
 
 func flat() fkapi.LuaSurface {
+	// Wide and tall enough for the band below `ctrl`: 256 is -128..128 and the
+	// band's last row is at y=142.
 	return harness.Flat{
-		Name: surf, MapWidth: 256, MapHeight: 256,
+		Name: surf, MapWidth: 512, MapHeight: 512,
 		ChunkCenter: fkapi.MapPosition{X: 0, Y: 32},
-		ChunkRadius: 4,
-		X0:          -10, Y0: -4, X1: 12, Y1: 62,
+		ChunkRadius: 5,
+		X0:          -45, Y0: -4, X1: 45, Y1: 175,
 		Tile: "grass-1",
 	}.Make()
 }
@@ -200,6 +211,30 @@ func ctrl(s fkapi.LuaSurface, base int) {
 	sink(s, surf, "ctrl", 5, base)
 }
 
+// THE BAND: how many, and where each one goes. Five columns twenty tiles apart
+// and rows six apart, which leaves every rig's own three tiles clear of its
+// neighbours and -- what the curve rule actually needs -- leaves the two tiles
+// `curvesFromCluster` probes empty: the head's REAR, one west of it, and the
+// tile beyond it on the far side.
+const bandN = 40
+
+func bandXY(i int) (int, int) { return -40 + (i%5)*20, 100 + (i/5)*6 }
+
+// band lays one rig: a 1 -> 1 with an edgeless spare part under its input, fed
+// and drained by one belt each so that it really compiles a network and is
+// really adopted. No source, no sink and no chest -- what it is for is one more
+// row on the checklist.
+func band(s fkapi.LuaSurface) {
+	for i := 0; i < bandN; i++ {
+		ox, oy := bandXY(i)
+		put(s, part, ox, oy, nil, "")
+		put(s, part, ox+1, oy, nil, "")
+		put(s, part, ox, oy+1, nil, "")
+		put(s, belt, ox-1, oy, &dirE, "")
+		put(s, belt, ox+2, oy, &dirE, "")
+	}
+}
+
 const (
 	baseA    = 0
 	baseB    = 8
@@ -251,6 +286,7 @@ func spines(s, b fkapi.LuaSurface) {
 	rigForce = harness.PlayerForce
 
 	ctrl(s, baseCtrl)
+	band(s)
 
 	// H, A's shape on a second surface.
 	spine(b, surfB, "H-main", baseH)
@@ -286,6 +322,14 @@ func curves(s, b fkapi.LuaSurface) {
 	silent(s, belt, 1, baseF-1, &dirS)
 	beltsX(s, 2, 5, baseF+1, false)
 	sink(s, surf, "F-curve", 6, baseF+1)
+
+	// The band's curve belts: one each, on the spare part's south face. One belt
+	// is the whole classification -- the rest of A's line is there to carry items
+	// to a chest, and nothing here counts items.
+	for i := 0; i < bandN; i++ {
+		ox, oy := bandXY(i)
+		silent(s, belt, ox, oy+2, &dirE)
+	}
 
 	rigForce = forceB
 	beltsX(s, 0, 4, baseG+2, false)
@@ -455,7 +499,9 @@ func report(tag string) {
 		out.Open("chest t=").S(tag).S(" ").S(chestName[i]).S(" n=").I(n).End()
 	}
 	ground, stacks := int64(0), int64(0)
-	for _, o := range harness.EntitiesInOfType(s, harness.Box(-12, -6, 14, 64), "item-entity") {
+	// The box covers the band as well as the named rigs: a spill out there would
+	// otherwise be counted nowhere and the total would stop being conserved.
+	for _, o := range harness.EntitiesInOfType(s, harness.Box(-45, -6, 45, 150), "item-entity") {
 		if _, c, ok := harness.GroundStack(o); ok {
 			ground += c
 			stacks++

@@ -59,6 +59,12 @@ TOLD = re.compile(
 )
 CHARTED = re.compile(r"charted (\d+)")
 PING = re.compile(r"first \[gps=(-?\d+),(-?\d+),(\S+?)\]")
+# HOW MANY CHAT LINES THE CHECKLIST TOOK. Written only when it took more than
+# one, so a message that fits is byte for byte the line it has always been.
+LINES = re.compile(r" in (\d+) lines")
+# ...and the one ping a message may still lose: a cluster whose surface name
+# could not be read. Every surface in this world resolves, so it must not appear.
+TRUNCATED = re.compile(r"\(list truncated\)")
 # Any line at all from the pass, for the two negatives.
 ANY_CURVE = re.compile(r"\[BBB\] (?:alert: )?curved exits:")
 # THE FLIP HANDLER'S OWN LINE, which must not appear at all. The write this pass
@@ -95,19 +101,24 @@ SEEDED = re.compile(r"\[BBB-CURV\] seeded (\d+) items")
 # THE WORLD, WRITTEN DOWN HERE RATHER THAN READ OFF THE GUEST. `mar`'s own red
 # proof is why: an injected defect that halved a rig passed every assertion the
 # suite had, because every number it checked came from the same classification
-# it had broken. Eight clusters over twenty parts, on two surfaces and two
+# it had broken. Eight named clusters over twenty parts, on two surfaces and two
 # forces: A and G are three parts (a 1 -> 1 and the edgeless spare the curve
 # belt stands against), F is three (a 2 -> 1 whose middle part is edgeless), H
 # is three on the second surface, and B, C, D and E are two each.
-CLUSTERS, PARTS = 8, 20
+#
+# Plus the BAND: forty more of A's shape at three parts each, on the player
+# force, laid so that one force's checklist is longer than a chat line holds.
+BAND = 40
+CLUSTERS, PARTS = 8 + BAND, 20 + 3 * BAND
 
-# Every rig with a belt across one of its faces: A, B, D, E, F, G, H. C has none
-# and must be read the same way whatever happens to the others.
-LEGACY = 7
+# Every rig with a belt across one of its faces: A, B, D, E, F, G, H and all
+# forty of the band. C has none and must be read the same way whatever happens
+# to the others.
+LEGACY = 7 + BAND
 # ...split by owning force. G is the second force's and everything else is the
 # player's. The values are what each force is told about; the KEYS are not, and
 # are not asserted -- a force INDEX is the engine's to hand out.
-LEGACY_PER_FORCE = [6, 1]
+LEGACY_PER_FORCE = [6 + BAND, 1]
 
 # WHAT THE WORLD ITSELF CHANGED, AND ONLY THAT. Five of the eight clusters are
 # exactly as the old rule compiled them and must be adopted whole. Three are not,
@@ -119,17 +130,17 @@ LEGACY_PER_FORCE = [6, 1]
 # So three rebuilds, and the two of them that HAD a network pay a teardown: E's
 # successor is input-only and cannot take its items back, so those spill; F's is
 # a working 2 -> 1 and takes them.
-WANT_ADOPTED, WANT_REBUILT = 5, 3
+WANT_ADOPTED, WANT_REBUILT = 5 + BAND, 3
 WANT_TEARDOWNS, WANT_SPILLS = 2, 1
 
 # The final audit. `nets` is short of `clusters` by D and E, which end the run
 # with an input and no output -- a legitimate half-built state that is never
 # counted `unbuilt`, which is exactly why it is written down beside it.
-FINAL_AUDIT = (CLUSTERS, PARTS, 6, 0, 0, 0)
+FINAL_AUDIT = (CLUSTERS, PARTS, 6 + BAND, 0, 0, 0)
 # ...and at create, where the audit reports the registry as its own dispatch
 # finds it and that dispatch is what compiles: everything but D is still to be
 # built when it looks.
-CREATE_AUDIT = (CLUSTERS, PARTS, 0, 0, 7, 0)
+CREATE_AUDIT = (CLUSTERS, PARTS, 0, 0, 7 + BAND, 0)
 
 # What a balancer delivers against a bare express belt fed the same way. The M2
 # suite records 0.998x for a 1 -> 1; the bound is loose on purpose, because a
@@ -307,13 +318,20 @@ def kept_leg(leg, run, adopted, rebuilt, fail):
             fail.append("the guest kept the old reading for %s balancers and the "
                         "rigs build %d with a belt across a face"
                         % (kept[0].group(1), LEGACY))
-        per = []
+        per, chunked = [], 0
         for m in told:
             f, n, pings, tail = m.groups()
             ch, gps = CHARTED.search(tail), PING.search(tail)
-            print("  told force %s about %s balancers, %s pings, %s, charted %s"
-                  % (f, n, pings, gps.group(0) if gps else "no ping",
+            ln = LINES.search(tail)
+            nlines = int(ln.group(1)) if ln else 1
+            print("  told force %s about %s balancers, %s pings in %d chat "
+                  "line(s), %s, charted %s"
+                  % (f, n, pings, nlines, gps.group(0) if gps else "no ping",
                      ch.group(1) if ch else "?"))
+            if TRUNCATED.search(tail):
+                fail.append("force %s's ping list was truncated. The only ping a "
+                            "message may lose is one whose surface name could not "
+                            "be read, and both surfaces here resolve" % f)
             if n != pings or not gps:
                 fail.append("force %s was told about %s balancers with %s pings: "
                             "a checklist that names a machine and does not point "
@@ -323,7 +341,19 @@ def kept_leg(leg, run, adopted, rebuilt, fail):
                 fail.append("%s balancers were charted and %s were pinged; a "
                             "[gps=] at uncharted ground opens on black"
                             % (ch.group(1) if ch else "no", pings))
+            if nlines > 1:
+                chunked += 1
             per.append(int(n))
+        # THE ANTI-VACUITY, and it is what the band is for. `pings == balancers`
+        # above is satisfied by any list short enough to have fitted, which is
+        # every suite in the estate before this one: a checklist of forty-six
+        # cannot be built into one chat line, so a run in which none of them took
+        # more than one is a run in which the band did not land, and the
+        # assertion above was never asked the question it exists to ask.
+        if told and not chunked:
+            fail.append("every checklist fitted in one chat line, and the band "
+                        "puts %d balancers on the player force's. Either the band "
+                        "is not in the world or the list was cut" % LEGACY_PER_FORCE[0])
         # THE ORDER IS ASSERTED AND NOT SORTED AWAY. Which force is told first,
         # and which of its balancers the ping list names, come out of the
         # rebuild's own cluster order -- and that order reaches every client, so
