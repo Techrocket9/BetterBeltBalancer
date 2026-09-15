@@ -18,7 +18,7 @@ import (
 // offered once it saturates.
 //
 // Simulate is a model of a splitter and not a splitter; the in-game suite is
-// what says the engine agrees. flow.go's header is the long form.
+// what says the engine agrees. flowmodel_test.go's header is the long form.
 
 // prioEdges is edges() with the first q output edges ticked.
 func prioEdges(n, m, q int) []Edge {
