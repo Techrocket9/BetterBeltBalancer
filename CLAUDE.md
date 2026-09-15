@@ -1882,7 +1882,7 @@ The thirteenth suite, and **the only one that is not about this mod's behaviour 
 
 The one thing god mode changes is `build_distance`, which is unbounded there and 10 for a character. The observer TELEPORTS the player next to every target anyway: the reach is not what is under test, and a rig that only worked from across the map would be one a person could not reproduce.
 
-**Nine clusters over 156 parts, one `--benchmark` of 1,800 ticks, 3.35 s.** Measured 2026-09-14 on Factorio 2.0.77, base only, over the `release/2.0` arm with the belt-restore fix applied:
+**Eleven clusters over 168 parts, one `--benchmark` of 1,800 ticks.** Measured 2026-09-14 on Factorio 2.0.77, base only, over the `release/2.0` arm with the belt-restore fix applied; the run was 3.35 s and nine clusters over 156 parts until bands (h) and (i) arrived on 2026-09-15, which cost **+2 clusters and +12 parts on every audit tuple and moved nothing else**:
 
 | gesture | rig | what came out |
 |---|---|---|
@@ -1897,7 +1897,21 @@ The one thing god mode changes is `build_distance`, which is unbounded there and
 | **(d) bmin** | an output belt laid by cursor on a running balancer's spare part, then mined | P 4 -> 2, `offered 128 items to player 1 before the floor` and `pocketed 128`, all of it into the inventory, **0 on the ground** |
 | **(d) pock** | a saturated 2->2 plus a spare part, taken apart ONE PART PER TICK | five mines, `offered` **18, 28, 26** over the three shrinks that overflow, all 72 pocketed, five parts to the player, **0 on the ground** |
 
-**NOTHING REACHES THE GROUND IN THE WHOLE RUN, and that is the headline rather than a formality.** Every removal here was made by a player, so everything a machine could not take back is offered to that player first -- where the `edge` suite's twin of the `bmin` leg puts 124 of the same 128 items on the floor, because a headless `--create` has nobody to offer them to. `assert-curs.py` fails on a non-zero `ground=` at any sample.
+**AND SINCE 2026-09-15 TWO BANDS ABOUT THE CURVED EXIT**, which are the mod portal report "Belt corners on exit" made as gestures and the linked-belt probe's red proof. Both rigs are a DEAD-ENDED 2->2 over four parts with a spare EDGELESS row above it whose north faces are the gesture row, which is the `bmin` idiom and is forced: under the one-belt-per-part rule the four working parts have no free face between them. They report on a `curve tag=` line of their own rather than through `sample`, because (h3) spills on purpose:
+
+| gesture | what came out |
+|---|---|
+| **(h1)** one belt clicked onto a free face | **grabbed**: `compiled cluster 157 2->3 over 4 ports, 27 entities`, the engine reading the belt `right`, an interface on the part below it, and **7 plates on the player's line** 130 ticks later |
+| **(h2)** a line laid from three tiles out, one belt per click across BOTH free faces | **never grabbed**: no interface at any of eight samples, **0 items** on the line, and not one compile in the window |
+| **(h3)** a belt laid BEHIND the grabbed one | **released**: `compiled cluster 157 2->2 over 2 ports, 11 entities` and `spilled 127 items beside cluster 157` |
+| **(i)** the same face belt with a `bbb-linked-belt` output end connected and pointing into its rear | **never grabbed**, no compile at all |
+| **(i)** the engine control, no balancer within ten tiles | `linked-rear shape=straight`, `empty-rear shape=right` |
+
+**The engine control is band (i)'s anti-vacuity and it is doing real work**: without it a rig that was simply not curve-eligible would satisfy every `false` above. The 127 items are the third band's own: releasing a port halves the butterfly (P 4 -> 2) on a machine that has been full for 130 ticks, so what will not fit reaches the ground. **That is the one window in this suite where the mod may spill**, named by line index the way `edge` names its four rather than the check being weakened.
+
+**RED-PROVEN by putting `beltTypes` back on `findAnyByPos`**, which is the probe's own six-type list: **three assertions, all of them band (i)'s, and every band (h) number byte-identical to the green run** -- `band (i): the face belt was grabbed at lb-2 ... with a linked belt OUTPUT end feeding its rear`, the same at `lb-10`, and `band (i) recompiled the balancer: [('163', '2', '3', '4', '27')]`. The grabbed belt reads `shape=straight` in that run, which is the defect in one word: an interface under a belt the engine will not curve is a side-load.
+
+**NOTHING REACHES THE GROUND IN THE WHOLE RUN OUTSIDE THAT ONE WINDOW, and that is the headline rather than a formality.** Every removal here was made by a player, so everything a machine could not take back is offered to that player first -- where the `edge` suite's twin of the `bmin` leg puts 124 of the same 128 items on the floor, because a headless `--create` has nobody to offer them to. `assert-curs.py` fails on a non-zero `ground=` at any sample.
 
 **THE FULL-INVENTORY NEGATIVE NEEDED TWO THINGS AND THE FIRST RUN HAD ONLY ONE.** Factorio REFILLS AN EMPTIED CURSOR FROM THE MAIN INVENTORY: place the last belt from a cursor while the inventory holds more, and the engine moves them into the cursor -- which FREES the slot they were in and gives the hand-back somewhere to land. Measured: main went two belts to zero across the click and the refused piece came back into main anyway, on an inventory that was otherwise full. The order is empty, hold ONE, fill, click. And `is_full` is not the signal either: an inventory whose eighty slots were all occupied answered false, because a partly-filled stack still has room in it. What the gesture needs is that one more steel chest cannot be inserted, and that is what the observer reports.
 
@@ -2513,7 +2527,7 @@ In `classifySide`'s `transport-belt` case alone, because nothing else curves: an
 | | |
 |---|---|
 | 1, 2 | **neither tile is a registered part tile of ANY cluster.** Not an optimisation: the edge query filters on the six belt-connectable type names, which deliberately omit linked-belt, so a foreign cluster's own output interface standing on its own tile is INVISIBLE to tests 3 and 4 and the registry is the only thing that can see it |
-| 3, 4 | **nothing standing on either tile points into B.** `classifySide`'s own reading asked at the probe tile, so an underground's input end, a loader's input type and a belt facing away all correctly fail to count, with no second list of types to keep in step |
+| 3, 4 | **nothing standing on either tile points into B.** `classifySide`'s own reading asked at the probe tile, so an underground's input end, a loader's input type and a belt facing away all correctly fail to count, with no second list of types to keep in step -- **plus a LINKED BELT since 0.3.4**, which is the one type the probe knows and the edge query must not: its output end feeds and its input end does not, both measured. See the 2026-09-15 subsection |
 
 **A SIDE-LOADED EXIT IS EXCLUDED ON PURPOSE and it is the one shape a player might expect and not get.** A belt whose rear is fed shares itself between two sources, so our port would deliver half a lane -- and a half-lane port backs the butterfly up, which breaks the exact balance this mod exists for. A belt that merely STARTS beside the machine is accepted, and that is vanilla's own splitter semantics: a splitter feeds the head of a line.
 
@@ -2561,6 +2575,36 @@ Both packages from `make clean`, 2026-09-07, shipped config (`--persist=packed -
 | events subscribed / defines read | 24 / 4 | 24 / 4 | unmoved |
 
 **The data guest is byte-identical and that is the shape of the whole change**: this is a runtime classification and the load path is not touched. **Net ONE member**, and the arithmetic is worth the line: `LuaEntity::type` gains its PREDICATE form (`type_is`) beside the string read `classifySide` still uses, while `belt_to_ground_type` and `loader_type` SWAP for theirs one for one. `find_entities_filtered` adds nothing at all -- the buffer form and the allocating one are the same member id, and only the guest-side wrapper differs.
+
+### "Belt corners on exit", 2026-09-15 -- the rule is unchanged and here is the measurement
+
+**A second report from Gamer433, who asked for the feature: "You have to be very careful not to place a straight belt adjacent to the balancer, as it immediately curves it."** The mod's author read it as a PRIORITY defect -- that the classifier grabs belts which have a straight feeder behind them, "belts lower-priority than splitter entrances". **That hypothesis is false, the rule does not change, and what the report describes is the first belt of a line.**
+
+**EVERY GESTURE WAS DRIVEN FROM `player.build_from_cursor`, ONE BELT PER TICK**, on Factorio 2.0.77 (build 84539) against release 0.2.3 plus trunk's cursor harness, with the mod's own `[BBB]` lines and `LuaEntity.belt_shape` read at every step. **78 samples, 18 grabs, and NOT ONE of the eighteen had a fed rear:**
+
+| gesture | grabbed? | what the mod said | plates pushed onto the player's line |
+|---|---|---|--:|
+| one belt on a free face, nothing else | **yes, permanent** | `compiled cluster 1 2->3 over 4 ports, 27 entities` | 7 at +58 ticks |
+| a line built FORWARD past two free faces, one belt per tick | **never** | nothing | 0 |
+| a line built BACKWARD, head first, one per tick | transient: each face belt grabbed until the belt behind it lands | 2x `2->3`, 1x `2->2` | 0 |
+| face belt, then extended EAST (ahead) | **yes, permanent** | `2->3` | 12 |
+| face belt, then extended WEST (behind) | one flush, then RELEASED | `2->3`, `2->2` | 0 |
+| rear = underground OUTPUT end / express splitter / a belt of ANOTHER FORCE, all pointing in | **never** | nothing | 0 |
+| a belt on an OCCUPIED part's face, multi-edge off | refused and handed back | `alert: ... worst 2`, `handed the refused piece at 0,11 ... back to player 1` | 0 |
+| a settled forward line, then the belt BEHIND the face tile MINED | **yes, permanent**, until it is put back (`2->2` + `spilled 1 items`) | | 14 at +28 ticks |
+| a grabbed face belt, then a belt at its FAR tile pointing in | RELEASED (`spilled 2 items`) | | 1 |
+
+And the engine control with no balancer within ten tiles, which is what says the classifier is a faithful model of it rather than a rule of its own: a belt B with a south feeder reads `right` when its rear tile is EMPTY, holds an underground INPUT end, or holds a belt pointing away; and `straight` when its rear holds a belt, an underground OUTPUT end, or a splitter pointing into it. **That is `feedsTile` exactly**, and it is why the answer to the report is not a priority order.
+
+**THE HEAD OF A LINE AND A DELIBERATE CORNER ARE ONE WORLD STATE.** A belt with an empty rear and one perpendicular feeder is what the engine curves, and it is what a player laying the first belt of a line produces -- so there is nothing for any rule to tell apart, at any priority. A rule that declined it would decline the feature it was asked for. **What says which the player meant is the SECOND belt**, and the row above measures both directions of that: extend the line backwards and the port goes away on the next flush, extend it forwards and it stays. The cost of a release is a teardown into a smaller machine, which spills, and that is the ordinary policy rather than anything this rule adds.
+
+**TWO THINGS THE DEEP-DIVE MEASURED THAT THE REPORT DID NOT NAME, and neither is a defect either.** A SETTLED passing line starts curving when the belt BEHIND its face tile is mined: nothing about the face belt moved, its rear simply went empty, and 14 plates were on the player's line 28 ticks later. And a line clicked one belt at a time from HEAD TO TAIL across parts that already carry their belt is refused per belt and left with holes -- each face belt lands with an empty rear, is classified, takes that part to two belts, and the whole cluster is refused, so the piece is handed back while the player is still dragging.
+
+**THE ONE REAL GAP IT FOUND IS A LINKED BELT AT THE REAR**, and that is 0.3.4. `feedsTile` walked `beltTypeNames`, the six EDGE types, which omit linked-belt because every visible interface this mod places IS one standing on a part tile -- a linked belt in the edge query would make a cluster's own output an edge of itself. The probe inherited the omission, so a player-placeable linked belt from another mod feeding a belt's rear was invisible to us and visible to the engine: the mod grabbed the belt, the engine kept it straight, and the interface side-loaded half a lane into a port. WormholeBelts is one such mod and one the author runs. `findAnyByPos` gets its own seven-type span now and `probeFeeds` reads the seventh, with the end type deciding it as an underground's does. The four rows behind that are measured on 2.0.77 and are in the commit: **a connected output end at the rear reads `straight`, an input end reads `right`, an UNCONNECTED output end reads `straight` too** (so nothing reads `linked_belt_neighbour`), **and an output end facing away reads `right`** (so the `d == back` gate holds for the seventh type as for the six). **Our own interfaces are structurally out of reach** rather than filtered out: a probe tile that is a registered part tile is refused two tests earlier.
+
+**`mar`'s leg H is the gate and it did not move**: **384 B/iter, 192 B/primitive, x1.00**, with the other seven slopes at 1,280 / 176 / 1,209 / 16 / 560 / 3,736 / 2,080 B per primitive over **3.92 MiB** of linear memory, 1,136 B of calibration at 0.0% spread and 0 items lost over 200 teardowns. What that says exactly is that the WIDER FILTER costs nothing: leg H's probe tile holds no linked belt, so what is not measured there is the cost of finding one, which is one `type_is` and one `linked_belt_type` on a path that runs once per edit.
+
+**The `curs` suite's bands (h) and (i) are the three gestures and the red proof**, and their numbers are in the `curs` section under Verification. One new member, **61 -> 62 of 4,870**: `LuaEntity::linked_belt_type`, the predicate form.
 
 ## The curve rule is a setting — `bbb-curved-exits`, on by default
 
