@@ -344,6 +344,24 @@ func floorF(v float64) float64 {
 // `classifyEdges` write the flush's own `tileBuf` and `edgeBuf`, which are
 // package level and not re-entrant. A keypress, a paste and a remote call are
 // all outermost dispatches. Nothing in this file may be called from `flush`.
+//
+// A TOGGLE IS REFUSED BEFORE THE FLAG MOVES: `plan.ShapeEdges` is asked with the
+// flag speculatively flipped, so a shape the compiler could not build leaves the
+// flag, the network and the items exactly as they were, rather than leaving the
+// cluster standing refused until the player guessed to toggle back.
+//
+// EXCEPT THAT TAKING A FLAG OFF IS ALWAYS ALLOWED WHERE THE OLD SHAPE DID NOT
+// FIT EITHER, which is the one direction that rule was wrong in. The fit bound
+// is about the SHAPE and not about the change, so at P = 64 every q >= 1 is
+// refused -- and a balancer that arrived there with two flags on it, by growing
+// past P = 32 with them already set, could then not have either one taken off:
+// each single un-flag lands on q = 1, which is refused, so the machine is stuck
+// refused forever while README, agents/priority.md and limit.go's own hand-back
+// sentence all tell the player that taking the flag off is the way out. The
+// pre-toggle shape costs nothing to ask -- `ShapeEdges` reads the edge counts
+// and `shapeWithTileFlipped` flips a field in a list already in hand, so there
+// is no host call on either -- and a change that cannot make things worse than
+// they already are is not a change to refuse.
 func setPartPriority(k key, want int, player uint32) bool {
 	id, ok := index[k]
 	if !ok {
@@ -382,12 +400,19 @@ func setPartPriority(k key, want int, player uint32) bool {
 	edges := classifyEdges(surf, tiles, force)
 	pt, fits := plan.ShapeEdges(edges)
 	if !fits {
-		pprio[id] = prev
-		logPriorityRefused(root, k, pt)
-		tellPriorityRefused(k, pt, player)
-		return false
-	}
-	if !prioFitsWhatIsStanding(root, k, pt, edges, player) {
+		_, wasFits := shapeWithTileFlipped(edges, k)
+		if on || wasFits {
+			pprio[id] = prev
+			logPriorityRefused(root, k, pt)
+			tellPriorityRefused(k, pt, player)
+			return false
+		}
+		// THE CLUSTER COULD NOT BE BUILT BEFORE THIS FLAG MOVED EITHER AND THE
+		// FLAG IS COMING OFF, so it is allowed through: see the header. The
+		// spill guard is skipped and that is not an omission -- a shape the
+		// compiler refuses is refused in FRONT of its own teardown, so nothing
+		// comes down and there is nothing to spill.
+	} else if !prioFitsWhatIsStanding(root, k, pt, edges, player) {
 		pprio[id] = prev
 		return false
 	}
@@ -430,16 +455,29 @@ func setPartPriority(k key, want int, player uint32) bool {
 // plan.TestAPriorityToggleCanShrinkTheNetworkInEitherDirection is that row.
 //
 // A cluster with no standing network has nothing to drain and skips the whole
-// thing, which is every first toggle on a half-built balancer and every toggle
-// made while the cluster is already refused.
+// thing, which is every first toggle on a half-built balancer.
+//
+// AND IT IS ONLY ASKED WHEN THE POST-TOGGLE SHAPE FITS. A toggle onto a shape
+// the compiler refuses tears nothing down -- the refusal is in front of the
+// teardown -- so there is no successor for the items to fail to fit into.
 func prioFitsWhatIsStanding(root uint32, k key, pt plan.Ports, edges []plan.Edge, player uint32) bool {
 	ni, standing := nets[root]
 	if !standing {
 		return true
 	}
 	room := plan.Reinsertable(pt)
-	was, _ := shapeWithTileFlipped(edges, k)
-	if room >= plan.Reinsertable(was) {
+	was, wasFits := shapeWithTileFlipped(edges, k)
+	// A PRE-TOGGLE SHAPE THAT DOES NOT FIT IS NOT A CAPACITY TO COMPARE
+	// AGAINST, and the answer is to allow rather than to count. `Reinsertable`
+	// gives such a shape 0, so a comparison would refuse every toggle on a
+	// cluster whose edges have outgrown the bound -- which is the one gesture
+	// that gets a refused balancer working again, and the trap the header's
+	// coming-off rule is about, met one function along. What is standing there
+	// was built by neither shape: the compiler refuses in front of the
+	// teardown, so a cluster carrying a network it can no longer build is
+	// carrying one from before the edges moved, and the toggle is not what
+	// makes it wrong.
+	if !wasFits || room >= plan.Reinsertable(was) {
 		return true
 	}
 	held := heldItems(ni)
