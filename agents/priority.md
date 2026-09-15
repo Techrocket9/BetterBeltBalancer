@@ -1,6 +1,6 @@
 # Priority ports -- what the planner builds, what it refuses, and what a toggle costs
 
-The whole of the input/output priorities feature: the planner (`guest/go/plan`), which decides what a priority network IS, and the guest around it (`guest/go/priority.go`), which is where the flag lives, how a player moves it and what happens when it cannot be honoured. The seam between them is `plan.Edge.Prio`, `plan.Ports.QIn/QOut`, `plan.ShapeEdges`, `plan.Capacity` and `plan.Op.OutPrio/InPrio`.
+The whole of the input/output priorities feature: the planner (`guest/go/plan`), which decides what a priority network IS, and the guest around it (`guest/go/priority.go`), which is where the flag lives, how a player moves it and what happens when it cannot be honoured. The seam between them is `plan.Edge.Prio`, `plan.Ports.QIn/QOut`, `plan.ShapeEdges`, `plan.Reinsertable` and `plan.Op.OutPrio/InPrio`.
 
 **OUTPUT priority is built and verified. INPUT priority is refused**, and the last section says why and what building it would take.
 
@@ -135,20 +135,20 @@ The port cap still comes first: a cluster past `MaxPorts` is refused as over the
 
 ## What it costs
 
-Entities, and the item positions the network can hold. A tile of belt holds eight item positions (0.25 of a tile per item along a lane, two lanes) and a splitter is two belts wide; the visible interfaces count, because a teardown drains the cluster's box as well as the slot.
+Entities, and how many items the network can be given back. The second column is `plan.Reinsertable` and it is a LOWER bound rather than a count of belt positions: the tile arithmetic (eight positions a tile, a splitter over two tiles, a lane splitter over one, the visible interfaces included because a teardown drains the cluster's box as well as the slot) is 25% over what a jammed 2->2 gave a real teardown and 19% over what a jammed 4->4 did, so the bound is the arithmetic less a third. `plan.Reinsertable`'s header is that measurement and the discount it fixes.
 
-| shape | plain entities | plain capacity | q | priority entities | priority capacity | growth | **residual bound** |
+| shape | plain entities | plain takes back | q | priority entities | priority takes back | growth | **residual bound** |
 |---|--:|--:|--:|--:|--:|--:|--:|
-| 2->2 | 11 | 112 | 1 | 18 | 192 | 1.71x | 80 |
-| 4->4 | 32 | 320 | 1 | 71 | 736 | 2.30x | 416 |
-| 4->4 | 32 | 320 | 2 | 58 | 608 | 1.90x | 288 |
-| 3->5 | 72 | 720 | 1 | 143 | 1456 | 2.02x | 736 |
-| 5->3 | 74 | 752 | 1 | 128 | 1312 | 1.74x | 560 |
-| 8->8 | 84 | 832 | 1 | 199 | 2016 | 2.42x | 1184 |
-| 8->8 | 84 | 832 | 2 | 203 | 2064 | 2.48x | 1232 |
-| 8->8 | 84 | 832 | 4 | 176 | 1792 | 2.15x | 960 |
-| 16->16 | 208 | 2048 | 1 | 515 | 5152 | 2.52x | 3104 |
-| 32->32 | 496 | 4864 | 1 | 1267 | 12576 | 2.59x | 7712 |
+| 2->2 | 11 | 64 | 1 | 18 | 106 | 1.71x | 42 |
+| 4->4 | 32 | 192 | 1 | 71 | 442 | 2.30x | 250 |
+| 4->4 | 32 | 192 | 2 | 58 | 362 | 1.90x | 170 |
+| 3->5 | 72 | 448 | 1 | 143 | 912 | 2.02x | 464 |
+| 5->3 | 74 | 458 | 1 | 128 | 816 | 1.74x | 358 |
+| 8->8 | 84 | 512 | 1 | 199 | 1253 | 2.42x | 741 |
+| 8->8 | 84 | 512 | 2 | 203 | 1280 | 2.48x | 768 |
+| 8->8 | 84 | 512 | 4 | 176 | 1109 | 2.15x | 597 |
+| 16->16 | 208 | 1280 | 1 | 515 | 3258 | 2.52x | 1978 |
+| 32->32 | 496 | 3072 | 1 | 1267 | 8037 | 2.59x | 4965 |
 
 The entity count is **not monotone in q**, and that is the tier balancers rather than an error: a 4x4 costs more with one priority port than with two, because one leaves three normal ports and a square butterfly over three ports is four rows with a loopback in it, where two and two are a pair of single-splitter blocks.
 
@@ -160,15 +160,17 @@ Toggling a priority flag is a RECOMPILE: the network comes down, the drained ite
 
 **IT NEVER REACHES THE GROUND, because a change that would not fit is refused instead.** That is the guest's `prioFitsWhatIsStanding`, and it is a decision this design took the other way first: the residual was written down as a cost a player could walk over rather than a thing to prevent. The reason it moved is the size of it. A jammed 8->8 whose last flag is cleared has the last column of the table to put on the floor, on the order of a thousand items, and none of it is the player's doing in the sense a mine is. A mine says take this machine apart; a flag says configure it.
 
-So before the flag moves, the guest asks `plan.Capacity` for the successor's positions and for the predecessor's. If the successor is smaller it counts what the standing network is holding, and refuses the change when the count exceeds what the successor could take. Nothing is torn down and nothing is said in chat: the balancer is still running and the player is told to let it empty.
+So before the flag moves, the guest asks `plan.Reinsertable` what the successor could take back and what the predecessor could. If the successor is smaller it counts what the standing network is holding, and refuses the change when the count exceeds what the successor could take. Nothing is torn down and nothing is said in chat: the balancer is still running and the player is told to let it empty.
 
 **THE DIRECTION IS NOT THE QUESTION, AND THE FIRST CUT OF THIS SECTION HAD THAT WRONG.** It read "turning a priority port ON never spills", which is true of the plain network against a priority one and false of q against q+1: the table's own 4x4 rows are 736 positions at q=1 and 608 at q=2, for the tier-balancer reason the paragraph above the table gives. So a toggle ON shrinks that network. The guard compares two capacities and never asks which way the flag went, and `TestAPriorityToggleCanShrinkTheNetworkInEitherDirection` is the row that says why.
 
-**The count is items and the capacity is positions**, and under belt stacking those are not the same unit: a stacked position holds up to four items, so the count can exceed the positions occupied and the guard can refuse a change that would have fitted. That is the side to be wrong on. On every force that cannot stack, which is all of base Factorio, one item is one position and the comparison is exact.
+**The count is items and the bound counts belt positions**, and under belt stacking those are not the same unit: a stacked position holds up to four items, so the count can exceed the positions occupied and the guard can refuse a change that would have fitted. That is the side to be wrong on. On every force that cannot stack, which is all of base Factorio, one item is one position and the comparison is exact.
 
-**The bound the capacity table gives needs a network that is completely full, which means one whose outputs are all blocked -- and a jammed network really is near capacity.** That is the one place the capacity arithmetic above can be checked against the game, and it checks out: CLAUDE.md records a saturated dead-ended 4x4 draining **232 items**, against the 320 positions this file computes for it (73%), and M2's full 2x2 draining **72** against 112 (64%). The shortfall is the splitters' internal buffers, which no transport line reports.
+**THE TILE ARITHMETIC IS NOT THE BOUND, AND ASSUMING IT WAS IS WHAT THE FIRST CUT OF THIS GUARD GOT WRONG.** The two places this repository has drained a jammed network of a shape the arithmetic can be computed for: CLAUDE.md's M2 conservation check puts **72 items** in a full plain 2->2, where the tiles say 96, and the `hand` leg's first shrink puts **232** in a saturated dead-ended plain 4->4, where they say 288. A guard comparing what the machine holds against the tile arithmetic therefore passes a toggle on a 2->2 holding anything from 65 to 96 items and spills the difference -- with the refusal message, which tells the player to let the balancer empty, walking them into the band rather than out of it. The shortfall is the splitter family: eight linked belts alone account for all but 8 of the 2->2's 72, so one splitter and two lane splitters gave back 8 where the arithmetic claims 32.
 
-Those two numbers are also what say the guard is reachable rather than theoretical. A 2->2 with one priority port holds 192 positions and the plain 2->2 it becomes holds 112; at the fill fraction M2 measured on the plain 2x2 a jammed priority 2->2 is carrying about 123 items, which is over the 112 the successor could take. So the suite's rig is a dead-ended 2->2: fill it, clear the flag, and the refusal fires.
+`plan.Reinsertable` is therefore the arithmetic less a third, which is under both measured fractions (75.0% and 80.6%) and under the pessimistic per-tile reading of them on every shape this planner builds, tightest at 1->4 with q=2 and 2.48 points to spare. It is a bound and not a measurement; being under costs a refusal a player did not need, and being over costs items on the floor.
+
+That is also what says the guard is reachable rather than theoretical. A priority 2->2 takes back 106 and the plain 2->2 it becomes takes back 64; a jammed priority 2->2 is carrying around 120 items, well over the 64. So the suite's rig is a dead-ended 2->2: fill it, clear the flag, and the refusal fires.
 
 ### What the guard does not cover
 
@@ -270,7 +272,7 @@ The settings paste takes the flag from the REGISTRY and not from the pasted vari
 | **over the port limit** | more than `MaxPorts` belts, whatever is flagged | unreachable: a flag cannot add a belt | `over-port-limit` |
 | **too big for a priority port** | the priority construction does not fit the slot, which is P = 64 | `priority-refused` | `priority-too-big` |
 | **a priority input** | `QIn > 0` after the collapse, at any size | `priority-input-refused` | `priority-input` |
-| **too full to shrink** | the successor holds fewer positions than the balancer is carrying | `priority-holding` | unreachable: a build cannot make a standing network smaller |
+| **too full to shrink** | the successor could take back less than the balancer is carrying | `priority-holding` | unreachable: a build cannot make a standing network smaller |
 
 Each build row has a second key with `-unconnected` on it, for the robot or script build that leaves the piece standing rather than handing it back, and `refuseShape` (`limit.go`) is the one place a refused `Ports` chooses. A shape carrying a priority port takes a priority sentence; among those, a priority INPUT wins over a size. A cluster can break more than one bound at once, and taking the flag off is the fix in every case.
 
@@ -301,7 +303,7 @@ The guest's half is log lines, and the suite drives every one of them through `r
 | the picture followed | `skin cluster=...` with the flagged part's cell 47 above its unflagged one |
 | a shape too big | `alert: priority refused for cluster N at part X,Y: ... does not fit; the flag was not set` |
 | a priority input | `alert: priority refused for cluster N at part X,Y: ... is a priority input, which this version does not build; the flag was not set` |
-| too full to shrink | `alert: priority refused for cluster N at part X,Y: the balancer holds H items and the network this would build holds C item positions; the flag was not set` |
+| too full to shrink | `alert: priority refused for cluster N at part X,Y: the balancer holds H items and the network this would build can take back C; the flag was not set` |
 | a build reaching the same bounds | `alert: cluster N cannot be built with Q priority outputs over n->m ports; refused` and `alert: cluster N asks for Q priority inputs over n->m ports, which this version does not build; refused` |
 
-**The spill guard's rig is a DEAD-ENDED 2->2 with one output flagged**, four parts under the one-belt-per-part rule, fed until it stops taking anything. Capacity is 192 positions flagged and 112 plain, both pinned by `TestPriorityCapacityIsRecorded`, and the guard's comparison is `held <= 112`. So the leg is: fill it, clear the flag, assert the refusal line with `H` over 112, assert the network still standing and still delivering, and assert **zero items on the ground** over the whole window. Then unblock the outputs, let it drain past the boundary, clear the flag again and assert one teardown, one rebuild and no spill. The rig has to be dead-ended rather than merely saturated: a balancer that is moving anything has room, which is what makes the refusal rare in play and what makes it reachable here.
+**The spill guard's rig is a DEAD-ENDED 2->2 with one output flagged**, four parts under the one-belt-per-part rule, fed until it stops taking anything. `plan.Reinsertable` is 106 flagged and 64 plain, both pinned by `TestPriorityCapacityIsRecorded`, and the guard's comparison is `held <= 64`. So the leg is: fill it, clear the flag, assert the refusal line with `H` over 64, assert the network still standing and still delivering, and assert **zero items on the ground** over the whole window. Then unblock the outputs, let it drain past the boundary, clear the flag again and assert one teardown, one rebuild and no spill. The rig has to be dead-ended rather than merely saturated: a balancer that is moving anything has room, which is what makes the refusal rare in play and what makes it reachable here.

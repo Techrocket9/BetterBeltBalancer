@@ -709,10 +709,10 @@ func TestTheRatesASuiteShouldAssert(t *testing.T) {
 // columns and the residual bound between them, and pins the shape-only form
 // against the built one on every row.
 //
-// Those are two different claims. `capacityOf` counts an op list, which is what
-// the table was measured with; `Capacity` takes a Ports and builds the shape
-// itself, which is what the guest asks on a keypress, and the only thing that
-// says the two agree is comparing them on every row.
+// Those are two different claims. `reinsertableOf` counts an op list, which is
+// what the table was measured with; `Reinsertable` takes a Ports and builds the
+// shape itself, which is what the guest asks on a keypress, and the only thing
+// that says the two agree is comparing them on every row.
 //
 // The residual bound is the difference: a toggle is a recompile, a recompile
 // hands the drained items to the network that succeeds it, and what that
@@ -722,25 +722,25 @@ func TestPriorityCapacityIsRecorded(t *testing.T) {
 		n, m, q            int
 		plain, prio, resid int
 	}{
-		{2, 2, 1, 112, 192, 80},
-		{4, 4, 1, 320, 736, 416},
-		{4, 4, 2, 320, 608, 288},
-		{3, 5, 1, 720, 1456, 736},
-		{5, 3, 1, 752, 1312, 560},
-		{8, 8, 1, 832, 2016, 1184},
-		{8, 8, 2, 832, 2064, 1232},
-		{8, 8, 4, 832, 1792, 960},
-		{16, 16, 1, 2048, 5152, 3104},
-		{32, 32, 1, 4864, 12576, 7712},
+		{2, 2, 1, 64, 106, 42},
+		{4, 4, 1, 192, 442, 250},
+		{4, 4, 2, 192, 362, 170},
+		{3, 5, 1, 448, 912, 464},
+		{5, 3, 1, 458, 816, 358},
+		{8, 8, 1, 512, 1253, 741},
+		{8, 8, 2, 512, 1280, 768},
+		{8, 8, 4, 512, 1109, 597},
+		{16, 16, 1, 1280, 3258, 1978},
+		{32, 32, 1, 3072, 8037, 4965},
 	} {
 		pl, ptPl, _ := Build(nil, edges(c.n, c.m), 0, 0)
-		if got := capacityOf(pl); got != c.plain {
-			t.Errorf("%d->%d plain holds %d item positions, recorded %d",
+		if got := reinsertableOf(pl); got != c.plain {
+			t.Errorf("%d->%d plain takes back %d items, recorded %d",
 				c.n, c.m, got, c.plain)
 		}
 		pr, ptPr, _ := Build(nil, prioEdges(c.n, c.m, c.q), 0, 0)
-		if got := capacityOf(pr); got != c.prio {
-			t.Errorf("%d->%d q=%d holds %d item positions, recorded %d "+
+		if got := reinsertableOf(pr); got != c.prio {
+			t.Errorf("%d->%d q=%d takes back %d items, recorded %d "+
 				"(update agents/priority.md in the same commit)",
 				c.n, c.m, c.q, got, c.prio)
 		}
@@ -748,15 +748,106 @@ func TestPriorityCapacityIsRecorded(t *testing.T) {
 			t.Errorf("%d->%d q=%d leaves a residual bound of %d, recorded %d",
 				c.n, c.m, c.q, got, c.resid)
 		}
-		if got := Capacity(ptPl); got != c.plain {
-			t.Errorf("%d->%d plain: Capacity(Ports) says %d and the built ops "+
-				"hold %d -- the guest asks the first and the teardown fills the "+
-				"second", c.n, c.m, got, c.plain)
+		if got := Reinsertable(ptPl); got != c.plain {
+			t.Errorf("%d->%d plain: Reinsertable(Ports) says %d and the built "+
+				"ops take back %d -- the guest asks the first and the rebuild "+
+				"fills the second", c.n, c.m, got, c.plain)
 		}
-		if got := Capacity(ptPr); got != c.prio {
-			t.Errorf("%d->%d q=%d: Capacity(Ports) says %d and the built ops "+
-				"hold %d", c.n, c.m, c.q, got, c.prio)
+		if got := Reinsertable(ptPr); got != c.prio {
+			t.Errorf("%d->%d q=%d: Reinsertable(Ports) says %d and the built "+
+				"ops take back %d", c.n, c.m, c.q, got, c.prio)
 		}
+	}
+}
+
+// TestTheBoundIsUnderWhatTheEngineGaveBack is the whole reason Reinsertable is
+// a bound rather than the tile arithmetic, and it is the only row of any of
+// these tests that comes out of a real Factorio.
+//
+// Both figures are jammed networks drained by a real teardown: CLAUDE.md's M2
+// conservation check puts 72 items in a full plain 2->2, and the `hand` leg's
+// first shrink puts 232 in a saturated dead-ended plain 4->4. The tile
+// arithmetic claims 96 and 288 for those two shapes, so a guard that trusted it
+// would pass a toggle holding anything between the pairs and spill the
+// difference -- 24 items on the 2->2 and 56 on the 4->4 -- with the refusal
+// message walking the player into the band rather than out of it.
+//
+// It is an inequality and not an equality on purpose: what the engine gives
+// back is a property of the engine, and pinning it exactly here would fail on
+// the day a belt's item pitch or a splitter's buffer moved, over a bound that
+// would still be sound.
+func TestTheBoundIsUnderWhatTheEngineGaveBack(t *testing.T) {
+	for _, c := range []struct {
+		n, m    int
+		drained int
+	}{
+		{2, 2, 72},
+		{4, 4, 232},
+	} {
+		pt, _ := ShapeEdges(edges(c.n, c.m))
+		if got := Reinsertable(pt); got > c.drained {
+			t.Errorf("a jammed %d->%d gave back %d items in a game and this "+
+				"bound says the network can take %d; the difference is what a "+
+				"toggle would put on the ground", c.n, c.m, c.drained, got)
+		}
+	}
+}
+
+// TestTheBoundHoldsOnShapesNobodyMeasured is what carries the flat two-thirds
+// discount past the two plain shapes a game has actually drained.
+//
+// The pessimistic reading of those two: belts and linked belts hold exactly what
+// the tile arithmetic says, eight a tile, and every splitter-family tile holds
+// the two the 2->2 implies rather than the 3.33 the 4->4 does. That is the
+// least a network could give back consistent with both measurements, and the
+// bound has to be under it on every shape and not only on the two.
+//
+// It is not idle. A priority network is MORE splitter than a plain one -- 40% of
+// a priority 2->2's tiles against 33% of the plain one's -- so the shapes the
+// guard is actually asked about are the ones the two measured rows argue least
+// about. The tightest row of the sweep is 1->4 at q=2, which clears the
+// pessimistic reading by 2.48 points.
+func TestTheBoundHoldsOnShapesNobodyMeasured(t *testing.T) {
+	check := func(n, m, q int) {
+		var es []Edge
+		if q == 0 {
+			es = edges(n, m)
+		} else {
+			es = prioEdges(n, m, q)
+		}
+		ops, _, ok := Build(nil, es, 0, 0)
+		if !ok {
+			return
+		}
+		worst := 0
+		for i := range ops {
+			switch ops[i].Proto {
+			case ProtoSplitter:
+				worst += 2 * 2
+			case ProtoLaneSplitter:
+				worst += 2
+			default:
+				worst += 8
+			}
+		}
+		if got := reinsertableOf(ops); got > worst {
+			t.Fatalf("%d->%d q=%d: the bound says %d items and the pessimistic "+
+				"reading of the two measured shapes says %d; the difference is "+
+				"what a toggle would spill", n, m, q, got, worst)
+		}
+	}
+	for n := 1; n <= 32; n++ {
+		for m := 1; m <= 32; m++ {
+			for q := 0; q <= m; q++ {
+				check(n, m, q)
+			}
+		}
+	}
+	// And the plain shapes past the priority fit rule, because
+	// prioFitsWhatIsStanding asks Reinsertable about the plain successor of a
+	// flag coming off a 64-port balancer as readily as about a priority one.
+	for n := 33; n <= MaxPorts; n++ {
+		check(n, n, 0)
 	}
 }
 
@@ -775,16 +866,16 @@ func TestPriorityCapacityIsRecorded(t *testing.T) {
 func TestAPriorityToggleCanShrinkTheNetworkInEitherDirection(t *testing.T) {
 	one, _ := ShapeEdges(prioEdges(4, 4, 1))
 	two, _ := ShapeEdges(prioEdges(4, 4, 2))
-	if Capacity(two) >= Capacity(one) {
-		t.Fatalf("4->4 holds %d positions at q=1 and %d at q=2; the guard's "+
+	if Reinsertable(two) >= Reinsertable(one) {
+		t.Fatalf("4->4 takes back %d items at q=1 and %d at q=2; the guard's "+
 			"whole reason for comparing capacities is that the second is smaller",
-			Capacity(one), Capacity(two))
+			Reinsertable(one), Reinsertable(two))
 	}
 	plain, _ := ShapeEdges(edges(4, 4))
-	if Capacity(two) <= Capacity(plain) {
-		t.Fatalf("4->4 q=2 holds %d positions and the plain network holds %d; "+
+	if Reinsertable(two) <= Reinsertable(plain) {
+		t.Fatalf("4->4 q=2 takes back %d items and the plain network takes %d; "+
 			"a priority network smaller than the plain one would make the very "+
-			"first toggle a spill", Capacity(two), Capacity(plain))
+			"first toggle a spill", Reinsertable(two), Reinsertable(plain))
 	}
 }
 

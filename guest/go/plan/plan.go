@@ -911,19 +911,50 @@ func PropagateLoop(ext []float64, pt Ports) (rows []float64, ok bool) {
 }
 
 // ---------------------------------------------------------------------------
-// How much a network can hold
+// How much a network can be given back
 // ---------------------------------------------------------------------------
 
-// Capacity is how many item positions the network for a shape can hold.
+// Reinsertable is a LOWER BOUND on how many items the network for a shape can
+// be given back.
 //
 // A teardown drains what is STANDING in a network and the flush hands it to
 // whatever cluster succeeds it; what the successor cannot hold spills on the
 // visible surface beside the cluster (carry.go, "A recompile is not a
 // removal"). That is the right answer for a machine a player took apart and the
 // wrong one for a flag they ticked, so the guest asks this before it moves a
-// priority flag and refuses a change the successor could not swallow. The
-// difference between two capacities is the bound on what that recompile could
-// otherwise put on the ground.
+// priority flag and refuses a change the successor could not swallow. A bound
+// that were too generous would pass a toggle and spill the difference, which is
+// the one outcome the guard exists to prevent, so it is deliberately under what
+// the engine has been measured giving back.
+//
+// WHAT THE ENGINE GIVES BACK IS NOT THE TILE ARITHMETIC, and the gap is
+// measured twice. A tile of belt holds eight item positions (0.25 of a tile per
+// item along a lane, two lanes), a splitter is two tiles and a lane splitter is
+// one, which makes a plain 2->2 96 positions and a plain 4->4 288. A JAMMED
+// network of those two shapes drains 72 and 232 -- CLAUDE.md's M2 conservation
+// check and the `hand` leg's first shrink -- which is 75.0% and 80.6% of the
+// arithmetic. The shortfall is the splitter family: eight linked belts alone
+// account for all but 8 of the 2->2's 72, so one splitter and two lane
+// splitters gave back 8 positions between them where the arithmetic claims 32.
+//
+// SO THE DISCOUNT IS FLAT AND IT IS TWO THIRDS. Two measurements cannot fit a
+// per-proto model -- read per tile they imply 2 positions a splitter-family tile
+// on the 2->2 and 3.33 on the 4->4 -- and a model fitted to one of them would be
+// a guess dressed as arithmetic on the other. Two thirds is under the lower of
+// the two FRACTIONS, 75.0%, with eight points to spare.
+//
+// AND IT IS UNDER THE PESSIMISTIC READING ON SHAPES NOBODY HAS MEASURED, which
+// is what carries it past the two plain rows: take the worse of the two --
+// belts and linked belts exact at eight a tile, the splitter family at two --
+// and the flat two thirds is under it on every shape this planner builds, by
+// 2.48 points at the tightest (1->4 at q=2). That matters because a priority network is MORE
+// splitter and not less: 40% of a priority 2->2's tiles are splitter family
+// against 33% of the plain one's, so a bound that leaned on the plain shapes'
+// composition would lean the wrong way. TestTheBoundHoldsOnShapesNobodyMeasured.
+//
+// BEING TOO LOW COSTS A REFUSAL A PLAYER DID NOT NEED, which is the side to be
+// wrong on -- the other side is items on the ground -- and the refusal names the
+// remedy, which is to let the balancer empty.
 //
 // IT BUILDS THE SHAPE RATHER THAN COUNTING IT. The op count of a priority
 // network is the head, two butterflies, a tap per rank and two tier balancers,
@@ -939,58 +970,57 @@ func PropagateLoop(ext []float64, pt Ports) (rows []float64, ok bool) {
 // way Build does, and it costs a whole Build. The guest calls it from
 // setPartPriority, which is an outermost dispatch, and from nowhere else.
 //
-// A shape with no inputs or no outputs, and one that does not fit, hold nothing:
-// neither has a network.
-func Capacity(pt Ports) int {
+// A shape with no inputs or no outputs, and one that does not fit, take nothing
+// back: neither has a network.
+func Reinsertable(pt Ports) int {
 	if pt.N <= 0 || pt.M <= 0 {
 		return 0
 	}
-	capEdges = capEdges[:0]
+	roomEdges = roomEdges[:0]
 	for i := 0; i < pt.N; i++ {
-		capEdges = append(capEdges, Edge{Dir: East})
+		roomEdges = append(roomEdges, Edge{Dir: East})
 	}
 	for i := 0; i < pt.M; i++ {
-		capEdges = append(capEdges, Edge{Dir: East, Out: true, Prio: i < pt.QOut})
+		roomEdges = append(roomEdges, Edge{Dir: East, Out: true, Prio: i < pt.QOut})
 	}
-	ops, _, ok := Build(capOps[:0], capEdges, 0, 0)
-	capOps = ops
+	ops, _, ok := Build(roomOps[:0], roomEdges, 0, 0)
+	roomOps = ops
 	if !ok {
 		return 0
 	}
-	return capacityOf(ops)
+	return reinsertableOf(ops)
 }
 
-// capEdges and capOps are Capacity's own, so that a capacity question cannot
-// overwrite an op list a caller is still holding. Slices rather than arrays for
-// the reason the buffer block above gives: an array of MaxPorts ops would be
-// tens of kilobytes of GLOBALS, which the conservative collector re-scans at
-// every paced step, where a slice header is three words and its backing array is
-// ordinary heap.
+// roomEdges and roomOps are Reinsertable's own, so that a capacity question
+// cannot overwrite an op list a caller is still holding. Slices rather than
+// arrays for the reason the buffer block above gives: an array of MaxPorts ops
+// would be tens of kilobytes of GLOBALS, which the conservative collector
+// re-scans at every paced step, where a slice header is three words and its
+// backing array is ordinary heap.
 var (
-	capEdges []Edge
-	capOps   []Op
+	roomEdges []Edge
+	roomOps   []Op
 )
 
-// capacityOf is the item positions an op list holds.
+// reinsertableOf is the items an op list can be given back.
 //
-// The arithmetic is the belt's: an item occupies 0.25 of a tile along a lane, so
-// a tile of belt holds four positions a lane and eight in both, and a splitter
-// is two belts wide. The VISIBLE interfaces count, because a teardown drains the
+// The tile arithmetic first: eight positions a tile, a splitter over two tiles
+// and everything else over one. A LANE SPLITTER IS ONE TILE, which is what
+// `tilesOf` in plan_test.go has always said and what the layout proves -- the
+// ops lay one per row at colLaneSplit, so a two-tile one would collide with the
+// row below. The VISIBLE interfaces count, because a teardown drains the
 // cluster's box as well as the slot.
 //
-// It is a bound on the items and not a measurement of them: a network is only
-// this full when every line in it is compressed, which is the saturated case and
-// the worst one.
-func capacityOf(ops []Op) int {
+// Then the two thirds, for the reason Reinsertable's header gives at length.
+func reinsertableOf(ops []Op) int {
 	const perTile = 8
-	n := 0
+	tiles := 0
 	for i := range ops {
-		switch ops[i].Proto {
-		case ProtoSplitter, ProtoLaneSplitter:
-			n += 2 * perTile
-		default:
-			n += perTile
+		if ops[i].Proto == ProtoSplitter {
+			tiles += 2
+			continue
 		}
+		tiles++
 	}
-	return n
+	return tiles * perTile * 2 / 3
 }

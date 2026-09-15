@@ -33,9 +33,10 @@ package main
 // smaller successor cannot hold, and a priority change really can build a
 // smaller network -- clearing a balancer's last flag returns it to the plain
 // butterfly, and on a 4x4 a second flag is smaller than the first. So the
-// successor's capacity is compared against what the machine is carrying BEFORE
-// the flag moves, and a change that would not fit is refused with the balancer
-// still running: `prioFitsWhatIsStanding`. The spill is a removal's outcome and
+// the successor is asked what it could take back and that is compared against
+// what the machine is carrying BEFORE the flag moves, and a change that would
+// not fit is refused with the balancer still running:
+// `prioFitsWhatIsStanding`. The spill is a removal's outcome and
 // a toggle is not a removal, so a toggle does not get it.
 //
 // WHAT THAT GUARD DOES NOT COVER, because neither is a flag changing:
@@ -392,7 +393,14 @@ func setPartPriority(k key, want int, player uint32) bool {
 // the spill is closed at the source rather than handled downstream: nothing is
 // torn down, nothing moves, and the player is told to let the balancer drain.
 //
-// IT COMPARES TWO CAPACITIES RATHER THAN ASKING WHICH WAY THE FLAG WENT, and
+// THE BOUND IS `plan.Reinsertable` AND IT IS A LOWER ONE, deliberately under
+// what a jammed network of either measured shape gave back in a game. A bound
+// taken off the tile arithmetic instead passes a toggle on a 2->2 holding
+// anything from 65 to 96 items and spills the difference, which is the defect
+// this guard exists to prevent, met inside the guard. The two measurements and
+// the discount they fix are in plan.Reinsertable's header.
+//
+// IT COMPARES TWO OF THEM RATHER THAN ASKING WHICH WAY THE FLAG WENT, and
 // that is not caution. A 4x4's SECOND priority port is smaller than its first --
 // one priority port leaves three normal ones and a square butterfly over three
 // ports is four rows with a loopback in it, where two and two are a pair of
@@ -407,9 +415,9 @@ func prioFitsWhatIsStanding(root uint32, k key, pt plan.Ports, edges []plan.Edge
 	if !standing {
 		return true
 	}
-	room := plan.Capacity(pt)
+	room := plan.Reinsertable(pt)
 	was, _ := shapeWithTileFlipped(edges, k)
-	if room >= plan.Capacity(was) {
+	if room >= plan.Reinsertable(was) {
 		return true
 	}
 	held := heldItems(ni)
@@ -459,17 +467,18 @@ func flipTilePrio(edges []plan.Edge, k key) {
 // allows is a few thousand host calls: 1,267 entities, one line-count call each
 // and up to eight line reads. At the ~12.6 us this repo measures for a tier-2
 // call that is the same order as the recompile it is standing in front of, and
-// it is paid once, on a keypress, only when the capacity shrinks and only when a
-// network is standing. Nothing has measured the product, and the cost of getting
+// it is paid once, on a keypress, only when the successor could take back less
+// than the predecessor and only when a network is standing. Nothing has measured the product, and the cost of getting
 // it wrong is the spill this exists to prevent.
 //
-// IT COUNTS ITEMS AND THE CAPACITY IT IS COMPARED AGAINST IS POSITIONS, and
-// under belt stacking those are not the same unit: a stacked position holds up
-// to four items, so the count can exceed the positions occupied. The comparison
-// is therefore CONSERVATIVE on a stacking force -- it can refuse a toggle that
-// would in fact have fitted -- and that is the side to be wrong on, because the
-// other side is items on the ground. On every force that cannot stack, which is
-// all of base Factorio, one item is one position and the bound is exact.
+// IT COUNTS ITEMS AND THE BOUND IT IS COMPARED AGAINST COUNTS BELT POSITIONS,
+// and under belt stacking those are not the same unit: a stacked position holds
+// up to four items, so the count can exceed the positions occupied. The
+// comparison is therefore CONSERVATIVE on a stacking force -- it can refuse a
+// toggle that would in fact have fitted -- and that is the side to be wrong on,
+// because the other side is items on the ground. It is conservative on every
+// force in any case, `plan.Reinsertable` being under what the engine has been
+// measured giving back.
 //
 // A HALF THAT CANNOT BE READ CONTRIBUTES NOTHING, which is the honest reading
 // rather than a fallback: the hidden surface being gone means the network's
@@ -710,9 +719,9 @@ func logPriorityHolding(root uint32, k key, held uint32, room int) {
 	logPriorityHead(root, k)
 	logS("the balancer holds ")
 	logU(held)
-	logS(" items and the network this would build holds ")
+	logS(" items and the network this would build can take back ")
 	logU(uint32(room))
-	logS(" item positions; the flag was not set")
+	logS("; the flag was not set")
 	logEnd()
 }
 
