@@ -106,9 +106,11 @@ EXPECT = {
     "plane": [1, 0],
     "ptog":  [2 / 3.0, 2 / 3.0],
     "pin":   [1, 1],
-    "pbig":  [1, 1],
-    "pgrow": [1, 1, 1],
-    # The four dead-ended rigs have no chest at all until the very end of the
+    # pbig and pgrow are NOT here and the refusal window is where they are
+    # checked. A P = 64 network is ten thousand item positions and this window
+    # opens at tick 1800: what it would measure is a machine still filling.
+    #
+    # The five dead-ended rigs have no chest at all until the very end of the
     # run, and a rig that quietly grew one would be draining while it was
     # supposed to be filling -- which is the one condition the spill guard and
     # the three holds both need.
@@ -116,6 +118,7 @@ EXPECT = {
     "mp22":  [None, None],
     "mq22":  [None, None],
     "mp44":  [None, None, None, None],
+    "pfull": [None, None, None, None],
 }
 
 # The toggle rig, either side of the flag. It is the same 2 -> 2 fed one express
@@ -205,9 +208,24 @@ def between(lines, lo, hi, rx):
     return [m for m in (rx.search(l) for l in lines[a:b]) if m]
 
 
-def rate_rows(fail, samp, belt, tags, table, what):
-    """Compare a rig's per-port delta over a window with the two formulas."""
+def rate_rows(fail, samp, tags, table, what):
+    """Compare a rig's per-port delta over a window with the two formulas.
+
+    THE CONTROL IS READ OVER THE SAME WINDOW, which is the only way a belt means
+    the same thing in a 1,740-tick window and in a 400-tick one. The first cut of
+    this divided every window by the main window's control and reported four
+    exact rigs at 0.23 of a belt.
+    """
     lo, hi = tags
+    if "ctrl" not in samp.get(lo, {}) or "ctrl" not in samp.get(hi, {}):
+        fail.append("the control belt was not reported at both ends of the %s "
+                    "window" % what)
+        return
+    belt = samp[hi]["ctrl"][0] - samp[lo]["ctrl"][0]
+    if belt <= 0:
+        fail.append("the control belt delivered %d items over the %s window"
+                    % (belt, what))
+        return
     for rig, want in sorted(table.items()):
         if rig not in samp.get(lo, {}) or rig not in samp.get(hi, {}):
             fail.append("%s: not reported at both ends of the %s window" % (rig, what))
@@ -245,6 +263,37 @@ def rate_rows(fail, samp, belt, tags, table, what):
                 fail.append(
                     "%s port %d delivered %.3f belts over the %s window, want %.3f"
                     % (rig, i + 1, g, what, w))
+
+
+def unchanged(fail, samp, before, after, rigs):
+    """A rig delivering the same before and after, each against its own control.
+
+    A refusal has to leave the machine it was asked about running exactly as it
+    was, and the two windows are equal in length -- so the ratio of the two
+    control-normalised totals is 1 whatever the absolute rate happens to be.
+    """
+    for rig in rigs:
+        tot = []
+        for lo, hi in (before, after):
+            if rig not in samp.get(lo, {}) or rig not in samp.get(hi, {}):
+                fail.append("%s: not reported at both ends of the %s window"
+                            % (rig, lo))
+                tot = None
+                break
+            belt = samp[hi]["ctrl"][0] - samp[lo]["ctrl"][0]
+            live = [b - a for a, b in zip(samp[lo][rig], samp[hi][rig]) if a >= 0]
+            tot.append(sum(live) / float(belt) if belt else 0)
+        if not tot:
+            continue
+        ratio = tot[1] / tot[0] if tot[0] else 0
+        print("    %-6s %.3f belts before the refusals, %.3f after (x%.3f)"
+              % (rig, tot[0], tot[1], ratio))
+        if abs(ratio - 1) > 0.05:
+            fail.append(
+                "%s delivered %.3f belts before the refusals and %.3f after. A "
+                "refusal is asked in front of the teardown, so the standing "
+                "network is not touched at all and the rate cannot move"
+                % (rig, tot[0], tot[1]))
 
 
 def audit_tuples(lines):
@@ -343,7 +392,7 @@ def main():
         sys.exit(1)
     print("\none saturated express belt over the window: %d items\n" % belt)
     print("  %-6s %-34s %s" % ("rig", "per-port belts delivered", "want"))
-    rate_rows(fail, samp, belt, (T0, T1), EXPECT, "main")
+    rate_rows(fail, samp, (T0, T1), EXPECT, "main")
 
     # THE LANE SAMPLE, which is the one thing a chest total cannot see.
     #
@@ -452,16 +501,21 @@ def main():
             if len(got) != want:
                 fail.append("%s: %d %ss where a toggle is %d"
                             % (tag, len(got), what, want))
-    rate_rows(fail, samp, belt, ("tog-on-a", "tog-on-b"),
+    rate_rows(fail, samp, ("tog-on-a", "tog-on-b"),
               {"ptog": EXPECT_TOG_ON}, "flag ON")
-    rate_rows(fail, samp, belt, ("tog-off-a", "tog-off-b"),
+    rate_rows(fail, samp, ("tog-off-a", "tog-off-b"),
               {"ptog": EXPECT_TOG_OFF}, "flag OFF")
 
     # ----------------------------------------------------------- the refusals
     print("\n  the refusals:")
     refusals(run, fail)
-    rate_rows(fail, samp, belt, ("ref-a", "ref-b"), EXPECT_REF,
-              "refusal")
+    rate_rows(fail, samp, ("ref-a", "ref-b"), EXPECT_REF, "refusal")
+    # ...AND THE SHARPER FORM OF THE SAME CLAIM: each of the three is compared
+    # with ITSELF over an equal window taken before the refusals, because "the
+    # balancer keeps running" is a statement about that machine and not about a
+    # number somebody worked out.
+    unchanged(fail, samp, ("ref-pre", "ref-mid"), ("ref-a", "ref-b"),
+              sorted(EXPECT_REF))
 
     # --------------------------------------------------------- the spill guard
     print("\n  the spill guard:")

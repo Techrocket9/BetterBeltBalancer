@@ -1079,7 +1079,7 @@ for suite in $SUITES; do
       # separate. agents/priority.md is the design.
       echo "=== prio: a port that is fed first ==="
       stage "$TMP/prio" bbb-prio-test
-      run "$TMP/prio" "${BBB_PRIO_TICKS:-6400}"
+      run "$TMP/prio" "${BBB_PRIO_TICKS:-7200}"
       echo "==> asserting the priority rates, the toggle and the refusals"
       python3 "$ROOT/test/assert-prio.py" "$TMP/prio/create.log" "$TMP/prio/run.log"
 
@@ -1092,7 +1092,7 @@ for suite in $SUITES; do
       # audit found the fingerprint moved.
       echo "=== prio: ... and a priority save whose guest heap is discarded ==="
       stage "$TMP/prioupg" bbb-prio-test
-      BETWEEN=bump_build run "$TMP/prioupg" "${BBB_PRIO_TICKS:-6400}"
+      BETWEEN=bump_build run "$TMP/prioupg" "${BBB_PRIO_TICKS:-7200}"
       echo "==> asserting that the flags came back out of the world"
       python3 "$ROOT/test/assert-prio.py" --leg upgrade \
         "$TMP/prioupg/create.log" "$TMP/prioupg/run.log"

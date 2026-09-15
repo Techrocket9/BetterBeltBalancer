@@ -520,10 +520,12 @@ func buildLane(s fkapi.LuaSurface, base int) []harness.XY {
 // priority refusal needs -- flagging the ONLY output of an n -> 1 balancer is
 // every output flagged, which collapses to the plain network and builds.
 //
-// THREE OF THE INPUTS ARE FED and the rest are inert belts. The shape is what
-// decides P, and the rate only has to be non-zero for "still delivering across
-// the attempt" to mean anything.
-const bigFed = 3
+// EIGHT OF THE INPUTS ARE FED and the rest are inert belts. The shape is what
+// decides P; the count is what decides how long the thing takes to FILL, and a
+// P = 64 network is ten thousand item positions. Three belts took it past the
+// middle of the run to reach steady state, which put the rate window on a
+// machine that was still filling.
+const bigFed = 8
 
 func buildColumn(s fkapi.LuaSurface, base, ins int, spare bool) []harness.XY {
 	outs := make([]harness.XY, 0, 3)
@@ -804,8 +806,12 @@ func openAndCut(rig string) {
 			harness.Destroy(o, false)
 		}
 	}
+	_, ri := rigByName(rig)
 	for i := 1; i <= c.outs; i++ {
-		sink(s, 5, c.base+i-1)
+		// RECORDED, because a chest nothing is holding the tile of is a chest
+		// nothing reads: `report` and `measureDrained` both walk this list, and
+		// a dead-ended rig's entries were empty until this moment.
+		built[ri].outs[i-1] = outSlot{xy: sink(s, 5, c.base+i-1), has: true}
 	}
 	out.Open("opened ").S(rig).S(": the outputs are sinks and the sources are gone").End()
 }
@@ -982,72 +988,83 @@ var schedule = []harness.Step{
 	// AFTER EVERY RATE ABOVE HAS REPORTED, which is `m2`'s rule for its own
 	// setting band: no figure in the main window is taken over a save whose
 	// wiring has moved.
+	//
+	// EACH WINDOW OPENS 220 TICKS AFTER THE REBUILD and not behind it, which is
+	// `plat`'s rule and `m2`'s curve band's: a recompile puts every drained item
+	// back at the HEAD of the butterfly, so the outputs are starved by
+	// construction until the pipeline refills. Measured at 20 ticks the priority
+	// port reads 0.94 of a belt, which is a statement about the window.
 	{Tick: 3600, Do: func() { toggleCheck("tog-on", "ptog", true) }},
-	{Tick: 3620, Do: func() { report("tog-on-a") }},
-	{Tick: 4020, Do: func() { report("tog-on-b") }},
-	{Tick: 4040, Do: func() { toggleCheck("tog-off", "ptog", false) }},
-	{Tick: 4060, Do: func() { report("tog-off-a") }},
-	{Tick: 4460, Do: func() { report("tog-off-b") }},
+	{Tick: 3820, Do: func() { report("tog-on-a") }},
+	{Tick: 4220, Do: func() { report("tog-on-b") }},
+	{Tick: 4240, Do: func() { toggleCheck("tog-off", "ptog", false) }},
+	{Tick: 4460, Do: func() { report("tog-off-a") }},
+	{Tick: 4860, Do: func() { report("tog-off-b") }},
 
 	// --- the refusals -------------------------------------------------------
-	{Tick: 4500, Do: func() { report("ref-pre") }},
-	{Tick: 4520, Do: func() {
+	//
+	// TWO EQUAL WINDOWS, one each side, because what a refusal has to leave
+	// behind is a balancer running exactly as it was -- which is a comparison
+	// with itself and not with a number.
+	{Tick: 4900, Do: func() { report("ref-pre") }},
+	{Tick: 5300, Do: func() { report("ref-mid") }},
+	{Tick: 5320, Do: func() {
 		_, i := rigByName("pin")
 		setPrio("ref-in", "pin", built[i].flag, true)
 		variation("ref-in", "pin", built[i].flag)
 	}},
-	{Tick: 4530, Do: func() {
+	{Tick: 5330, Do: func() {
 		_, i := rigByName("pbig")
 		setPrio("ref-big", "pbig", built[i].flag, true)
 		variation("ref-big", "pbig", built[i].flag)
 	}},
-	// The paste, then a queueing edit, then the audit: three ticks apart so that
+	// The paste, then a queueing edit, then the audit: a few ticks apart so that
 	// the compile the paste did NOT ask for has somewhere to happen before the
 	// audit looks.
-	{Tick: 4540, Do: func() { pasteSettings("p2sat", "pbig") }},
-	{Tick: 4550, Do: nudge},
-	{Tick: 4560, Do: func() { auditNow(0) }},
-	{Tick: 4570, Do: func() { variation("paste", "pbig", pasteTile()) }},
-	{Tick: 4580, Do: grow},
-	{Tick: 4600, Do: func() { auditNow(0) }},
-	{Tick: 4620, Do: func() { report("ref-a") }},
-	{Tick: 5020, Do: func() { report("ref-b") }},
+	{Tick: 5340, Do: func() { pasteSettings("p2sat", "pbig") }},
+	{Tick: 5350, Do: nudge},
+	{Tick: 5360, Do: func() { auditNow(0) }},
+	{Tick: 5370, Do: func() { variation("paste", "pbig", pasteTile()) }},
+	{Tick: 5380, Do: grow},
+	{Tick: 5400, Do: func() { auditNow(0) }},
+	{Tick: 5420, Do: func() { report("ref-a") }},
+	{Tick: 5820, Do: func() { report("ref-b") }},
 	// TAKING A FLAG OFF A BALANCER THAT ALREADY DOES NOT FIT. pgrow is carrying
 	// two priority ports over a shape that a build has just taken to P = 64, so
 	// neither the shape it has nor the shape one fewer flag would give can be
 	// built -- and the change has to be allowed anyway, because refusing it
 	// leaves the player holding a machine they cannot un-break.
-	{Tick: 5040, Do: func() {
+	{Tick: 5840, Do: func() {
 		_, i := rigByName("pgrow")
 		setPrio("unflag", "pgrow", built[i].flag, false)
 		variation("unflag", "pgrow", built[i].flag)
 	}},
-	{Tick: 5060, Do: func() { auditNow(0) }},
+	{Tick: 5860, Do: func() { auditNow(0) }},
 
 	// --- the spill guard ----------------------------------------------------
 	//
 	// pfull has been dead-ended and fed hard since tick 0, so by now every belt
 	// and every splitter in it is stationary and it is carrying more than the
 	// plain network it would become could hold.
-	{Tick: 5100, Do: func() { toggleCheck("spill-refused", "pfull", false) }},
-	{Tick: 5120, Do: func() { auditNow(0) }},
-	{Tick: 5140, Do: func() { openAndCut("pfull") }},
+	{Tick: 5900, Do: func() { toggleCheck("spill-refused", "pfull", false) }},
+	{Tick: 5920, Do: func() { auditNow(0) }},
+	{Tick: 5940, Do: func() { openAndCut("pfull") }},
 	// Long enough for four express belts to empty a stopped network into four
 	// chests with nothing left feeding it.
-	{Tick: 5660, Do: func() { toggleCheck("spill-cleared", "pfull", false) }},
-	{Tick: 5680, Do: func() { report("spill-after") }},
+	{Tick: 6460, Do: func() { toggleCheck("spill-cleared", "pfull", false) }},
+	{Tick: 6480, Do: func() { report("spill-after") }},
 
 	// --- the boundary, and the three holds ----------------------------------
-	{Tick: 5700, Do: measureBelts},
-	{Tick: 5720, Do: func() {
+	{Tick: 6500, Do: measureBelts},
+	{Tick: 6520, Do: func() {
 		for _, r := range measured {
 			openAndCut(r)
 		}
-		bndFrom = 5760
+		bndFrom = 6560
 	}},
-	{Tick: 6300, Do: measureDrained},
-	{Tick: 6340, Do: func() { auditNow(0) }},
-	{Tick: 6360, Do: func() { report("final") }},
+	{Tick: 7100, Do: measureDrained},
+	{Tick: 7140, Do: func() { auditNow(0) }},
+	{Tick: 7160, Do: func() { report("final") }},
 }
 
 //go:wasmexport fk_on_init
