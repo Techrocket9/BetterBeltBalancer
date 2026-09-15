@@ -126,6 +126,12 @@ OVERLIMIT = re.compile(
 # the port limit) back to player 1` and its could-not-be-handed-back twin have
 # in common, and nothing else in this guest's vocabulary produces it.
 HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
+# THE BELT A REFUSED FAST REPLACE DESTROYED, on the same shape rule as the
+# hand-back above and behind the same wall. `restoreReplacedBelt` runs only
+# from `revertOne`, which needs a player, so every arm of it -- the restore,
+# the nothing-to-pay-with alert and the create-failed alert -- is unreachable
+# here. "replaced belt at x,y" is what all three have in common.
+BELTBACK = re.compile(r"\[BBB\].*\breplaced belt at -?\d+,-?\d+")
 # The other side of the same fork: nobody built it, so the force is told instead.
 # This IS reachable headlessly -- every build in every suite is a script build --
 # and it is the only part of the feedback that is.
@@ -1237,6 +1243,21 @@ def main():
         fail("%d over-limit pieces were handed back in a suite with no players: "
              "the revert is running for a script build, which has nobody to "
              "give a belt to" % len(handed))
+    # ... AND THE BELT A REFUSED FAST REPLACE DESTROYED, which is the same
+    #    negative one statement further on. `restoreReplacedBelt` is called from
+    #    revertOne AFTER the part has been mined back, so it cannot be reached
+    #    without a player either -- and it also cannot be reached without an
+    #    `on_pre_build`, which carries a player index and therefore never fires
+    #    here at all. This suite's own frepa/frepb rigs build with
+    #    `create_entity{fast_replace = true}`, which is not a cursor and raises
+    #    no pre-build, so a line here would mean the match fired on a script.
+    belts = [l for l in lines if BELTBACK.search(l)]
+    print("  belts put back after a refused fast replace: %d (must be 0 -- a "
+          "script build raises no on_pre_build)" % len(belts))
+    if belts:
+        fail("%d belt(s) were put back after a refused fast replace in a suite "
+             "with no players: the restore is running for a script build"
+             % len(belts))
     print()
 
     # ---- the merge that would be over the limit ------------------------------

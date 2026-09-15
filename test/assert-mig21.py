@@ -141,6 +141,12 @@ TOOKBACK = re.compile(r"\[BBB\] cluster (\d+) took back (\d+) items")
 # the port limit) back to player 1` and its could-not-be-handed-back twin have
 # in common, and nothing else in this guest's vocabulary produces it.
 HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
+# THE BELT A REFUSED FAST REPLACE DESTROYED, on the same shape rule as the
+# hand-back above and behind the same wall. `restoreReplacedBelt` runs only
+# from `revertOne`, which needs a player, so every arm of it -- the restore,
+# the nothing-to-pay-with alert and the create-failed alert -- is unreachable
+# here. "replaced belt at x,y" is what all three have in common.
+BELTBACK = re.compile(r"\[BBB\].*\breplaced belt at -?\d+,-?\d+")
 # The ordinary per-piece refusal message. It must NOT be used for a migration:
 # nothing was placed, so "the extra piece was left in place" is a sentence about
 # an event that never happened.
@@ -528,6 +534,9 @@ def grandfather_arm(text, want):
     check(not HANDEDBACK.search(text),
           "a piece was handed back to a player. There is no player in a headless "
           "run and nothing was placed in this one")
+    check(not BELTBACK.search(text),
+          "a belt a fast replace destroyed was put back. Nothing in this save was "
+          "fast-replaced and there is no player for the restore to charge")
     check_no_curve(text)
 
     # --- and the state is stable ---------------------------------------------
@@ -743,6 +752,9 @@ def main():
     check(not HANDEDBACK.search(text),
           "a piece was handed back to a player. There is no player in a headless "
           "run, and nothing was placed in this one")
+    check(not BELTBACK.search(text),
+          "a belt a fast replace destroyed was put back. Nothing in this save was "
+          "fast-replaced and there is no player for the restore to charge")
 
     # --- THE NEGATIVE: no grandfather, on an engine where the write would raise -
     check(not GRANDFATHER.search(text),

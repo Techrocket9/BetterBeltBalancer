@@ -185,6 +185,12 @@ FLIPPED = re.compile(r"\[BBB\] single-edge: multiple belts per part turned (ON|O
 # is the one shape a rename in the guest can make VACUOUS -- the line stops
 # matching, the assertion stops being able to fail, and nothing says so.
 HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
+# THE BELT A REFUSED FAST REPLACE DESTROYED, on the same shape rule as the
+# hand-back above and behind the same wall. `restoreReplacedBelt` runs only
+# from `revertOne`, which needs a player, so every arm of it -- the restore,
+# the nothing-to-pay-with alert and the create-failed alert -- is unreachable
+# here. "replaced belt at x,y" is what all three have in common.
+BELTBACK = re.compile(r"\[BBB\].*\breplaced belt at -?\d+,-?\d+")
 TORNDOWN = re.compile(r"\[BBB\] torn down cluster (\d+), returned (\d+) items")
 SPILLED = re.compile(r"\[BBB\] spilled (\d+) items beside cluster (\d+)")
 
@@ -763,6 +769,10 @@ def check_refusals(lines, leg, fail):
     if find_all(lines, HANDEDBACK):
         fail.append("a piece was handed back to a player: there is no player in "
                     "a headless run, and in a migration nobody placed anything")
+    if find_all(lines, BELTBACK):
+        fail.append("a belt a fast replace destroyed was put back: the restore "
+                    "runs from the hand-back, which needs a player, and nothing "
+                    "here was fast-replaced by one")
     gf = find_all(lines, GRANDFATHER)
     if ENGINE == "2.0":
         # THE POSITIVE, on the engine where it is reachable. A converted Belt

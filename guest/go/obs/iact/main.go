@@ -339,6 +339,12 @@ func bandBridge(s fkapi.LuaSurface) {
 // one part shorter, because the belt lands where the part's own edge was; and
 // either tile BESIDE the middle hands its surviving neighbour a second belt, so
 // that half is refused. Three tiles, three answers, one rig.
+//
+// AND A THIRD PIECE, A FED BELT LINE WITH NO BALANCER ANYWHERE NEAR IT, for the
+// gesture that has nothing to do with a balancer until the click makes one: a
+// part dropped into the middle of it becomes its own one-part cluster with two
+// belts on it, which is refused, and what the gesture checks is that the belt
+// the engine destroyed comes back. That is the 2026-09-14 field report.
 func bandFastReplace(s fkapi.LuaSurface) {
 	b := 90
 	for i := 0; i < 2; i++ {
@@ -361,6 +367,25 @@ func bandFastReplace(s fkapi.LuaSurface) {
 	}
 	feedTo(s, col-1, c, dirE, 2)
 	drainFrom(s, col+1, c+4, dirE, 2)
+
+	// THE MIDDLE OF A RUNNING LINE, and it is the one shape the line above
+	// cannot stage: that one ENDS on its target, so a part dropped there takes
+	// one belt and is built. This one runs THROUGH (20, 103), so a part dropped
+	// there takes the belt behind it as an input and the belt ahead as an output
+	// -- two belts on one part, which Factorio 2.1 refuses -- and the belt the
+	// engine destroyed on the way in is what has to come back. It is fed, so the
+	// cargo the mine puts in the player's inventory is visible too.
+	//
+	// THREE TILES CLEAR of the column above it, which is one more than the
+	// neighbour gate walks: no part is near it, so it stages no cluster, no
+	// compile and no refusal, and every count the `iact` suite asserts is what
+	// it was.
+	m := b + 13
+	source(s, col-6, m, dirE)
+	for x := col - 4; x <= col+3; x++ {
+		put(s, harness.Piece{Name: belt, X: x, Y: m, Dir: &dirE})
+	}
+	sink(s, col+4, m, dirE)
 }
 
 // ---------------------------------------------------------------------------
@@ -510,7 +535,8 @@ func onInit() {
 	audit(s, "compiled")
 
 	out.Open("gestures staged: pocket y-24, edge y-12, limit y0 " +
-		"(spare part at (20,-1)), bridge y45 (gap at (20,61)), fast replace y90").End()
+		"(spare part at (20,-1)), bridge y45 (gap at (20,61)), fast replace y90 " +
+		"and the fed line at y103").End()
 	out.Open("demo scenes staged at x56: cross y-24, compact y-10, " +
 		"c-shape 8->8 y6, c-shape 8->9 y30, long run y60").End()
 }
@@ -527,6 +553,7 @@ var tags = []chartTag{
 	{col, 16, "C: 65th belt at (20,-2), facing south"},
 	{col, 61, "D: one part in this gap"},
 	{col, 92, "E: part onto (20,92); belt onto (20,98)"},
+	{col, 103, "E: part onto (20,103), mid-line"},
 	{dcol, -24, "demo: cross 1-to-3"},
 	{dcol, -10, "demo: compact column 8-to-8"},
 	{dcol, 10, "demo: c-shape 8-to-8"},
@@ -543,6 +570,7 @@ var greeting = []string{
 	"[BBB] C: y=0 lay a south-facing belt at (20,-2), against the spare part.",
 	"[BBB] D: y=61 place a balancer part in the one-tile gap between the two big ones.",
 	"[BBB] E: y=90 drop a part onto (20,92); then lay a belt on (20,98).",
+	"[BBB] E: y=103 drop a part onto (20,103), the middle of the fed line.",
 	"[BBB] Expected outcomes and the log lines to grep: test/interactive/README.md",
 }
 

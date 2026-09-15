@@ -1851,6 +1851,11 @@ func flush() {
 	// is what refused them, so past here they are ordinary balancers like any
 	// other and an edit to one is an edit (legacy.go, legacyRoots).
 	forgetBuildNotes()
+	// ... and the belts the engine destroyed for them, which have exactly the
+	// same span: a record made by a mine in the previous tick was read by the
+	// build event that followed it and by the revert above, and nothing after
+	// this can want it. See fastreplace.go.
+	forgetReplacedBelts()
 	forgetAddedParts()
 	forgetCondemned()
 	forgetLegacyConverted()

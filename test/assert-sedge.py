@@ -57,6 +57,12 @@ TOLDFORCE = re.compile(
 # the port limit) back to player 1` and its could-not-be-handed-back twin have
 # in common, and nothing else in this guest's vocabulary produces it.
 HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
+# THE BELT A REFUSED FAST REPLACE DESTROYED, on the same shape rule as the
+# hand-back above and behind the same wall. `restoreReplacedBelt` runs only
+# from `revertOne`, which needs a player, so every arm of it -- the restore,
+# the nothing-to-pay-with alert and the create-failed alert -- is unreachable
+# here. "replaced belt at x,y" is what all three have in common.
+BELTBACK = re.compile(r"\[BBB\].*\breplaced belt at -?\d+,-?\d+")
 SPARED = re.compile(
     r"\[BBB\] cluster (\d+) would merge into a cluster this mod cannot build; "
     r"left (\d+) standing network\(s\) alone"
@@ -254,8 +260,11 @@ def main():
     if any(HANDEDBACK.search(l) for l in lines):
         fail.append("a refused piece was handed back in a run with no players; "
                     "revertOne fired for a script build")
+    elif any(BELTBACK.search(l) for l in lines):
+        fail.append("a belt a fast replace destroyed was put back in a run with "
+                    "no players; the restore fired for a script build")
     else:
-        print("  hand-backs over the whole run: 0")
+        print("  hand-backs over the whole run: 0, belts put back: 0")
 
     # ---- the merge: both standing networks untouched -----------------------
     spared = [m for m in (SPARED.search(l) for l in lines) if m]

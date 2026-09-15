@@ -79,6 +79,12 @@ SPILLED = re.compile(r"\[BBB\] spilled (\d+) items beside cluster (\d+)")
 # sentence. A NEGATIVE assertion -- a headless run has no players -- and an exact
 # regex over a negative is the one shape a rename in the guest can make VACUOUS.
 HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
+# THE BELT A REFUSED FAST REPLACE DESTROYED, on the same shape rule as the
+# hand-back above and behind the same wall. `restoreReplacedBelt` runs only
+# from `revertOne`, which needs a player, so every arm of it -- the restore,
+# the nothing-to-pay-with alert and the create-failed alert -- is unreachable
+# here. "replaced belt at x,y" is what all three have in common.
+BELTBACK = re.compile(r"\[BBB\].*\breplaced belt at -?\d+,-?\d+")
 AUDIT = re.compile(
     r"\[BBB\] audit clusters=(\d+) parts=(\d+) nets=(\d+) drift=(\d+) "
     r"unbuilt=(\d+) refused=(\d+)"
@@ -467,6 +473,9 @@ def main():
     check(not HANDEDBACK.search(text),
           "a piece was handed back to a player. There is no player in a headless "
           "run, so `revertOne` must return before it mines anything")
+    check(not BELTBACK.search(text),
+          "a belt a fast replace destroyed was put back. It is the same wall: the "
+          "restore runs from `revertOne`, after a player has been resolved")
 
     # --- the audit walk -------------------------------------------------------
     walk = [tuple(int(g) for g in m.groups()) for m in AUDIT.finditer(text)]

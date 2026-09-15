@@ -243,6 +243,21 @@ func init() {
 	// See sedge.go.
 	fkapi.SubscribeMasked(fkapi.EventOnRuntimeModSettingChanged,
 		fkapi.SkipOnRuntimeModSettingChangedPlayerIndex)
+
+	// THE CLICK, which is the only thing that can tie a mine and a build at one
+	// tile together into a FAST REPLACE. A player dropping a balancer part onto
+	// the middle of a belt line has that belt destroyed by the engine before the
+	// build event arrives, and on Factorio 2.1 the part is then refused and
+	// handed back -- leaving a hole in the line unless the belt is put back. See
+	// fastreplace.go.
+	//
+	// NO FILTER EXISTS FOR IT (`runtime-api.json` gives a `filter` concept to 30
+	// events and this is not one of them) and nothing here is maskable: every
+	// field is a scalar. So it arrives for every tile of every build gesture any
+	// player makes and the handler writes one struct out of the decoded payload,
+	// with no host call. In a headless run it never fires at all, because it
+	// carries a player and there are none.
+	fkapi.Subscribe(fkapi.EventOnPreBuild)
 }
 
 //go:wasmexport fk_on_init
@@ -437,6 +452,11 @@ func onEventBody(id, ptr uint32) {
 	// for a robot, a script build, a revive and a clone -- and zero in every
 	// headless suite, which is why nothing else in them moved. See limit.go.
 	builtBy := uint32(0)
+	// The event's own tick, on the two events a fast replace is made of. Same
+	// shape and the same cost as the two above: a scalar already sitting in the
+	// decoded block. A mine and a build at one tile in one tick by one player
+	// are what `on_pre_build` turns into a fast replace; see fastreplace.go.
+	tick := uint64(0)
 	switch id {
 	// --- events that carry no entity ---------------------------------------
 	case fkapi.EventOnUndoApplied:
@@ -472,6 +492,9 @@ func onEventBody(id, ptr uint32) {
 	case fkapi.EventOnForceCreated:
 		onForceCreated(fkapi.ReadOnForceCreated(ptr).Force)
 		return
+	case fkapi.EventOnPreBuild:
+		notePreBuild(fkapi.ReadOnPreBuild(ptr))
+		return
 	case fkapi.EventOnRuntimeModSettingChanged:
 		// EVERY MOD'S SETTINGS ARRIVE HERE -- the event takes no filter -- so the
 		// handler's first act is to compare the name, and `Setting` is a Go string
@@ -497,7 +520,7 @@ func onEventBody(id, ptr uint32) {
 	// an entity actually carries some.
 	case fkapi.EventOnBuiltEntity:
 		ev := fkapi.ReadOnBuiltEntity(ptr)
-		obj, builtBy = ev.Entity, ev.PlayerIndex
+		obj, builtBy, tick = ev.Entity, ev.PlayerIndex, ev.Tick
 	case fkapi.EventOnRobotBuiltEntity:
 		obj = fkapi.ReadOnRobotBuiltEntity(ptr).Entity
 	case fkapi.EventOnSpacePlatformBuiltEntity:
@@ -512,7 +535,7 @@ func onEventBody(id, ptr uint32) {
 
 	case fkapi.EventOnPlayerMinedEntity:
 		ev := fkapi.ReadOnPlayerMinedEntity(ptr)
-		obj, what, minedBy = ev.Entity, evVanish, ev.PlayerIndex
+		obj, what, minedBy, tick = ev.Entity, evVanish, ev.PlayerIndex, ev.Tick
 	case fkapi.EventOnRobotMinedEntity:
 		obj, what = fkapi.ReadOnRobotMinedEntity(ptr).Entity, evVanish
 	case fkapi.EventOnSpacePlatformMinedEntity:
@@ -571,7 +594,17 @@ func onEventBody(id, ptr uint32) {
 	// placed alone in the middle of nowhere has no neighbours to be recognised
 	// by, so the name is the only thing that can identify it and it is bought
 	// unconditionally.
-	if what != evAppear && si != hiddenIdx && !nearCluster(si, pos.X, pos.Y) {
+	//
+	// ... EXCEPT WHEN THE ENGINE IS CLEARING A TILE FOR A PLAYER'S OWN BUILD.
+	// A part dropped onto a belt line far from every balancer is the common
+	// shape of the refused fast replace, and the mine that clears it would be
+	// rejected here -- so the belt would be gone before anything knew what it
+	// was. `isFastReplace` is a compare against one struct written by
+	// `on_pre_build`, with no host call behind it, and it is asked only of a
+	// mine a PLAYER made. See fastreplace.go.
+	fastRep := what == evVanish && minedBy != 0 &&
+		isFastReplace(tick, minedBy, floorTile(pos.X), floorTile(pos.Y))
+	if !fastRep && what != evAppear && si != hiddenIdx && !nearCluster(si, pos.X, pos.Y) {
 		return
 	}
 	name, err := ent.Name()
@@ -591,7 +624,7 @@ func onEventBody(id, ptr uint32) {
 				return
 			}
 		}
-		onPart(k, f, what, minedBy, builtBy)
+		onPart(k, f, what, minedBy, builtBy, tick)
 		return
 	}
 
@@ -657,6 +690,17 @@ func onEventBody(id, ptr uint32) {
 	// See fastreplace.go.
 	if what == evAppear {
 		reapFastReplaced(si, floorTile(pos.X), floorTile(pos.Y), builtBy)
+	}
+	// AND A BELT THE ENGINE IS ABOUT TO DESTROY FOR A PART, read here because
+	// this dispatch is the last moment it exists. Every name branch above has
+	// returned by now, so what is left is a belt-connectable that is not one of
+	// ours -- which is the only thing a balancer part can be dropped onto. The
+	// build event a statement later is what decides whether anything was: if no
+	// part appears on this tile the record is simply never read, and the flush
+	// throws it away. See fastreplace.go.
+	if fastRep {
+		noteReplacedBelt(si, floorTile(pos.X), floorTile(pos.Y), minedBy, tick,
+			name, ent)
 	}
 	onNeighbour(si, pos.X, pos.Y, minedBy, builtBy)
 }
@@ -850,7 +894,7 @@ func onNetworkLoss(si uint32, x, y float64, name string) {
 // other path -- a robot, a death, a script destroy. It reaches the registry
 // only so that a removal which DISSOLVES a cluster can hand the drained network
 // to the miner rather than to the ground; see carry.go.
-func onPart(k key, force uint32, what int, minedBy, builtBy uint32) {
+func onPart(k key, force uint32, what int, minedBy, builtBy uint32, tick uint64) {
 	changed := false
 	switch what {
 	case evAppear:
@@ -861,7 +905,8 @@ func onPart(k key, force uint32, what int, minedBy, builtBy uint32) {
 		// back if the shape it made is past plan.MaxPorts. Scalars only, no host
 		// call, and nothing at all unless a player built it. See limit.go.
 		if changed {
-			noteBuiltByPlayer(k.s, k.x, k.y, force, builtBy, true)
+			noteBuiltByPlayer(k.s, k.x, k.y, force, builtBy, true,
+				takeReplacedBelt(k.s, k.x, k.y, builtBy, tick))
 		} else if id, dup := index[k]; dup && builtBy != 0 {
 			// THE WAKE RACE'S SECOND HEAD (field report, 2026-08-05, the
 			// bridge gesture). When this event is the FIRST of a session, the
@@ -879,7 +924,8 @@ func onPart(k key, force uint32, what int, minedBy, builtBy uint32) {
 			// the fingerprint. builtBy is 0 for scripts and robots, whose
 			// wake-race outcome (the piece stands, the force is told) is the
 			// designed one already.
-			noteBuiltByPlayer(k.s, k.x, k.y, force, builtBy, true)
+			noteBuiltByPlayer(k.s, k.x, k.y, force, builtBy, true,
+				takeReplacedBelt(k.s, k.x, k.y, builtBy, tick))
 			markLive(find(id))
 			logState()
 			requestFlush()
@@ -1002,7 +1048,10 @@ func onNeighbour(surf uint32, x, y float64, minedBy, builtBy uint32) {
 	// the network's. The force is the first cluster this belt touches, which is
 	// the only one that can refuse over it. See limit.go.
 	if builtBy != 0 {
-		noteBuiltByPlayer(surf, tx, ty, nearForce, builtBy, false)
+		// No belt spec: a belt laid BESIDE a balancer replaced nothing of the
+		// player's -- a fast replace of a belt by a belt is the engine's own
+		// business and is not a refusal this mod can cause.
+		noteBuiltByPlayer(surf, tx, ty, nearForce, builtBy, false, beltSpec{})
 	}
 	requestFlush()
 }

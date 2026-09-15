@@ -100,6 +100,15 @@ type buildNote struct {
 	// cluster's box by construction, so the flag and the registry cross-check
 	// each other for free at revert time.
 	isPart bool
+	// belt is the belt-connectable the ENGINE destroyed to make room for this
+	// part, on the one build that has one: a fast replace. Zero everywhere else,
+	// and zero on every build a headless run can produce. Handing the part back
+	// without putting it back leaves a hole in a line the player never asked to
+	// open; see fastreplace.go, "The belt a refused fast replace destroyed".
+	//
+	// It is comparable, like every other field here, so the dedupe below is
+	// still `==`.
+	belt beltSpec
 }
 
 // pendingPiece is one note the flush decided to hand back, WITH THE CLAUSE
@@ -177,11 +186,13 @@ var (
 // Exact duplicates are dropped for the same reason `carry.Claims.Add` drops
 // them: the neighbour gate walks a 5x5 neighbourhood and could otherwise record
 // one belt several times over.
-func noteBuiltByPlayer(s uint32, x, y int32, force, player uint32, isPart bool) {
+func noteBuiltByPlayer(s uint32, x, y int32, force, player uint32, isPart bool,
+	belt beltSpec) {
 	if player == 0 {
 		return
 	}
-	n := buildNote{s: s, x: x, y: y, force: force, player: player, isPart: isPart}
+	n := buildNote{s: s, x: x, y: y, force: force, player: player, isPart: isPart,
+		belt: belt}
 	for i := range buildNotes {
 		if buildNotes[i] == n {
 			return
@@ -1174,5 +1185,13 @@ func revertOne(n buildNote, why string) {
 		logS(") back to player ")
 		logU(n.player)
 		logEnd()
+	}
+	// AND THE BELT THE ENGINE DESTROYED TO MAKE ROOM FOR IT, on the one build
+	// that had one. The part has just left the tile, which is what the belt
+	// needs: the two collide, so this could not have run a statement earlier.
+	// Zero on every other note and on every build any headless run can make.
+	// See fastreplace.go.
+	if n.isPart && n.belt.known() {
+		restoreReplacedBelt(surf, n, p)
 	}
 }

@@ -56,6 +56,8 @@ The group works in both directions, so a belt held over a part replaces the part
 
 On Factorio 2.1 there is one thing to know about replacing an edge part. The belt you lay sits on the tile the part occupied, which is next to the part beyond it, so it becomes that part's belt. If that part already has one, the balancer asks for two belts on one part, which 2.1 does not allow, and it is refused and stops until you take the belt away. What the machine was holding lands on the ground beside it, because the part is gone before the mod can find out that what is left cannot be built.
 
+A part dropped into the middle of a belt line is a different matter, because the part is then left with the belt behind it as an input and the belt ahead of it as an output. On Factorio 2.1 that is two belts on one part, so the part is refused and handed back, and the belt it replaced is put back on its tile with the line running again. It comes back empty: whatever it was carrying stays in your inventory, where the engine put it when it mined the belt, and the returned belt is paid for with the belt item you were refunded, so the count in your inventory is the one you started with. If that item is not there any more, the gap stays and the log says which item was missing.
+
 The collision mask is unchanged: a belt still cannot be laid *through* a balancer, only fast-replaced onto one part at a time.
 
 ## Cost and research

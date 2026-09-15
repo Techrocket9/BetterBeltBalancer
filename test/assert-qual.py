@@ -79,6 +79,12 @@ TOLDFORCE = re.compile(
 # the port limit) back to player 1` and its could-not-be-handed-back twin have
 # in common, and nothing else in this guest's vocabulary produces it.
 HANDEDBACK = re.compile(r"\[BBB\].*\bpiece at -?\d+,-?\d+")
+# THE BELT A REFUSED FAST REPLACE DESTROYED, on the same shape rule as the
+# hand-back above and behind the same wall. `restoreReplacedBelt` runs only
+# from `revertOne`, which needs a player, so every arm of it -- the restore,
+# the nothing-to-pay-with alert and the create-failed alert -- is unreachable
+# here. "replaced belt at x,y" is what all three have in common.
+BELTBACK = re.compile(r"\[BBB\].*\breplaced belt at -?\d+,-?\d+")
 SAMPLE = re.compile(r"\[BBB-QUAL\] sample tick=(\d+) (.*)")
 
 # The rig geometry the probes aim at (must match guest/go/obs/qual/main.go).
@@ -320,6 +326,9 @@ def main():
     if any(HANDEDBACK.search(l) for l in lines):
         fail.append("an over-limit piece was handed back in a run with no "
                     "players; revertOne fired for a script build")
+    if any(BELTBACK.search(l) for l in lines):
+        fail.append("a belt a fast replace destroyed was put back in a run with "
+                    "no players; the restore fired for a script build")
 
     # ---- an uncommon balancer balances -------------------------------------
     samples = {int(m.group(1)): parse_sample(m.group(2))

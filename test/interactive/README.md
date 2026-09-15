@@ -72,7 +72,7 @@ At any point, `/bbb-audit` in the console prints cluster and network counts. Whi
 
 ## E. Fast replace, both ways (y = 90)
 
-A four-part balancer with a belt line running east into the tile below its south-west corner, and below that a five-part column fed on its top and bottom parts only.
+A four-part balancer with a belt line running east into the tile below its south-west corner, below that a five-part column fed on its top and bottom parts only, and below that again a fed belt line with no balancer near it.
 
 **A part over a belt.** Hold a balancer part over the belt line's last tile at (20, 92). The cursor must show the fast-replace preview rather than a red block. Place it. Expected: the belt vanishes, the part takes the tile and joins the balancer above, the belt and whatever it was carrying arrive in your inventory, and the balancer is now three in and two out. Nothing on the ground.
 
@@ -86,7 +86,19 @@ The line stops there on purpose. A part dropped into the middle of a running lin
 
 **And the drag.** Hold a stack of belts and drag along the column from (20, 96) downwards. Every part you cross is replaced, exactly as dragging a belt across a row of splitters replaces those. A drag that clips a balancer takes out the parts it clips.
 
-Log lines: `a belt-connectable fast-replaced the part at 20,98` for each replaced part, `compiled cluster ... 3->2` for the forward gesture, and `carrying more than one belt` for the refusal. Only the refusal may produce a spill line, and no gesture here may produce a `[BBB] error:`.
+**A part into the middle of a running line.** A fed belt line runs east through (20, 103), below the column and far enough from it that no balancer is involved. Hold a balancer part over (20, 103) and place it. The engine replaces the belt, and the part it leaves has the belt behind it as an input and the belt ahead of it as an output, which is two belts on one part and is refused. Expected, over two ticks:
+
+- red flying text saying a balancer part connects to one belt, and the cannot-build sound;
+- the part back in your inventory;
+- the belt back on (20, 103), facing east, with the line running again;
+- the same number of belts in your inventory as the moment before the click: the engine refunded you one when it mined the belt, and the belt that came back was paid for with it;
+- whatever that belt was carrying still in your inventory, where the engine's own mine put it. The belt comes back empty.
+
+A gap left in the line is the whole finding this gesture exists for, so look at the tile rather than only at the log.
+
+If the belt item is not in your inventory when the part comes back (you dropped it, or your inventory was full when the engine mined it and it spilled), the gap stays and an alert line says which item was missing. That is deliberate: the belt is put back only when it can be paid for.
+
+Log lines: `a belt-connectable fast-replaced the part at 20,98` for each replaced part, `compiled cluster ... 3->2` for the forward gesture, `carrying more than one belt` for the refusals, and `put the replaced belt at 20,103 back` for the mid-line gesture, with `had no ... to pay for the replaced belt` when it cannot be paid for. Only a refusal may produce a spill line, and no gesture here may produce a `[BBB] error:`.
 
 ## F. Adopting a Belt Balancer 2 or 3 save
 
