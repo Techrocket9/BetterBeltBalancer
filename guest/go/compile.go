@@ -592,6 +592,15 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 	forceFilter = fkapi.OfNumber(float64(force))
 	for i := range tiles {
 		k := tiles[i]
+		// THE PRIORITY FLAG IS THE PART'S, NOT THE BELT'S, so it is read once
+		// per tile and stamped onto every edge that tile carries -- which on an
+		// engine that lets a part hold two belts is both of them, and that is
+		// the intended reading: a player flags a PART. One map point query, no
+		// host call, on a walk that is already doing one per side.
+		prio := false
+		if id, ok := index[k]; ok {
+			prio = pprio[id] != 0
+		}
 		onTile := uint32(0)
 		for d := 0; d < len(dirs); d++ {
 			nx, ny := k.x+dirs[d][0], k.y+dirs[d][1]
@@ -611,7 +620,8 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 			if !out {
 				ld = plan.Opposite(dir)
 			}
-			edgeBuf = append(edgeBuf, plan.Edge{TileX: k.x, TileY: k.y, Dir: ld, Out: out})
+			edgeBuf = append(edgeBuf, plan.Edge{TileX: k.x, TileY: k.y, Dir: ld,
+				Out: out, Prio: prio})
 			// WHICH EDGES THE CURVE ARM PRODUCED, parallel to edgeBuf and used
 			// by one caller: the adoption comparison, which asks what this
 			// cluster would look like WITHOUT them. See curveupg.go.
@@ -938,9 +948,18 @@ func fingerprint(edges []plan.Edge) uint64 {
 		e := edges[i]
 		mix(uint64(uint32(e.TileX)))
 		mix(uint64(uint32(e.TileY)))
-		b := uint64(e.Dir) << 1
+		b := uint64(e.Dir) << 2
 		if e.Out {
 			b |= 1
+		}
+		// THE PRIORITY FLAG IS IN THE FINGERPRINT, and it has to be: toggling it
+		// changes what plan.Build wires and nothing else about the world moves,
+		// so a hash blind to it would make the toggle a silent no-op -- the same
+		// shape as a belt turned around with no event, which the `m3` suite's
+		// `swap` rig is about. It costs the Dir field one more bit of shift and
+		// no more mixing.
+		if e.Prio {
+			b |= 2
 		}
 		mix(b)
 	}
@@ -1214,6 +1233,10 @@ func execute(ops []plan.Op, vis, hid fkapi.LuaSurface, force uint32) bool {
 		if o.Visible {
 			drawArrow(vis, *h, o)
 		}
+		if (o.OutPrio != 0 || o.InPrio != 0) && !setPriority(fkapi.LuaEntity{Object: *h}, o, i) {
+			unwind()
+			return false
+		}
 	}
 	for i := range ops {
 		if ops[i].Link != plan.LinkInput || ops[i].Pair < 0 {
@@ -1231,6 +1254,57 @@ func execute(ops []plan.Op, vis, hid fkapi.LuaSurface, force uint32) bool {
 		}
 	}
 	return true
+}
+
+// prioName renders plan's own -1/0/+1 as the engine's words. "left" and "right"
+// are relative to the direction the splitter faces, which is what plan.Op says
+// the sign means.
+func prioName(v int8) string {
+	if v < 0 {
+		return "left"
+	}
+	return "right"
+}
+
+// setPriority puts a splitter's output or input priority on it, one host call
+// per field and none at all for a field the plan left at zero -- so a plain
+// butterfly makes exactly the host calls it always made.
+//
+// A FAILURE UNWINDS THE WHOLE NETWORK, which is harsher than it looks and is
+// the only honest answer. The entity is standing and balancing; what it is not
+// doing is the thing the player asked for, so leaving it up would be a balancer
+// that lies about its own ports. That is the same call compile() makes about a
+// cluster it cannot build: a stopped balancer that says why beats a running one
+// that does not do what it says.
+//
+// Measured on 2.0.77 against a clone of express-splitter stripped exactly the
+// way guest/go/data/hidden.go strips `bbb-splitter` -- no minable, no
+// placeable_by, hidden, blanked structure, blanked belt_animation_set: "left",
+// "right" and "none" all set and read back on both fields, and a value the
+// engine does not know is refused by name ("Unknown SplitterPriority value").
+// Stripping a splitter down to a hidden prototype takes none of that away.
+func setPriority(e fkapi.LuaEntity, o *plan.Op, i int) bool {
+	var err error
+	if o.OutPrio != 0 {
+		err = e.SetSplitterOutputPriority(prioName(o.OutPrio))
+	}
+	if err == nil && o.InPrio != 0 {
+		err = e.SetSplitterInputPriority(prioName(o.InPrio))
+	}
+	if err == nil {
+		return true
+	}
+	logErrStart("splitter priority refused at op ")
+	logU(uint32(i))
+	logS(" (")
+	logS(protoName(o.Proto))
+	logS(" at ")
+	logF1(o.X)
+	logS(",")
+	logF1(o.Y)
+	logS(") -- aborting this cluster")
+	logEnd()
+	return false
 }
 
 // ---------------------------------------------------------------------------
