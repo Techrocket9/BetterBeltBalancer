@@ -714,13 +714,15 @@ var limPartPos fkapi.MapPosition
 // tile on every flush that merged anything -- which is the reason this was
 // written down as uncovered rather than done. It is avoided by an arithmetic
 // bound that needs no host call at all: A CLUSTER OF C PARTS HAS AT MOST 4C
-// EXTERIOR SIDES AND THEREFORE AT MOST 4C EDGES, so `4*csize[r] <= MaxPorts`
-// is a proof that no classification could find enough of them. Sixteen parts is
-// the largest cluster that can be proved safe, and every balancer any suite in
-// this repo merges is smaller than that -- the `mar` suite's merge leg is five
-// parts -- so the pass is a handful of integer comparisons and a `find` per
-// queued root, with no host call and no allocation, on every flush that is not
-// about a balancer of seventeen parts or more.
+// EXTERIOR SIDES AND THEREFORE AT MOST 4C EDGES, so a part count is a proof
+// about how many ports the merged cluster can possibly have. The threshold is
+// `4*csize[r] <= MaxPorts/2` since the priority pass rather than `MaxPorts`,
+// because a priority network stops fitting its slot at P = 64 and not at the
+// port cap -- EIGHT parts is the largest cluster that can be proved safe now,
+// where it used to be sixteen. The `mar` suite's merge leg is five parts, so the
+// pass is still a handful of integer comparisons and a `find` per queued root,
+// with no host call and no allocation, on every flush that is not about a
+// balancer of nine parts or more.
 //
 // The bound is CONSERVATIVE, and being wrong about it costs exactly the old
 // behaviour: a cluster whose recorded shape has been overtaken by a world the
@@ -876,10 +878,34 @@ func overLimitMerge(r uint32, bridged bool) bool {
 	}
 	// THE TWO FREE TESTS FIRST, and neither makes a host call.
 	//
-	// The port bound: AT MOST FOUR EDGES PER PART, so `4C <= MaxPorts` is a
-	// proof and not a heuristic. It is what keeps the whole pass off the hot
-	// path -- see the header.
-	ports := int(csize[r])*4 > plan.MaxPorts
+	// The SHAPE bounds: AT MOST FOUR EDGES PER PART, so a part count is a proof
+	// and not a heuristic about how big the merged cluster's ports can get. It
+	// is what keeps the whole pass off the hot path -- see the header.
+	//
+	// THE THRESHOLD IS HALF THE PORT CAP AND NOT THE CAP, because `plan.Build`
+	// refuses more than the cap now. A priority network is two butterflies wide
+	// and carries its tiers in a second band, so it does not fit its slot at
+	// P = 64 -- which is max(N, M) past MaxPorts/2, thirty-three belts on a
+	// side, and nine parts can carry thirty-six. At `4C > MaxPorts` a merge of
+	// nine parts into a shape with a flag on it was proved safe by arithmetic
+	// that had stopped being true, and both predecessors came down before
+	// flushLive refused the product -- which is the whole defect this pass
+	// exists to prevent, met through the bound that arrived after it.
+	//
+	// Eight parts carry at most thirty-two edges and cannot reach it, so the
+	// mar suite's five-part merge leg stays off this path exactly as it did.
+	// What a cluster of nine or more now pays is one classification it was
+	// already going to pay a moment later in compile().
+	//
+	// THE INPUT BOUND HAS NO SUCH ARITHMETIC and is not claimed to: a priority
+	// INPUT is refused at any size. What stands in for it is the bridging-tile
+	// theorem again -- adding a part can only take edges away from the tiles
+	// that were already there, and a part the engine has just built carries no
+	// flag, `recoverPriority` raising one at restyle time, which is after this.
+	// A flagged part revived from a blueprint INTO a merge is therefore missed,
+	// and it is the case agents/priority.md already records as taking the
+	// ordinary recompile-and-spill rule.
+	bigEnough := int(csize[r])*4 > plan.MaxPorts/2
 	// The one-belt-per-part bound has no such arithmetic: any two-part merge
 	// could break it. What stands in for it is the BRIDGING-TILE THEOREM
 	// (sedge.go) -- adding a part can only take edges away from the tiles that
@@ -898,7 +924,7 @@ func overLimitMerge(r uint32, bridged bool) bool {
 		}
 		sedge = false
 	}
-	if !ports && !sedge {
+	if !bigEnough && !sedge {
 		return false
 	}
 	tiles := collectCluster(r)
@@ -910,7 +936,9 @@ func overLimitMerge(r uint32, bridged bool) bool {
 		return false
 	}
 	edges := classifyEdges(surf, tiles, pforce[r])
-	if ports {
+	if bigEnough {
+		// `overLimitShape` is `plan.ShapeEdges` negated, so this is all three
+		// shape bounds and not only the cap.
 		if _, over := overLimitShape(edges); over {
 			return true
 		}
