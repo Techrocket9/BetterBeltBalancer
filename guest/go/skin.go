@@ -212,6 +212,14 @@ func restyle(root uint32) {
 // its own handler, or somebody picking a cell by hand in the map editor -- and
 // an editor pick silently flipping a balancer's port priority on the next flush
 // is worse than an editor pick that only looks wrong.
+//
+// THAT LASTS THE SESSION AND NOT THE SAVE, which is the honest end of the
+// sentence. `pvar` is guest heap and the heap is declined on every rebuilt
+// guest, so the next release of this mod zeroes it for every part in the world
+// and hands the lot to this function through rebuildFromWorld -- at which point
+// a badge somebody picked by hand in the editor becomes a real flag. There is
+// nothing here that could tell it from one, the variation being the only record
+// of the flag that survives a rebuilt guest at all.
 func recoverPriority(f uint32) {
 	if cap(skinRead) < len(skinEnt) {
 		skinRead = make([]fkapi.BulkOptUint8, len(skinEnt))
