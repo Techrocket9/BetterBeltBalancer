@@ -1,6 +1,6 @@
 ---------------------------------------------------------------------------------------------------
 Version: 0.3.3
-Date: 2026-09-07
+Date: 2026-09-14
   Bugfixes:
     - Fixed a permanent freeze that could happen with another mod installed that automatically crafts the items in your quickbar. It appeared when you enabled your personal roboport, or put a balancer part in the quickbar or on the cursor, and the game stopped responding with nothing in the log. The compatibility item this mod defines for saves migrating off Belt Balancer now places a compatibility part, which becomes a real balancer part on the next tick, instead of placing the part directly. Nothing about building or using a balancer changes. Thanks to PiggyWhiskey for the report and the save.
   Features:

@@ -56,6 +56,19 @@ MOD_VERSION := $(shell sed -n 's/^version = "\(.*\)"$$/\1/p' fklua.toml)
 # mod under test: the API description its generated bindings came from, and the
 # engine series its info.json declares.
 MOD_API     := $(shell sed -n 's/^api = "\(.*\)"$$/\1/p' fklua.toml)
+# FkRecipes arrives through the REAL Go module channel since 0.3.3 (its go/v0.1.0
+# tag, no replace), and its GitHub repository is PRIVATE until a build that relies
+# on it has shipped. GOPRIVATE keeps `go` from asking the public proxy and the
+# checksum database for that path, which would refuse it; the fetch itself then
+# runs git over HTTPS, and non-interactive git cannot answer GitHub's credential
+# prompt, so a developer maps the host to SSH in THEIR OWN git config
+# (`git config --global url."git@github.com:".insteadOf "https://github.com/"`)
+# or exports the one-shot form (`GIT_CONFIG_COUNT=1
+# GIT_CONFIG_KEY_0=url.git@github.com:.insteadOf GIT_CONFIG_VALUE_0=https://github.com/`).
+# Nothing here writes that config. Once the module is in the local cache no
+# network is needed, which is how a fetched machine builds offline. When the
+# repository goes public this export becomes harmless and can go.
+export GOPRIVATE ?= github.com/Techrocket9/fkrecipes
 MOD_SERIES  := $(shell sed -n 's/^factorio_version = "\(.*\)"$$/\1/p' fklua.toml)
 
 DIST      := dist

@@ -12,9 +12,12 @@ go 1.24
 
 require (
 	github.com/Techrocket9/fklua/guest/go v0.2.0
-	// The shared DATA-STAGE library. This mod declares its two startup
-	// dropdowns through it (guest/go/tune/plan.go) and its prototypes by hand;
-	// tune/plan.go's header is why the split is where it is.
+	// The shared DATA-STAGE library, through the REAL channel since 0.3.3:
+	// its go/v0.1.0 tag on GitHub, no replace. This mod declares its settings,
+	// its recipe and its technology through it (guest/go/tune/plan.go). The
+	// dev-only replace onto the sibling checkout that stood here until the
+	// library was published came out on 2026-09-14; a developer who wants the
+	// sibling's working tree again adds it back locally and does not commit it.
 	github.com/Techrocket9/fkrecipes/go v0.1.0
 )
 
@@ -26,11 +29,3 @@ require (
 // from v0.0.0 when this mod took that dependency. The replace still resolves it
 // onto the sibling checkout, which is what is actually compiled.
 replace github.com/Techrocket9/fklua/guest/go => ../../../FkLua/guest/go
-
-// DEV-ONLY, and it is the only way to build this today: FkRecipes is a sibling
-// checkout with no remote and no tag. v0.1.0 above is the tag its README names
-// as its eventual Go one, written down so the require has something to say;
-// nothing resolves it, because this line points the whole module path at the
-// working tree next door. When FkRecipes is published this replace comes out
-// and the version becomes real.
-replace github.com/Techrocket9/fkrecipes/go => ../../../FkRecipes/go
