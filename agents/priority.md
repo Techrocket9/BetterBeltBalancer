@@ -320,3 +320,42 @@ The guest's half is log lines, and the suite drives every one of them through `r
 | a build reaching the same bounds | `alert: cluster N cannot be built with Q priority outputs over n->m ports; refused` and `alert: cluster N asks for Q priority inputs over n->m ports, which this version does not build; refused` |
 
 **The spill guard's rig is a DEAD-ENDED 2->2 with one output flagged**, four parts under the one-belt-per-part rule, fed until it stops taking anything. `plan.Reinsertable` is 106 flagged and 64 plain, both pinned by `TestPriorityCapacityIsRecorded`, and the guard's comparison is `held <= 64`. So the leg is: fill it, clear the flag, assert the refusal line with `H` over 64, assert the network still standing and still delivering, and assert **zero items on the ground** over the whole window. Then unblock the outputs, let it drain past the boundary, clear the flag again and assert one teardown, one rebuild and no spill. The rig has to be dead-ended rather than merely saturated: a balancer that is moving anything has room, which is what makes the refusal rare in play and what makes it reachable here.
+
+---
+
+## What the engine said, and what the model did not
+
+The `prio` suite, 2026-09-15, Factorio 2.0.77, sixteen commits on the `release/2.0` arm at 0.2.4. Everything above this line was the flow model's; this is what a game did with it. CLAUDE.md's `prio` section is the whole run.
+
+**THE TWO FORMULAS ARE RIGHT, AND THE ENGINE AGREES TO WITHIN 0.002 OF A BELT.** Twenty rigs at the loads that separate the tiers, each read against a bare express belt in the same save that delivered 1,306 items over the window. A priority port at `min(S/q, 1)` measured 0.998 to 1.000 wherever it should be full and 0.332 where S was a third of a belt; a normal port at `min(max(S - q, 0)/(M - q), 1)` measured 0.332 to 0.334 against a third, 0.499 to 0.501 against a half, and **exactly zero** wherever the priority tier was not full. The blocked-priority-port row is the tiers absorbing a dead end rather than a neighbour doubling up: the three normal ports took 0.332, 0.334, 0.334 of the one belt fed.
+
+**EQUAL INTAKE HOLDS IN THE GAME, WHICH IS THE ONE THING THE BALANCING BUTTERFLY IN FRONT OF THE CONCENTRATOR EXISTS FOR.** A saturated 3 -> 2 with one priority port drew **870, 870, 870** from three finite sources over the window, a spread of 0.00%. The model says 0.6667 on every input and this is that, to the item, in a construction whose second half is deliberately asymmetric.
+
+**A PRIORITY PORT CARRIES BOTH LANES OUT OF TWO HALF-LANE INPUTS**, which the model cannot express at all. `plane` is a 2 -> 2 whose two inputs are side-loaded, so each is half a belt on ONE lane; S = 1 with q = 1 puts a full belt on the priority port, and the straight tail of its output belt read **12 items on the left lane and 12 on the right at every one of five samples**. A lane-preserving network delivers the same chest total, so nothing but a per-lane reading separates them.
+
+### The fill fraction, measured three ways
+
+The capacity table above is item POSITIONS and the spill guard's bound is what a teardown can give BACK. What fraction of either a jammed network really holds had never been measured, and the guard's bound was re-derived from exactly these numbers during the review. Three rigs dead-ended, fed from tick 0, then opened with the feed cut; what landed in their chests, less what their own visible belts were carrying, is the machine's:
+
+| | jammed hold | `Reinsertable` | tile positions | of positions |
+|---|--:|--:|--:|--:|
+| plain 2 -> 2 | **72** | 64 | 112 | 64% |
+| priority 2 -> 2, q = 1 | **128** | 106 | 192 | 67% |
+| plain 4 -> 4 | **232** | 192 | 320 | 73% |
+| priority 4 -> 4, q = 1 | **578** | 442 | 736 | 79% |
+
+**Two of them reproduce CLAUDE.md's own records to the item** -- M2's full 2x2 draining 72 and a saturated dead-ended 4x4 draining 232 -- by a different route, in a different save, which is what makes the other two worth quoting. The 4 -> 4 figure is the guard's own reading of the machine it refused.
+
+**AND IT SAYS WHAT THE DESIGN'S OWN RIG WOULD HAVE COST.** This file proposed a dead-ended 2 -> 2 for the spill guard on the arithmetic of the day, 192 positions against 112, and estimated the jammed hold at about 123. It is 128 -- close, and against the bound as it then stood a margin of sixteen items. The suite built a dead-ended 4 -> 4 instead, where the margin is 578 against 192, and kept the 2 -> 2 shape for the BOUNDARY leg, where the clear is asked every forty ticks as the machine drains and the tick it is accepted on is the tick it crossed under. That leg needs no margin at all, because the guard's own answer is what marks the crossing.
+
+### Two doors are a player's and one of them was not known to be
+
+`remote.call('better-belt-balancer', 'set-part-priority', ...)` is what the suite drives and it reaches `setPartPriority` with nothing below it that can tell a script from a keypress, which is what makes a headless run evidence about the keybind.
+
+**THE SETTINGS PASTE IS NOT LIKE THAT.** `LuaEntity::copy_settings` declares no `raises` in either pinned runtime description -- 89 methods there do and this is not one of them -- and `on_entity_settings_pasted` carries a mandatory `player_index`. Measured: a scripted `copy_settings` between two parts moves the destination's `graphics_variation` and this guest hears nothing, so `onSettingsPasted` and the refusal path inside it are reachable by a human and by nothing else. The suite asserts the outcome it can see -- the engine copies the picture, the registry does not move, nothing is refused -- and the handler belongs on the interactive checklist beside the keybind and the miner's pocket.
+
+### What a toggle costs, in the game
+
+A toggle is a recompile and the items go back inside: **13,249 items before and 13,249 after** across a flag going on, and the same across it coming off, counted either side of an audit marker inside one tick so that nothing anywhere in the save can have moved for another reason. **Zero items reached the ground anywhere in the run**, including on the toggle the guard ACCEPTED at the boundary, which is the tightest reinsertion this feature can produce.
+
+**And ticking every output costs nothing at all.** A 1 -> 1 whose only output is flagged, and a 2 -> 2 whose two are flagged in one tick, both come out at **0 teardowns and 0 compiles** with the parts badged: what collapses is what the planner reads, and the part still carries the flag.
