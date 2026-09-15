@@ -263,6 +263,8 @@ ALT + P is free: a `--dump-data` of base, quality, elevated-rails and space-age 
 
 The settings paste takes the flag from the REGISTRY and not from the pasted variation, even though the engine writes that variation itself: measured on 2.0.77, a script `copy_settings` between two of these entities moves `graphics_variation` from the source to the destination. Reading the flag back out of it would work today and would rest on an engine behaviour nobody promised. `pvar` is cleared for the destination in the same breath, because the engine has written a picture behind the guest's back and restyle must look rather than compare against a memory that is now wrong.
 
+**AND A REFUSED PASTE PUTS THE PICTURE BACK ITSELF**, which is the price of that clearing. `setPartPriority` restores the flag on every refusal, and the destination is still wearing the source's variation -- badged, if the source was flagged -- with `pvar` at 0; the next restyle hands it to `recoverPriority`, which reads a badge as a flag and raises one with no guard and no message. That is a hole straight through the spill guard and through the fit check: the player is told the change did not happen, and the flag lands a flush later on a cluster the compiler then refuses. So the handler writes the shape the registry says that part should draw and sets `pvar` to it, one host call on the entity the event already carried, and `recoverPriority` finds nothing.
+
 ### The four refusals
 
 `plan.ShapeEdges` answers one question, can this be built, and three bounds sit behind it; the fourth is the guest's own and is about the moment rather than the shape. Each has one sentence for a player and one log line.

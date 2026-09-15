@@ -71,6 +71,7 @@ package main
 import (
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/plan"
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/skin"
 )
 
 // InputTogglePriority is the custom-input prototype guest/go/data/priority.go
@@ -281,7 +282,28 @@ func onSettingsPasted(p uint32) {
 	if pprio[sid] != 0 {
 		on = prioOn
 	}
-	setPartPriority(dk, on, e.PlayerIndex)
+	if setPartPriority(dk, on, e.PlayerIndex) {
+		return
+	}
+	// A REFUSED PASTE HAS TO PUT THE PICTURE BACK ITSELF, and that is the one
+	// thing zeroing `pvar` above costs. `setPartPriority` restores the flag on
+	// every refusal, but the DESTINATION is still wearing the variation the
+	// engine copied off the source -- badged, if the source was flagged -- and
+	// with `pvar` at 0 the next restyle hands it to `recoverPriority`, which
+	// reads a badge as a flag and raises one with no guard and no message. That
+	// is a hole straight through the spill guard: the player is told the change
+	// did not happen and the flag arrives a flush later anyway, on a balancer
+	// the compiler will then refuse.
+	//
+	// So the shape the registry says this part should be drawing is written
+	// here, in the dispatch that caused the mess. One host call on a keypress,
+	// on the entity handle the event already carried, and `recoverPriority` has
+	// nothing left to find.
+	v := skin.Variation(maskAt(dk, pforce[did]), pprio[did] != 0)
+	if err := dst.SetGraphicsVariation(v); err != nil {
+		return
+	}
+	pvar[did] = v
 }
 
 // tileOfEntity is the tile and surface an entity stands on, in the registry's
