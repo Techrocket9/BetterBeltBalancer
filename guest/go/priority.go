@@ -455,6 +455,14 @@ func flipTilePrio(edges []plan.Edge, k key) {
 // contents cross the boundary, so there is one host call per transport line and
 // no allocation per line.
 //
+// IT IS PROPORTIONAL TO THE NETWORK, which on the largest shape the fit rule
+// allows is a few thousand host calls: 1,267 entities, one line-count call each
+// and up to eight line reads. At the ~12.6 us this repo measures for a tier-2
+// call that is the same order as the recompile it is standing in front of, and
+// it is paid once, on a keypress, only when the capacity shrinks and only when a
+// network is standing. Nothing has measured the product, and the cost of getting
+// it wrong is the spill this exists to prevent.
+//
 // IT COUNTS ITEMS AND THE CAPACITY IT IS COMPARED AGAINST IS POSITIONS, and
 // under belt stacking those are not the same unit: a stacked position holds up
 // to four items, so the count can exceed the positions occupied. The comparison
