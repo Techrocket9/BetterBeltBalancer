@@ -212,14 +212,22 @@ const (
 	jumperCols = 2
 )
 
-// Width is how many tile columns a P-line network occupies.
-func Width(p int) int {
+// stageCols is how many tile columns k butterfly stages occupy: one per stage,
+// plus a two-column jumper block in front of every stage but the first.
+func stageCols(p int) int {
 	k := stages(p)
-	w := colFirstStage + k
-	if k > 1 {
-		w += (k - 1) * jumperCols
+	if k == 0 {
+		return 0
 	}
-	return w + 1 // the send column
+	return k + (k-1)*jumperCols
+}
+
+// Width is how many tile columns a P-line network occupies: the recv column,
+// the lane-splitter column, the stages and the send column. It is also the
+// width of any plain butterfly BLOCK, which is what the priority construction
+// builds its two sub-balancers out of.
+func Width(p int) int {
+	return colFirstStage + stageCols(p) + 1
 }
 
 // stages is log2(p) for a power of two.
@@ -270,6 +278,14 @@ const (
 // the ONE check compile() makes before it touches anything and the one Build
 // repeats, so the two cannot disagree; a cluster with no inputs or no outputs
 // is a legitimate half-built state and fits at any size.
+//
+// EVERY OUTPUT MARKED PRIORITY IS THE PLAIN BALANCER, and it is reported as
+// QOut = 0 rather than as QOut = M. Two tiers where the second tier is empty is
+// one tier: the priority ports share equally among themselves and there is
+// nobody to share the residual with, which is what the plain butterfly already
+// does. Collapsing it here rather than in Build is what makes a player who
+// ticks every output of a 64-port balancer get a network instead of a refusal.
+// The same goes for the inputs.
 func ShapeEdges(edges []Edge) (pt Ports, fits bool) {
 	n, m, qi, qo := 0, 0, 0, 0
 	for i := range edges {
@@ -286,11 +302,54 @@ func ShapeEdges(edges []Edge) (pt Ports, fits bool) {
 		}
 	}
 	pt = Shape(n, m)
+	if qo == m {
+		qo = 0
+	}
+	if qi == n {
+		qi = 0
+	}
 	pt.QIn, pt.QOut = qi, qo
 	if pt.N == 0 || pt.M == 0 {
 		return pt, true
 	}
-	return pt, pt.P <= MaxPorts
+	if pt.P > MaxPorts {
+		return pt, false
+	}
+	if qo == 0 && qi == 0 {
+		return pt, true
+	}
+	// A priority network is TWO butterflies deep and carries its tiers in a
+	// second band of rows, so the slot is what binds it rather than the port
+	// cap.
+	if qi > 0 {
+		// Input priority is not built. buildPrio has no de-concentrator in it,
+		// and an approximation of a bound this repository states in terms of
+		// exactness is worse than a refusal. agents/priority.md, "What input
+		// priority does".
+		return pt, false
+	}
+	w, h := prioExtent(pt)
+	return pt, w <= SlotWidth && h <= SlotHeight
+}
+
+// prioExtent is the bounding box of the priority construction, in tiles: the
+// two bands buildPrio lays, measured rather than asserted by
+// TestEveryPriorityShapeStaysInsideItsSlot.
+//
+// Band 0 is the head, the balancing butterfly, the concentrator and the tap
+// column, over P rows. Band 1 is the two tier balancers side by side, under it.
+func prioExtent(pt Ports) (w, h int) {
+	band0 := colFirstStage + 2*stageCols(pt.P) + 1
+	band1 := Width(NextPow2(pt.QOut)) + Width(NextPow2(pt.M-pt.QOut))
+	h1 := NextPow2(pt.QOut)
+	if t := NextPow2(pt.M - pt.QOut); t > h1 {
+		h1 = t
+	}
+	w = band0
+	if band1 > w {
+		w = band1
+	}
+	return w, pt.P + h1
 }
 
 // Shape sizes a network for n inputs and m outputs.
@@ -326,6 +385,18 @@ var (
 	recvOp   [MaxPorts]int32
 	sendOp   [MaxPorts]int32
 	jinBuf   [MaxPorts]int32
+
+	// The priority path's own. rankBuf is one byte a row and the others are the
+	// same [MaxPorts] the rest of this block is: about 1 KB of extra globals,
+	// which is what a package-level buffer costs here rather than the
+	// ~50 KB agents/maxports.md warns a raised MaxPorts would (the conservative
+	// collector re-scans every global at every paced step, and test/run.sh
+	// fails a run on its root-set warning).
+	rankBuf  [MaxPorts]uint8
+	headOp   [MaxPorts]int32
+	tapOp    [MaxPorts]int32
+	subOp    [2 * MaxPorts]int32
+	portSend [MaxPorts]int32
 )
 
 // order returns, for each stage, the logical line sitting at each physical row
@@ -369,60 +440,21 @@ func permutation(from, to []int) []int {
 	return out
 }
 
-// Build produces the entity list for a cluster, appending into dst.
+// stagesAt lays the k butterfly stages of a p-row block: the splitter columns
+// and the jumper block in front of every stage but the first. It starts at
+// column `col` of the slot at (ox, oy) and returns the column after the last
+// stage, so that blocks can be laid end to end in one band of rows.
 //
-// ox, oy are the slot origin on the hidden surface, in tiles. The ops come back
-// in creation order and reference each other only by index, never by position,
-// so the executor never has to search for anything.
-//
-// ok is false when the cluster is beyond MaxPorts; the caller must refuse the
-// compile rather than build a network that overruns its slot.
-func Build(dst []Op, edges []Edge, ox, oy int32) (ops []Op, pt Ports, ok bool) {
-	ops = dst[:0]
-	pt, fits := ShapeEdges(edges)
-	if pt.N == 0 || pt.M == 0 {
-		// Nothing to balance: a cluster with no inputs or no outputs is a
-		// legitimate half-built state, not an error.
-		return ops, pt, true
-	}
-	if !fits {
-		return ops, pt, false
-	}
-
-	p := pt.P
+// outPrio goes on every splitter it places. PrioNone is the plain butterfly;
+// PrioLeft makes the same schedule a CONCENTRATOR, because `order` puts the
+// line whose bit s is clear on the smaller y of every stage-s pair, so
+// prioritising the smaller y prioritises the same half at every stage and the
+// winners meet each other at the next one. See "The sorter" below.
+func stagesAt(ops []Op, p, col int, ox, oy int32, outPrio int8) ([]Op, int) {
 	k := stages(p)
 	ord := order(p)
-
-	for i := 0; i < p; i++ {
-		inUsed[i] = i < pt.N
-		outUsed[i] = i < pt.M
-		recvOp[i], sendOp[i] = -1, -1
-	}
-	for i := 0; i < pt.Loop; i++ {
-		inUsed[pt.N+i] = true
-		outUsed[pt.M+i] = true
-	}
-
-	// No closures anywhere below. A closure that mutates `ops` forces the slice
-	// header onto the heap, and a heap allocation per compile is a heap
-	// allocation per compile forever under -gc=leaking.
 	fxBase := float64(ox) + 0.5
 	fyBase := float64(oy) + 0.5
-
-	// --- head: recv, lane splitter -----------------------------------------
-	for r := 0; r < p; r++ {
-		if !inUsed[r] {
-			continue
-		}
-		ops = append(ops, Op{Proto: ProtoLinkedBelt, X: fxBase + colRecv, Y: fyBase + float64(r),
-			Dir: East, Link: LinkOutput, Pair: -1})
-		recvOp[r] = int32(len(ops) - 1)
-		ops = append(ops, Op{Proto: ProtoLaneSplitter, X: fxBase + colLaneSplit, Y: fyBase + float64(r),
-			Dir: East, Pair: -1})
-	}
-
-	// --- stages -------------------------------------------------------------
-	col := colFirstStage
 	for s := 0; s < k; s++ {
 		if s > 0 {
 			perm := permutation(ord[s-1], ord[s])
@@ -455,10 +487,68 @@ func Build(dst []Op, edges []Edge, ox, oy int32) (ops []Op, pt Ports, ok bool) {
 			// An east-facing splitter's position is on the boundary between the
 			// two rows it spans, not on either tile's centre.
 			ops = append(ops, Op{Proto: ProtoSplitter, X: fxBase + float64(col),
-				Y: float64(oy+int32(2*t)) + 1.0, Dir: East, Pair: -1})
+				Y: float64(oy+int32(2*t)) + 1.0, Dir: East, Pair: -1, OutPrio: outPrio})
 		}
 		col++
 	}
+	return ops, col
+}
+
+// Build produces the entity list for a cluster, appending into dst.
+//
+// ox, oy are the slot origin on the hidden surface, in tiles. The ops come back
+// in creation order and reference each other only by index, never by position,
+// so the executor never has to search for anything.
+//
+// ok is false when the cluster is beyond MaxPorts; the caller must refuse the
+// compile rather than build a network that overruns its slot.
+func Build(dst []Op, edges []Edge, ox, oy int32) (ops []Op, pt Ports, ok bool) {
+	ops = dst[:0]
+	pt, fits := ShapeEdges(edges)
+	if pt.N == 0 || pt.M == 0 {
+		// Nothing to balance: a cluster with no inputs or no outputs is a
+		// legitimate half-built state, not an error.
+		return ops, pt, true
+	}
+	if !fits {
+		return ops, pt, false
+	}
+	if pt.QOut > 0 {
+		return buildPrio(ops, edges, pt, ox, oy)
+	}
+
+	p := pt.P
+
+	for i := 0; i < p; i++ {
+		inUsed[i] = i < pt.N
+		outUsed[i] = i < pt.M
+		recvOp[i], sendOp[i] = -1, -1
+	}
+	for i := 0; i < pt.Loop; i++ {
+		inUsed[pt.N+i] = true
+		outUsed[pt.M+i] = true
+	}
+
+	// No closures anywhere below. A closure that mutates `ops` forces the slice
+	// header onto the heap, and a heap allocation per compile is a heap
+	// allocation per compile forever under -gc=leaking.
+	fxBase := float64(ox) + 0.5
+	fyBase := float64(oy) + 0.5
+
+	// --- head: recv, lane splitter -----------------------------------------
+	for r := 0; r < p; r++ {
+		if !inUsed[r] {
+			continue
+		}
+		ops = append(ops, Op{Proto: ProtoLinkedBelt, X: fxBase + colRecv, Y: fyBase + float64(r),
+			Dir: East, Link: LinkOutput, Pair: -1})
+		recvOp[r] = int32(len(ops) - 1)
+		ops = append(ops, Op{Proto: ProtoLaneSplitter, X: fxBase + colLaneSplit, Y: fyBase + float64(r),
+			Dir: East, Pair: -1})
+	}
+
+	// --- stages -------------------------------------------------------------
+	ops, col := stagesAt(ops, p, colFirstStage, ox, oy, PrioNone)
 
 	// --- tail: send ---------------------------------------------------------
 	for r := 0; r < p; r++ {
@@ -494,6 +584,219 @@ func Build(dst []Op, edges []Edge, ox, oy int32) (ops []Op, pt Ports, ok bool) {
 				Pair: recvOp[nin]})
 			nin++
 		}
+	}
+	return ops, pt, true
+}
+
+// ---------------------------------------------------------------------------
+// Priority outputs
+//
+// The mod's promise for a priority output is the one a player can state: the
+// ports they ticked are fed FIRST and share what they get equally, and the rest
+// share whatever is left, equally. So with S belts arriving and q of the M
+// outputs ticked, a priority output carries min(S/q, 1) and a normal one
+// carries max(S-q, 0)/(M-q) -- exact at every load rather than close at most of
+// them, which is the whole reason this mod exists.
+//
+// It is one network, compiled once, and it runs no script. Everything below is
+// vanilla splitters with `output_priority` set at create time.
+//
+// # Why one priority butterfly is not the answer
+//
+// Setting output priority on every splitter of the plain butterfly DESTROYS the
+// remainder rather than distributing it: two belts into a 4x4 come out
+// [1, 0, 1, 0], because a priority splitter is a MERGE and a tree of merges is
+// a concentrator, not a balancer. That is the fact the construction is built
+// around rather than the one it fails on.
+//
+// # The construction
+//
+//	band 0, P rows:  head -> BALANCE -> CONCENTRATE -> one tap per rank
+//	band 1:          PRIO balancer (q ports)  |  RESID balancer (M-q ports)
+//
+//   - BALANCE is the plain butterfly over P rows with every row an output, so
+//     nothing loops back and nothing dead-ends. Every row leaves it carrying
+//     exactly S/P.
+//   - CONCENTRATE is the SAME schedule with every splitter's output priority on
+//     the smaller y. Over a uniform input it sorts: the row of rank r carries
+//     clamp(S - r, 0, 1), so ranks 0..q-1 hold min(S, q) between them and the
+//     ranks after them hold the rest. `order` puts the line whose bit s is
+//     clear on the smaller y of every stage-s pair, so the same half wins at
+//     every stage and the winners meet each other at the next one; the rank of
+//     a row is then the bit reversal of the line standing on it, which is what
+//     sorterRanks computes and TestTheConcentratorSorts measures.
+//   - the tap column sends ranks 0..q-1 to the PRIO balancer and ranks
+//     q..M-1 to the RESID one. Ranks M and past get NO tap and dead-end, which
+//     is correct rather than tolerated: a balancer with M outputs cannot
+//     deliver more than M belts, and a priority splitter whose overflow side is
+//     blocked backs up without disturbing its priority side.
+//   - each tier balancer is a plain square butterfly, shape (t, t), so its
+//     every spare port loops back and it has no dead end in it. That is what
+//     makes each tier exact at every load and not only at saturation: a
+//     dead-ended port re-routes flow asymmetrically under partial load, which
+//     TestDeadEndedSpareOutputsAreNotExactUnderPartialLoad records against the
+//     plain network.
+//
+// BALANCE is not an optimisation and cannot be dropped for q = 1 even though
+// rank 0 carries min(S, 1) whatever the input looks like. It is what makes the
+// network draw EQUALLY from its inputs: the concentrator's tree is deliberately
+// asymmetric, and behind it the input a row happens to sit on would decide how
+// much of it is taken when the balancer is full.
+//
+// # What it costs
+//
+// Two butterflies where there was one, plus the tier balancers, plus a linked
+// belt pair per tap: about 2.3x the entities of the plain network at 4x4 and
+// 2.5x at 8x8, and a recompile is linear in entities. agents/priority.md has
+// the table and what a toggle costs in items.
+// ---------------------------------------------------------------------------
+
+// sorterRanks fills rankBuf with the concentration rank of each physical row at
+// the concentrator's exit: rank 0 is the row that fills first.
+//
+// A line wins stage s when its bit s is clear, so after k stages the line's
+// value is clamp(S - rev(line), 0, 1) where rev reverses its k bits -- the
+// first stage decides the LAST bit of the rank. The row that line ends on is
+// `order`'s last stage read backwards.
+func sorterRanks(p int) {
+	k := stages(p)
+	if k == 0 {
+		rankBuf[0] = 0
+		return
+	}
+	last := order(p)[k-1]
+	for r := 0; r < p; r++ {
+		v, rev := last[r], 0
+		for i := 0; i < k; i++ {
+			rev = rev<<1 | (v>>uint(i))&1
+		}
+		rankBuf[r] = uint8(rev)
+	}
+}
+
+// subAt lays one tier's balancer: a plain butterfly of shape (t, t) over
+// NextPow2(t) rows at (cx, cy), with its spare ports looped back into its spare
+// rows. Square because a tier's lines and its ports are the same set.
+//
+// entry and exit come back in subOp, packed as the entry op of port i followed
+// by the exit op of port i, so that one [MaxPorts] buffer serves both and the
+// caller can wire the taps and the visible interfaces without a second pass.
+// Only the t real ports are reported; the loopbacks are wired here.
+func subAt(ops []Op, t int, cx, cy int32) []Op {
+	pp := NextPow2(t)
+	fx := float64(cx) + 0.5
+	fy := float64(cy) + 0.5
+	for r := 0; r < pp; r++ {
+		ops = append(ops, Op{Proto: ProtoLinkedBelt, X: fx + colRecv, Y: fy + float64(r),
+			Dir: East, Link: LinkOutput, Pair: -1})
+		recvOp[r] = int32(len(ops) - 1)
+		// Every tier line gets the lane stage. The concentrator's splitters are
+		// the first in this mod that are not plain, nothing has measured
+		// whether an output priority keeps a vanilla splitter's lane fidelity,
+		// and one entity a line is what makes the question not matter.
+		ops = append(ops, Op{Proto: ProtoLaneSplitter, X: fx + colLaneSplit,
+			Y: fy + float64(r), Dir: East, Pair: -1})
+	}
+	ops, col := stagesAt(ops, pp, colFirstStage, cx, cy, PrioNone)
+	for r := 0; r < pp; r++ {
+		ops = append(ops, Op{Proto: ProtoLinkedBelt, X: fx + float64(col), Y: fy + float64(r),
+			Dir: East, Link: LinkInput, Pair: -1})
+		sendOp[r] = int32(len(ops) - 1)
+	}
+	for i := t; i < pp; i++ {
+		ops[sendOp[i]].Pair = recvOp[i]
+	}
+	for i := 0; i < t; i++ {
+		subOp[2*i], subOp[2*i+1] = recvOp[i], sendOp[i]
+	}
+	return ops
+}
+
+// buildPrio is Build for an edge list with priority outputs in it. The header
+// above is the construction; this is the wiring.
+func buildPrio(ops []Op, edges []Edge, pt Ports, ox, oy int32) ([]Op, Ports, bool) {
+	p, q := pt.P, pt.QOut
+	mn := pt.M - q
+	fx := float64(ox) + 0.5
+	fy := float64(oy) + 0.5
+
+	// --- band 0: the head, over the N real input rows. Nothing loops back into
+	// this band: every tier balancer recirculates its own spare ports, so the
+	// flow that reaches one has already lost or won the priority competition
+	// and must not be offered it again.
+	for r := 0; r < pt.N+pt.Loop; r++ {
+		ops = append(ops, Op{Proto: ProtoLinkedBelt, X: fx + colRecv, Y: fy + float64(r),
+			Dir: East, Link: LinkOutput, Pair: -1})
+		headOp[r] = int32(len(ops) - 1)
+		ops = append(ops, Op{Proto: ProtoLaneSplitter, X: fx + colLaneSplit,
+			Y: fy + float64(r), Dir: East, Pair: -1})
+	}
+	ops, col := stagesAt(ops, p, colFirstStage, ox, oy, PrioNone)
+	ops, col = stagesAt(ops, p, col, ox, oy, PrioLeft)
+
+	// --- the tap column. A rank past the last output port gets no tap at all.
+	sorterRanks(p)
+	taps := pt.M + pt.Loop
+	for i := 0; i < taps; i++ {
+		tapOp[i] = -1
+	}
+	for r := 0; r < p; r++ {
+		rank := int(rankBuf[r])
+		if rank >= taps {
+			continue
+		}
+		ops = append(ops, Op{Proto: ProtoLinkedBelt, X: fx + float64(col), Y: fy + float64(r),
+			Dir: East, Link: LinkInput, Pair: -1})
+		tapOp[rank] = int32(len(ops) - 1)
+	}
+
+	// --- band 1: the two tiers, side by side under band 0. portSend[i] is the
+	// op a visible output pairs with, numbered priority ports first.
+	by := oy + int32(p)
+	ops = subAt(ops, q, ox, by)
+	for i := 0; i < q; i++ {
+		ops[tapOp[i]].Pair = subOp[2*i]
+		portSend[i] = subOp[2*i+1]
+	}
+	ops = subAt(ops, mn, ox+int32(Width(NextPow2(q))), by)
+	for j := 0; j < mn; j++ {
+		ops[tapOp[q+j]].Pair = subOp[2*j]
+		portSend[q+j] = subOp[2*j+1]
+	}
+	// The ranks past the last output port are the plain network's spare ports
+	// and they are wired the plain network's way: the first Loop of them feed
+	// the head's spare rows and the rest dead-end. That is not tidiness. A
+	// head row with nothing on it makes the network draw UNEVENLY from its
+	// inputs once it saturates -- 7 belts into a 7->5 came out 0.625 four ways,
+	// 0.75 twice and a whole belt once -- because the back-pressure the
+	// concentrator sends back is shaped by the concentration tree, and a
+	// butterfly whose outputs are blocked unevenly is not input-fair.
+	// TestSaturatedInputsAreDrawnEqually is what holds it.
+	for i := 0; i < pt.Loop; i++ {
+		ops[tapOp[pt.M+i]].Pair = headOp[pt.N+i]
+	}
+
+	// --- the visible edge interfaces, in edge order, so that the k-th visible
+	// end is still the k-th edge whatever port the plan gave it.
+	nin, nprio, nnorm := 0, 0, 0
+	for _, e := range edges {
+		if e.Out {
+			port := q + nnorm
+			if e.Prio {
+				port = nprio
+				nprio++
+			} else {
+				nnorm++
+			}
+			ops = append(ops, Op{Proto: ProtoLinkedBelt, X: float64(e.TileX) + 0.5,
+				Y: float64(e.TileY) + 0.5, Dir: e.Dir, Link: LinkOutput, Visible: true, Pair: -1})
+			ops[portSend[port]].Pair = int32(len(ops) - 1)
+			continue
+		}
+		ops = append(ops, Op{Proto: ProtoLinkedBelt, X: float64(e.TileX) + 0.5,
+			Y: float64(e.TileY) + 0.5, Dir: e.Dir, Link: LinkInput, Visible: true,
+			Pair: headOp[nin]})
+		nin++
 	}
 	return ops, pt, true
 }
