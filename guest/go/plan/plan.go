@@ -152,6 +152,13 @@ type Op struct {
 	// Visible puts the entity on the cluster's own surface instead of the
 	// hidden one. Only the edge interfaces are visible.
 	Visible bool
+	// OutPrio and InPrio are a SPLITTER's output and input priority: 0 is
+	// none, -1 is "left" and +1 is "right" in the engine's own sense, which is
+	// relative to the direction the splitter faces. Every hidden splitter
+	// faces East, so "left" is North, the smaller y of the pair, and "right"
+	// is South, the larger y. Zero on every op of a plain butterfly, and the
+	// executor makes no host call for a zero.
+	OutPrio, InPrio int8
 }
 
 // Edge is one belt touching the cluster: a tile of the cluster, and the
