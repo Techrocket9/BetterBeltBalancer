@@ -1,6 +1,6 @@
 # Priority ports -- what the planner builds, what it refuses, and what a toggle costs
 
-The planner's half of the input/output priorities feature: `guest/go/plan`. The guest's half -- the per-part flag, the UI, the persistence and the refusal wiring -- is somebody else's, and the seam between them is `plan.Edge.Prio`, `plan.Ports.QIn/QOut`, `plan.ShapeEdges` and `plan.Op.OutPrio/InPrio`.
+The whole of the input/output priorities feature: the planner (`guest/go/plan`), which decides what a priority network IS, and the guest around it (`guest/go/priority.go`), which is where the flag lives, how a player moves it and what happens when it cannot be honoured. The seam between them is `plan.Edge.Prio`, `plan.Ports.QIn/QOut`, `plan.ShapeEdges`, `plan.Capacity` and `plan.Op.OutPrio/InPrio`.
 
 **OUTPUT priority is built and verified. INPUT priority is refused**, and the last section says why and what building it would take.
 
@@ -156,18 +156,28 @@ The entity count is **not monotone in q**, and that is the tier balancers rather
 
 ### What a toggle costs in items
 
-Toggling a priority flag is a RECOMPILE: the network comes down, the drained items go into the carry pool, and the network that goes up takes them back in plan order (`carry.go`, "A recompile is not a removal"). Nothing is ever spilled on the hidden surface and nothing goes to a player's inventory. What the successor cannot hold takes the existing visible-surface spill beside the cluster.
+Toggling a priority flag is a RECOMPILE: the network comes down, the drained items go into the carry pool, and the network that goes up takes them back in plan order (`carry.go`, "A recompile is not a removal"). Nothing is ever spilled on the hidden surface and nothing goes to a player's inventory, because a toggle records no mine claim and a claim is what makes a removal's leftovers somebody's property.
 
-So the direction matters, and it is asymmetric:
+**IT NEVER REACHES THE GROUND, because a change that would not fit is refused instead.** That is the guest's `prioFitsWhatIsStanding`, and it is a decision this design took the other way first: the residual was written down as a cost a player could walk over rather than a thing to prevent. The reason it moved is the size of it. A jammed 8->8 whose last flag is cleared has the last column of the table to put on the floor, on the order of a thousand items, and none of it is the player's doing in the sense a mine is. A mine says take this machine apart; a flag says configure it.
 
-- **turning a priority port ON never spills.** The successor is bigger than the predecessor in every shape in the table, so everything the teardown drained fits.
-- **turning the LAST priority port off** shrinks the network back to the plain one, and the residual is `max(0, what was standing - plain capacity)`. The bound is the last column of the table.
+So before the flag moves, the guest asks `plan.Capacity` for the successor's positions and for the predecessor's. If the successor is smaller it counts what the standing network is holding, and refuses the change when the count exceeds what the successor could take. Nothing is torn down and nothing is said in chat: the balancer is still running and the player is told to let it empty.
 
-**The bound needs a network that is completely full, which means one whose outputs are all blocked -- and a jammed network really is near capacity.** That is the one place the capacity arithmetic above can be checked against the game, and it checks out: CLAUDE.md records a saturated dead-ended 4x4 draining **232 items**, against the 320 positions this file computes for it (73%), and M2's full 2x2 draining **72** against 112 (64%). The shortfall is the splitters' internal buffers, which no transport line reports.
+**THE DIRECTION IS NOT THE QUESTION, AND THE FIRST CUT OF THIS SECTION HAD THAT WRONG.** It read "turning a priority port ON never spills", which is true of the plain network against a priority one and false of q against q+1: the table's own 4x4 rows are 736 positions at q=1 and 608 at q=2, for the tier-balancer reason the paragraph above the table gives. So a toggle ON shrinks that network. The guard compares two capacities and never asks which way the flag went, and `TestAPriorityToggleCanShrinkTheNetworkInEitherDirection` is the row that says why.
 
-So the residual is not theoretical. A jammed 8->8 whose last priority flag is cleared can put on the order of a thousand items on the ground, and **that is the one number in this design that is not small**. What keeps it rare rather than small is that it needs every output of that balancer blocked at the moment of the toggle; a balancer that is moving anything has room.
+**The count is items and the capacity is positions**, and under belt stacking those are not the same unit: a stacked position holds up to four items, so the count can exceed the positions occupied and the guard can refuse a change that would have fitted. That is the side to be wrong on. On every force that cannot stack, which is all of base Factorio, one item is one position and the comparison is exact.
 
-It is written down rather than fixed because the two ways to shrink it are both worse. The concentrator is a whole butterfly and cannot be made cheaper without giving up the exactness the feature is for; and a toggle that refused to run on a full balancer would be a worse answer than a spill the player can walk over.
+**The bound the capacity table gives needs a network that is completely full, which means one whose outputs are all blocked -- and a jammed network really is near capacity.** That is the one place the capacity arithmetic above can be checked against the game, and it checks out: CLAUDE.md records a saturated dead-ended 4x4 draining **232 items**, against the 320 positions this file computes for it (73%), and M2's full 2x2 draining **72** against 112 (64%). The shortfall is the splitters' internal buffers, which no transport line reports.
+
+Those two numbers are also what say the guard is reachable rather than theoretical. A 2->2 with one priority port holds 192 positions and the plain 2->2 it becomes holds 112; at the fill fraction M2 measured on the plain 2x2 a jammed priority 2->2 is carrying about 123 items, which is over the 112 the successor could take. So the suite's rig is a dead-ended 2->2: fill it, clear the flag, and the refusal fires.
+
+### What the guard does not cover
+
+Two shrinks, and neither is a flag changing:
+
+- **a belt MINED off a priority port** shrinks the machine too, and takes the rule every mine takes: what the successor cannot hold is offered to the player who mined it and only then to the floor (CLAUDE.md, "The miner's pocket"). That is the contract for a removal and this guard has no business overriding it.
+- **a blueprint or a paste that lands a flagged part into a balancer that is then too big** is refused by `compile`, in front of its own teardown, so there is nothing standing to lose.
+
+The two writers of the flag are the toggle, which is guarded, and `recoverPriority`, which raises one only on a part whose picture the guest has never written. That part arrived with its belts, so the cluster it lands in is recompiled by the BUILD it came in on, and a build that shrinks a machine has taken the ordinary recompile-and-spill rule since long before priorities existed.
 
 ## What the model found about the plain network
 
@@ -212,6 +222,62 @@ Until then, `Op.InPrio` is a field nothing sets. `TestOnlySplittersCarryAPriorit
 - **`Ports.QOut`** is the count of ticked outputs AFTER the collapse: `M` ticked outputs reports 0. `Ports.Loop` still describes the head's loopback and is still `min(P-M, P-N)`.
 - **Port order**: the priority output edges take ports `0..q-1` in edge order and the rest take `q..M-1`, but nothing outside the planner needs to know that. The visible interfaces are still appended in EDGE order, so the k-th visible end is the k-th edge, exactly as in the plain path.
 
+## The guest's half
+
+`guest/go/priority.go`, and one byte per part.
+
+### The flag
+
+`pprio` is one byte a node in `cluster.go`'s parallel slices, beside `pvar`, and it is the PART's rather than the belt's: `classifyEdges` reads it once per tile and stamps it onto every edge that tile carries, which on an engine that lets a part hold two belts is both of them. A player flags a part.
+
+It is in the compile FINGERPRINT (`compile.go`), which is what makes a toggle a recompile: the flag is the only thing that moves, nothing in the world does, and a hash blind to it would make the gesture a silent no-op -- the shape `m3`'s `swap` rig is about. It costs the `Dir` field one more bit of shift and no more mixing.
+
+### Where it survives
+
+In `graphics_variation`, which is the one piece of per-entity state this mod already writes and the engine already persists. Cells 1..47 are the shapes and 48..94 are the same shapes badged, so the byte is the in-world indicator at the same time. The guest heap is declined on every rebuilt guest, so a flag kept only there would be lost on every release of this mod and a player's factory would quietly go back to balancing evenly.
+
+Measured on 2.0.77 against a prototype declaring `variation_count = 94`:
+
+| | |
+|---|---|
+| 94 | reads back 94 |
+| 95 | reads back 1 |
+| 255 | reads back 67 |
+| 0 | refused, "allowed values are from 1 to 256" |
+
+so the engine wraps modulo the count. A blueprint over a `simple-entity-with-force` with a `placeable_by` carries `variation = 50` and a revived ghost comes back at 50, so a blueprint round-trip keeps the flag with nothing asked of the guest.
+
+`recoverPriority` (`skin.go`) is the other half: a part whose picture the guest has never written -- a revived ghost, a clone, or a whole world on a fresh heap -- has its variation read back, and ONLY the flag is taken, because a pasted part's neighbourhood is not its source's. One host call for the whole cluster through the bulk getter, skipped entirely when every candidate's picture is already known.
+
+Driven end to end on 2.0.77 through the remote method on a 2x2: the part at 10,10 flips and restyle writes variation 21 -> 68, which is 21 + 47; off again writes 68 -> 21, one teardown and one rebuild each way. A blueprint taken over the result carries `variation = 68` for the flagged part and 17, 27, 35 for the other three; pasted elsewhere and revived, the cluster comes up `skin cluster=5 parts=4 set=0 vars=68,27,17,35`, which is `recoverPriority` finding the world already showing what it wanted and making no write at all. With it stubbed out the same paste comes up `set=4 vars=21,...` and the flag is gone.
+
+### The three doors
+
+A keybind (`bbb-toggle-priority`, ALT + P over the part the player is pointing at), a remote method (`set-part-priority`), and a settings paste. All three reach `setPartPriority` and nothing else does.
+
+The remote method is not a convenience. A keypress cannot be issued from a script -- `script.raise_event` refuses a custom input outright -- and a headless run has no player to press one, so without it the whole feature is reachable by a human and by nothing else. It reaches the same function with no branch below it that can tell them apart except the player there is to tell, which is what makes a suite driving it evidence about the keybind.
+
+ALT + P is free: a `--dump-data` of base, quality, elevated-rails and space-age on 2.0.77 has 14 custom inputs, twelve of them `ALT + <letter>` over A B C D E F G L R T U Y, one on TAB and one unbound. The engine's own compiled-in bindings are not prototypes and no dump lists them.
+
+The settings paste takes the flag from the REGISTRY and not from the pasted variation, even though the engine writes that variation itself: measured on 2.0.77, a script `copy_settings` between two of these entities moves `graphics_variation` from the source to the destination. Reading the flag back out of it would work today and would rest on an engine behaviour nobody promised. `pvar` is cleared for the destination in the same breath, because the engine has written a picture behind the guest's back and restyle must look rather than compare against a memory that is now wrong.
+
+### The four refusals
+
+`plan.ShapeEdges` answers one question, can this be built, and three bounds sit behind it; the fourth is the guest's own and is about the moment rather than the shape. Each has one sentence for a player and one log line.
+
+| | when | toggle | build |
+|---|---|---|---|
+| **over the port limit** | more than `MaxPorts` belts, whatever is flagged | unreachable: a flag cannot add a belt | `over-port-limit` |
+| **too big for a priority port** | the priority construction does not fit the slot, which is P = 64 | `priority-refused` | `priority-too-big` |
+| **a priority input** | `QIn > 0` after the collapse, at any size | `priority-input-refused` | `priority-input` |
+| **too full to shrink** | the successor holds fewer positions than the balancer is carrying | `priority-holding` | unreachable: a build cannot make a standing network smaller |
+
+Each build row has a second key with `-unconnected` on it, for the robot or script build that leaves the piece standing rather than handing it back, and `refuseShape` (`limit.go`) is the one place a refused `Ports` chooses. A shape carrying a priority port takes a priority sentence; among those, a priority INPUT wins over a size. A cluster can break more than one bound at once, and taking the flag off is the fix in every case.
+
+**A TOGGLE IS REFUSED BEFORE THE FLAG MOVES.** `ShapeEdges` is asked with the flag speculatively flipped, so a shape the compiler could not build leaves the flag, the network and the items exactly as they were. Refusing after the flip would save the network too -- the check is in front of the teardown -- and would leave the cluster standing refused until the player guessed to toggle back.
+
+**Every-port-flagged collapses rather than refusing.** `ShapeEdges` reports `QOut = 0` for M flagged outputs and `QIn = 0` for N flagged inputs, so a player who ticks every port of a 64-port balancer gets the plain network to the byte instead of a refusal, and a balancer whose every INPUT is flagged is not an input-priority refusal at all. Two tiers where the second is empty is one tier.
+
 ### What a suite should assert
 
 The load is in belts fed. Per output, with a bare belt in the same save as the yardstick, as the M2 rigs do it:
@@ -226,3 +292,16 @@ The load is in belts fed. Per output, with a bare belt in the same save as the y
 | 2->2, one ticked | 2 belts (saturated) | **1.0** | **1.0** |
 
 `TestTheRatesASuiteShouldAssert` pins the same six rows against the model. Two more worth a leg each: every input drawn equally when the rig is saturated, and a blocked priority port leaving the normal ports at exactly a third of a belt each on a 4x4 fed one belt.
+
+The guest's half is log lines, and the suite drives every one of them through `remote.call("better-belt-balancer", "set-part-priority", surface, x, y, on)`, because the keybind needs a player:
+
+| what | the line |
+|---|---|
+| the flag moved | `priority part=X,Y on` / `priority part=X,Y off` |
+| the picture followed | `skin cluster=...` with the flagged part's cell 47 above its unflagged one |
+| a shape too big | `alert: priority refused for cluster N at part X,Y: ... does not fit; the flag was not set` |
+| a priority input | `alert: priority refused for cluster N at part X,Y: ... is a priority input, which this version does not build; the flag was not set` |
+| too full to shrink | `alert: priority refused for cluster N at part X,Y: the balancer holds H items and the network this would build holds C item positions; the flag was not set` |
+| a build reaching the same bounds | `alert: cluster N cannot be built with Q priority outputs over n->m ports; refused` and `alert: cluster N asks for Q priority inputs over n->m ports, which this version does not build; refused` |
+
+**The spill guard's rig is a DEAD-ENDED 2->2 with one output flagged**, four parts under the one-belt-per-part rule, fed until it stops taking anything. Capacity is 192 positions flagged and 112 plain, both pinned by `TestPriorityCapacityIsRecorded`, and the guard's comparison is `held <= 112`. So the leg is: fill it, clear the flag, assert the refusal line with `H` over 112, assert the network still standing and still delivering, and assert **zero items on the ground** over the whole window. Then unblock the outputs, let it drain past the boundary, clear the flag again and assert one teardown, one rebuild and no spill. The rig has to be dead-ended rather than merely saturated: a balancer that is moving anything has room, which is what makes the refusal rare in play and what makes it reachable here.

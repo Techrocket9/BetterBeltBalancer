@@ -26,10 +26,37 @@ package main
 // deliberate: a claim is what makes a removal's leftovers a player's property,
 // and a toggle is not a removal -- `noteMinedByPlayer` is never called from this
 // file, so `settleCarry` has nobody to offer anything to and the reinsertion is
-// the only outcome. The one way anything reaches the ground is the fourth
-// decision, a successor that is materially smaller than what came down, and
-// that spill is `spillPool`'s: beside the VISIBLE cluster, never on the hidden
-// surface, and logged.
+// the only outcome.
+//
+// AND NOTHING REACHES THE GROUND, which is the one place this file goes further
+// than an ordinary edge edit does. The fourth decision spills what a materially
+// smaller successor cannot hold, and a priority change really can build a
+// smaller network -- clearing a balancer's last flag returns it to the plain
+// butterfly, and on a 4x4 a second flag is smaller than the first. So the
+// successor's capacity is compared against what the machine is carrying BEFORE
+// the flag moves, and a change that would not fit is refused with the balancer
+// still running: `prioFitsWhatIsStanding`. The spill is a removal's outcome and
+// a toggle is not a removal, so a toggle does not get it.
+//
+// WHAT THAT GUARD DOES NOT COVER, because neither is a flag changing:
+//
+//   - a belt MINED off a priority port shrinks the machine too, and takes the
+//     pocket-then-spill rule every mine takes -- what the successor cannot hold
+//     is offered to the player who mined it and only then to the floor
+//     (carry.go, "The miner's pocket"). That is the contract for a removal and
+//     this guard has no business overriding it.
+//   - a blueprint or a paste landing a flagged part into a balancer that is
+//     then too big goes through `compile`'s refusal, which is in front of its
+//     own teardown, so the standing network is not touched at all.
+//
+// The two writers of `pprio` are `setPartPriority`, which is guarded, and
+// `recoverPriority`, which raises a flag only on a part whose picture this guest
+// has never written -- a revived ghost, a clone, a fresh heap. That part arrived
+// with its belts, so the cluster it lands in is recompiled by the BUILD it came
+// in on, and a build that shrinks a machine has taken the ordinary
+// recompile-and-spill rule since long before this file existed (CLAUDE.md, "A
+// mine beside a machine is a mine of that machine"). Changing that is a decision
+// about builds and not about flags, and it is not taken here.
 //
 // AND A SHAPE THAT WOULD NOT FIT IS REFUSED BEFORE THE FLAG MOVES, which is the
 // other thing that could cost a player a working balancer. `plan.ShapeEdges` is
@@ -54,17 +81,36 @@ const InputTogglePriority = "bbb-toggle-priority"
 
 // The locale keys, in mod-data/locale/en/better-belt-balancer.cfg.
 //
-// THE TWO REFUSAL KEYS ARE SHAPED LIKE limit.go's PAIR because they go through
-// the same `tellRefusal`: one sentence for a player who can be handed the piece
-// back and one for a robot or script build that leaves it standing. The third
-// is the TOGGLE's own, which has no piece in it at all -- nobody built anything,
-// the flag simply did not move.
+// THREE REFUSALS AND THEY ARE NOT THE SAME REFUSAL, which is what the key names
+// say. A shape too big for a priority port is a statement about the machine's
+// size; a priority INPUT is a statement about this version, since the planner
+// refuses one at every size (agents/priority.md, "What input priority does");
+// and a balancer too full to shrink is a statement about the moment, and comes
+// back the second it has drained.
+//
+// The first two have a PAIR, shaped like limit.go's and delivered through the
+// same `tellRefusal`: one sentence for a player who can be handed the piece back
+// and one for a robot or script build that leaves it standing. Their singles are
+// the TOGGLE's, which has no piece in it at all -- nobody built anything, the
+// flag simply did not move. The third has no pair, because nothing but a toggle
+// can reach it: a build cannot make a standing network smaller.
 const (
 	msgPrioOn        = "bbb.priority-on"
 	msgPrioOff       = "bbb.priority-off"
 	msgPrioTooBig    = "bbb.priority-too-big"
 	msgPrioTooBigStd = "bbb.priority-too-big-unconnected"
 	msgPrioRefused   = "bbb.priority-refused"
+	msgPrioInput     = "bbb.priority-input"
+	msgPrioInputStd  = "bbb.priority-input-unconnected"
+	msgPrioInputRef  = "bbb.priority-input-refused"
+	msgPrioHolding   = "bbb.priority-holding"
+)
+
+// The clauses tellRefusal names the bound with, in the force-wide line and in
+// the hand-back line revertOne writes. Both complete "cluster N is ___".
+const (
+	whyPrioTooBig = "too big for a priority port"
+	whyPrioInput  = "asking for an unsupported priority input"
 )
 
 // What setPartPriority was asked for.
@@ -75,12 +121,15 @@ const (
 )
 
 // Its own message buffers rather than limit.go's, and the reason is the COLOUR.
-// A refusal is vanilla's cannot-build red because that is what the base game has
-// taught everybody a refusal looks like (limit.go, and the 2026-08-05 field
-// report behind it); a confirmation must not be, or "Priority on" reads as
-// something having gone wrong. limit.go's `limText` is wired to the red once, at
-// init, and pointing it somewhere else per call would make two files share a
-// mutable struct to save a few static bytes.
+// A confirmation must not be vanilla's cannot-build red, or "Priority on" reads
+// as something having gone wrong; a refusal must be, because that is what the
+// base game has taught everybody a refusal looks like (limit.go, and the
+// 2026-08-05 field report behind it). So the amber below is the DEFAULT this
+// struct is wired to and `flyRefusal` borrows `limColor` for the three sentences
+// that are refusals. Sharing the struct with limit.go instead would mean one
+// mutable struct serving two files whose messages go to different places: this
+// one is always at a part a player is pointing at, limit.go's is at a piece they
+// just built.
 var (
 	prioMsg  [2]fkapi.Value
 	prioPos  fkapi.MapPosition
@@ -307,10 +356,16 @@ func setPartPriority(k key, want int, player uint32) bool {
 	// priority network is wider than the plain butterfly, so a balancer that
 	// fits its slot without one may not fit with one -- and the flag is the only
 	// thing that moved, so this is the only place that can tell.
-	if pt, fits := plan.ShapeEdges(classifyEdges(surf, tiles, force)); !fits {
+	edges := classifyEdges(surf, tiles, force)
+	pt, fits := plan.ShapeEdges(edges)
+	if !fits {
 		pprio[id] = prev
 		logPriorityRefused(root, k, pt)
 		tellPriorityRefused(k, pt, player)
+		return false
+	}
+	if !prioFitsWhatIsStanding(root, k, pt, edges, player) {
+		pprio[id] = prev
 		return false
 	}
 
@@ -325,33 +380,186 @@ func setPartPriority(k key, want int, player uint32) bool {
 	return true
 }
 
-// refusePriority is compile()'s answer when the shape a PRIORITY port asks for
-// does not fit, which is the same answer refuseOverLimit gives for the port cap
-// and goes through the same three-way admission: a refusal issued from inside
-// `rebuildFromWorld` logs and requeues and tells nobody, a repeat of an edge
-// state already refused says nothing, and anything else logs and speaks.
+// prioFitsWhatIsStanding is the second pre-teardown check: a toggle that would
+// make the balancer SMALLER than the items it is carrying is refused instead of
+// spilling them.
+//
+// The fourth decision of "A recompile is not a removal" (carry.go) is that a
+// successor which cannot hold what came down puts the remainder on the ground
+// beside the cluster. That is the right answer for a machine a player mined --
+// they asked for it to stop existing -- and the wrong one for a flag they
+// ticked, which is a configuration change on a machine they want to keep. So
+// the spill is closed at the source rather than handled downstream: nothing is
+// torn down, nothing moves, and the player is told to let the balancer drain.
+//
+// IT COMPARES TWO CAPACITIES RATHER THAN ASKING WHICH WAY THE FLAG WENT, and
+// that is not caution. A 4x4's SECOND priority port is smaller than its first --
+// one priority port leaves three normal ones and a square butterfly over three
+// ports is four rows with a loopback in it, where two and two are a pair of
+// single-splitter blocks -- so a toggle ON shrinks the network there.
+// plan.TestAPriorityToggleCanShrinkTheNetworkInEitherDirection is that row.
+//
+// A cluster with no standing network has nothing to drain and skips the whole
+// thing, which is every first toggle on a half-built balancer and every toggle
+// made while the cluster is already refused.
+func prioFitsWhatIsStanding(root uint32, k key, pt plan.Ports, edges []plan.Edge, player uint32) bool {
+	ni, standing := nets[root]
+	if !standing {
+		return true
+	}
+	room := plan.Capacity(pt)
+	was, _ := shapeWithTileFlipped(edges, k)
+	if room >= plan.Capacity(was) {
+		return true
+	}
+	held := heldItems(ni)
+	if held <= uint32(room) {
+		return true
+	}
+	logPriorityHolding(root, k, held, room)
+	tellPriorityHolding(k, player)
+	return false
+}
+
+// shapeWithTileFlipped is the shape this edge list had before one tile's flag
+// moved: the tile's own edges flipped back, counted, and flipped again.
+//
+// `plan.ShapeEdges` reads the edge COUNTS and nothing else, so asking it twice
+// about one list costs no host call and no allocation -- it is the same property
+// that makes it safe to ask from a keypress at all. Flipping the tile rather
+// than re-classifying the cluster is what keeps it that way: a second
+// `classifyEdges` would be a position query per side of every part.
+func shapeWithTileFlipped(edges []plan.Edge, k key) (plan.Ports, bool) {
+	flipTilePrio(edges, k)
+	pt, fits := plan.ShapeEdges(edges)
+	flipTilePrio(edges, k)
+	return pt, fits
+}
+
+func flipTilePrio(edges []plan.Edge, k key) {
+	for i := range edges {
+		if edges[i].TileX == k.x && edges[i].TileY == k.y {
+			edges[i].Prio = !edges[i].Prio
+		}
+	}
+}
+
+// heldItems is the drain's own reading of a standing network, made without
+// draining it: every entity a teardown would sweep, and the item count of every
+// transport line on it.
+//
+// IT ENUMERATES EXACTLY WHAT `teardownNet` ENUMERATES -- the hidden slot's box
+// and the visible cluster's box, through the same four names and the same
+// prebuilt filter -- because a number that counted a different set would be a
+// bound on the wrong thing. What it does not do is `drain`'s second half: no
+// contents cross the boundary, so there is one host call per transport line and
+// no allocation per line.
+//
+// IT COUNTS ITEMS AND THE CAPACITY IT IS COMPARED AGAINST IS POSITIONS, and
+// under belt stacking those are not the same unit: a stacked position holds up
+// to four items, so the count can exceed the positions occupied. The comparison
+// is therefore CONSERVATIVE on a stacking force -- it can refuse a toggle that
+// would in fact have fitted -- and that is the side to be wrong on, because the
+// other side is items on the ground. On every force that cannot stack, which is
+// all of base Factorio, one item is one position and the bound is exact.
+//
+// A HALF THAT CANNOT BE READ CONTRIBUTES NOTHING, which is the honest reading
+// rather than a fallback: the hidden surface being gone means the network's
+// hidden half is gone with it, and a visible surface that cannot be resolved
+// holds no interfaces of ours either.
+func heldItems(ni netInfo) uint32 {
+	total := uint32(0)
+	// `hiddenIdx` rather than `hiddenSurface()`, which CREATES the surface when
+	// it is missing. A keypress has no business making one, and a network that
+	// is standing was compiled onto a surface that already exists.
+	if hiddenIdx != 0 && ni.slot != 0 {
+		if hid, ok := surfaceByIndex(hiddenIdx); ok {
+			ox, oy := slotOrigin(ni.slot)
+			total += countItemsIn(hid, ox, oy, ox+slotW-1, oy+slotH-1)
+		}
+	}
+	if vis, ok := surfaceByIndex(ni.surf); ok {
+		total += countItemsIn(vis, ni.x0, ni.y0, ni.x1, ni.y1)
+	}
+	return total
+}
+
+// heldEnts is the only buffer this reading needs; it grows to the biggest box
+// any toggle has looked at and is reused. The filter and the search box are
+// `sweep`'s own, which is the point: this is sweep's query without the sweep.
+var heldEnts []fkapi.Object
+
+func countItemsIn(s fkapi.LuaSurface, x0, y0, x1, y1 int32) uint32 {
+	setSearchBox(x0, y0, x1, y1)
+	total := uint32(0)
+	for n := range sweepNames {
+		nameFilter = fkapi.OfString(sweepNames[n])
+		ents, err := s.FindEntitiesFilteredInto(heldEnts, findByName)
+		if err != nil {
+			continue
+		}
+		heldEnts = ents
+		for i := range ents {
+			e := fkapi.LuaEntity{Object: ents[i]}
+			// The line count is ASKED FOR rather than assumed per prototype, for
+			// `drain`'s reason: a constant that was wrong by one would quietly
+			// under-count here, which is a spill this guard promised to prevent.
+			lines, err := e.GetMaxTransportLineIndex()
+			if err != nil || lines == 0 || lines > maxLinesToProbe {
+				continue
+			}
+			for j := uint32(1); j <= lines; j++ {
+				l, err := e.GetTransportLine(j)
+				if err != nil {
+					break
+				}
+				c, err := fkapi.LuaTransportLine{Object: l}.GetItemCount(nil)
+				if err == nil {
+					total += c
+				}
+			}
+		}
+	}
+	return total
+}
+
+// refusePriority is compile()'s answer when a shape with a priority port on it
+// cannot be built, which is the same answer refuseOverLimit gives for the port
+// cap and goes through the same three-way admission: a refusal issued from
+// inside `rebuildFromWorld` logs and requeues and tells nobody, a repeat of an
+// edge state already refused says nothing, and anything else logs and speaks.
 //
 // It is reached when something OTHER than a toggle produced the shape -- a belt
 // laid against a flagged part, a merge, a blueprint pasting a flagged balancer
 // into a bigger one -- because a toggle is refused before the flag moves and
 // never gets here.
+//
+// TWO SENTENCES, ONE PREDICATE. A shape carrying a priority INPUT is refused at
+// every size, because the construction for it is not built; anything else that
+// reaches here is refused for its size. A cluster can be both, and the input
+// sentence wins for `refuseShape`'s reason: taking the flag off is the fix in
+// either case, and it is the flag the player last touched.
 func refusePriority(root uint32, fp uint64, pt plan.Ports, tiles []key, force uint32) {
 	found := refusalFound(root, tiles, force)
+	input := pt.QIn > 0
 	switch refuseAdmit(root, fp) {
 	case refuseSilent:
 		return
 	case refuseLogOnly:
-		logRefusedPriority(root, pt, found)
+		logRefusedPriority(root, pt, found, input)
 		return
 	}
-	logRefusedPriority(root, pt, found)
+	logRefusedPriority(root, pt, found, input)
+	if input {
+		tellRefusal(root, tiles, force, msgPrioInput, msgPrioInputStd, 0, whyPrioInput)
+		return
+	}
 	side := pt.N
 	if pt.M > side {
 		side = pt.M
 	}
 	limMsg[1].Number = float64(side)
-	tellRefusal(root, tiles, force, msgPrioTooBig, msgPrioTooBigStd, 1,
-		"too big for a priority port")
+	tellRefusal(root, tiles, force, msgPrioTooBig, msgPrioTooBigStd, 1, whyPrioTooBig)
 }
 
 // tellPriorityToggled is the flying text at the part, which is the only thing
@@ -377,8 +585,18 @@ func tellPriorityToggled(k key, on bool, player uint32) {
 // tellPriorityRefused says the flag did not move. It names the rule and stops,
 // for the reason limit.go's messages do: the 2026-08-05 field report was about a
 // sentence that narrated a transaction the player never saw.
+//
+// An input priority takes no number with it. Where the bound falls for a SIZE is
+// something a player can act on; that this version does not build an input
+// priority at all is true at every size, and a number beside it would suggest a
+// smaller balancer were the way out.
 func tellPriorityRefused(k key, pt plan.Ports, player uint32) {
 	if player == 0 {
+		return
+	}
+	if pt.QIn > 0 {
+		prioMsg[0] = fkapi.OfString(msgPrioInputRef)
+		flyRefusal(k, prioMsg[:1], player)
 		return
 	}
 	side := pt.N
@@ -387,7 +605,30 @@ func tellPriorityRefused(k key, pt plan.Ports, player uint32) {
 	}
 	prioMsg[0] = fkapi.OfString(msgPrioRefused)
 	prioMsg[1].Number = float64(side)
-	flyAtTile(k, fkapi.Value{Tag: fkapi.TagArray, Array: prioMsg[:2]}, player)
+	flyRefusal(k, prioMsg[:2], player)
+}
+
+// tellPriorityHolding says the balancer is too full to be rebuilt smaller. No
+// number: the count and the room are in the log line, and what a player can act
+// on is the machine emptying, which they can see.
+func tellPriorityHolding(k key, player uint32) {
+	if player == 0 {
+		return
+	}
+	prioMsg[0] = fkapi.OfString(msgPrioHolding)
+	flyRefusal(k, prioMsg[:1], player)
+}
+
+// flyRefusal is the toggle's refusal in front of the player who pressed the key:
+// the text in vanilla's cannot-build red and the standard cannot-build sound,
+// which is what the base game has taught everybody a refusal looks and sounds
+// like (limit.go, and the 2026-08-05 field report behind it). A confirmation
+// goes through flyAtTile instead and keeps the badge's amber, or "Priority on"
+// reads as something having gone wrong.
+func flyRefusal(k key, msg []fkapi.Value, player uint32) {
+	prioText.Color = &limColor
+	flyAtTile(k, fkapi.Value{Tag: fkapi.TagArray, Array: msg}, player)
+	prioText.Color = &prioColor
 	if o, err := fkapi.Game.GetPlayer(fkapi.OfNumber(float64(player))); err == nil && o != nil {
 		_ = fkapi.LuaPlayer{Object: *o}.PlaySound(limSound)
 	}
@@ -428,18 +669,15 @@ func logPriorityToggle(k key, on bool) {
 	logEnd()
 }
 
-// logPriorityRefused is the toggle's own refusal. `alert:` and not `error:` for
-// the reason limit.go gives: a player asking for a balancer the mod does not
-// build is an expected condition with a defined outcome, and `test/run.sh` fails
-// a run on an `error:`.
+// logPriorityRefused is the toggle's own refusal, and it ends in the reason so
+// that the two are one line apart for a suite to key on: a shape that does not
+// fit is about the machine's size and an input priority is about this version.
+//
+// `alert:` and not `error:` for the reason limit.go gives: a player asking for a
+// balancer the mod does not build is an expected condition with a defined
+// outcome, and `test/run.sh` fails a run on an `error:`.
 func logPriorityRefused(root uint32, k key, pt plan.Ports) {
-	logAlertStart("priority refused for cluster ")
-	logU(root)
-	logS(" at part ")
-	logI(k.x)
-	logS(",")
-	logI(k.y)
-	logS(": ")
+	logPriorityHead(root, k)
 	logU(uint32(pt.N))
 	logS(" inputs and ")
 	logU(uint32(pt.M))
@@ -447,19 +685,58 @@ func logPriorityRefused(root uint32, k key, pt plan.Ports) {
 	logU(uint32(pt.QIn))
 	logS(" priority inputs and ")
 	logU(uint32(pt.QOut))
-	logS(" priority outputs does not fit; the flag was not set")
+	logS(" priority outputs ")
+	if pt.QIn > 0 {
+		logS("is a priority input, which this version does not build")
+	} else {
+		logS("does not fit")
+	}
+	logS("; the flag was not set")
 	logEnd()
+}
+
+// logPriorityHolding is the spill guard's refusal: the two numbers it compared,
+// in the units it compared them in, because that comparison is the whole of the
+// decision and neither number is visible anywhere else.
+func logPriorityHolding(root uint32, k key, held uint32, room int) {
+	logPriorityHead(root, k)
+	logS("the balancer holds ")
+	logU(held)
+	logS(" items and the network this would build holds ")
+	logU(uint32(room))
+	logS(" item positions; the flag was not set")
+	logEnd()
+}
+
+func logPriorityHead(root uint32, k key) {
+	logAlertStart("priority refused for cluster ")
+	logU(root)
+	logS(" at part ")
+	logI(k.x)
+	logS(",")
+	logI(k.y)
+	logS(": ")
 }
 
 // logRefusedPriority is compile()'s refusal, shared by the ordinary path and the
 // silent rebuild path -- the twin of logRefusedOverLimit, and the edge suite
 // reads this line.
-func logRefusedPriority(root uint32, pt plan.Ports, found int) {
+func logRefusedPriority(root uint32, pt plan.Ports, found int, input bool) {
 	logAlertStart("cluster ")
 	logU(root)
+	if input {
+		logS(" asks for ")
+		logU(uint32(pt.QIn))
+		logS(" priority inputs over ")
+		logU(uint32(pt.N))
+		logS("->")
+		logU(uint32(pt.M))
+		logS(" ports, which this version does not build; refused")
+		logRefusalFound(found)
+		logEnd()
+		return
+	}
 	logS(" cannot be built with ")
-	logU(uint32(pt.QIn))
-	logS(" priority inputs and ")
 	logU(uint32(pt.QOut))
 	logS(" priority outputs over ")
 	logU(uint32(pt.N))

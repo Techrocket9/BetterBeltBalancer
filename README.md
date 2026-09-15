@@ -50,15 +50,17 @@ That is a change to what a factory you already have means, so it is behind a map
 
 A save made before this version keeps its old behaviour without being asked. On its first load the mod finds every balancer whose belts were laid when a belt across a face meant nothing, leaves each of them exactly as it stood, turns the setting off for that save, and says so in chat with a map ping for each one. Nothing in the world moves and nothing is lost. Turn the setting on when you want the new rule, and those are the balancers that change.
 
-## Input and output priorities
+## Belt priority
 
 Point at a balancer part and press ALT + P to give its belt priority. Press it again to take the priority away. A part with priority carries a mark on it, so a balancer says what it is doing without being opened.
 
-A priority output is filled before the balancer's other outputs, and a priority input is emptied before its other inputs. Everything without priority still splits evenly among itself, which is what the balancer is for. The flag belongs to the part rather than to the belt, so a part serving one belt gives that belt priority, and flagging a part that has no belt yet is remembered for the belt you lay against it later.
+A priority output is filled before the balancer's other outputs, and everything without priority still splits evenly among itself, which is what the balancer is for. Give one output of a four-output balancer priority and feed the balancer two belts: that output gets a full belt and the other three share what is left. Feed it four and all four outputs are full. The flag belongs to the part rather than to the belt, so a part serving one belt gives that belt priority, and flagging a part that has no belt yet is remembered for the belt you lay against it later.
 
-Changing it rebuilds the balancer, so it is an edit like adding a belt: the items the machine was holding go straight back inside it. The only way anything reaches the ground is a balancer that comes back materially smaller than it went down, and then the leftovers land beside it exactly as they do when you take a machine apart.
+This version gives priority to belts leaving a balancer. A belt going into one cannot have it yet: flagging a part whose belt feeds the balancer is refused with a message saying so, and nothing about the balancer changes. Priority on an input is a later version.
 
-A balancer can be too big to give a belt priority, because a priority port takes more room inside the machine than an even one. When that happens nothing moves: the flag is not set, the balancer keeps running as it was, and a message says so. Taking priority off another part, or building the balancer a little smaller, is the way out.
+Changing priority rebuilds the balancer, so it is an edit like adding a belt, and the items the machine was holding go straight back inside it. Nothing is put on the ground. Some changes build a balancer smaller than the one that came down, and while the machine is too full for the smaller one to hold what it is carrying the change is refused instead: let it empty and try again.
+
+A balancer can also be too big to give a belt priority, because a priority port takes more room inside the machine than an even one. When that happens nothing moves: the flag is not set, the balancer keeps running as it was, and a message says so. Taking priority off another part, or building the balancer a little smaller, is the way out.
 
 The flag is kept on the part itself, so it survives a blueprint, a copy of the blueprint, shift-clicking one part's settings onto another, and an update of the mod. The keybind is in Settings > Controls under this mod's name if ALT + P is taken on your keyboard. A mod or a scenario can set it without a keypress through the `better-belt-balancer` remote interface: `remote.call("better-belt-balancer", "set-part-priority", surface_index, x, y, on)`, which returns whether the flag ended up as asked.
 
