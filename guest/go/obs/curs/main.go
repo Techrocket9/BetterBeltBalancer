@@ -66,6 +66,11 @@ const (
 	loader   = protos.CursLoader
 	plate    = "iron-plate"
 
+	// This mod's own visible edge interface. Bands (h) and (i) read it off a part
+	// tile to say whether that face was classified, and band (i) places a pair of
+	// its own to stand in for another mod's placeable linked belt.
+	nameIface = "bbb-linked-belt"
+
 	// A steel chest holds 48 stacks, so an insert past that is clamped by the
 	// engine. `edge` uses the same number for the same reason: what the source
 	// actually holds is read back rather than assumed.
@@ -121,7 +126,43 @@ const (
 	brdgHalf = 16
 	brdgFed  = 2
 
-	rows = brdg + 2*brdgHalf + 14
+	// (h) THE CURVED EXIT, and the mod portal report it answers: "you have to be
+	// very careful not to place a straight belt adjacent to the balancer, as it
+	// immediately curves it".
+	//
+	// THE SPARE ROW IS THE RIG AND NOT PADDING. Under the one-belt-per-part rule
+	// a working balancer has NO FREE FACE -- the west part of a row carries its
+	// input and the east part its output -- so a belt laid on any of the four
+	// working parts is a second belt and is refused before the curve arm is ever
+	// asked. The two spare parts carry nothing, so their north faces are the only
+	// tiles in the band where a curve can be classified at all. `curveFace` is
+	// the row above them, which is where every gesture in the band lands.
+	//
+	// DEAD-ENDED, like the two pocket rigs, so the machine fills and stays full:
+	// a grabbed face belt then shows as plates arriving on a line the player
+	// meant to run PAST the balancer, which is the report's own symptom, and a
+	// released one has something to spill.
+	curveBal   = brdg + 2*brdgHalf + 16
+	curveSpare = curveBal - 1
+	curveFace  = curveBal - 2
+
+	// (i) A LINKED BELT AT THE REAR. The same rig with a `bbb-linked-belt` output
+	// end standing west of the face tile and pointing into it, which is a feeder
+	// the engine counts and the probe could not see: `feedsTile` walked the six
+	// EDGE types, and linked-belt is deliberately not one of them.
+	//
+	// This mod's own interfaces can never stand on a probe tile -- an interface
+	// stands on a part tile and a part tile is refused two tests earlier -- so
+	// what the rig stands in for is somebody else's placeable one.
+	lbeltBal   = curveBal + 12
+	lbeltSpare = lbeltBal - 1
+	lbeltFace  = lbeltBal - 2
+
+	// The engine-only control for band (i): the same two shapes with no balancer
+	// within ten tiles, so what they report is Factorio's reading and not ours.
+	lbEng = lbeltBal + 12
+
+	rows = lbEng + 12
 )
 
 // The tile each gesture is aimed at, so that the observer, the log and the
@@ -135,7 +176,15 @@ var (
 	bminTarget   = harness.XY{X: 0, Y: bmin + 3}
 	limTarget    = harness.XY{X: 0, Y: lim + limRows + 1}
 	brdgTarget   = harness.XY{X: 0, Y: brdg + brdgHalf}
+	curveTarget  = harness.XY{X: 0, Y: curveFace}
+	curveRear    = harness.XY{X: -1, Y: curveFace}
+	lbeltTarget  = harness.XY{X: 0, Y: lbeltFace}
 )
+
+// curveLine is the forward line of band (h): laid west to east, one belt per
+// click, starting three tiles before the balancer. Every belt but the first has
+// the one behind it in its rear, and the first is not beside a part at all.
+var curveLine = []int{-3, -2, -1, 0, 1, 2, 3}
 
 // pockOrder is the `pock` rig taken apart the way a player does it: one part per
 // step, the spare first and then row by row, west part before east. Every prefix
@@ -801,8 +850,190 @@ func gBrdg() {
 }
 
 // ---------------------------------------------------------------------------
+// (h) and (i) the curved exit
+// ---------------------------------------------------------------------------
+
+// curveSample is band (h) and (i)'s own reporting line, and it is deliberately
+// NOT `sample`: the release in (h3) spills on purpose, and every `sample` tag in
+// this suite is asserted to have found nothing on the ground.
+//
+// `iface_w` and `iface_e` are the DIRECT statement of a grab. An edge interface
+// stands on the cluster's own tile, so one on a spare part's tile IS that part's
+// north face having been classified; a compile line says the same thing from the
+// mod's side and the two are asserted together.
+func curveSample(tag string, face, spare int) {
+	s := surf()
+	name, shape := "empty", "none"
+	if o, ok := harness.FindAt(s, 0, face, "", "transport-belt"); ok {
+		name, _ = (fkapi.LuaEntity{Object: o}).Name()
+		shape = shapeOf(o)
+	}
+	_, w := harness.FindOnTile(s, nameIface, 0, spare)
+	_, e := harness.FindOnTile(s, nameIface, 1, spare)
+	var line, ground int64
+	for x := -3; x <= 4; x++ {
+		if o, ok := harness.FindAt(s, x, face, "", "transport-belt"); ok {
+			line += harness.TransportLineItems(o)
+		}
+	}
+	for _, o := range harness.EntitiesIn(s, harness.Box(-8, float64(face-2), 8, float64(face+5)), "") {
+		if harness.EntityTypeIs(o, "item-entity") {
+			if _, n, got := harness.GroundStack(o); got {
+				ground += n
+			}
+		}
+	}
+	out.Open("curve tag=").S(tag).S(" face=").I(int64(face)).
+		S(" tile=").S(name).S(" shape=").S(shape).
+		S(" iface_w=").B(w).S(" iface_e=").B(e).
+		S(" line=").I(line).S(" ground=").I(ground).End()
+}
+
+// shapeOf asks the ENGINE what a belt's rendered shape is. A curve is the whole
+// question the band is about and `belt_shape` is the only thing that states it
+// directly.
+func shapeOf(o fkapi.Object) string {
+	e := fkapi.LuaEntity{Object: o}
+	for _, want := range [3]string{"straight", "left", "right"} {
+		if is, err := e.BeltShapeIs(want); err == nil && is {
+			return want
+		}
+	}
+	return "?"
+}
+
+// clearFace destroys the belts a gesture put on a face row, raising the event so
+// the mod recompiles around what is left.
+func clearFace(face int) {
+	s := surf()
+	for x := -3; x <= 4; x++ {
+		if o, ok := harness.FindAt(s, x, face, "", "transport-belt"); ok {
+			harness.Destroy(o, true)
+		}
+	}
+}
+
+// (h1) THE REPORT: one belt clicked onto a free face, direction along the face,
+// nothing else anywhere near it. Its rear is empty by construction -- it is the
+// head of a line that does not exist yet -- so the engine curves it towards the
+// interface and the mod classifies it as an output.
+func gCurveFace() {
+	out.Open("gesture begin name=curve-face").End()
+	stand(curveTarget)
+	hold(belt, 20)
+	curveSample("curve-face-pre", curveFace, curveSpare)
+	click(curveTarget, &dirE)
+	curveSample("curve-face-click", curveFace, curveSpare)
+	out.Open("gesture end name=curve-face").End()
+}
+
+// (h2) THE LINE THE REPORT MEANT TO LAY: the same row built west to east, one
+// belt per click, starting three tiles clear of the balancer. Every belt that
+// reaches a free face has the one behind it in its rear already, so none of them
+// is ever a curve.
+func gCurveLay(i int) func() {
+	return func() {
+		x := curveLine[i]
+		tag := "curve-line-" + digit(i)
+		stand(harness.XY{X: x, Y: curveFace})
+		hold(belt, 20)
+		click(harness.XY{X: x, Y: curveFace}, &dirE)
+		curveSample(tag, curveFace, curveSpare)
+	}
+}
+
+func digit(i int) string { return [...]string{"0", "1", "2", "3", "4", "5", "6"}[i] }
+
+// (h3) ... AND THE REMEDY. The grabbed belt is given a belt behind it, which is
+// what the player wanted in the first place. Its rear is fed, the curve arm
+// declines a side-load, the port goes away and the machine recompiles 2->2.
+func gCurveRelease() {
+	out.Open("gesture begin name=curve-release").End()
+	stand(curveRear)
+	hold(belt, 20)
+	curveSample("curve-rel-pre", curveFace, curveSpare)
+	click(curveRear, &dirE)
+	curveSample("curve-rel-click", curveFace, curveSpare)
+	out.Open("gesture end name=curve-release").End()
+}
+
+// (i) the linked belt at the rear.
+func gLinkedRear() {
+	out.Open("gesture begin name=linked-rear").End()
+	stand(lbeltTarget)
+	hold(belt, 20)
+	curveSample("lb-pre", lbeltFace, lbeltSpare)
+	click(lbeltTarget, &dirE)
+	curveSample("lb-click", lbeltFace, lbeltSpare)
+	out.Open("gesture end name=linked-rear").End()
+}
+
+// engSample is the engine-only control: what Factorio makes of the same two
+// shapes with no balancer within ten tiles. It is what says the rig is really
+// curve-eligible and the linked belt is really a feeder, rather than the mod
+// having declined for some reason of its own.
+func engSample(tag string, y int) {
+	s := surf()
+	shape, rear := "no-belt", "empty"
+	if o, ok := harness.FindAt(s, 0, y, "", "transport-belt"); ok {
+		shape = shapeOf(o)
+	}
+	for _, o := range harness.EntitiesIn(s, harness.InnerBox(-1, y), "") {
+		if n, err := (fkapi.LuaEntity{Object: o}).Name(); err == nil {
+			rear = n
+		}
+	}
+	out.Open("engine tag=").S(tag).S(" y=").I(int64(y)).
+		S(" shape=").S(shape).S(" rear=").S(rear).End()
+}
+
+// ---------------------------------------------------------------------------
 // the world, built once
 // ---------------------------------------------------------------------------
+
+// curveRig is bands (h) and (i): a dead-ended 2->2 over four parts, a spare row
+// of two EDGELESS parts above it whose north faces are the gesture row, and
+// nothing on the gesture row at all.
+func curveRig(s fkapi.LuaSurface, bal int) {
+	for r := 0; r <= 1; r++ {
+		put(s, part, 0, bal+r, nil)
+		put(s, part, 1, bal+r, nil)
+		deadEnd(s, bal+r)
+	}
+	put(s, part, 0, bal-1, nil)
+	put(s, part, 1, bal-1, nil)
+}
+
+// linkedPair places a `bbb-linked-belt` output end at (x, y) facing `dir` and
+// its input partner five tiles west, and connects them.
+//
+// CONNECTING IT IS NOT WHAT MAKES IT A FEEDER and the control row says so: an
+// UNCONNECTED output end keeps a belt straight too, measured on 2.0.77. The pair
+// is connected anyway so that the rig is a feeder in the ordinary sense as well
+// as in the engine's shape reading.
+func linkedPair(s fkapi.LuaSurface, x, y int, dir *uint32) {
+	o := putTyped(s, nameIface, x, y, dir, "output")
+	i := putTyped(s, nameIface, x-5, y, dir, "input")
+	if err := (fkapi.LuaEntity{Object: o}).ConnectLinkedBelts(&i); err != nil {
+		harness.Fatal("connect_linked_belts", fk.LastError())
+	}
+}
+
+func buildCurve(s fkapi.LuaSurface) {
+	curveRig(s, curveBal)
+
+	curveRig(s, lbeltBal)
+	linkedPair(s, -1, lbeltFace, &dirE)
+
+	// The control, twice: the same belt-and-feeder with a linked belt output end
+	// at its rear, and with nothing there.
+	put(s, belt, 0, lbEng, &dirE)
+	put(s, belt, 0, lbEng+1, &dirN)
+	linkedPair(s, -1, lbEng, &dirE)
+
+	put(s, belt, 0, lbEng+4, &dirE)
+	put(s, belt, 0, lbEng+5, &dirN)
+}
 
 func buildLine(s fkapi.LuaSurface) {
 	// A WEST-facing dead-ended line: the head is x=-4 and nothing feeds it, so
@@ -1011,6 +1242,45 @@ var schedule = []harness.Step{
 	{Tick: t0 + 1080, Do: gPockMine(5)},
 	{Tick: t0 + 1084, Do: func() { auditAt("post-pock", 12, 0) }},
 
+	// (h) The curved exit, in the gap while (d2)'s network fills. The bands are
+	// forty tiles clear of every other rig, so nothing here touches a count above
+	// it -- and (h3) SPILLS on purpose, which is the one window in this suite
+	// where the mod may.
+	{Tick: t0 + 540, Do: func() { out.Open("gesture begin name=curve-line").End() }},
+	{Tick: t0 + 542, Do: gCurveLay(0)},
+	{Tick: t0 + 544, Do: gCurveLay(1)},
+	{Tick: t0 + 546, Do: gCurveLay(2)},
+	{Tick: t0 + 548, Do: gCurveLay(3)},
+	{Tick: t0 + 550, Do: gCurveLay(4)},
+	{Tick: t0 + 552, Do: gCurveLay(5)},
+	{Tick: t0 + 554, Do: gCurveLay(6)},
+	{Tick: t0 + 570, Do: func() { curveSample("curve-line-settled", curveFace, curveSpare) }},
+	{Tick: t0 + 572, Do: func() { out.Open("gesture end name=curve-line").End(); clearFace(curveFace) }},
+	{Tick: t0 + 576, Do: func() { auditAt("post-curve-line", 12, 0) }},
+
+	{Tick: t0 + 590, Do: gCurveFace},
+	{Tick: t0 + 592, Do: func() { curveSample("curve-face-2", curveFace, curveSpare) }},
+	{Tick: t0 + 594, Do: func() { auditAt("post-curve-face", 12, 0) }},
+	// A hundred and thirty ticks of it standing as a live port, which is what
+	// fills the three-port network and puts plates on a line the player meant to
+	// run past the machine.
+	{Tick: t0 + 720, Do: func() { curveSample("curve-face-filled", curveFace, curveSpare) }},
+
+	{Tick: t0 + 730, Do: gCurveRelease},
+	{Tick: t0 + 732, Do: func() { curveSample("curve-rel-2", curveFace, curveSpare) }},
+	{Tick: t0 + 740, Do: func() { curveSample("curve-rel-10", curveFace, curveSpare) }},
+	{Tick: t0 + 742, Do: func() { auditAt("post-curve", 12, 0) }},
+
+	// (i) the linked belt at the rear, and the engine's own reading of the shape.
+	{Tick: t0 + 760, Do: gLinkedRear},
+	{Tick: t0 + 762, Do: func() { curveSample("lb-2", lbeltFace, lbeltSpare) }},
+	{Tick: t0 + 770, Do: func() { curveSample("lb-10", lbeltFace, lbeltSpare) }},
+	{Tick: t0 + 772, Do: func() { auditAt("post-lb", 12, 0) }},
+	{Tick: t0 + 780, Do: func() {
+		engSample("linked-rear", lbEng)
+		engSample("empty-rear", lbEng+4)
+	}},
+
 	{Tick: t0 + 1100, Do: func() { reportPlayer("final"); auditAt("final", 12, 0) }},
 }
 
@@ -1047,6 +1317,7 @@ func onInit() {
 	buildWorld(s)
 	buildLim(s)
 	buildBrdg(s)
+	buildCurve(s)
 
 	// `--create` never reaches a tick, and this suite has no `--create` -- but the
 	// fixture's own first tick is the benchmark's, so without a marker here every

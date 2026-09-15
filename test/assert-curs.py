@@ -29,6 +29,15 @@ graphical client made (test/fixtures-player/) and drives seven gestures through
   (d) bmin, pock  the miner's pocket, both field reports. An output belt mined
                   off a running balancer whose P halves, and a saturated
                   balancer taken apart one part per tick.
+  (h) curve       THE CURVED EXIT, and the mod portal report about it. One belt
+                  clicked onto a free face is an output, because the head of a
+                  line has nothing behind it; the same line laid from three
+                  tiles out never is; and giving the grabbed belt a belt behind
+                  it gives it back. The rule is unchanged and this is what it
+                  does, stated in gestures.
+  (i) lb          a linked belt at that belt's REAR, which the engine counts as
+                  a feeder and the probe could not see. Plus the engine's own
+                  reading of the same two shapes with no balancer near them.
 
 THE PLAYER IS IN THE GOD CONTROLLER. A save written by a headless server holds
 every player DISCONNECTED and with no character, and a disconnected player
@@ -110,6 +119,13 @@ POCKMINE = re.compile(
     r"\[BBB-CURS\] pock-mine step=(\d+) x=(-?\d+) y=(-?\d+) took=(\S+)")
 BMINMINE = re.compile(r"\[BBB-CURS\] bmin-mine took=(\S+)")
 
+# Bands (h) and (i) report on a line of their own rather than through `sample`,
+# because the release in (h3) spills on purpose and every `sample` tag in this
+# file is asserted to have found nothing on the ground.
+CURVE = re.compile(r"\[BBB-CURS\] curve tag=(\S+) (.*)$")
+ENGINE = re.compile(
+    r"\[BBB-CURS\] engine tag=(\S+) y=(-?\d+) shape=(\S+) rear=(\S+)")
+
 BELT = "express-transport-belt"
 PART = "bbb-balancer-part"
 PLATE = "iron-plate"
@@ -133,29 +149,38 @@ LINE_TILE = (-2, 0)
 # no inputs or no outputs is a legitimate half-built state and is never counted,
 # so a rig that lost half its belts reads `unbuilt=0` while delivering nothing.
 #
-# `armed` is the world as the rigs build it: nine clusters over 156 parts, eight
+# `armed` is the world as the rigs build it: eleven clusters over 168 parts, ten
 # of them with a network -- the lone part at band (c) has no belts at all, and a
 # cluster with no edges gets none.
 #
-# The last five carry `drift=1 refused=1`, and that is the full-inventory
+# The last nine carry `drift=1 refused=1`, and that is the full-inventory
 # negative's own residue: the sixty-fifth belt is still standing, unconnected,
 # because the mod could not hand it back. A refused cluster is a STABLE state --
 # it still has its network and knows its edge list has moved past what the mod
 # can build -- and it stays that way for the rest of the run.
+#
+# THE WHOLE TABLE MOVED BY +2 CLUSTERS AND +12 PARTS when bands (h) and (i)
+# arrived, which is the two curve rigs: four working parts and two spare ones
+# each. Nothing else in it moved, which is what says those bands are forty tiles
+# clear of every gesture above them.
 AUDIT_EXPECT = {
-    "armed":          (9, 156, 8, 0, 0, 0),
-    "post-restore":   (9, 156, 8, 0, 0, 0),
-    "post-end":       (9, 157, 8, 0, 0, 0),
-    "post-lone":      (8, 156, 8, 0, 0, 0),
-    "post-col":       (9, 155, 9, 0, 0, 0),
-    "post-second":    (9, 155, 9, 0, 0, 0),
-    "post-brdg":      (9, 155, 9, 0, 0, 0),
-    "post-lim":       (9, 155, 9, 0, 0, 0),
-    "post-limfull":   (9, 155, 9, 1, 0, 1),
-    "post-bmin-add":  (9, 155, 9, 1, 0, 1),
-    "post-bmin-mine": (9, 155, 9, 1, 0, 1),
-    "post-pock":      (8, 150, 8, 1, 0, 1),
-    "final":          (8, 150, 8, 1, 0, 1),
+    "armed":            (11, 168, 10, 0, 0, 0),
+    "post-restore":     (11, 168, 10, 0, 0, 0),
+    "post-end":         (11, 169, 10, 0, 0, 0),
+    "post-lone":        (10, 168, 10, 0, 0, 0),
+    "post-col":         (11, 167, 11, 0, 0, 0),
+    "post-second":      (11, 167, 11, 0, 0, 0),
+    "post-brdg":        (11, 167, 11, 0, 0, 0),
+    "post-lim":         (11, 167, 11, 0, 0, 0),
+    "post-limfull":     (11, 167, 11, 1, 0, 1),
+    "post-bmin-add":    (11, 167, 11, 1, 0, 1),
+    "post-curve-line":  (11, 167, 11, 1, 0, 1),
+    "post-curve-face":  (11, 167, 11, 1, 0, 1),
+    "post-curve":       (11, 167, 11, 1, 0, 1),
+    "post-lb":          (11, 167, 11, 1, 0, 1),
+    "post-bmin-mine":   (11, 167, 11, 1, 0, 1),
+    "post-pock":        (10, 162, 10, 1, 0, 1),
+    "final":            (10, 162, 10, 1, 0, 1),
 }
 
 # What a SATURATED express belt tile holds: four items per lane at the belt's own
@@ -207,7 +232,7 @@ def main():
 
     # A window is the slice of the log between two observer tags, which is how a
     # mod line is attributed to the gesture that caused it.
-    def window(start, end):
+    def window_span(start, end):
         i = j = None
         for n, line in enumerate(lines):
             if i is None and start in line:
@@ -217,8 +242,12 @@ def main():
                 break
         if i is None or j is None:
             fail.append("no window from %r to %r" % (start, end))
-            return []
-        return lines[i:j + 1]
+            return None
+        return i, j
+
+    def window(start, end):
+        span = window_span(start, end)
+        return [] if span is None else lines[span[0]:span[1] + 1]
 
     def find(rx, where):
         return [m.groups() for m in (rx.search(l) for l in where) if m]
@@ -596,6 +625,158 @@ def main():
             fail.append("band (d1): the player holds %d more parts than they "
                         "did and mined five" % (after[PART] - pre[PART]))
 
+    # ---- (h) the curved exit ----------------------------------------------
+    #
+    # The mod portal report is "you have to be very careful not to place a
+    # straight belt adjacent to the balancer, as it immediately curves it", and
+    # these three gestures are what that is: the FIRST belt of a line has nothing
+    # behind it, which is the same world state as a deliberate corner, and the
+    # rule cannot tell them apart because there is nothing to tell apart.
+    curves, corder = {}, []
+    for line in lines:
+        m = CURVE.search(line)
+        if m:
+            curves[m.group(1)] = parse_sample(m.group(2))
+            corder.append(m.group(1))
+
+    def curve(tag):
+        c = curves.get(tag)
+        if c is None:
+            fail.append("no curve sample for tag=%s" % tag)
+        return c
+
+    def grabbed(c):
+        return c["iface_w"] == "true" or c["iface_e"] == "true"
+
+    # (h2) the line laid from three tiles out, one belt per click. It passes two
+    # free faces and is never taken, because every belt that reaches one has the
+    # belt behind it in its rear already.
+    laid = [t for t in corder if t.startswith("curve-line")]
+    print("  curve line tags=%d" % len(laid))
+    if len(laid) != 8:
+        fail.append("band (h2) took %d samples and the line is seven clicks plus "
+                    "a settled read" % len(laid))
+    for tag in laid:
+        c = curves[tag]
+        if grabbed(c):
+            fail.append("band (h2): the line was grabbed at %s (%s). A belt laid "
+                        "past a balancer with a belt behind it is a SIDE-LOAD, "
+                        "which this rule declines on purpose -- half a lane on a "
+                        "port backs the butterfly up" % (tag, c))
+        if c["line"] != 0:
+            fail.append("band (h2): %d items reached the passing line at %s. "
+                        "Nothing of the machine's may, and the rig is dead-ended "
+                        "so anything there came out of it" % (c["line"], tag))
+    win = window("gesture begin name=curve-line", "gesture end name=curve-line")
+    if find(COMPILED, win):
+        fail.append("band (h2) recompiled the balancer: %s. Seven belts laid past "
+                    "it move no edge at all" % find(COMPILED, win))
+
+    # (h1) ONE belt on a free face, which is the report.
+    face = curve("curve-face-2")
+    if face:
+        print("  curve face %s" % face)
+        if face["iface_w"] != "true":
+            fail.append("band (h1): the free face was NOT classified (%s). A belt "
+                        "clicked onto it has an empty rear by construction -- it "
+                        "is the head of a line that does not exist yet -- so the "
+                        "engine curves it and this mod gives it a port" % face)
+        if face["shape"] != "right":
+            fail.append("band (h1): the engine reads the face belt as %r and it "
+                        "curves towards the interface below it, which is `right`"
+                        % face["shape"])
+    win = window("gesture begin name=curve-face", "audited tag=post-curve-face")
+    got = find(COMPILED, win)
+    print("  curve face compiled %s" % [(g[1], g[2], g[3]) for g in got])
+    if len(got) != 1 or (got[0][1], got[0][2], got[0][3]) != ("2", "3", "4"):
+        fail.append("band (h1) compiled %s and one belt on a free face takes a "
+                    "2->2 over two ports to a 2->3 over four"
+                    % [(g[1], g[2], g[3]) for g in got])
+
+    # ... and what it costs the player, which is the half the report noticed. The
+    # rig is dead-ended, so anything on that line came out of the machine through
+    # a port the player did not mean to open. The assertion is a FLOOR: the count
+    # is a rate over the ticks the port stood open, and 7 is what this schedule
+    # produced.
+    filled = curve("curve-face-filled")
+    if filled:
+        print("  curve face filled line=%s" % filled["line"])
+        if filled["line"] < 1:
+            fail.append("band (h1) pushed nothing onto the player's line, so the "
+                        "grab cost nothing visible and the gesture proves less "
+                        "than it looks like it does")
+
+    # (h3) the remedy: give that belt a belt behind it and the port goes away.
+    rel = curve("curve-rel-2")
+    if rel:
+        print("  curve release %s" % rel)
+        if grabbed(rel):
+            fail.append("band (h3): the port is still there after a belt was laid "
+                        "behind the face belt (%s). A fed rear is a side-load and "
+                        "the rule declines one" % rel)
+        if rel["shape"] != "straight":
+            fail.append("band (h3): the engine still reads the face belt as %r "
+                        "with a belt feeding its rear" % rel["shape"])
+    relwin = window_span("gesture begin name=curve-release", "audited tag=post-curve")
+    win = [] if relwin is None else lines[relwin[0]:relwin[1] + 1]
+    got = find(COMPILED, win)
+    print("  curve release compiled %s" % [(g[1], g[2], g[3]) for g in got])
+    if len(got) != 1 or (got[0][1], got[0][2], got[0][3]) != ("2", "2", "2"):
+        fail.append("band (h3) compiled %s and releasing the port takes the "
+                    "machine back to a 2->2 over two ports"
+                    % [(g[1], g[2], g[3]) for g in got])
+    spilled = [int(g[0]) for g in find(SPILLED, win)]
+    print("  curve release spilled %s" % spilled)
+    if len(spilled) != 1 or spilled[0] < 1:
+        fail.append("band (h3) spilled %s. Releasing a port HALVES the butterfly "
+                    "-- P goes 4 -> 2 -- so a machine that was full has more than "
+                    "the successor can hold, and what will not fit reaches the "
+                    "ground. That is the ordinary teardown policy and it is the "
+                    "price of every release in this band" % spilled)
+
+    # ---- (i) a linked belt at the rear ------------------------------------
+    #
+    # `feedsTile` walked the six EDGE types, and linked-belt is deliberately not
+    # one of them: every visible interface this mod places is a linked belt on a
+    # part tile, and one in the edge query would make a cluster's own output an
+    # edge of itself. The probe inherited the omission, so a player-placeable
+    # linked belt from another mod was a feeder the engine saw and the mod did
+    # not -- and the belt got a port that side-loads half a lane.
+    for tag in ("lb-pre", "lb-click", "lb-2", "lb-10"):
+        c = curve(tag)
+        if not c:
+            continue
+        if grabbed(c):
+            fail.append("band (i): the face belt was grabbed at %s (%s) with a "
+                        "linked belt OUTPUT end feeding its rear. Revert the "
+                        "seventh type out of `probeTypes` and this is what comes "
+                        "back" % (tag, c))
+    click = curve("lb-click")
+    if click and click["tile"] != BELT:
+        fail.append("band (i): the click did not land -- the face tile holds %s. "
+                    "Every `iface=false` above is vacuous without a belt there"
+                    % click["tile"])
+    win = window("gesture begin name=linked-rear", "audited tag=post-lb")
+    if find(COMPILED, win):
+        fail.append("band (i) recompiled the balancer: %s" % find(COMPILED, win))
+
+    # The engine's own reading, with no balancer within ten tiles. This is what
+    # says the rig is really curve-eligible and the linked belt is really a
+    # feeder, rather than the mod having declined for a reason of its own.
+    eng = {m.group(1): (m.group(3), m.group(4))
+           for m in (ENGINE.search(l) for l in lines) if m}
+    print("  engine control %s" % eng)
+    if eng.get("empty-rear", (None,))[0] != "right":
+        fail.append("the engine control with an EMPTY rear reads %s and a belt "
+                    "with one perpendicular feeder and nothing behind it curves "
+                    "towards that feeder. Without this row band (i)'s rig might "
+                    "simply not be curve-eligible and its every `false` would "
+                    "mean nothing" % (eng.get("empty-rear"),))
+    if eng.get("linked-rear", (None,))[0] != "straight":
+        fail.append("the engine control with a linked belt output end at the rear "
+                    "reads %s and the engine counts one as a feeder, which is why "
+                    "the probe must see it too" % (eng.get("linked-rear"),))
+
     # ---- the whole run -----------------------------------------------------
     #
     # NOTHING REACHES THE FLOOR IN THIS SUITE, and that is a headline rather than
@@ -610,15 +791,25 @@ def main():
         fail.append("items reached the ground at %s. Every removal in this "
                     "suite was made by a player, and a player is offered what "
                     "no network could take before the floor" % ground)
-    if find(SPILLED, lines):
-        fail.append("the mod spilled: %s" % find(SPILLED, lines))
+    # ... AND THE MOD SPILLS IN EXACTLY ONE WINDOW, which is band (h3)'s release.
+    # That one is a machine getting SMALLER -- a port taken off a full balancer,
+    # P 4 -> 2 -- which is the ordinary teardown policy and not a gesture anybody
+    # is being credited for. Everywhere else a spill is a defect, and the window
+    # is named rather than the check weakened: `edge` scopes its own four the
+    # same way.
+    stray = [(n, m.group(1)) for n, m in
+             ((n, SPILLED.search(l)) for n, l in enumerate(lines)) if m
+             and not (relwin and relwin[0] <= n <= relwin[1])]
+    if stray:
+        fail.append("the mod spilled outside band (h3)'s release: %s" % stray)
 
     for f in fail:
         print("FAIL: " + f)
     if fail:
         sys.exit(1)
     print("the player gestures all behave: the refused fast replace puts the "
-          "belt back, every hand-back lands, and the pocket is paid")
+          "belt back, every hand-back lands, the pocket is paid, and a belt on a "
+          "free face is a port that a belt behind it gives back")
 
 
 if __name__ == "__main__":
