@@ -113,10 +113,12 @@ WANT_PARTS = 75
 #   variation back to 1), and its lower half a 2-column whose top part moved
 #   to 3 while the bottom kept its 9 -- so parts=2, set=1.
 #
-# The unfixed guest fails this two ways at once: `set=0` on every line (it can
-# never find an uncommon part to touch), and MORE lines than these, because a
-# part it never touched is retried by every flush that queues its cluster --
-# which is what the qblk poke at t=500/510 exists to provoke.
+# The unfixed guest fails this two ways at once: `set=0` on every line with
+# `vars=0` beside it (it can never find an uncommon part to touch), and MORE
+# lines than these, because a part it never touched is retried by every flush
+# that queues its cluster -- which is what the qblk poke at t=500/510 exists to
+# provoke. The one `set=0` below is a different statement and says so where it
+# stands: the part was found, read, and already showing the right cell.
 #
 # qlim's string is what a one-part-wide stalk on each end of a two-wide block
 # looks like: the output part alone at the top (5), the block's first row (22,
@@ -129,7 +131,16 @@ WANT_PARTS = 75
 SKIN_EXPECT = sorted([
     ("4", "4", "21,27,17,35"),                     # qblk
     ("4", "4", "5,6,6,2"),                         # qcol, at the first flush
-    ("1", "1", "1"),                               # qlone
+    # qlone, AND `set=0` IS THE PART BEING FOUND RATHER THAN MISSED. A freshly
+    # created part wears cell 1 (`random_variation_on_create = false`) and a lone
+    # part's shape IS cell 1, so since `recoverPriority` reads a variation back
+    # for every part whose picture this guest has never written, it finds the two
+    # already equal and seeds `pvar` instead of writing. The vars column is what
+    # keeps the assertion as sharp as it was: `pvar` is only seeded from a value
+    # the bulk getter actually returned, so `vars=1` beside `set=0` says the
+    # uncommon part was found and read. A part restyle could NOT find leaves
+    # `pvar` at 0 and prints `vars=0`.
+    ("1", "0", "1"),                               # qlone
     ("66", "66", "5,22,27," + "25,43," * 14 + "25,..."),    # qlim, truncated
     ("1", "1", "1"),                               # qcol's top part, post-split
     ("2", "1", "5,2"),                             # qcol's lower half, post-
