@@ -155,14 +155,21 @@ func onData() {
 //go:noinline
 func onFinalFixes() {
 	// THE ORDER IS NOT ARBITRARY AND IT IS ALSO NOT DELICATE. The speed scan
-	// reads every belt-connectable's `speed` and writes four of them; the legacy
-	// stub defines a `simple-entity-with-force` and an `item`. Neither can see
-	// the other's prototypes, so this reads in the order the two were added.
+	// reads every belt-connectable's `speed` and writes four of them; the mask
+	// re-read reads one entry of `utility-constants` and writes one field of
+	// one of those same four; the legacy stub defines a
+	// `simple-entity-with-force` and an `item`. No one of the three can see
+	// what another wrote -- the two that touch `bbb-linked-belt` touch
+	// different fields of it -- so this reads in the order the three were
+	// added.
 	//
-	// data-final-fixes is the last stage there is, which is what BOTH of them
-	// are here for -- one needs every mod's belts to have been defined, the
-	// other needs every mod's chance to have claimed `balancer-part` to be over.
+	// data-final-fixes is the last stage there is, which is what ALL THREE of
+	// them are here for: one needs every mod's belts to have been defined, one
+	// needs every mod's chance to have rewritten the collision defaults to be
+	// over, and the third needs every mod's chance to have claimed
+	// `balancer-part` to be over.
 	deriveHiddenSpeed()
+	followCollisionDefaults()
 	legacy()
 }
 

@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.5
+Date: 2026-09-17
+  Bugfixes:
+    - On Factorio 2.0, the mod no longer fails to load beside a mod that adds a collision layer to the game's belts. Cerys is the one this was reported with: it gives every belt a layer of its own so that nothing can be built on its water, and the hidden belt piece this mod places at a balancer's edges was left out of that, which the game refuses with a message naming only this mod. That piece now reads the belt collision layers back at the end of loading and takes whatever they are, and the mod declares Cerys as an optional dependency so that it loads after it. Thanks to toynbeeidea and entitytiger for the reports.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.4
 Date: 2026-09-17
   Bugfixes:

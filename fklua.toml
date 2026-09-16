@@ -1,7 +1,7 @@
 # What this mod is. These become info.json.
 [mod]
 name = "better-belt-balancer"
-version = "0.3.4"
+version = "0.3.5"
 title = "Better Belt Balancer"
 author = "Techrocket9"
 description = "Belt balancers that click together into arbitrary shapes. Highly performant; megabase-ready (UPS hit is ~equal to vanilla hand-crafted belt balancers)."
@@ -28,7 +28,23 @@ factorio_version = "2.1"
 # package time rather than picking a winner.
 data = "mod-data"
 # info.json's dependencies, verbatim. The data stage extends base prototypes.
-dependencies = ["base >= 2.1.0"]
+#
+# THE OPTIONAL ONE IS A LOAD ORDER AND NOT A FEATURE. An optional dependency
+# on an INSTALLED mod puts that mod ahead of this one in Factorio's own
+# ordering, and is inert in every game that does not have it -- which is what
+# the `?` form is for. Cerys-Moon-of-Fulgora rewrites
+# `data.raw["utility-constants"].default.default_collision_masks` from its
+# data-final-fixes, and `guest/go/data/hidden.go`'s followCollisionDefaults
+# re-reads that table from OURS, so the two stages have to run in that order or
+# the re-read sees the table the rewriter is about to replace. Measured without
+# it on 2.0.77: this mod's final-fixes at 0.823 and Cerys's at 0.984.
+#
+# IT IS THE ONE KNOWN REWRITER AND THE LIST IS NOT A GENERAL ANSWER.
+# data-final-fixes is the last stage Factorio has, so a mod rewriting those
+# defaults from a data-final-fixes that sorts after this one is past anything
+# this mod can read; there is no later stage to take an answer in. What the
+# entry buys is the pack this was reported from.
+dependencies = ["base >= 2.1.0", "? Cerys-Moon-of-Fulgora"]
 
 # The API version the generated bindings come from.
 # PINNED: `fklua gen-bindings --check` fails if the tree drifts from it,

@@ -536,3 +536,97 @@ func insertProbe() fkdata.V {
 		f("picture", emptySprite()),
 	)
 }
+
+// ---------------------------------------------------------------------------
+// followCollisionDefaults: THE ONE PROTOTYPE HERE WITH AN EXPLICIT COLLISION
+// MASK HAS TO KEEP AGREEING WITH THE TYPE DEFAULT, AND THE DEFAULT IS A THING
+// ANOTHER MOD MAY REWRITE.
+//
+// `bbb-linked-belt` carries `collision_mask` written out because it has to
+// carry `not_colliding_with_itself` beside it on 2.0, and a mask is a whole
+// value: there is no way to add one sibling key without also stating `layers`.
+// Every other belt-connectable in the game -- this file's other three included
+// -- states no mask at all and inherits
+// `data.raw["utility-constants"].default.default_collision_masks[<type>]`.
+//
+// A MOD IS ENTITLED TO REWRITE THAT TABLE, and one does: Cerys-Moon-of-Fulgora
+// declares a collision layer of its own and, at ITS data-final-fixes, copies
+// every default mask carrying `water_tile` and adds `cerys_water_tile` to the
+// copy. Afterwards every inheriting belt-connectable has six layers and this
+// prototype has the five `beltLayers()` names. That difference is what the
+// 2.0 loader refuses, and it refuses it in terms that name neither the other
+// mod nor the layer:
+//
+//	entity prototype "bbb-linked-belt" (linked-belt) collision_mask(...) must
+//	collide with entity prototype "bbb-linked-belt" (linked-belt)
+//	collision_mask(...).
+//
+// which is the self-collision validation -- the check the header above says 2.0
+// SKIPS while a belt-connectable's layers are exactly the type default, and
+// which `not_colliding_with_itself` cannot survive once it runs. So the door
+// the whole multi-edge architecture stands in is held open by an equality with
+// a table this mod does not own, and the literal is only the right answer until
+// somebody moves it.
+//
+// SO THE LAYERS ARE RE-READ AT data-final-fixes AND WRITTEN BACK WHEN THEY HAVE
+// MOVED. Only `layers` is written, never the mask, because
+// `not_colliding_with_itself` is a sibling of it and is canStack()'s decision
+// rather than the default's.
+//
+// NOTHING IS WRITTEN WHEN NOTHING MOVED, which is `deriveHiddenSpeed`'s own
+// idiom and is here for the same reason: a stock game's prototype table stays
+// byte-identical to the one every number in this repository was measured on.
+//
+// THE OTHER THREE NEED NOTHING AND MUST KEEP NEEDING NOTHING. `bbb-belt`,
+// `bbb-splitter` and `bbb-lane-splitter` state no `collision_mask` at all --
+// base's own `express-transport-belt`, `express-splitter` and `lane-splitter`
+// do not, so the clones do not -- and an inherited mask follows a rewritten
+// default by construction. Giving any of them an explicit mask would put it in
+// this function's position.
+//
+// ON 2.1 THIS IS CORRECTNESS RATHER THAN A LOAD. That engine has no
+// `not_colliding_with_itself` here and validates every belt-connectable
+// against itself, which the literal passes whatever the defaults say -- so the
+// mod loads either way. What following the default buys there is that the
+// interface collides with whatever a mod decided belts collide with, instead of
+// being placeable on one more mod's water.
+//
+// AND IT CANNOT COVER A REWRITER THAT SORTS AFTER US. data-final-fixes is the
+// last stage there is, so a mod that rewrites the defaults from a
+// data-final-fixes running after this one is past anything this mod can read.
+// fklua.toml's optional dependency on Cerys-Moon-of-Fulgora is what puts the
+// one known rewriter in front; there is no general answer and the engine
+// provides no later stage to take one in.
+//
+//go:noinline
+func followCollisionDefaults() {
+	want, ok := fkdata.Get("utility-constants", "default",
+		"default_collision_masks", "linked-belt", "layers")
+	if !ok || want.Tag != fkdata.TagMap || sameLayers(want, beltLayers()) {
+		return
+	}
+	at{"linked-belt", "bbb-linked-belt"}.set(want, "collision_mask", "layers")
+	fkdata.Log("[BBB] the linked-belt collision default has been rewritten; " +
+		"the hidden interface follows it")
+}
+
+// sameLayers compares two `layers` dictionaries. Both sides come back with
+// their pairs sorted -- fkdata.Get sorts at every level and beltLayers() is
+// written in order -- so this could be a positional walk; it is a lookup per
+// key instead, because the sort is the ABI's promise about one side and this
+// package's own spelling on the other, and a comparison that is right for a
+// reason spanning both is a comparison that breaks when either moves.
+//
+//go:noinline
+func sameLayers(a, b fkdata.V) bool {
+	if a.Tag != fkdata.TagMap || b.Tag != fkdata.TagMap || len(a.Map) != len(b.Map) {
+		return false
+	}
+	for _, kv := range a.Map {
+		v, ok := b.At(kv.Key.String())
+		if !ok || v.Tag != kv.Val.Tag || v.Boolean() != kv.Val.Boolean() {
+			return false
+		}
+	}
+	return true
+}

@@ -65,8 +65,9 @@ a machine with different DLC produces a different hash for a mod that is
 perfectly fine. A golden line whose engine does not match the binary is a SKIP
 with a message, never a failure.
 
-...AND SIXTEEN VARIANT ARMS (ONE OF THEM THE VANILLA CONTROL), A SPEED ARM,
-TWO MERGE ARMS AND TWO CEILING ARMS, WHICH ARE NOT HASHED.
+...AND SIXTEEN VARIANT ARMS (ONE OF THEM THE VANILLA CONTROL), A SPEED ARM, A
+COLLISION-DEFAULT ARM, TWO MERGE ARMS AND TWO CEILING ARMS, WHICH ARE NOT
+HASHED.
 
 0.3.1 made the recipe's cost, the research's cost and the hidden network's belt
 speed depend on things a golden cannot hold still. A hash is the right
@@ -112,6 +113,15 @@ never make easy. So:
   because no mod set this machine can otherwise install has one -- vanilla tops
   out at turbo, 0.125, which is HALF this mod's floor, so on every other arm the
   correct behaviour and a derivation that does nothing at all are the same dump.
+
+  the COLLISION DEFAULTS get an arm with a mod in it that REWRITES them, and
+  it is the one arm here whose claim is that the game loads at all. This mod
+  writes a `collision_mask` on exactly one prototype and every other
+  belt-connectable in the game inherits the type default, so a pack that
+  rewrites that default leaves ours behind and the 2.0 loader refuses it --
+  which is what two players reported. The fixture is Cerys-Moon-of-Fulgora's
+  own loop with the layer name changed, staged ahead of this mod. See
+  CERYS_NAME and check_cerys.
 
   the LADDER MERGE gets an arm with a mod in it that DELETES an item, for the
   same reason turned around: no mod set this machine can install is missing
@@ -1019,6 +1029,144 @@ log("bbbt-remover: swept " .. dead .. " recipe(s) at data-final-fixes")
 '''
 
 
+# ---------------------------------------------------------------------------
+# THE COLLISION-DEFAULT ARM'S FIXTURE: a pack that rewrites the game's own
+# default collision masks, which is the shape that stopped this mod loading.
+#
+# WHAT IT IS FOR. `bbb-linked-belt` is the one prototype this mod writes a
+# `collision_mask` on, because on 2.0 it has to carry
+# `not_colliding_with_itself` and a mask is a whole value -- there is no way to
+# add that sibling without also stating `layers`. Every other belt-connectable
+# in the game states no mask and inherits
+# `data.raw["utility-constants"].default.default_collision_masks[<type>]`, and
+# a mod is entitled to rewrite that table. Cerys-Moon-of-Fulgora does, at its
+# own data-final-fixes: it declares a collision layer and adds it to a copy of
+# every default mask that carries `water_tile`. Afterwards every inheriting
+# belt-connectable has one more layer than this one does, and the 2.0 loader
+# runs the self-collision validation that the equality was skipping -- which
+# `not_colliding_with_itself` cannot pass:
+#
+#   entity prototype "bbb-linked-belt" (linked-belt) collision_mask(...) must
+#   collide with entity prototype "bbb-linked-belt" (linked-belt)
+#   collision_mask(...).
+#
+# exit 1, no dump. Reported from two players' 120-mod packs and reproduced down
+# to nine mods. guest/go/data/hidden.go's followCollisionDefaults is the fix and
+# this is the engine half of it: a host test can prove what the guest reads and
+# only a load can say the validation is satisfied.
+#
+# ITS data-final-fixes LOOP IS CERYS'S OWN, TRANSCRIBED CHARACTER FOR CHARACTER
+# off Cerys-Moon-of-Fulgora 4.24.2's prototypes/override-final/entity.lua, tabs
+# included, with the layer name substituted and nothing else touched. A
+# rephrasing would be this file's model of what that mod does rather than what
+# it does.
+#
+# WHY LUA AND NOT A `build_fixture` GUEST, which is REMOVER_NAME's argument and
+# it transfers word for word: no tinygo, no `fklua mod`, no compile at all, for
+# a fixture whose whole content is one `data:extend` and one loop. And the loop
+# has to be Lua to be verbatim.
+#
+# IT SORTS BEFORE THIS MOD AND THE ORDER IS THE WHOLE ARM. MEASURED on 2.0.77
+# (build 84539), the same fixture staged both ways against the fixed guest:
+# before, the load completes and `bbb-linked-belt` comes out carrying the
+# fixture's layer; AFTER -- the fixture given a dependency on
+# `better-belt-balancer` so the engine runs it second, data-final-fixes at 0.475
+# against 0.595 -- the load exits 1 on the message above. The second outcome is
+# not a case this arm fails to cover, it is the STATED LIMIT of the fix:
+# data-final-fixes is the last stage Factorio has, so a rewriter running after
+# this mod is past anything this mod can read. What puts the one known rewriter
+# in front is fklua.toml's `? Cerys-Moon-of-Fulgora` -- an optional dependency
+# is a load order and nothing else -- and no arm here can drive that, Cerys
+# being a Space Age pack with four hard dependencies of its own. What drove it
+# is the reporter's own 120-mod pack; CLAUDE.md carries that run.
+#
+# THE NAME SORTS BEFORE `better-belt-balancer`, which is how it comes to run
+# first, exactly as REMOVER_NAME does -- and the arm ASSERTS that rather than
+# resting on the alphabet, for the same reason: Factorio's data-stage ordering
+# is measured in this file and was not found documented.
+# ---------------------------------------------------------------------------
+
+CERYS_NAME = "bbbt-cerys"
+CERYS_VERSION = "0.0.1"
+
+# The fixture's own layer. NOT `cerys_water_tile`: what is general here is the
+# rewrite, and a fixture borrowing the real mod's layer name would read as a
+# claim about that mod's prototypes rather than about anybody's.
+CERYS_LAYER = "bbbt_water_tile"
+
+# The one prototype of ours that states a mask, and the three that must not.
+# THE THREE ARE AN ASSERTION AND NOT A NOTE: an explicit mask on any of them
+# would fall behind a rewritten default exactly as the linked belt's did, and
+# nothing else in this file would see it -- the golden holds a field still
+# without ever saying it has to be ABSENT.
+CERYS_MASKED = ("linked-belt", "bbb-linked-belt")
+CERYS_INHERITS = [
+    ("transport-belt", "bbb-belt"),
+    ("splitter", "bbb-splitter"),
+    ("lane-splitter", "bbb-lane-splitter"),
+]
+
+CERYS_DATA_LUA = '''\
+-- bbbt-cerys: a pack that rewrites the game's default collision masks, for the
+-- collision-default arm of test/check-datastage.py. Never shipped. THE LAYER
+-- GOES HERE because a collision-layer prototype has to exist before anything
+-- names it; the rewrite is in data-final-fixes.lua, which is the stage the mod
+-- this fixture stands in for does it at.
+data:extend({ { type = "collision-layer", name = %s } })
+'''
+
+# CERYS'S OWN LOOP. The only substitution is the layer name.
+CERYS_FINAL_LUA = '''\
+for key, mask in pairs(data.raw["utility-constants"].default.default_collision_masks) do
+	if mask.layers and mask.layers.water_tile then
+		local new_mask = util.table.deepcopy(mask)
+		new_mask.layers[%s] = true
+		data.raw["utility-constants"].default.default_collision_masks[key] = new_mask
+	end
+end
+log("bbbt-cerys: rewrote the default collision masks at data-final-fixes")
+'''
+
+# WHAT THE GUEST SAYS WHEN IT FOLLOWS. Transcribed out of hidden.go, like every
+# other expectation in this file, and asserted because it is the one thing in
+# the run that separates "this mod followed the default" from "the mask happens
+# to match": a dump records the mask and not who wrote it.
+CERYS_LINE = ("[BBB] the linked-belt collision default has been rewritten; "
+              "the hidden interface follows it")
+
+
+def build_cerys(series: str, out: Path) -> Path:
+    """Write the bbbt-cerys fixture into a staged mod directory.
+
+    NO TOOLCHAIN, exactly as `build_remover` needs none: an info.json, a
+    data.lua and a data-final-fixes.lua.
+
+    NO DEPENDENCY ON THIS MOD, AND THAT IS THE ARM'S DIRECTION. The fixture has
+    to rewrite the defaults BEFORE this mod re-reads them, which the alphabet
+    already does and the arm asserts; a dependency on `better-belt-balancer`
+    would order it the other way and measure the limit rather than the fix. The
+    block above CERYS_NAME has both outcomes.
+    """
+    d = out / f"{CERYS_NAME}_{CERYS_VERSION}"
+    d.mkdir(parents=True)
+    (d / "info.json").write_text(json.dumps({
+        "name": CERYS_NAME,
+        "version": CERYS_VERSION,
+        "title": "BBB collision-default rewriter fixture",
+        "author": "BetterBeltBalancer",
+        "factorio_version": series,
+        "description": "Declares a collision layer and adds it to every default "
+                       "collision mask carrying water_tile, which is what "
+                       "Cerys-Moon-of-Fulgora does, for the collision-default "
+                       "arm of test/check-datastage.py. Never shipped.",
+        "dependencies": [f"base >= {series}.0"],
+    }, indent=2) + "\n")
+    name = json.dumps(CERYS_LAYER)
+    (d / "data.lua").write_text(CERYS_DATA_LUA % name)
+    (d / "data-final-fixes.lua").write_text(CERYS_FINAL_LUA % name)
+    return d
+
+
 def engine_version(factorio: str) -> str:
     out = subprocess.run([factorio, "--version"], capture_output=True, text=True).stdout
     m = re.match(r"^Version: (\d+\.\d+\.\d+)", out)
@@ -1360,6 +1508,8 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
         # they end up in.
         said = [line[line.index("fkrecipes:"):] for line in text.splitlines()
                 if "fkrecipes:" in line]
+        ours_said = [line[line.index("[BBB]"):] for line in text.splitlines()
+                     if "[BBB]" in line]
         ran = re.findall(r"Loading mod (\S+) \S+ \(data\.lua\)", text)
 
         so = userdir / "script-output"
@@ -1395,6 +1545,15 @@ def run_arm(arm: str, factorio: str, series: str, mod_dir: Path,
             # the guest's own `[BBB]` lines: match from the tag, never on what
             # the engine printed in front of it.
             "fkrecipes_lines": said,
+            # WHAT THE GUEST ITSELF SAID, on the same rule one tag over: from
+            # `[BBB]` onward, never on the engine's stamp in front of it. A data
+            # stage writes one of these at most -- the belt-speed derivation and
+            # the collision-default re-read are the only two paths here that
+            # speak -- and both are a decision NOTHING IN THE DUMP RECORDS: a
+            # mask that matches the default matches it whether this mod followed
+            # it or another mod wrote it, and the line is what tells the two
+            # apart. See check_cerys.
+            "bbb_lines": ours_said,
             # WHICH MODS RAN THE DATA STAGE, IN THE ORDER THE ENGINE RAN THEM,
             # for the two arms whose whole premise is that another mod went
             # FIRST. `check_remover` stages a mod that deletes an item ahead of
@@ -1808,6 +1967,7 @@ def main() -> int:
     if not args.golden_only:
         bad |= check_variants(factorio, series, mod_dir)
         bad |= check_speed(factorio, series, mod_dir)
+        bad |= check_cerys(factorio, series, mod_dir)
         bad |= check_remover(factorio, series, mod_dir)
         bad |= check_note_ceiling(factorio, series, mod_dir)
 
@@ -2049,6 +2209,131 @@ def check_speed(factorio: str, series: str, mod_dir: Path) -> bool:
 REMOVER_PROBE = ('{item: .item["%s"], alive: .item["%s"], '
                  'dead_recipe: .recipe["%s"], alive_recipe: .recipe["%s"], '
                  'ours: .recipe["%s"]}')
+
+
+# THE COLLISION-DEFAULT ARM'S ONE PROJECTION, and every question it asks is in
+# it. Four keys over one thirteen-megabyte dump, for the reason `project` gives.
+#
+# THE DEFAULT TABLE IS FETCHED BESIDE OUR MASK, which is what makes the claim an
+# EQUALITY rather than a containment. "our mask gained the fixture's layer" is
+# satisfied by a guest that added that one name and dropped another; "our mask
+# is the default's layer set" is not, and it is the property the loader actually
+# checks.
+CERYS_PROBE = ('{ours: .["%s"]["%s"].collision_mask, '
+               'want: .["utility-constants"].default'
+               '.default_collision_masks["%s"].layers, '
+               'inherits: [%s]}')
+
+
+def check_cerys(factorio: str, series: str, mod_dir: Path) -> bool:
+    """A pack that rewrote the default collision masks, and the mod still loads.
+
+    Returns True on a failure, which is the shape main() already counts.
+
+    THE LOAD ITSELF IS HALF THE ASSERTION AND `run_arm` MAKES IT. A rewrite this
+    mod did not follow does not produce a wrong mask in a dump, it produces NO
+    DUMP: the engine refuses the prototype and exits 1, which `run_arm` turns
+    into a `sys.exit` carrying the engine's own text. So the red proof of this
+    arm is the reported message and not a FAIL line, and that is the right shape
+    -- what was reported was a game that would not start.
+    """
+    print("==> the default collision masks, 1 arm with a pack that rewrites them")
+    work = Path(tempfile.mkdtemp(prefix="bbb-cerys-"))
+    try:
+        fixture = build_cerys(series, work)
+        got = run_arm("cerys", factorio, series, mod_dir, None, extras=[fixture],
+                      probe=lambda d: project(d, CERYS_PROBE % (
+                          CERYS_MASKED[0], CERYS_MASKED[1], CERYS_MASKED[0],
+                          ", ".join('.["%s"]["%s"].collision_mask' % (t, n)
+                                    for t, n in CERYS_INHERITS))))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+    ours, want = got["probe"]["ours"], got["probe"]["want"]
+
+    # ANTI-VACUITY FIRST, AND THE ORDER IS THE SHARPEST OF THE THREE. A fixture
+    # the engine ran SECOND rewrites a table this mod has already read, which is
+    # the case the fix cannot cover at all -- so an arm that let the order slip
+    # would stop being about the fix without saying so. It is asked of
+    # `load_order`, which the ENGINE wrote.
+    order = got["load_order"]
+    ours_name = got["mods"][0]
+    if not {CERYS_NAME, ours_name} <= set(order):
+        print(f"FAIL cerys: the engine ran the data stages of {order} and "
+              f"{[n for n in (CERYS_NAME, ours_name) if n not in order]} never "
+              f"ran one; being in the staging directory is not being in the game")
+        return True
+    if order.index(CERYS_NAME) > order.index(ours_name):
+        print(f"FAIL cerys: the data stages ran {order}, and this arm needs "
+              f"{CERYS_NAME} before {ours_name}; a rewrite this mod has already "
+              f"read past is the limit of the fix rather than a test of it")
+        return True
+    # AND THE REWRITE LANDED. `want` is the table the guest reads, so a jq path
+    # that went stale answers null here and the equality below would then be
+    # comparing our mask against nothing.
+    if want is None or CERYS_LAYER not in want:
+        print(f"FAIL cerys: the `{CERYS_MASKED[0]}` default mask is {want} and "
+              f"the fixture has to have put `{CERYS_LAYER}` in it; nothing was "
+              f"rewritten, so this arm proves nothing")
+        return True
+
+    bad = False
+    # THE CLAIM. Layer for layer, not a containment: a mask that gained the
+    # fixture's name and lost one of base's own is a mask that does not collide
+    # with the belts around it, which is the condition the loader refuses.
+    if (ours or {}).get("layers") != want:
+        bad = True
+        print(f"FAIL cerys: `{CERYS_MASKED[1]}` carries the layers "
+              f"{json.dumps((ours or {}).get('layers'))}\n{'':>5}  and the "
+              f"`{CERYS_MASKED[0]}` default is {json.dumps(want)}")
+    # AND canStack()'S DECISION SURVIVED THE FOLLOW. The re-read writes `layers`
+    # alone, so its SIBLING is the thing a careless fix would take out -- and
+    # taking it out on 2.0 costs the multi-edge geometry silently, on a load
+    # that completes. It is per engine, like the goldens: the flag is emitted on
+    # 2.0.x and never on 2.1.x.
+    want_keys = ["layers"] + (["not_colliding_with_itself"]
+                              if series == "2.0" else [])
+    if sorted((ours or {}).keys()) != sorted(want_keys):
+        bad = True
+        print(f"FAIL cerys: `{CERYS_MASKED[1]}`'s mask has the keys "
+              f"{sorted((ours or {}).keys())} and on {series} it has to have "
+              f"{sorted(want_keys)}")
+    elif "not_colliding_with_itself" in want_keys and \
+            ours["not_colliding_with_itself"] is not True:
+        bad = True
+        print(f"FAIL cerys: `{CERYS_MASKED[1]}` carries "
+              f"not_colliding_with_itself = "
+              f"{json.dumps(ours['not_colliding_with_itself'])}; on {series} the "
+              f"whole multi-edge geometry is that flag being true")
+    # AND THE THREE THAT INHERIT STILL STATE NOTHING. An explicit mask on any of
+    # them would fall behind the same rewrite the same way, and it is the one
+    # shape here a hash holds still without ever naming.
+    stated = [n for (_, n), m in zip(CERYS_INHERITS, got["probe"]["inherits"])
+              if m is not None]
+    if stated:
+        bad = True
+        print(f"FAIL cerys: {stated} state a collision_mask of their own. Every "
+              f"one of them inherits the type default today, which is what "
+              f"makes a rewrite free for them; an explicit mask puts it in "
+              f"followCollisionDefaults' position and nothing else here looks")
+    # AND THE GUEST SAID IT FOLLOWED. The dump records a mask and not who wrote
+    # it, so this is the only line in the run that tells the fix from a
+    # coincidence -- a mask that matched the default for some other reason would
+    # satisfy every assertion above.
+    if CERYS_LINE not in got["bbb_lines"]:
+        bad = True
+        print(f"FAIL cerys: the guest's own lines are {got['bbb_lines']}\n"
+              f"{'':>5}  and following a rewritten default has to say "
+              f"{CERYS_LINE!r}")
+    if not bad:
+        print(f"  ok   cerys{'':<22} exit {got['returncode']}, and "
+              f"{CERYS_MASKED[1]} carries the {len(want)} layers "
+              f"`{CERYS_MASKED[0]}` now defaults to, `{CERYS_LAYER}` among "
+              f"them, with {', '.join(n for _, n in CERYS_INHERITS)} stating "
+              f"no mask at all")
+        print(f"{'':>5}  the engine ran {CERYS_NAME} before {ours_name}, and "
+              f"the guest said {CERYS_LINE!r}")
+    return bad
 
 
 def check_remover(factorio: str, series: str, mod_dir: Path) -> bool:
