@@ -1,7 +1,7 @@
 # What this mod is. These become info.json.
 [mod]
 name = "better-belt-balancer"
-version = "0.3.5"
+version = "0.2.5"
 title = "Better Belt Balancer"
 author = "Techrocket9"
 description = "Belt balancers that click together into arbitrary shapes. Highly performant; megabase-ready (UPS hit is ~equal to vanilla hand-crafted belt balancers)."
@@ -14,7 +14,7 @@ description = "Belt balancers that click together into arbitrary shapes. Highly 
 # BEHIND trunk, because it carries the last 2.0 release rather than head, and
 # `test/check-release-arm.sh` is what says its source is still trunk's. See
 # agents/single-edge.md, "Packaging: one tree, two releases".
-factorio_version = "2.1"
+factorio_version = "2.0"
 # The mod's ASSETS -- graphics, locale, changelog, thumbnail, and since the
 # data-stage purge NOTHING ELSE. `fklua mod` generates the control stage and
 # rm -rf's its output directory first, so nothing hand-written can live there;
@@ -44,14 +44,14 @@ data = "mod-data"
 # defaults from a data-final-fixes that sorts after this one is past anything
 # this mod can read; there is no later stage to take an answer in. What the
 # entry buys is the pack this was reported from.
-dependencies = ["base >= 2.1.0", "? Cerys-Moon-of-Fulgora"]
+dependencies = ["base >= 2.0.0", "? Cerys-Moon-of-Fulgora"]
 
 # The API version the generated bindings come from.
 # PINNED: `fklua gen-bindings --check` fails if the tree drifts from it,
 # and `fklua api check --to <newer>` says whether an upgrade would break
 # anything this mod actually calls.
 [fklua]
-api = "2.1.17"
+api = "2.0.77"
 # GO ALONE, and this repository is PURE GO: the shipped guest, the data guest
 # and all fourteen test observers are the one language.
 #
