@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.6
+Date: 2026-09-20
+  Bugfixes:
+    - A balancer now follows an underground belt that is turned around from its far end. Rotating either half of an underground pair swaps both halves, but the game reports only the half you pointed at, so when the half beside a balancer changed from going in to coming out (or back) by way of its partner a few tiles away, the balancer kept the old connection and its arrows did not move until something else nearby changed. Rotating the half next to the balancer always worked and still does. Thanks to Gamer433 for the report.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.5
 Date: 2026-09-17
   Bugfixes:

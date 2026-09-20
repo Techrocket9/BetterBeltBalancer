@@ -163,24 +163,29 @@ LINE_TILE = (-2, 0)
 # arrived, which is the two curve rigs: four working parts and two spare ones
 # each. Nothing else in it moved, which is what says those bands are forty tiles
 # clear of every gesture above them.
+#
+# AND BY +1 CLUSTER AND +2 PARTS AGAIN for band (j), whose row has NO network
+# until its underground pair is turned -- two inputs and no output is a
+# half-built state -- so `nets` gains one at `post-urot` and not before.
 AUDIT_EXPECT = {
-    "armed":            (11, 168, 10, 0, 0, 0),
-    "post-restore":     (11, 168, 10, 0, 0, 0),
-    "post-end":         (11, 169, 10, 0, 0, 0),
-    "post-lone":        (10, 168, 10, 0, 0, 0),
-    "post-col":         (11, 167, 11, 0, 0, 0),
-    "post-second":      (11, 167, 11, 0, 0, 0),
-    "post-brdg":        (11, 167, 11, 0, 0, 0),
-    "post-lim":         (11, 167, 11, 0, 0, 0),
-    "post-limfull":     (11, 167, 11, 1, 0, 1),
-    "post-bmin-add":    (11, 167, 11, 1, 0, 1),
-    "post-curve-line":  (11, 167, 11, 1, 0, 1),
-    "post-curve-face":  (11, 167, 11, 1, 0, 1),
-    "post-curve":       (11, 167, 11, 1, 0, 1),
-    "post-lb":          (11, 167, 11, 1, 0, 1),
-    "post-bmin-mine":   (11, 167, 11, 1, 0, 1),
-    "post-pock":        (10, 162, 10, 1, 0, 1),
-    "final":            (10, 162, 10, 1, 0, 1),
+    "armed":            (12, 170, 10, 0, 0, 0),
+    "post-restore":     (12, 170, 10, 0, 0, 0),
+    "post-end":         (12, 171, 10, 0, 0, 0),
+    "post-lone":        (11, 170, 10, 0, 0, 0),
+    "post-col":         (12, 169, 11, 0, 0, 0),
+    "post-second":      (12, 169, 11, 0, 0, 0),
+    "post-brdg":        (12, 169, 11, 0, 0, 0),
+    "post-lim":         (12, 169, 11, 0, 0, 0),
+    "post-limfull":     (12, 169, 11, 1, 0, 1),
+    "post-bmin-add":    (12, 169, 11, 1, 0, 1),
+    "post-curve-line":  (12, 169, 11, 1, 0, 1),
+    "post-curve-face":  (12, 169, 11, 1, 0, 1),
+    "post-curve":       (12, 169, 11, 1, 0, 1),
+    "post-lb":          (12, 169, 11, 1, 0, 1),
+    "post-urot":        (12, 169, 12, 1, 0, 1),
+    "post-bmin-mine":   (12, 169, 12, 1, 0, 1),
+    "post-pock":        (11, 164, 11, 1, 0, 1),
+    "final":            (11, 164, 11, 1, 0, 1),
 }
 
 # What a SATURATED express belt tile holds: four items per lane at the belt's own
@@ -776,6 +781,47 @@ def main():
         fail.append("the engine control with a linked belt output end at the rear "
                     "reads %s and the engine counts one as a feeder, which is why "
                     "the probe must see it too" % (eng.get("linked-rear"),))
+
+    # ---- (j) an underground pair turned from its far end -------------------
+    #
+    # The engine swaps BOTH halves of a pair when either is rotated and raises
+    # the event for the one under the cursor. The far half is four tiles from the
+    # nearest part, outside the two-tile gate, so until `farUndergroundTurned`
+    # the near half changed from the row's second input to its only output and
+    # the mod was told nothing: no compile, and `drift=1` at the next audit.
+    UROT = re.compile(r"\[BBB-CURS\] urot tag=(\S+) near-output=(\S+) iface=(\S+)")
+    urots = {m.group(1): (m.group(2), m.group(3))
+             for m in (UROT.search(l) for l in lines) if m}
+    print("  urot %s, rate %s" % (urots, rates.get("urot")))
+    if urots.get("urot-pre") != ("true", "false"):
+        fail.append("band (j) starts at %s and the near half must be the pair's "
+                    "OUTPUT end feeding the east part, over a row with no network "
+                    "and so no interface, or the gesture turns nothing"
+                    % (urots.get("urot-pre"),))
+    if not any("urot-rotate turned=true" in l for l in lines):
+        fail.append("band (j): the player's rotate did not take")
+    if urots.get("urot-turned", (None,))[0] != "false":
+        fail.append("band (j): the near half reads %s after the FAR half was "
+                    "rotated. The engine swaps both ends of a pair, and if it did "
+                    "not the rest of this band is vacuous"
+                    % (urots.get("urot-turned"),))
+    if urots.get("urot-2") != ("false", "true"):
+        fail.append("band (j): two ticks after the turn the row reads %s and its "
+                    "east part must be carrying an interface. An audit repairs "
+                    "this, so the sample is taken BEFORE one"
+                    % (urots.get("urot-2"),))
+    # The window closes BEFORE the audit, which re-classifies the save and would
+    # compile the row whatever the event path did.
+    win = window("gesture begin name=urot", "urot tag=urot-2")
+    got = find(COMPILED, win)
+    print("  urot compiled %s" % [(g[1], g[2], g[3]) for g in got])
+    if len(got) != 1 or (got[0][1], got[0][2], got[0][3]) != ("1", "1", "1"):
+        fail.append("band (j) compiled %s. Turning the far half makes the near "
+                    "half the row's output, which takes two inputs and no "
+                    "network to a 1->1" % [(g[1], g[2], g[3]) for g in got])
+    if rates.get("urot", 0) <= 0:
+        fail.append("band (j) delivered %s items through the turned pair"
+                    % rates.get("urot"))
 
     # ---- the whole run -----------------------------------------------------
     #

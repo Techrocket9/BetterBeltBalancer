@@ -66,6 +66,8 @@ const (
 	loader   = protos.CursLoader
 	plate    = "iron-plate"
 
+	underground = "express-underground-belt"
+
 	// This mod's own visible edge interface. Bands (h) and (i) read it off a part
 	// tile to say whether that face was classified, and band (i) places a pair of
 	// its own to stand in for another mod's placeable linked belt.
@@ -162,7 +164,16 @@ const (
 	// within ten tiles, so what they report is Factorio's reading and not ours.
 	lbEng = lbeltBal + 12
 
-	rows = lbEng + 12
+	// (j) AN UNDERGROUND PAIR TURNED FROM ITS FAR END, the mod portal report of
+	// 2026-09-19. A two-part row whose west part carries an ordinary input and
+	// whose east part has an underground pair beside it running WEST, so the
+	// near half is a second input and the row has no output and no network. The
+	// player rotates the FAR half, three tiles out and outside the neighbour
+	// gate; the engine swaps both ends, the near half becomes the row's output,
+	// and the event names only the far one.
+	urot = lbEng + 12
+
+	rows = urot + 12
 )
 
 // The tile each gesture is aimed at, so that the observer, the log and the
@@ -179,6 +190,8 @@ var (
 	curveTarget  = harness.XY{X: 0, Y: curveFace}
 	curveRear    = harness.XY{X: -1, Y: curveFace}
 	lbeltTarget  = harness.XY{X: 0, Y: lbeltFace}
+	urotNear     = harness.XY{X: 2, Y: urot}
+	urotFar      = harness.XY{X: 5, Y: urot}
 )
 
 // curveLine is the forward line of band (h): laid west to east, one belt per
@@ -1035,6 +1048,49 @@ func buildCurve(s fkapi.LuaSurface) {
 	put(s, belt, 0, lbEng+5, &dirN)
 }
 
+// buildUrot is band (j)'s row. The far half is at x=5 and the near one at x=2,
+// so the rotated entity is four tiles from the nearest part and the two-tile
+// gate cannot see it. The input half is placed first so the output half pairs
+// with it rather than with nothing.
+func buildUrot(s fkapi.LuaSurface) {
+	put(s, part, 0, urot, nil)
+	put(s, part, 1, urot, nil)
+	feedIn(s, urot)
+	putTyped(s, underground, urotFar.X, urot, &dirW, "input")
+	putTyped(s, underground, urotNear.X, urot, &dirW, "output")
+	putTyped(s, loader, 6, urot, &dirE, "input")
+	harness.Place(s, harness.Piece{Name: "steel-chest", X: 7, Y: urot})
+}
+
+// urotSample says which end the NEAR half is, which is the thing the gesture
+// moves without touching it.
+func urotSample(tag string) {
+	s := surf()
+	line := out.Open("urot tag=").S(tag)
+	if e, found := harness.FindOnTile(s, underground, urotNear.X, urotNear.Y); found {
+		isOut, _ := (fkapi.LuaEntity{Object: e}).BeltToGroundTypeIs("output")
+		line = line.S(" near-output=").B(isOut)
+	} else {
+		line = line.S(" near-output=absent")
+	}
+	_, iface := harness.FindOnTile(s, nameIface, 1, urot)
+	line.S(" iface=").B(iface).End()
+}
+
+func gUrot() {
+	out.Open("gesture begin name=urot").End()
+	stand(urotFar)
+	urotSample("urot-pre")
+	p, ok := player()
+	e, found := harness.FindOnTile(surf(), underground, urotFar.X, urotFar.Y)
+	turned := false
+	if ok && found {
+		turned, _ = (fkapi.LuaEntity{Object: e}).Rotate(fkapi.LuaEntityRotateArgs{ByPlayer: &p.Object})
+	}
+	out.Open("urot-rotate turned=").B(turned).End()
+	urotSample("urot-turned")
+}
+
 func buildLine(s fkapi.LuaSurface) {
 	// A WEST-facing dead-ended line: the head is x=-4 and nothing feeds it, so
 	// what `lineLoad` puts on the middle belt has nowhere to go and what the mod
@@ -1281,6 +1337,12 @@ var schedule = []harness.Step{
 		engSample("empty-rear", lbEng+4)
 	}},
 
+	// (j) the underground pair turned from its far end, in the same gap.
+	{Tick: t0 + 800, Do: gUrot},
+	{Tick: t0 + 802, Do: func() { urotSample("urot-2") }},
+	{Tick: t0 + 804, Do: func() { auditAt("post-urot", 12, 0) }},
+	{Tick: t0 + 1000, Do: func() { rate("urot", harness.XY{X: 7, Y: urot}) }},
+
 	{Tick: t0 + 1100, Do: func() { reportPlayer("final"); auditAt("final", 12, 0) }},
 }
 
@@ -1318,6 +1380,7 @@ func onInit() {
 	buildLim(s)
 	buildBrdg(s)
 	buildCurve(s)
+	buildUrot(s)
 
 	// `--create` never reaches a tick, and this suite has no `--create` -- but the
 	// fixture's own first tick is the benchmark's, so without a marker here every

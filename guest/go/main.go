@@ -615,6 +615,13 @@ func onEventBody(id, ptr uint32) {
 	fastRep := what == evVanish && minedBy != 0 &&
 		isFastReplace(tick, minedBy, floorTile(pos.X), floorTile(pos.Y))
 	if !fastRep && what != evAppear && si != hiddenIdx && !nearCluster(si, pos.X, pos.Y) {
+		// ... EXCEPT THAT AN UNDERGROUND PAIR TURNS AS ONE. Rotating either half
+		// swaps BOTH ends, and the event names only the half under the cursor --
+		// so the half against a balancer changes from input to output with
+		// nothing inside the gate having been reported. See farUndergroundTurned.
+		if what == evModify {
+			farUndergroundTurned(ent, si, pos.X, pos.Y)
+		}
 		return
 	}
 	name, err := ent.Name()
@@ -989,6 +996,60 @@ func nearCluster(surf uint32, x, y float64) bool {
 		}
 	}
 	return false
+}
+
+// farUndergroundTurned handles a rotation or flip of an underground belt that
+// is itself outside every cluster's gate, because its PARTNER may not be: the
+// engine swaps both ends of a pair when either is rotated and raises the event
+// for the one the player pointed at. Reported on the mod portal by Gamer433,
+// 2026-09-19 -- the balancer's arrows did not follow an underground turned from
+// its far end.
+//
+// POSITIONAL RATHER THAN BY HANDLE, because the partner attribute is
+// `neighbours` (a union) at the 2.0.77 pin and `underground_belt_neighbour` at
+// 2.1.17, and one tree ships on both. The partner lies on the rotated half's
+// own axis at most `max_underground_distance` tiles away, so every tile of that
+// reach is offered to the same neighbourhood walk a belt edit gets. It
+// over-approximates -- a cluster beside the tunnel that the pair does not touch
+// is queued too -- and what that costs is a classification the fingerprint
+// throws away.
+//
+// A rotation is a keypress, so the three host calls here are per gesture and
+// never per tick; a belt that is not an underground pays one and returns.
+func farUndergroundTurned(ent fkapi.LuaEntity, surf uint32, x, y float64) {
+	if is, err := ent.TypeIs("underground-belt"); err != nil || !is {
+		return
+	}
+	d, err := ent.Direction()
+	if err != nil {
+		return
+	}
+	di, ok := dirIndex(d)
+	if !ok {
+		return
+	}
+	proto, err := ent.Prototype()
+	if err != nil {
+		return
+	}
+	reach, err := fkapi.LuaEntityPrototype{Object: proto}.MaxUndergroundDistance()
+	if err != nil || reach == nil {
+		return
+	}
+	// dirOf is north, east, south, west; the pair shares an axis and the
+	// partner may be on either side of it.
+	ax, ay := float64(0), float64(1)
+	if di == 1 || di == 3 {
+		ax, ay = 1, 0
+	}
+	for n := 1; n <= int(*reach); n++ {
+		for _, sgn := range [2]float64{-1, 1} {
+			px, py := x+sgn*ax*float64(n), y+sgn*ay*float64(n)
+			if nearCluster(surf, px, py) {
+				onNeighbour(surf, px, py, 0, 0)
+			}
+		}
+	}
 }
 
 // `minedBy` is the player_index for on_player_mined_entity and 0 for everything
