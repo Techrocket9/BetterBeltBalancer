@@ -35,7 +35,7 @@ package main
 // MISS allocates nothing on either side. The paths this sits on are refusals,
 // fast-replace hits, picture changes and the migration's build swaps -- none
 // is per-tick -- and the `mar` suite's slopes are the gate that says what it
-// really moved (see CLAUDE.md, the quality pass).
+// really moved (see agents/features/quality-lookups.md).
 
 import "github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
 

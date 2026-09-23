@@ -3,7 +3,7 @@
 
 A rebuilt guest gets a fresh heap, and it is now TOLD SO: this mod exports
 `fk_migrate`, which upstream split off as a notification on a fresh heap rather
-than the adopt-the-old-linear-memory hook it used to be (CLAUDE.md, "Coming back
+than the adopt-the-old-linear-memory hook it used to be (agents/architecture/runtime-model.md, "Coming back
 on a heap this build did not write"). So the guest wakes up with an empty
 registry and a world full of parts and running networks, and puts that right at
 a named point -- on_configuration_changed, before the first tick -- rather than

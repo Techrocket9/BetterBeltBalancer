@@ -174,7 +174,7 @@ func deriveHiddenSpeed() {
 // WHAT THIS DOES NOT FIX: the ITEMS. There is no prototype field anywhere that
 // suppresses the drawing of items on a belt-connectable, and no linked-belt
 // equivalent of `LoaderPrototype::belt_length` to shorten the stretch they are
-// drawn over. See CLAUDE.md, "The tan streak".
+// drawn over. See agents/features/tan-streak.md.
 // ---------------------------------------------------------------------------
 
 // blankAnimation is one transparent pixel, as an Animation. Valid wherever an

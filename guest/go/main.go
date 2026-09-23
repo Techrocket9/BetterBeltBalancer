@@ -578,7 +578,7 @@ func onEventBody(id, ptr uint32) {
 	// because the arena underneath them is released when the call returns -- and
 	// under `-gc=leaking` that copy is permanent, in the save and in every
 	// multiplayer join. Measured at 32 B for one `express-transport-belt`
-	// (CLAUDE.md, "The marathon save", leg D). A position and a surface index
+	// (agents/performance/marathon-save.md, leg D). A position and a surface index
 	// are scalars decoded out of the return block and cost nothing.
 	//
 	// The engine's filter admits every belt-connectable on the map, so this
@@ -1208,7 +1208,7 @@ func logShrunk(root uint32) {
 //
 // The suffix is the only evidence a headless run can give that `player_index`
 // reached the registry at all -- the pocket itself needs a player and a
-// `--create` has none (CLAUDE.md, "What M3 implements and does NOT verify"), and
+// `--create` has none (agents/verification/suites/m3.md, "What M3 implements and does NOT verify"), and
 // on_player_mined_entity is not one of the events script.raise_event will raise.
 // The unsuffixed form is what every other removal path writes, and every suite
 // asserting on it is unchanged.

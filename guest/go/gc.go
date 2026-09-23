@@ -6,7 +6,7 @@ package main
 // mark-sweep over the guest's OWN heap: `-gc=custom` on the TinyGo side, one
 // import here, and `fklua mod --gc=collected` on the package. `make GC=...` is
 // the whole switch, and COLLECTED IS THE SHIPPED DEFAULT since 2026-08-02 --
-// CLAUDE.md's "The third decision" is the measurement that flipped it and
+// "The third decision" in agents/performance/heap-diet.md is the measurement that flipped it and
 // "The collected-mode postscript" is the whole history.
 //
 // UNDER `-gc=leaking` THIS FILE COSTS NOTHING. `guest/go/fkgc/off.go` is the
@@ -30,7 +30,7 @@ package main
 //   - it does not run at idle, so an idle balancer starts no collection, steps
 //     none, registers no `on_tick`, and pays what it paid before. The
 //     zero-script property extends to zero-collector, and that is measured
-//     rather than argued (CLAUDE.md, the collected-mode postscript).
+//     rather than argued (agents/performance/heap-diet.md, the collected-mode postscript).
 //
 // AND IT IS NOT ENOUGH ON ITS OWN, WHICH THE MARATHON SUITE MEASURED. A flush is
 // deferred only when an event QUEUED A CLUSTER, and the guest's
@@ -183,7 +183,7 @@ const gcArmBytes = 256 << 10
 // termination attempt charged the root re-scan against the same allowance, so a
 // guest whose globals crossed 16 KiB re-scanned, ran out, failed to terminate,
 // and repeated until `markDeadline` forced an unbudgeted finish hundreds of
-// ticks later. That was a silent cliff and this guest went over it (CLAUDE.md,
+// ticks later. That was a silent cliff and this guest went over it (agents/performance/root-scan.md,
 // "The root scan that could not fit in a step"). **The cliff is gone**:
 // `EffectiveBudget()` floors the budget at `rootScanCost() + 64` and the
 // collector logs the one `fkgc:` line that names the cause. So the constant is

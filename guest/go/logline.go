@@ -28,7 +28,7 @@ package main
 //
 // THE VERBOSE BUILD IS THE SHIPPED BUILD and that is why this had to be fixed
 // rather than switched off: the guest's own log lines are the assertion surface
-// for all five headless suites (CLAUDE.md, "Verification"). `QUIET=1` still
+// for all five headless suites (agents/verification/gates.md). `QUIET=1` still
 // exists and still eliminates every line below the error level, but it is no
 // longer the difference between a 16 MiB heap and a 64 MiB one.
 //

@@ -13,7 +13,7 @@
 #         item KINDS and several items per POSITION at once, which is the pair
 #         of conditions compile.go's kindAt needs to be reached at all
 #   mar   what does one NET-ZERO world operation cost the guest heap, forever?
-#         (the `-gc=leaking` marathon slope -- see CLAUDE.md, "The marathon save")
+#         (the `-gc=leaking` marathon slope -- see agents/performance/marathon-save.md)
 #   edge  the mid-operation edges: churn, merges, splits, forces and same-tick
 #         edits, each with item conservation across it
 #   mix   MORE THAN ONE KIND of item through one balancer: two pure belts, a
@@ -93,7 +93,7 @@
 #         belt, one onto the end of a line, a belt over a part twice, a second
 #         belt on a part that has one, the bridge, the sixty-fifth belt with and
 #         without room to hand it back, and the miner's pocket both field
-#         reports. See CLAUDE.md's `curs` section
+#         reports. See agents/verification/suites/curs.md
 #
 # FIFTEEN OF THE SIXTEEN RUN ON EITHER ENGINE, and three of them ANSWER
 # DIFFERENTLY on each. The estate was rebuilt for the one-belt-per-part rule in
@@ -961,7 +961,7 @@ for suite in $SUITES; do
       # EVERY PART IN THIS SUITE IS UNCOMMON QUALITY. `find_entity` resolves a
       # bare name as normal quality only, so a guest lookup that used it worked
       # on every other suite's save and silently failed on a quality-rolled
-      # part -- see guest/go/findpart.go for the fix and CLAUDE.md for the four
+      # part -- see guest/go/findpart.go for the fix and agents/features/quality-lookups.md for the four
       # sites it covers. Base plus the quality mod, nothing from Space Age.
       echo "=== qual: a part at uncommon quality is a part everywhere the guest asks ==="
       stage "$TMP/qual" bbb-qual-test false true
@@ -1321,7 +1321,7 @@ for suite in $SUITES; do
       # this is the one suite that cannot run on trunk's own engine, and it says
       # so out loud rather than passing.
       #
-      # A CHECK THAT SKIPS IS A CHECK THAT PASSED (CLAUDE.md's own review-gate
+      # A CHECK THAT SKIPS IS A CHECK THAT PASSED (agents/features/legacy-migration.md's review-gate
       # finding), so the skip is a line in the log and a line in the assertion
       # script's output, not a silent `continue`. What covers the FOLD on 2.1 is
       # `go test ./edgemode/`, which proves all eighteen of its states; what

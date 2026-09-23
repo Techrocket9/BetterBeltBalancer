@@ -81,7 +81,7 @@ MOD_DIR   := $(DIST)/$(MOD_NAME)_$(MOD_VERSION)
 # stale save). guest/go/gc.go is the import and the one call site.
 #
 # THE DEFAULT IS `collected` AND IT IS THE SHIPPED BUILD, decided THREE times.
-# The full history and every table is in CLAUDE.md, "The collected-mode
+# The full history and every table is in agents/performance/heap-diet.md, "The collected-mode
 # postscript"; the short form is that the decision turned twice on what the
 # measurement was of.
 #
@@ -151,7 +151,7 @@ endif
 
 # --persist=packed. M1 chose packed, M2 changed it to table on a measurement, and
 # this is the THIRD decision, taken after upstream replaced packed's min/max
-# BYTE-RANGE dirty watermark with a dirty PAGE SET (CLAUDE.md, full tables).
+# BYTE-RANGE dirty watermark with a dirty PAGE SET (agents/architecture/build.md, full tables).
 #
 # The span pathology is what made packed unshippable: one host call touched the
 # static scratch region and the heap, so a flush repacked everything in between
@@ -166,7 +166,7 @@ endif
 # collector walks the same thing either way. Measured: unchanged.
 #
 # `none` is still not an option: it would rebuild from the world on every load,
-# in each client's own order, which is a multiplayer desync (CLAUDE.md).
+# in each client's own order, which is a multiplayer desync (agents/architecture/build.md).
 PERSIST := packed
 
 # The control guest is everything under guest/go EXCEPT the generated bindings
@@ -325,7 +325,7 @@ endef
 # constants the guest derived by hand, and there are none left: the last two
 # event offsets went when `fk.subscribe` gained a field mask, and the four
 # `defines.direction` values went when `gen-bindings` started emitting an
-# accessor per define. See CLAUDE.md, "The layout check is gone".
+# accessor per define. See agents/verification/layout-check.md.
 mod: $(WASM) $(DATA_WASM) $(DATA_SRC) fklua.toml
 	$(call fklua_mod,$(WASM),-o $(DIST))
 	python3 test/check-sprites.py $(MOD_DIR)

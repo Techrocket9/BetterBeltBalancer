@@ -306,7 +306,7 @@ func hiddenSurfaceGone() {
 //   - two clusters that touch and used to be two balancers BECAUSE their forces
 //     differed are now one balancer, and the registry still says two. Two
 //     overlapping networks on tiles that belong to one cluster is the shape M3
-//     found twice (CLAUDE.md, "Two bugs M3 found");
+//     found twice (agents/architecture/runtime-model.md, "Two bugs M3 found");
 //   - a belt of the source force beside a cluster of the destination force was
 //     never an edge and now is, anywhere on the map.
 //

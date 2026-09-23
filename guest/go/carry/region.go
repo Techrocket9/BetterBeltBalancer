@@ -18,7 +18,7 @@
 // diagonal makes those boxes overlap outright. So a player mining one force's
 // balancer in the same tick another force's network came down could be handed
 // the other force's items. Conservation was never at risk; the wrong pocket
-// was. It is the same shape as the M3 bug collectCluster had (CLAUDE.md, "two
+// was. It is the same shape as the M3 bug collectCluster had (agents/architecture/runtime-model.md, "two
 // bugs M3 found"): a force check that every neighbour of a predicate has and
 // that one predicate does not.
 //

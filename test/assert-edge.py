@@ -864,7 +864,7 @@ def main():
     #
     # A removal started by a PLAYER hands what no network could take to that
     # player before anything reaches the ground (carry.go, "the beneficiary").
-    # The TRIGGER is unverifiable headlessly and stays in CLAUDE.md's table; the
+    # The TRIGGER is unverifiable headlessly and stays in agents/verification/suites/m3.md's table; the
     # arithmetic above is not, and neither is the quantity above that.
     #
     # First, the walls, measured rather than quoted -- if either ever falls, this

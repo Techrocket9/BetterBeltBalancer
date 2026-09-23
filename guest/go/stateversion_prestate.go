@@ -19,6 +19,6 @@ package main
 // with no event.
 //
 // The control on that equivalence is the spike's genuine 0.3.2 save, which is
-// run through the shipped guest by hand rather than by a suite -- see CLAUDE.md,
+// run through the shipped guest by hand rather than by a suite -- see agents/features/curve-upgrade.md,
 // "A save from before the curve rule keeps the reading it was built to".
 const stateVersion = 0

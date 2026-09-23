@@ -28,7 +28,7 @@
 // had ever run, because every stacked rig above is single-kind iron plate and
 // every MULTI-kind rig lives in the base-only `mix` suite, where the stacking
 // gate is shut and `detailedTally` is never called at all. Multi-kind AND
-// stacked is Space Age, so it is here. See CLAUDE.md, "Stacked belts come back
+// stacked is Space Age, so it is here. See agents/features/stacked-belts.md, "Stacked belts come back
 // stacked".
 //
 // EVERY RIG HERE IS BUILT TO FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART.

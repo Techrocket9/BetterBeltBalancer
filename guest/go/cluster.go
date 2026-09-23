@@ -32,7 +32,7 @@ package main
 // coordinates and a force index; the world is re-read at compile time. There is
 // no cached LuaEntity and no cached LuaTransportLine to be invalidated by a
 // removal path nobody thought of, so "stale reference" is not a bug this mod
-// can have -- see CLAUDE.md, "The failure envelope".
+// can have -- see agents/architecture/runtime-model.md, "The failure envelope".
 
 // key identifies one tile: which surface, and which tile on it.
 //
@@ -99,7 +99,7 @@ var (
 	// as already-visited and is dropped from its own cluster. Nothing here
 	// defends against it because nothing can reach it: `initRegistry` resets it
 	// to 0, a fill happens per queued cluster per flush, and a player editing
-	// one balancer every tick for a 300-hour session (CLAUDE.md, "The marathon
+	// one balancer every tick for a 300-hour session (agents/performance/marathon-save.md, "The marathon
 	// save", which models six edge-moving edits per player-hour) spends four
 	// orders of magnitude less than that. It is written down because a future
 	// caller that filled per PART rather than per cluster would move it two

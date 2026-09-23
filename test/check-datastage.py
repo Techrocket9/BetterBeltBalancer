@@ -1078,7 +1078,7 @@ log("bbbt-remover: swept " .. dead .. " recipe(s) at data-final-fixes")
 # in front is fklua.toml's `? Cerys-Moon-of-Fulgora` -- an optional dependency
 # is a load order and nothing else -- and no arm here can drive that, Cerys
 # being a Space Age pack with four hard dependencies of its own. What drove it
-# is the reporter's own 120-mod pack; CLAUDE.md carries that run.
+# is the reporter's own 120-mod pack; agents/features/collision-defaults.md carries that run.
 #
 # THE NAME SORTS BEFORE `better-belt-balancer`, which is how it comes to run
 # first, exactly as REMOVER_NAME does -- and the arm ASSERTS that rather than

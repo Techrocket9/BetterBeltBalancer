@@ -20,7 +20,7 @@
 //	bits: N=1 E=2 S=4 W=8   NE=16 SE=32 SW=64 NW=128
 //
 // A bit is set when that neighbour tile holds a part OF THE SAME FORCE -- two
-// forces' parts touching are two balancers (CLAUDE.md, "Clusters are per
+// forces' parts touching are two balancers (agents/architecture/runtime-model.md, "Clusters are per
 // force") and must not fuse into one picture.
 //
 // # Why 47 and not 16

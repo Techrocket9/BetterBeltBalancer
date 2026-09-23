@@ -33,7 +33,7 @@ package main
 // against a character, and from inside the DEFERRED FLUSH where the pocket
 // actually runs. What it does not pin is the TRIGGER: that a player mining a
 // part is what reaches this code needs a player, and stays interactive. See
-// CLAUDE.md's table of what M3 implements and does not verify.
+// agents/verification/suites/m3.md's table of what M3 implements and does not verify.
 //
 // IT IS A FIELD DIAGNOSTIC TOO, and that is why it ships rather than living in
 // the test harness, exactly as `bbb-audit` does. Placing one on a chest in a

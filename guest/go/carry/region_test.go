@@ -4,7 +4,7 @@ import "testing"
 
 // The two networks the whole package is about: same surface, DIFFERENT forces,
 // boxes that overlap. That is not a contrived arrangement -- two forces' parts
-// touching are two balancers by construction (CLAUDE.md, "clusters are per
+// touching are two balancers by construction (agents/architecture/runtime-model.md, "clusters are per
 // force"), so their bounding boxes are adjacent, and an L or a diagonal makes
 // them overlap outright.
 var (

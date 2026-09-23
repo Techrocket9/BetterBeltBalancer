@@ -96,7 +96,7 @@ data_module = "dist/bbbdata.wasm"
 # error and never a mod that silently fails to collect.
 #
 # COLLECTED IS THE SHIPPED ARM, decided three times and re-measured each time;
-# CLAUDE.md's "The third decision" is the one that flipped it and the Makefile's
+# "The third decision" in agents/performance/heap-diet.md is the one that flipped it and the Makefile's
 # GC block is the short form. `make GC=leaking` builds the other arm, which
 # stays green on all seven suites, by passing `--gc=leaking` here on the command
 # line -- a flag overrides this key, which is what makes one manifest able to

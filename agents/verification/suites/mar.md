@@ -1,0 +1,12 @@
+# `mar` -- `test/assert-marathon.py`, the permanent-heap slope
+
+Under `-gc=leaking` every transient guest allocation is permanent, so the interesting number is not the heap at any one moment but the SLOPE: what one complete place-and-remove cycle adds that never comes back. This suite drives 680 net-zero world operations over 4,600 ticks and reads the guest's own `[BBB] heap post-audit sys=… alloc=…` probe after each one. Full method, numbers and the projection they support: **"The marathon save"** below.
+
+Two properties make the table attributable rather than a list:
+
+- **Every leg pays exactly one audit**, and `cal`/`calA`/`calZ` measure that audit with the world untouched, before, in the middle of and after the run. It came out **1,136 B all three times, 0.0% spread**, and is subtracted from every other leg. A drifting calibration would fail the suite: nothing below it could then be attributed.
+- **Every leg leaves the world exactly as it found it**, so every audit sees the same three clusters and costs the same.
+
+The suite is green in both `-gc` arms and asserts a different thing in each. Under `collected` the heap is given back, so `alloc` is not a permanent total and its slope would be arithmetic on noise; the script detects `gc=1` and asserts what never shrinks in either arm instead — linear memory, the live set, and that the collector is not being outrun.
+
+**THE SECOND OF THOSE TWO PROPERTIES WAS A COMMENT AND IS NOW AN ASSERTION, and it took the single-edge re-lay to notice.** `assert-marathon.py` now pins the `(clusters, parts, networks)` tuple every leg's probe was taken over -- `(3, 24, 3)` for the three permanent rigs, and `(2, 20, 2)` for leg F, whose probe deliberately fires between the dissolve and the rebuild -- against constants written down in the script rather than read off the guest, and it requires each leg's audits to collapse to exactly ONE tuple. It exists because the injected defect meant as this suite's red proof **passed every assertion the suite had**: with leg F's rebuild crippled so that only half the churn rig came back, the item count never rose, nothing drifted, no cluster read `unbuilt` (a cluster with inputs and no outputs is a legitimate half-built state, so it is not "unbuilt" -- it is half-built), and the calibration spread stayed at **0.0%**. The only visible trace was `calZ` re-classifying a world with two fewer parts and one fewer network than `cal` did, and nothing was looking. It fails by name now: *"leg calZ audited a world of (3, 22, 2) and the rigs build (3, 24, 3)"*.

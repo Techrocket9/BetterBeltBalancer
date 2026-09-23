@@ -1002,7 +1002,7 @@ const (
 // The measured cost of a create_entity is elsewhere and this does not move it:
 // a 4x4 recompile is ~350 host calls at ~12 us each, and that 12 us is the
 // tier-2 encode on the LUA side (`read_dyn` walking the table this describes).
-// See CLAUDE.md.
+// See agents/architecture/build.md.
 func createArgs(name string, x, y float64, dir uint32, ltype string, force uint32) fkapi.Value {
 	posBuf[0].Number = x
 	posBuf[1].Number = y
@@ -1092,7 +1092,7 @@ func compile(root uint32) bool {
 	//
 	// Refusing here leaves the standing network standing. The belt that could
 	// not be joined is inert -- the same degradation as a belt this guest never
-	// heard about (CLAUDE.md, "The failure envelope") -- and limit.go tells the
+	// heard about (agents/architecture/runtime-model.md, "The failure envelope") -- and limit.go tells the
 	// player and offers the piece back. See agents/maxports.md §4.
 	if pt, over := overLimitShape(edges); over {
 		refuseShape(root, fp, pt, tiles, force)

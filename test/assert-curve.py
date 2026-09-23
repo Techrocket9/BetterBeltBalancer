@@ -13,7 +13,7 @@ balancers the classifier would have built with the curve arm switched off.
 What the load must do with it: read every one of them under the rule the save
 was written to, tear down only what the world itself has changed, write
 `bbb-curved-exits = false`, and tell each owning force once with a ping per
-balancer (CLAUDE.md, "A save from before the curve rule keeps the reading it was
+balancer (agents/features/curve-upgrade.md, "A save from before the curve rule keeps the reading it was
 built to").
 
     python3 test/assert-curve.py create.log run.log
@@ -72,7 +72,7 @@ ANY_CURVE = re.compile(r"\[BBB\] (?:alert: )?curved exits:")
 # announced it would be telling the player they had changed something they had
 # not -- and re-queueing the whole save from inside the settling flush to do it.
 # It is what the anchor in settleCurveMode exists to prevent, and it fired on the
-# first passing run of this suite (CLAUDE.md, "A save from before the curve
+# first passing run of this suite (agents/features/curve-upgrade.md, "A save from before the curve
 # rule").
 FLIPPED = re.compile(r"\[BBB\] curved exits: a belt across a balancer's face is")
 # THE OTHER RULE'S MIGRATION, WHICH MUST NEVER SPEAK HERE. A tile whose second

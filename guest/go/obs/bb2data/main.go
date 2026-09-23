@@ -13,7 +13,7 @@
 // reproduced here exactly, under the real mod's own name and version so that
 // `script.active_mods` and `mods[...]` see what they would really see. The real
 // Belt Balancer 2 was run through the same flow by hand once, and the numbers
-// are recorded in CLAUDE.md.
+// are recorded in agents/features/legacy-migration.md.
 //
 // IT HAS NO RUNTIME, deliberately, and that is a statement about the feature
 // rather than about the port. The real mod's runtime moves items through a Lua

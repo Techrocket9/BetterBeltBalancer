@@ -55,7 +55,7 @@ package main
 // has never written -- a revived ghost, a clone, a fresh heap. That part arrived
 // with its belts, so the cluster it lands in is recompiled by the BUILD it came
 // in on, and a build that shrinks a machine has taken the ordinary
-// recompile-and-spill rule since long before this file existed (CLAUDE.md, "A
+// recompile-and-spill rule since long before this file existed (agents/features/miners-pocket.md, "A
 // mine beside a machine is a mine of that machine"). Changing that is a decision
 // about builds and not about flags, and it is not taken here.
 //

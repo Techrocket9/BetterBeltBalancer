@@ -301,7 +301,7 @@ def main():
     # the predecessors' roots (whose network is real, so that half is torn down
     # and rebuilt). This save reaches the second case, because nothing in it
     # frees a node id before the bridging part is placed and `newNode` therefore
-    # hands it the highest one. CLAUDE.md's "The merge that would be over the
+    # hands it the highest one. agents/features/over-limit-merge.md, "The merge that would be over the
     # limit" records that the key is not fixed and must not be assumed; what it
     # also says -- that mining the bridge back out costs zero teardowns -- is
     # true only of the first case.

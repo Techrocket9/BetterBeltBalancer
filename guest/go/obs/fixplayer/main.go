@@ -82,8 +82,8 @@ var out = harness.Line{Tag: "[FIXPLAYER] "}
 
 // playerInventories is every inventory a player can be holding something in.
 // Filled at init from the accessors rather than written down, because a define's
-// number is Factorio's own and is not stable across versions (CLAUDE.md, "the
-// layout check is gone").
+// number is Factorio's own and is not stable across versions (agents/verification/layout-check.md,
+// "The layout check is gone").
 var playerInventories []uint32
 
 func init() {

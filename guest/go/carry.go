@@ -109,7 +109,7 @@ package main
 //     what the GAME can produce, not about what is physically possible, and a
 //     third-party mod that scripts stacks onto a bonus-0 force's belts is the
 //     one case that still comes back unstacked. That is the same shape as the
-//     failure envelope in CLAUDE.md: conservation always holds, fidelity is
+//     failure envelope in agents/architecture/runtime-model.md: conservation always holds, fidelity is
 //     best-effort, and the next audit re-reads the world.
 //
 // Below the gate the drain and the reinsertion are byte-for-byte what they were
@@ -227,7 +227,7 @@ package main
 // AND THE FORCE IS PART OF THAT KEY SINCE 2026-08-02, which is a fix and not a
 // refinement. It was not, and `matches` -- the successor test, over the same
 // pool, three hundred lines away -- always compared it. Clusters are per force
-// (CLAUDE.md, "semantics fixed at M3"), so two forces' parts touching are two
+// (agents/architecture/runtime-model.md, "semantics fixed at M3"), so two forces' parts touching are two
 // balancers whose boxes are ADJACENT BY CONSTRUCTION and, around an L or a
 // diagonal, overlapping; two of them coming down in one tick with a player
 // mining one of them could credit that player with the other force's items.

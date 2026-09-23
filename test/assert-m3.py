@@ -170,7 +170,7 @@ def main():
     # ---------------------------------------------------------------- registry
     # The guest heap is discarded whenever the mod is rebuilt (this mod exports
     # fk_migrate, which is a NOTIFICATION on a fresh heap, and never
-    # fk_migrate_adopt -- CLAUDE.md, "Coming back on a heap this build did not
+    # fk_migrate_adopt -- agents/architecture/runtime-model.md, "Coming back on a heap this build did not
     # write"), so the registry is re-derived from the world. On a fresh map like
     # this one there is no rebuild to be told about and the fallback does it:
     # `registryReady` is false, so the first event of the session scans. What is

@@ -11,7 +11,7 @@ WHAT THIS SUITE CANNOT REACH, because it is base only: `compile.go`'s
 `detailedTally` and `kindAt`. Below the stacking gate the drain takes the flat
 totals and that code is never called at all, however many kinds are in flight, so
 multi-kind AND STACKED is a Space Age question and lives in the `plat` suite's
-`smix` band. See CLAUDE.md, "Stacked sushi".
+`smix` band. See agents/features/stacked-belts.md, "Stacked sushi".
 
 Per name and not as one total, which is the whole point: a teardown that dropped
 one kind and reinserted the rest conserves nothing, and a single total would have

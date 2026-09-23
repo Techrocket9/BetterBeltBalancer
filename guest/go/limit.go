@@ -27,7 +27,7 @@ package main
 //     standing network is left exactly as it was and keeps running; the belt
 //     that could not be joined simply stands there unconnected, which is the
 //     same inert degradation the failure envelope already documents for a belt
-//     the guest never heard about (CLAUDE.md, "The failure envelope").
+//     the guest never heard about (agents/architecture/runtime-model.md, "The failure envelope").
 //
 //  2. THE PLAYER IS TOLD. A build event carries a `player_index`, and this file
 //     writes down the scalars -- surface, tile, player -- for every addition
@@ -180,7 +180,7 @@ var (
 // CALL and returns on the zero player before it touches anything, which is what
 // keeps it off the guest's highest-multiplier path: `player` is zero for a
 // robot, for a script build and for every event in every headless suite, so the
-// marathon suite's per-operation slopes cannot move (CLAUDE.md, "The marathon
+// marathon suite's per-operation slopes cannot move (agents/performance/marathon-save.md, "The marathon
 // save").
 //
 // Exact duplicates are dropped for the same reason `carry.Claims.Add` drops
