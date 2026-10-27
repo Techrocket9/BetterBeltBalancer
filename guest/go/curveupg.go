@@ -272,6 +272,7 @@ func noteCurveLegacy(root uint32) {
 func curveDecide(tiles []key) {
 	found := false
 	for i := range edgeCurved {
+		workEdges++
 		if edgeCurved[i] {
 			found = true
 			break
@@ -291,6 +292,7 @@ func curveDecide(tiles []key) {
 	}
 	n := 0
 	for i := range edgeBuf {
+		workEdges++
 		if edgeCurved[i] {
 			continue
 		}
@@ -321,24 +323,20 @@ func curveDecide(tiles []key) {
 // `mig21` asserts the other half from the other side: neither of its fixtures
 // has a belt across a face, so no load of them may decide anything at all.
 //
-// Quadratic in an edge list bounded by plan.MaxPorts, and it runs only for a
-// cluster that had a curve edge on the one load in a save's history that decides.
+// The fresh classifier sorts before applying the curve decision, so all edges
+// of a tile are contiguous even when the cluster exceeds the port limit.
 func recountEdgesPerTile() {
 	sedgeWorst, sedgeTiles = 0, 0
-	for i := range edgeBuf {
-		n, first := uint32(0), true
-		for j := range edgeBuf {
-			if edgeBuf[j].TileX != edgeBuf[i].TileX || edgeBuf[j].TileY != edgeBuf[i].TileY {
-				continue
-			}
-			n++
-			if j < i {
-				// Counted from that tile's first edge and no other, or a tile
-				// with three edges would be counted three times.
-				first = false
-			}
+	for i := 0; i < len(edgeBuf); {
+		j := i + 1
+		workEdges++
+		for j < len(edgeBuf) && edgeBuf[j].TileX == edgeBuf[i].TileX && edgeBuf[j].TileY == edgeBuf[i].TileY {
+			workEdges++
+			j++
 		}
-		if !first || n < 2 {
+		n := uint32(j - i)
+		i = j
+		if n < 2 {
 			continue
 		}
 		sedgeTiles++

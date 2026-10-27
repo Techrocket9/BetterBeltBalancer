@@ -57,7 +57,7 @@ package main
 // this file's; the one-belt-per-part rule Factorio 2.1 forces is sedge.go's.
 // They share everything below the sentence: `refuseAdmit`'s three-way
 // admission (the wake-race guard and the once-per-edge-state gate),
-// `tellRefusal`'s three arms, `limPending`'s hand-back, and the merge pre-pass,
+// `tellRefusal`'s three arms, the build-note hand-back, and the merge pre-pass,
 // which asks both questions of a candidate before it spares anything. What
 // differs is the predicate and the two locale keys, which is the whole of what
 // a bound is.
@@ -81,8 +81,8 @@ const (
 // What a player just built
 // ---------------------------------------------------------------------------
 
-// buildNote is one addition a PLAYER made, for the one tick between the build
-// event that reported it and the flush that decides whether it fits.
+// buildNote owns one player's addition until classification and any refund
+// finish, including bounded transient retries. unit is captured from the event.
 //
 // SCALARS AND NOTHING ELSE, for the reason every persistent thing in this guest
 // is scalars: the build arrives in one dispatch, the compile happens in the
@@ -91,10 +91,15 @@ const (
 // whose tile is always the NETWORK'S -- because the thing this note is for is
 // handing that entity back, and a tile is how it gets re-found.
 type buildNote struct {
-	s      uint32
-	x, y   int32
-	force  uint32
-	player uint32
+	x0, y0, x1, y1                        int32 // event-time affected footprint, including its halo
+	s                                     uint32
+	x, y                                  int32
+	force                                 uint32
+	player                                uint32
+	unit                                  uint64
+	seen, retry, refused, exhausted, done bool
+	compileFailures, refundFailures       uint8
+	refundWhy                             string
 	// isPart distinguishes the two shapes without a stored name: a part stands
 	// ON a registry tile and a belt at the edge stands one tile OUTSIDE the
 	// cluster's box by construction, so the flag and the registry cross-check
@@ -111,39 +116,9 @@ type buildNote struct {
 	belt beltSpec
 }
 
-// pendingPiece is one note the flush decided to hand back, WITH THE CLAUSE
-// NAMING THE BOUND THAT REFUSED IT.
-//
-// The bound is carried rather than looked up because by revert time there is
-// nothing left to look it up from: `revertOverLimit` runs after the drain, the
-// cluster the note was attributed to may have been re-rooted or dissolved by
-// then, and `overLimit` remembers a fingerprint and not a reason. The refusal
-// that queued the note is the one moment anything knows, and it knows for free
-// -- `tellRefusal` already takes the clause for its own force-wide line.
-//
-// It matters because BOTH BOUNDS SHARE THIS PATH. Until the 2.1 port there was
-// one, so "the over-limit piece" was the whole vocabulary; now a belt handed
-// back for the one-belt-per-part rule would have been reported as an over-limit
-// piece, which is the same defect spareMerge's line had one level up -- a
-// sentence naming a bound it no longer owns. The string is a package-level
-// constant in both callers, so this costs a pointer and a length on a slice
-// that is empty on every tick nobody's build was refused.
-type pendingPiece struct {
-	n   buildNote
-	why string
-}
-
 var (
-	// buildNotes is one tick's worth, IN EVENT ORDER, truncated by every flush.
-	// High-water like the recompile queues, so a blueprint paste sizes it once
-	// and every paste after that reuses the same backing array.
+	// Pending builds in event order; resolved notes are compacted after refunds.
 	buildNotes []buildNote
-
-	// limPending is what the flush decided to hand back, filled during the
-	// drain and consumed after it. Separate from buildNotes because the two
-	// have different lifetimes by one function call, and that call is the whole
-	// reentrancy argument in revertOverLimit.
-	limPending []pendingPiece
 
 	// overLimit remembers, per cluster root, the edge-list fingerprint that was
 	// last refused.
@@ -200,10 +175,6 @@ func noteBuiltByPlayer(s uint32, x, y int32, force, player uint32, isPart bool,
 	}
 	buildNotes = append(buildNotes, n)
 }
-
-// forgetBuildNotes ends the tick. A note outlives the event that made it by one
-// flush and no longer -- the flush that could have used it has run.
-func forgetBuildNotes() { buildNotes = buildNotes[:0] }
 
 // ---------------------------------------------------------------------------
 // The refusal
@@ -400,7 +371,7 @@ func refuseAdmit(root uint32, fp uint64) int {
 		rebuildRefused = append(rebuildRefused, root)
 		return refuseLogOnly
 	}
-	if prev, ok := overLimit[root]; ok && prev == fp {
+	if prev, ok := overLimit[root]; ok && prev == fp && !pendingBuildFor(root) {
 		return refuseSilent
 	}
 	if overLimit == nil {
@@ -540,7 +511,7 @@ func tellRefusal(root uint32, tiles []key, force uint32,
 	}
 	for i := range buildNotes {
 		n := buildNotes[i]
-		if n.s != surf || !besideCluster(n, tiles) {
+		if n.done || n.refundWhy != "" || n.s != surf || n.force != force || !buildTouchesRoot(n, root) {
 			continue
 		}
 		if told == 0 {
@@ -562,7 +533,7 @@ func tellRefusal(root uint32, tiles []key, force uint32,
 		// to anything -- the network was never rebuilt -- so handing them all
 		// back settles it in one step. The alternative converges too, one belt
 		// and one flying text per tick, which is worse to be on the end of.
-		limPending = append(limPending, pendingPiece{n: n, why: why})
+		buildNotes[i].refundWhy = why
 	}
 
 	if told != 0 {
@@ -615,30 +586,6 @@ func tellRefusal(root uint32, tiles []key, force uint32,
 	}
 }
 
-// besideCluster is the same question the neighbour gate asks, asked of a note:
-// is any tile of this cluster within two tiles of it?
-//
-// Two rather than one for the reason nearCluster gives -- a splitter is two
-// tiles wide and reports the boundary between its halves -- and over the
-// cluster's own tile list rather than over `index`, because the note has to be
-// attributed to THIS cluster and not merely to some cluster.
-func besideCluster(n buildNote, tiles []key) bool {
-	for i := range tiles {
-		k := tiles[i]
-		dx, dy := k.x-n.x, k.y-n.y
-		if dx < 0 {
-			dx = -dx
-		}
-		if dy < 0 {
-			dy = -dy
-		}
-		if dx <= 2 && dy <= 2 {
-			return true
-		}
-	}
-	return false
-}
-
 // forceOfCluster gets a LuaForce for a cluster whose force INDEX is all the
 // registry keeps.
 //
@@ -678,8 +625,6 @@ func forceOfCluster(tiles []key, force uint32) (fkapi.LuaForce, bool) {
 	return lf, true
 }
 
-var limPartPos fkapi.MapPosition
-
 // ---------------------------------------------------------------------------
 // The merge -- refusing in front of the TEARDOWNS as well as in front of the
 // rebuild
@@ -709,27 +654,11 @@ var limPartPos fkapi.MapPosition
 // reaches the merged cluster, refuses it through the ordinary path in piece 1,
 // and returns without a teardown of its own.
 //
-// WHAT IT COSTS ON THE HOT PATH, WHICH IS NOTHING, AND WHY. Classifying every
-// merge product's edges would be a second `find_entities_filtered` per boundary
-// tile on every flush that merged anything -- which is the reason this was
-// written down as uncovered rather than done. It is avoided by an arithmetic
-// bound that needs no host call at all: A CLUSTER OF C PARTS HAS AT MOST 4C
-// EXTERIOR SIDES AND THEREFORE AT MOST 4C EDGES, so a part count is a proof
-// about how many ports the merged cluster can possibly have. The threshold is
-// `4*csize[r] <= MaxPorts/2` since the priority pass rather than `MaxPorts`,
-// because a priority network stops fitting its slot at P = 64 and not at the
-// port cap -- EIGHT parts is the largest cluster that can be proved safe now,
-// where it used to be sixteen. The `mar` suite's merge leg is five parts, so the
-// pass is still a handful of integer comparisons and a `find` per queued root,
-// with no host call and no allocation, on every flush that is not about a
-// balancer of nine parts or more.
-//
-// The bound is CONSERVATIVE, and being wrong about it costs exactly the old
-// behaviour: a cluster whose recorded shape has been overtaken by a world the
-// guest was never told about (the failure envelope) is classified when it need
-// not be, or -- if a mod added belts with no event at all -- is not classified
-// when it should be, and the merge falls through to the refusal in compile()
-// where it always used to be. Nothing about that path changed.
+// Ordinary single-component extensions retain their incumbent and never enter
+// this pass. True merges and stranded predecessors require a full fresh read,
+// including priority recovery before classification: even a small blueprint
+// bridge can carry an unsupported priority input. A failed read spares the
+// predecessors and blocks the successor's build for this flush.
 //
 // WHAT THE REGISTRY BELIEVES WHILE A REFUSED MERGE STANDS, and it is the one
 // state in this guest where `nets` holds a network under a key that is no
@@ -802,6 +731,7 @@ var (
 //
 // Called from the top of `flushDead` and from nowhere else.
 func spareOverLimitMerges() {
+	preflightBlocked = preflightBlocked[:0]
 	if len(deadRoots) == 0 && len(stranded) == 0 {
 		return
 	}
@@ -820,23 +750,32 @@ func spareOverLimitMerges() {
 		}
 		if r := find(d); r != d && alive[r] {
 			addLimCand(r, true)
+		} else if workQueue[d].stranded {
+			addLimCand(r, false)
 		}
 	}
 	// And whatever now owns a network a previous flush stranded has to decide
 	// again, because the edit that makes a refused merge buildable does not
 	// have to be a merge -- it is usually a belt being mined.
-	for i := range stranded {
-		s := stranded[i]
+	for _, s := range liveRoots {
 		if int(s) >= len(alive) || !alive[s] {
 			continue
 		}
-		addLimCand(find(s), false)
+		r := find(s)
+		if workQueue[r].strandedN != 0 {
+			addLimCand(r, false)
+		}
+	}
+	if len(limCands) == 0 && len(deadRoots) == 0 {
+		return
 	}
 
 	for i := range limCands {
 		r := limCands[i]
-		if overLimitMerge(r, limCandMerge[i]) {
-			if limCandMerge[i] {
+		// Preserve the existing retry budget: this is preparation, not a new edit.
+		enqueueLive(r)
+		if overLimitMerge(r) {
+			if limCandMerge[i] || !classificationReadOK {
 				spareMerge(r)
 			}
 			continue
@@ -863,92 +802,40 @@ func addLimCand(r uint32, merge bool) {
 // the compiler is going to refuse it -- for EITHER bound, because a merge past
 // either one demolishes the same two working balancers.
 //
-// `bridged` says whether this candidate had a dead root absorbed into it THIS
-// flush (a real merge) or is a candidate only because a previous refusal left
-// networks stranded under it. The distinction matters to the second bound and
-// not to the first.
-//
-// IT MUST BE EXACT IN THE "YES" DIRECTION. Sparing a merge that then compiles
-// successfully leaves both predecessors' networks standing beside the new one,
-// which is strictly worse than the defect this pass exists to fix. Being
-// conservative the other way costs the old behaviour and nothing else.
-func overLimitMerge(r uint32, bridged bool) bool {
+// A read error is also a yes, with a separate preflightBlocked entry so compile
+// cannot build beside the predecessors this pass has spared.
+func overLimitMerge(r uint32) bool {
+	classificationReadOK = true
 	if int(r) >= len(csize) || !alive[r] {
 		return false
 	}
-	// THE TWO FREE TESTS FIRST, and neither makes a host call.
-	//
-	// The SHAPE bounds: AT MOST FOUR EDGES PER PART, so a part count is a proof
-	// and not a heuristic about how big the merged cluster's ports can get. It
-	// is what keeps the whole pass off the hot path -- see the header.
-	//
-	// THE THRESHOLD IS HALF THE PORT CAP AND NOT THE CAP, because `plan.Build`
-	// refuses more than the cap now. A priority network is two butterflies wide
-	// and carries its tiers in a second band, so it does not fit its slot at
-	// P = 64 -- which is max(N, M) past MaxPorts/2, thirty-three belts on a
-	// side, and nine parts can carry thirty-six. At `4C > MaxPorts` a merge of
-	// nine parts into a shape with a flag on it was proved safe by arithmetic
-	// that had stopped being true, and both predecessors came down before
-	// flushLive refused the product -- which is the whole defect this pass
-	// exists to prevent, met through the bound that arrived after it.
-	//
-	// Eight parts carry at most thirty-two edges and cannot reach it, so the
-	// mar suite's five-part merge leg stays off this path exactly as it did.
-	// What a cluster of nine or more now pays is one classification it was
-	// already going to pay a moment later in compile().
-	//
-	// THE INPUT BOUND HAS NO SUCH ARITHMETIC and is not claimed to: a priority
-	// INPUT is refused at any size. What stands in for it is the bridging-tile
-	// theorem again -- adding a part can only take edges away from the tiles
-	// that were already there, and a part the engine has just built carries no
-	// flag, `recoverPriority` raising one at restyle time, which is after this.
-	// A flagged part revived from a blueprint INTO a merge is therefore missed,
-	// and it is the case agents/priority.md already records as taking the
-	// ordinary recompile-and-spill rule.
-	bigEnough := int(csize[r])*4 > plan.MaxPorts/2
-	// The one-belt-per-part bound has no such arithmetic: any two-part merge
-	// could break it. What stands in for it is the BRIDGING-TILE THEOREM
-	// (sedge.go) -- adding a part can only take edges away from the tiles that
-	// were already there, so the only tile that can newly violate is the new
-	// part's own.
-	//
-	// A candidate with stranded networks under it is the one case the theorem
-	// cannot serve: a stranded predecessor was REFUSED rather than compiled, so
-	// "the predecessors were valid single-edge" is not true of it and the full
-	// classification is the only exact answer. `stranded` is empty in every save
-	// that has never refused a merge, so the test costs a length check.
-	sedge := !multiEdgeAllowed()
-	if sedge && bridged && len(stranded) == 0 {
-		if bridgingTilesOverloaded(r) {
-			return true
-		}
-		sedge = false
-	}
-	if !bigEnough && !sedge {
-		return false
-	}
+	// Even a small blueprint bridge can recover a priority that invalidates
+	// the old arithmetic bound. Merges/stranded roots use the fresh oracle.
+	invalidateClassification(r)
 	tiles := collectCluster(r)
 	if len(tiles) == 0 {
 		return false
 	}
 	surf, ok := surfaceByIndex(tiles[0].s)
-	if !ok {
-		return false
+	if !ok || !restyleTiles(r, tiles) {
+		classificationReadOK = false
+		preflightBlocked = append(preflightBlocked, r)
+		return true
 	}
 	edges := classifyEdges(surf, tiles, pforce[r])
-	if bigEnough {
-		// `overLimitShape` is `plan.ShapeEdges` negated, so this is all three
-		// shape bounds and not only the cap.
-		if _, over := overLimitShape(edges); over {
-			return true
-		}
+	if !classificationReadOK {
+		preflightBlocked = append(preflightBlocked, r)
+		return true // preserve predecessors AND prohibit this flush's build
 	}
-	if sedge {
-		if _, over := multiEdgeShape(); over {
-			return true
-		}
+	if _, over := overLimitShape(edges); over {
+		return true
 	}
-	return false
+	_, over := multiEdgeShape()
+	if !classificationReadOK {
+		preflightBlocked = append(preflightBlocked, r)
+		return true
+	}
+	return over
 }
 
 // spareMerge takes every teardown that belongs to the merge into `r` back off
@@ -967,6 +854,7 @@ func spareMerge(r uint32) {
 				addStranded(d)
 				spared++
 			}
+			setPending(d, true, false)
 			continue
 		}
 		deadRoots[n] = d
@@ -989,11 +877,10 @@ func spareMerge(r uint32) {
 }
 
 func addStranded(d uint32) {
-	for i := range stranded {
-		if stranded[i] == d {
-			return
-		}
+	if workQueue[d].stranded {
+		return
 	}
+	setPending(d, false, true)
 	stranded = append(stranded, d)
 }
 
@@ -1028,6 +915,7 @@ func reclaimStranded(r uint32) {
 			if s != r || others != 0 {
 				markDead(s)
 			}
+			setPending(s, false, false)
 			continue
 		}
 		stranded[n] = s
@@ -1055,6 +943,7 @@ func sweepStranded() {
 	for i := range stranded {
 		s := stranded[i]
 		if _, has := nets[s]; !has {
+			setPending(s, false, false)
 			continue
 		}
 		if int(s) < len(alive) && alive[s] {
@@ -1063,6 +952,7 @@ func sweepStranded() {
 			continue
 		}
 		markDead(s)
+		setPending(s, false, false)
 	}
 	stranded = stranded[:n]
 }
@@ -1130,26 +1020,53 @@ func strandedNets(root uint32) uint32 {
 // gone back to what its netInfo already says, and the compile is a SKIP. The
 // standing network is never torn down at any point in the whole sequence.
 func revertOverLimit() {
-	if len(limPending) == 0 {
+	if rebuildingFromWorld {
 		return
 	}
-	// By index over a saved length, and by VALUE: nothing below can append to
-	// limPending (only refuseOverLimit does, and only from inside the drain that
-	// has already finished), but a mine that somehow did would otherwise
-	// invalidate a pointer into the backing array mid-loop.
-	n := len(limPending)
-	for i := 0; i < n; i++ {
-		revertOne(limPending[i].n, limPending[i].why)
+	// Values and a captured boundary: mining can synchronously append new
+	// build notes, but cannot move the indices belonging to this drain.
+	for i := 0; i < buildNotesInFlush; i++ {
+		n := buildNotes[i]
+		if n.done {
+			continue
+		}
+		if n.seen && !n.retry && !n.refused {
+			buildNotes[i].done = true // a later edit made the original build valid
+			continue
+		}
+		if n.refundWhy == "" {
+			if !n.retry {
+				continue
+			}
+			buildNotes[i].compileFailures++
+			if !n.exhausted && buildNotes[i].compileFailures <= maxCompileRetries {
+				continue
+			}
+			n.refundWhy = "unreadable or failed balancer after bounded retries"
+			buildNotes[i].refundWhy = n.refundWhy
+			reportBuildFailure(n, "Could not finish validating/building this balancer after retries. Attempting to return your original placed entity.")
+		}
+		if revertOne(n, n.refundWhy) {
+			buildNotes[i].done = true
+			continue
+		}
+		buildNotes[i].refundFailures++
+		if buildNotes[i].refundFailures <= maxCompileRetries {
+			requestFlush()
+		} else {
+			buildNotes[i].done = true
+			reportBuildFailure(n, "Automatic refund could not be completed after retries. No replacement entity was mined; please inspect this build and restore any replaced belt manually.")
+		}
 	}
-	limPending = limPending[:0]
 }
 
 // revertOne hands one refused piece back. `why` is the clause naming the bound
 // that refused it and reaches nothing but the two log lines: what the PLAYER
 // was told is a LocalisedString the refusal already sent, and this is for
 // whoever reads logs -- who, since there are two bounds, cannot otherwise tell
-// which of them a returned belt came back from.
-func revertOne(n buildNote, why string) {
+// which of them a returned belt came back from. False means a transient failure;
+// true means returned, deliberately left in place, or no longer the same entity.
+func revertOne(n buildNote, why string) bool {
 	// The registry cross-check, and it costs nothing: a part stands ON a
 	// registered tile and a belt at a cluster's edge stands one tile OUTSIDE
 	// the cluster's box by construction. If the world has moved on -- the part
@@ -1158,54 +1075,35 @@ func revertOne(n buildNote, why string) {
 	// answer is to leave it alone.
 	_, registered := index[key{n.s, n.x, n.y}]
 	if registered != n.isPart {
-		return
+		return true
 	}
 	surf, ok := surfaceByIndex(n.s)
 	if !ok {
-		return
+		return false
+	}
+	ent, found, readable := resolveBuildNote(surf, n)
+	if !readable {
+		return false
+	}
+	if !found {
+		return true // removed, replaced, or transferred; never touch the successor
 	}
 	o, err := fkapi.Game.GetPlayer(fkapi.OfNumber(float64(n.player)))
-	if err != nil || o == nil {
-		return // left between the build and the flush; the piece stands
+	if err != nil {
+		return false
+	}
+	if o == nil {
+		reportBuildFailure(n, "The builder is no longer available; the refused piece could not be returned.")
+		return true
 	}
 	p := fkapi.LuaPlayer{Object: *o}
-
-	var ent fkapi.Object
-	limPartPos.X = float64(n.x) + 0.5
-	limPartPos.Y = float64(n.y) + 0.5
-	if n.isPart {
-		// `findOnTile`, not `find_entity`: a player can build an over-limit
-		// part at any quality their cursor holds, and a bare-name lookup
-		// (findpart.go) would leave a non-normal one standing instead of
-		// handing it back.
-		e, found, ferr := findOnTile(surf, PartName, n.x, n.y)
-		if ferr != nil || !found {
-			return
-		}
-		ent = e
-	} else {
-		// findByPos filters by belt-connectable TYPE and by FORCE, both in C++,
-		// so what comes back is a belt of the right force on that tile and
-		// nothing else. THE FORCE IS SET HERE rather than inherited from the
-		// classification pass: that pass ran during the drain and left
-		// `forceFilter` naming whichever cluster it happened to finish on, which
-		// is not necessarily this note's.
-		searchPos.X = limPartPos.X
-		searchPos.Y = limPartPos.Y
-		forceFilter = fkapi.OfNumber(float64(n.force))
-		ents, err := surf.FindEntitiesFiltered(findByPos)
-		if err != nil || len(ents) == 0 {
-			return
-		}
-		ent = ents[0]
-	}
 
 	// `force = nil`, which is the vanilla rule: a player whose inventory cannot
 	// take it does not get to mine it, and the piece stays standing rather than
 	// evaporating. The bool it returns says which happened.
 	took, err := p.MineEntity(ent, nil)
 	if err != nil {
-		return
+		return false
 	}
 	if !took {
 		// An alert rather than a verbose line, because the outcome is now the
@@ -1221,7 +1119,8 @@ func revertOne(n buildNote, why string) {
 		logS(why)
 		logS(") -- no room in the inventory; it stays where it is, unconnected")
 		logEnd()
-		return
+		reportBuildFailure(n, "There is no room to return the refused piece. It remains in place; please make inventory space and remove it manually.")
+		return true
 	}
 	// The same level and the same reason as carry.go's `offered … before the
 	// floor`: this is the one piece of evidence a player checking the feature
@@ -1246,4 +1145,5 @@ func revertOne(n buildNote, why string) {
 	if n.isPart && n.belt.known() {
 		restoreReplacedBelt(surf, n, p)
 	}
+	return true
 }

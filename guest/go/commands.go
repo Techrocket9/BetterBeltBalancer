@@ -29,7 +29,10 @@ package main
 // the engine's table rather than this mod's claim about itself. That is the
 // qol-research port's pattern and the reasoning is its.
 
-import "github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
+import (
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
+	"github.com/Techrocket9/BetterBeltBalancer/guest/go/plan"
+)
 
 // The id space is this guest's own: the host stores nothing but the closure that
 // captures one, so these are not registered anywhere and cannot collide with
@@ -92,6 +95,7 @@ const (
 	// suite driving this is evidence about the keybind, exactly as
 	// `remote.call(..., 'audit')` is evidence about `/bbb-audit`.
 	callSetPartPriority = 4
+	callWorkStats       = 5
 )
 
 // The names. `CmdAudit` deliberately matches the marker prototype's name --
@@ -128,7 +132,8 @@ func init() {
 		fkapi.InterfaceMethod{Name: "audit", ID: callAudit},
 		fkapi.InterfaceMethod{Name: "set-multi-edge-parts", ID: callSetMultiEdge},
 		fkapi.InterfaceMethod{Name: "set-curved-exits", ID: callSetCurvedExits},
-		fkapi.InterfaceMethod{Name: "set-part-priority", ID: callSetPartPriority})
+		fkapi.InterfaceMethod{Name: "set-part-priority", ID: callSetPartPriority},
+		fkapi.InterfaceMethod{Name: "work-stats", ID: callWorkStats})
 }
 
 // fk_on_call is the whole inbound surface for both: one export, id-dispatched,
@@ -144,6 +149,16 @@ func init() {
 //go:wasmexport fk_on_call
 func onCall(id, argp, retp uint32) uint32 {
 	switch id {
+	case callWorkStats:
+		// No ensureRegistry, flush, audit, GC scheduling, or counter reset.
+		values := [6]fkapi.Value{
+			fkapi.OfNumber(float64(workFlooded)), fkapi.OfNumber(float64(workClassified)),
+			fkapi.OfNumber(float64(workRestyled)), fkapi.OfNumber(float64(workEdges + plan.EdgeVisits)),
+			fkapi.OfNumber(float64(workBuilds)), fkapi.OfNumber(float64(workTeardowns)),
+		}
+		fkapi.WriteDyn(retp, fkapi.Value{Tag: fkapi.TagArray, Array: values[:]})
+		return 0
+
 	case callSetCurvedExits:
 		// ITS DEFAULT IS THE SETTING'S OWN, which is the opposite of the leg
 		// below and is the same rule stated once: a caller who names no mode gets

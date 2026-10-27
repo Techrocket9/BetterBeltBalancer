@@ -177,8 +177,13 @@ func edgeModeRecheck() { edgeCap, edgeMode = edgeCapUnchecked, edgeModeUnchecked
 // is `legacyStubPresent` with a different name in it.
 func stackCapable() bool {
 	if edgeCap == edgeCapUnchecked {
+		present, ok := stackMarkerPresent()
+		if !ok {
+			classificationReadOK = false
+			return false
+		}
 		edgeCap = edgeCapSingle
-		if stackMarkerPresent() {
+		if present {
 			edgeCap = edgeCapMulti
 		}
 	}
@@ -193,29 +198,39 @@ func stackCapable() bool {
 // `go test`: every interesting one of them is unreachable from a 2.1 headless
 // run, which is the only Factorio this repository has.
 //
-// One integer compare on every call after the first of each heap, which is what
-// keeps it affordable on `noteAddedPart`'s path -- that one runs for every part
-// anybody places anywhere.
+// One integer compare on every call after the first of each heap.
 func multiEdgeAllowed() bool {
 	if edgeMode == edgeModeUnchecked {
+		capable := stackCapable()
+		if edgeCap == edgeCapUnchecked {
+			return false
+		}
+		setting := edgemode.SettingOff
+		if capable {
+			setting = settingMultiEdge()
+			if setting == edgemode.SettingAbsent {
+				classificationReadOK = false
+				return false
+			}
+		}
 		edgeMode = edgeModeSingle
-		if stackCapable() && settingMultiEdge() == edgemode.SettingOn {
+		if capable && setting == edgemode.SettingOn {
 			edgeMode = edgeModeMulti
 		}
 	}
 	return edgeMode == edgeModeMulti
 }
 
-func stackMarkerPresent() bool {
+func stackMarkerPresent() (present, ok bool) {
 	raw, err := fkapi.Prototypes.EntityRaw()
 	if err != nil {
-		return false
+		return false, false
 	}
 	v, err := fkapi.LuaCustomTable{Object: raw}.Get(fkapi.OfString(StackMarkerName))
 	if err != nil {
-		return false
+		return false, false
 	}
-	return v.Tag == fkapi.TagObject
+	return v.Tag == fkapi.TagObject, true
 }
 
 // settingMultiEdge reads the policy.
@@ -399,173 +414,6 @@ func refuseSingleEdge(root uint32, fp uint64, worst uint32, tiles []key, force u
 }
 
 // ---------------------------------------------------------------------------
-// The merge, and the theorem that keeps it off the hot path
-// ---------------------------------------------------------------------------
-//
-// A part that BRIDGES two clusters is queued by `AddPart` as two DEAD roots and
-// one live one, so the check in compile() is useless on its own: both
-// predecessors' networks are down before flushLive discovers that what they
-// became cannot be built. limit.go's `spareOverLimitMerges` is the pass that
-// takes those teardowns back off the queue, and it needs the same answer for
-// this rule that it already gets for the port limit.
-//
-// THE PORT LIMIT GETS ITS ANSWER FROM ARITHMETIC -- a cluster of C parts has at
-// most 4C edges, so `4C <= MaxPorts` is a proof no classification could find
-// enough of them. There is no such bound here: any two-part merge could break
-// the rule. What replaces it is a theorem about what a merge can CHANGE.
-//
-//	A tile's edge count is over its EXTERIOR sides. Adding a part to the world
-//	makes one side of each of its neighbours INTERIOR, which can only take edges
-//	away. So the only tile whose count can have gone UP is the new part's own --
-//	and this guest has the tick's new parts in hand already.
-//
-// THE CURVED EXIT MADE THAT PROOF LONGER AND DID NOT BREAK IT, and the longer
-// form is the one to check against when anything else about classification
-// moves. A tile's count no longer depends only on its own four neighbours: a
-// perpendicular belt beside it is an output or not according to two further
-// tiles, its rear and its far perpendicular one (compile.go,
-// curvesFromCluster). So "adding a part makes neighbours interior" is no longer
-// the whole story, and the question is whether a part's ARRIVAL can turn a
-// declined perpendicular belt into an accepted one. Every way it could is
-// monotone the other way:
-//
-//	the part lands ON the rear or far tile -- which is the only way its arrival
-//	can remove a feeder, because a part is 1x1 and destroys nothing but what it
-//	fast-replaces on its own tile. The tile is then a REGISTERED PART TILE, and
-//	tests 1 and 2 decline on exactly that. So the feeder going away and the
-//	decline arrive together, in that one dispatch, by construction.
-//
-//	the part lands on B itself -- the side becomes interior and the count falls.
-//
-//	the part lands anywhere else -- neither probe tile's contents changed, so
-//	the belt is classified exactly as it was.
-//
-// So the pass still classifies the new parts' own tiles and nothing else. What
-// it does NOT cover is a tile whose count rose because something OTHER than the
-// merge changed in the same tick -- a feeder mined, a belt rotated -- and that
-// gap is not new: it is the same gap a rotation beside a merging cluster has
-// always had, one tile further out. It costs completeness and never soundness,
-// which is the OLD behaviour: the predecessors come down for a refusal, items
-// conserved and spilled.
-//
-// SOUND, NOT COMPLETE, AND SOUNDNESS IS THE REQUIREMENT. Sparing a merge that
-// then COMPILES SUCCESSFULLY would leave both predecessors' networks standing
-// beside the new one -- three networks over one cluster, two of them holding
-// items nothing will ever come back for. So a "yes" here must mean a refusal,
-// and a bridging tile carrying two edges is one: the full classification would
-// see the same two on the same tile. A "no" that is wrong costs the OLD
-// behaviour -- the predecessors are torn down for a refusal, items conserved
-// and spilled -- and never a network left standing where it should not be.
-//
-// THE DESIGN'S "ALSO SPARE WHEN EITHER PREDECESSOR IS ALREADY REFUSED" IS NOT
-// TAKEN, AND THE REASON IS SOUNDNESS. It reads as free conservatism and it is
-// the unsound direction: a part is fast-replaceable onto a belt
-// (fastreplace.go), so the bridging part can be placed ON one of the two belts
-// that made a predecessor's tile multi-edge -- taking that tile to ONE edge and
-// making the merged cluster perfectly buildable. Spare it and the disaster
-// above is exactly what happens. The same argument retires it for the port
-// bound, where a bridging part laid over a belt likewise removes an edge.
-
-// bridgingTilesOverloaded asks the theorem above of one merge candidate.
-//
-// Costs NO HOST CALL at all unless a merge would really strand something, and
-// then at most four per tile a part was added to this tick -- fewer in
-// practice, because a bridging part has at least two INTERIOR sides by
-// construction and an interior side is a map probe rather than a query.
-func bridgingTilesOverloaded(r uint32) bool {
-	if len(addedTiles) == 0 || multiEdgeAllowed() {
-		return false
-	}
-	// NOTHING TO STRAND, NOTHING TO DECIDE. `spareMerge` only spares teardowns
-	// of predecessors that HAVE a standing network, so a merge of clusters that
-	// have none -- every merge inside a blueprint paste, and every merge
-	// `rebuildFromWorld` makes while it is registering a world onto a fresh
-	// heap -- has nothing this pass could protect. Answering "no" for those
-	// costs nothing and saves the classification.
-	if !mergeWouldStrand(r) {
-		return false
-	}
-	force := pforce[r]
-	for i := range addedTiles {
-		k := addedTiles[i]
-		id, ok := index[k]
-		// Added and then mined again inside the same tick (the edge suite has
-		// that leg), or absorbed into a different cluster: not this candidate's.
-		if !ok || find(id) != r {
-			continue
-		}
-		surf, ok := surfaceByIndex(k.s)
-		if !ok {
-			continue
-		}
-		if edgesOnTile(surf, k, force) >= 2 {
-			return true
-		}
-	}
-	return false
-}
-
-// mergeWouldStrand reports whether any predecessor queued dead into `r` has a
-// standing network. Pure guest memory: a `find` and a point query per queued
-// root.
-func mergeWouldStrand(r uint32) bool {
-	for i := range deadRoots {
-		d := deadRoots[i]
-		if int(d) >= len(alive) || !alive[d] || find(d) != r {
-			continue
-		}
-		if _, has := nets[d]; has {
-			return true
-		}
-	}
-	return false
-}
-
-// edgesOnTile is `classifyEdges` restricted to one tile.
-//
-// The interior test is the same one classifyEdges makes and is deliberately
-// force-blind for the same reason: a part of ANOTHER force standing beside this
-// one still occupies the side, so no interface can be placed against it.
-func edgesOnTile(surf fkapi.LuaSurface, k key, force uint32) int {
-	forceFilter = fkapi.OfNumber(float64(force))
-	n := 0
-	for d := 0; d < len(dirs); d++ {
-		nx, ny := k.x+dirs[d][0], k.y+dirs[d][1]
-		if _, ok := index[key{k.s, nx, ny}]; ok {
-			continue
-		}
-		if _, found, _ := classifySide(surf, k.s, nx, ny, dirOf[d]); found {
-			n++
-		}
-	}
-	return n
-}
-
-// ---------------------------------------------------------------------------
-// The tick's new parts
-// ---------------------------------------------------------------------------
-
-// addedTiles is every tile a part was registered on during this tick, IN EVENT
-// ORDER, truncated by every flush. High-water like the recompile queues, so a
-// blueprint paste sizes it once and every paste after that reuses the backing
-// array.
-//
-// It exists for the theorem above and for nothing else, which is why both of
-// the cases that would make it big skip it: a rebuild-from-world registers a
-// whole save's parts and has no standing networks to protect while it does, and
-// an engine that can stack never asks the question.
-var addedTiles []key
-
-func noteAddedPart(k key) {
-	if rebuildingFromWorld || multiEdgeAllowed() {
-		return
-	}
-	addedTiles = append(addedTiles, k)
-}
-
-func forgetAddedParts() { addedTiles = addedTiles[:0] }
-
-// ---------------------------------------------------------------------------
 // The unreachable backstop
 // ---------------------------------------------------------------------------
 
@@ -649,19 +497,6 @@ func singleEdgeBackstop(root uint32) bool {
 // build).
 
 var (
-	// sedgeCondemned is the roots whose STANDING network was built to a rule this
-	// engine no longer allows, and which must therefore come down even though the
-	// compile that follows will refuse.
-	//
-	// IT IS WHAT KEEPS THE ORDINARY REFUSAL ORDINARY. compile() asks the rule in
-	// front of its own teardown, and that is the whole of the sixty-fifth belt's
-	// fix -- a player who lays a second belt on a WORKING single-edge balancer
-	// must find it still running. The difference here is not the new edge list, it
-	// is that the network already standing is itself invalid, and only the two
-	// producers below can tell the two apart. Empty in every save that was built
-	// under the rule it is running under, which is every save anybody makes today.
-	sedgeCondemned []uint32
-
 	// sedgeAnnounce is the roots whose refusal belongs in the SUMMARY rather than
 	// in the ordinary "the extra piece was left in place" message.
 	//
@@ -701,31 +536,11 @@ type annNote struct {
 }
 
 func condemnStanding(root uint32) {
-	for i := range sedgeCondemned {
-		if sedgeCondemned[i] == root {
-			return
-		}
+	if ni, exists := nets[root]; exists {
+		ni.condemned = true
+		nets[root] = ni
 	}
-	sedgeCondemned = append(sedgeCondemned, root)
 }
-
-// takeCondemned reports whether this root's standing network has to come down,
-// and consumes the answer: the teardown happens once.
-func takeCondemned(root uint32) bool {
-	for i := range sedgeCondemned {
-		if sedgeCondemned[i] != root {
-			continue
-		}
-		sedgeCondemned[i] = sedgeCondemned[len(sedgeCondemned)-1]
-		sedgeCondemned = sedgeCondemned[:len(sedgeCondemned)-1]
-		return true
-	}
-	return false
-}
-
-// forgetCondemned drops whatever the flush did not reach -- a condemned cluster
-// that dissolved before it could be compiled. Its network went down with it.
-func forgetCondemned() { sedgeCondemned = sedgeCondemned[:0] }
 
 // noteAnnounce records one cluster for the summary.
 //
@@ -869,7 +684,7 @@ func scanStackedMultiEdge() uint32 {
 			continue
 		}
 		classifyEdges(s, tiles, pforce[r])
-		if sedgeWorst < 2 {
+		if !classificationReadOK || sedgeWorst < 2 {
 			continue
 		}
 		found++

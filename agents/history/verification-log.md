@@ -425,3 +425,27 @@ The tile holds a `transport-belt` at direction 4 on the player's force from that
 **And the smoke that was never run on 2.1 is run, on the RELEASED zip rather than a rebuild.** That zip alone in a scratch mods directory with a `mod-list.json` beside it and a private `write-data`, a bare `--create`: **exit 0, zero Error and zero Warning lines**, all three data stages loading (`settings.lua` at 0.061, `data.lua` at 0.297, `data-final-fixes.lua` at 0.805) and the control stage arming at checksum 1289863643 -- `[BBB] guest init: cluster tracking armed for bbb-balancer-part` -- with **no follow line**, on base plus the three expansions and again on base alone. The 0.3.4 zip's own smoke stays NOT RUN and is not made redundant by this: 0.3.5 differs from it in the data guest.
 
 **WHAT IS STILL OWED AFTER THIS PASS.** The **portal uploads**, unchanged. The **packaged-zip repro against a real Cerys install**, which needs that mod's own zip and is the one thing the `cerys` fixture stands in for. The **2.1.16 golden rows**, which are a Steam betas checkbox away and which nothing here touches. And the `release/2.0` arm's own engine gates, which this binary cannot run at all.
+
+## 2026-10-27: Concave Ownership And Incremental Edits
+
+Prepared the runtime changes against upstream master `6af2a5c`, retaining the
+upstream mod ID, generated-setting constructors and asset paths. Fork branding,
+local installation records, package renaming, PR text and the illustrative image
+are not part of this change. Network ownership, integrity checks, cached local
+classification, conservative invalidation, retired-node safety and bounded build
+retries are described in `agents/architecture/runtime-model.md`.
+
+Verification in Docker image `bbb-toolchain:tinygo-0.41.1-go1.26.6`, with sibling
+FkLua available at `/work/FkLua`:
+
+```sh
+make -C /work/BetterBeltBalancer check mod FKLUA=/work/FkLua/bin/fklua
+```
+
+Passed the six pure-Go packages, data/observer/fixture vet, generated bindings and
+lock checks, formatting, both wasm builds, packaging/pruning, sprite references
+and changelog grammar. The initial release-arm check skipped the shallow clone;
+after fetching complete upstream master and release/2.0 history, a second
+`make check` passed the provenance gate too. Engine-suite results are recorded
+separately below after the regression probes are included; no wall-clock speedup
+is claimed.

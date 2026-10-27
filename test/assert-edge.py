@@ -466,7 +466,7 @@ BMIN_OVERFLOW_MIN = 40
 # the same order both times.
 DET_ORDER = [3, 1, 4, 2]
 
-# 200 teardowns of a full network in the chn leg alone, plus the one-offs. M3
+# Genuine port changes still tear down full networks; edgeless churn does not. M3
 # measures 0.89% lost over ~100 teardowns, to fractional item positions and
 # whatever a splitter holds outside its transport lines.
 LOSS_BOUND = 0.08
@@ -529,15 +529,23 @@ def main():
     drifted = [i for i, _ in chn if audits["chn%d" % i][3] != 0]
     unbuilt = [i for i, _ in chn if audits["chn%d" % i][4] != 0]
     shapes = {audits["chn%d" % i][:2] for i, _ in chn}
+    last_churn = max(i for i, line in enumerate(lines)
+                     if (m := COUNT.search(line)) and m[1].startswith("chn"))
+    first_churn = next((i for i, line in enumerate(lines) if "[BBB-EDGE] churn-begin" in line), None)
+    if first_churn is None:
+        fail("missing churn-begin marker")
+    churn_window = lines[first_churn:last_churn + 1]
+    returned = sorted(int(m[2]) for line in churn_window
+                      if (m := TORNDOWN.search(line)))
     print("a hundred add-part/remove-part cycles on a SATURATED balancer:")
     print("  items %d -> %d over %d cycles and %d teardowns: %d lost (%.2f%%)"
-          % (first, last, len(chn), 2 * len(chn), first - last,
+          % (first, last, len(chn), len(returned), first - last,
              100.0 * (first - last) / max(first, 1)))
     print("  the count never rose: %s" % ("yes" if not rises else "NO"))
     print("  audits reporting drift: %d;  unbuilt: %d" % (len(drifted), len(unbuilt)))
     print("  every cycle's audit saw the same world: %s" % sorted(shapes))
     # WHERE the items are, which is what the 2026-08-02 policy change is about.
-    # Two hundred recompiles of a network whose outputs are DEAD-ENDED: the
+    # Recompiles of a network whose outputs are DEAD-ENDED: the
     # spill has nowhere to put an item except the floor, so under the old
     # drain-and-spill policy this number climbed all run. A recompile now
     # reinserts, so it must stay at zero -- and it is cumulative, so one leaked
@@ -551,20 +559,13 @@ def main():
         fail("the churn leg put %d items on the ground (first at cycle %d): a "
              "recompile is not a removal, and the drained items belong back "
              "inside the network that was just built" % (worst, leaked[0]))
-    # And the networks really were carrying items. Only chn is torn down during
-    # this leg, so every `returned` line in it is one of the two hundred, and a
-    # leg of empty teardowns would prove nothing about conservation.
-    returned = sorted(int(m.group(2))
-                      for m in (TORNDOWN.search(l) for l in lines) if m)
-    if len(returned) < 150:
-        fail("only %d teardowns returned any items at all; the churn leg was "
-             "tearing down EMPTY networks and proves nothing" % len(returned))
-    print("  items handed back per teardown: min %d, median %d, max %d over %d "
-          "teardowns that carried something"
-          % (returned[0], returned[len(returned) // 2], returned[-1], len(returned)))
-    if returned[len(returned) // 2] < 10:
-        fail("the median teardown returned %d items: the networks were not full"
-             % returned[len(returned) // 2])
+    # Both the edgeless extension and its leaf removal retain the incumbent.
+    # Count this leg only, so later genuine port changes cannot hide rebuilds.
+    rebuilt = [m for line in churn_window if (m := COMPILED.search(line))]
+    if returned or rebuilt:
+        fail("edgeless churn must retain its network: %d nonempty teardowns "
+             "and %d builds over %d cycles" % (len(returned), len(rebuilt), len(chn)))
+    print("  the incumbent survived all extensions and leaf removals without rebuilding")
     if rises:
         fail("the item count ROSE at cycles %r: the churn minted matter" % rises[:5])
     if drifted:
@@ -685,9 +686,11 @@ def main():
     took = sorted(int(m.group(2))
                   for m in (TOOKBACK.search(l) for l in lines) if m)
     spilled = [int(m.group(1)) for m in (SPILLED.search(l) for l in lines) if m]
-    if len(took) < 150:
-        fail("only %d recompiles reinserted anything at all; the drained items "
-             "were not going back into the networks" % len(took))
+    churn_took = sorted(int(m[2]) for line in churn_window
+                        if (m := TOOKBACK.search(line)))
+    if churn_took != returned:
+        fail("the churn must reinsert every nonempty teardown's contents: "
+             "%r returned, %r reinserted" % (returned, churn_took))
     print("  reinserted per recompile: min %d, median %d, max %d over %d "
           "recompiles that carried something"
           % (took[0], took[len(took) // 2], took[-1], len(took)))
@@ -929,7 +932,7 @@ def main():
     # without this method the whole feature is reachable by a human and by
     # nothing else.
     want_iface = {"audit", "set-multi-edge-parts", "set-curved-exits",
-                  "set-part-priority"}
+                  "set-part-priority", "work-stats"}
     if set(iface.group(1).split(",")) != want_iface:
         fail("the remote interface exposes %r, expected exactly %s"
              % (iface.group(1), ",".join(sorted(want_iface))))

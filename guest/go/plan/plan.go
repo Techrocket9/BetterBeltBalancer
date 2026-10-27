@@ -74,6 +74,10 @@ package plan
 // toolchain. So the compass is pushed in rather than pulled.
 var North, East, South, West uint32
 
+// EdgeVisits counts actual edge-loop iterations for the control guest's work
+// diagnostic. It does not participate in planning decisions.
+var EdgeVisits uint64
+
 // SetCompass installs the running game's `defines.direction` values. Called once
 // per guest lifetime, from a package initialiser, before anything below runs.
 //
@@ -289,6 +293,7 @@ const (
 func ShapeEdges(edges []Edge) (pt Ports, fits bool) {
 	n, m, qi, qo := 0, 0, 0, 0
 	for i := range edges {
+		EdgeVisits++
 		if edges[i].Out {
 			m++
 			if edges[i].Prio {
@@ -349,6 +354,7 @@ func ShapeEdges(edges []Edge) (pt Ports, fits bool) {
 func PrioCollapses(edges []Edge) (out, in bool) {
 	n, m, qi, qo := 0, 0, 0, 0
 	for i := range edges {
+		EdgeVisits++
 		if edges[i].Out {
 			m++
 			if edges[i].Prio {
@@ -605,6 +611,7 @@ func Build(dst []Op, edges []Edge, ox, oy int32) (ops []Op, pt Ports, ok bool) {
 	// exactly what this produces.
 	nin, nout := 0, 0
 	for _, e := range edges {
+		EdgeVisits++
 		if e.Out {
 			ops = append(ops, Op{Proto: ProtoLinkedBelt, X: float64(e.TileX) + 0.5,
 				Y: float64(e.TileY) + 0.5, Dir: e.Dir, Link: LinkOutput, Visible: true, Pair: -1})
@@ -812,6 +819,7 @@ func buildPrio(ops []Op, edges []Edge, pt Ports, ox, oy int32) ([]Op, Ports, boo
 	// end is still the k-th edge whatever port the plan gave it.
 	nin, nprio, nnorm := 0, 0, 0
 	for _, e := range edges {
+		EdgeVisits++
 		if e.Out {
 			port := q + nnorm
 			if e.Prio {

@@ -12,7 +12,7 @@ M2 proves item conservation across ONE recompile of a saturated 2x2. This suite 
 
 | what is done to a full network | what came out |
 |---|---|
-| **100 add-part / remove-part cycles** on a balancer whose outputs are DEAD-ENDED, so its hidden network is full and stays full | 200 teardowns, median **72 items handed back each**, **0 lost**, **0 on the ground**, the count never rose, `drift=0 unbuilt=0` on all 100 audits, fifteen clusters of one hundred and ninety-eight parts back every cycle |
+| **100 add-part / remove-part cycles** on a balancer whose outputs are DEAD-ENDED, so its hidden network is full and stays full | Since the cached leaf-removal path: **0 teardowns and 0 builds**, **0 lost**, **0 on the ground**, the count never rose, `drift=0 unbuilt=0` on all 100 audits, fifteen clusters of one hundred and ninety-eight parts back every cycle. Factorio 2.1.23 verification: **220800 -> 220800 items**, both collector modes; command recorded in the verification log. |
 | a part placed and removed **inside one dispatch chain** | no change; the flush drops a root whose slot is already on the free list |
 | a part placed on the tick a **deferred flush from the previous tick is pending** | one cluster of six parts, drift=0 |
 | a part **bridging two saturated clusters** — two full networks down in one flush, one up | 15 clusters → 14, conserved, **0 on the ground** |
@@ -47,4 +47,10 @@ M2 proves item conservation across ONE recompile of a saturated 2x2. This suite 
 
 The scrambled-paste row is the determinism claim the deferred queue has to make. Events arrive in engine order, which is deterministic; what the queue adds is that it drains in the order roots were first inserted, dedupes without reordering, and re-resolves each root through `find` before compiling. Two identical pastes producing two different orders would be a desync, not a cosmetic difference.
 
-The dead-ended outputs on the churn rig are load-bearing and the suite asserts that they worked: it requires a median teardown to have returned at least ten items, so a leg of empty teardowns fails rather than passing vacuously. Since 2026-08-02 it requires the same of the REINSERTION, so a policy that quietly stopped putting anything back would fail the same way.
+The churn's `churn-begin` marker excludes initial network construction from the
+preservation window. Both edgeless extension and leaf removal must retain the
+incumbent: the assertion rejects any build or nonempty teardown within that
+window, rather than requiring the old unnecessary drain/reinsert cycles. The
+separate genuine port-change windows still require reinsertion and conservation.
+M3 additionally checks exact interface and partner identities and work counters,
+so a missing or silently replaced network cannot satisfy the preservation claim.

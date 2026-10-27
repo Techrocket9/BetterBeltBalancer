@@ -434,8 +434,8 @@ func takeReplacedBelt(s uint32, x, y int32, player uint32, tick uint64) beltSpec
 	return beltSpec{}
 }
 
-// forgetReplacedBelts ends the tick, beside forgetBuildNotes and for the same
-// reason.
+// Only unmatched event records expire here. A matched replacement spec is owned
+// by its buildNote, which survives unresolved compile/refund retries.
 func forgetReplacedBelts() { replacedBelts = replacedBelts[:0] }
 
 // backKV is the `create_entity` table the restore builds, package level so that
@@ -498,6 +498,7 @@ func restoreReplacedBelt(surf fkapi.LuaSurface, n buildNote, p fkapi.LuaPlayer) 
 	// is refunded below.
 	paid, err := p.RemoveItem(carryStack(b.item, b.quality, 1))
 	if err != nil {
+		reportBuildFailure(n, "Could not charge for restoring the replaced belt. The part was returned; please restore the belt manually.")
 		return
 	}
 	if paid == 0 {

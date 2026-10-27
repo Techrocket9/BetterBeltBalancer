@@ -84,9 +84,74 @@ Two things that did not change:
 - Built parts-first (the M2 rigs), a cluster still becomes buildable partway through and the bound is per tick, so a rig built across several ticks costs one build per tick that moved an edge.
 - A cluster whose edge list did not move rebuilds nothing at all -- the fingerprint still skips, and skips are still most of a churn run.
 
-**`markDead` and `markLive` are O(N²) in the queue, deliberately, and the bound is worth writing down rather than removing.** Both dedupe by scanning the queue linearly, so queuing N clusters in one tick costs N²/2 `uint32` comparisons. N is not the number of clusters in the save, it is **the clusters touched in ONE tick**, and the queue is truncated to `[:0]` by every flush. The worst case this mod has a name for is the n=200 bench `--create`: 200 clusters in one dispatch is 20,000 comparisons, which is a handful of microseconds against the 45.8 s that create takes — three orders of magnitude below the compile it is deduplicating for. A map would allocate per tick on the guest's hottest path to save that, which is the trade "The heap diet" spent a milestone learning to refuse. **Left as it is; revisit only if something starts queuing thousands of clusters in one tick, and re-measure rather than re-argue.**
+**Queue membership is stored per node.** `markDead` and `queueLive` deduplicate by checking a flag rather than scanning the queue. Pending predecessor counts move with unions and are recomputed during splits. The build drain re-resolves queued nodes through `find` and deduplicates the resulting roots before compiling, preserving deterministic first-queued order without an allocation per insertion.
 
-**The one-tick latency is real and is stated rather than hidden.** A network appears on the tick after its last part, and anything that has to measure the result in the tick it caused it -- which is every item-conservation check in `test/` -- has to force the flush. The shipped `bbb-audit` marker is the synchronous escape hatch and it is what the test mods use; it is also what their `on_init` uses, because `--create` never reaches a tick at all and the compiling would otherwise land on the first tick of the benchmark.
+**The one-tick latency is real and is stated rather than hidden.** A network appears on the tick after its last part. A check that must measure its edit synchronously has to force the flush; deferred-edit checks instead wait for later ticks. The shipped `bbb-audit` marker is the synchronous escape hatch; test setup uses it in `on_init` because `--create` never reaches a tick and the compiling would otherwise land on the first tick of the benchmark.
+
+## Network Ownership And Recovery (2026-10-27)
+
+`netInfo.interfaces` records each visible interface's position and unit number.
+The cluster box remains carry-routing geometry, not ownership: a concave group
+can surround an independent balancer of the same force. Teardown and priority
+item counts resolve the recorded identities; clone cleanup preserves interfaces
+owned by standing networks, including stranded predecessors.
+
+Audit and upgrade adoption validate every planned entity and both directions of
+each linked-belt pair. Canonical edge ordering makes full and incremental reads
+agree; an older network with another port order can require a one-time carrying
+rebuild. Unclaimed hidden slots with possible contents remain reserved rather
+than being deleted or assigned to a guessed owner.
+
+`workqueue.go` deduplicates pending work and keeps retired node IDs unavailable
+while queues or networks still reference them. Classification/construction
+failures get an initial attempt plus three deferred retries. `buildcontext.go`
+retains the event-time entity identity, affected footprint and replacement belt
+specification until validation or refund finishes. A later entity at the same
+coordinate is never substituted for that identity.
+
+Neighbour events invalidate the entity's cardinal footprint and classifier halo;
+underground rotations/flips cover possible partners on both axes. Unreadable or
+oversized footprints and configuration changes use full revalidation. Failed
+reads are not cached as authoritative absence. These retries do not make teardown
+transactional: failed cleanup queries, drains or destruction remain a separate
+failure envelope, and injected host failures have not been verified.
+
+## Cached Topology Edits (2026-10-27)
+
+`classification.go` retains the sorted port list, per-part side states, exact
+bounds, counts, and a deduplicated dirty list. `compile` rechecks dirty tiles
+before comparing the network fingerprint. A valid classification can describe
+a zero-port or refused group; absence of a network alone never proves emptiness.
+
+`RemovePart` preserves the classification and network when a portless leaf has
+exactly one same-force neighbour, the curve policy is decided, no teardown or
+stranded predecessor is pending, and any incumbent agrees with the cached
+fingerprint and is not condemned. It removes the leaf from the dirty list,
+flattens the surviving union-find component, recomputes exact bounds from that
+same registry walk, and transfers ownership if the root changed. This remains
+O(parts) pure registry work: a geometric leaf can have union-find children, so
+freeing its id without repairing parent references is unsafe. Only the local
+neighbourhood is restyled and reclassified; unchanged ports leave all transport
+entities and their contents untouched.
+
+`AddPart` also retains a lone incumbent when joining distinct, readable cached
+groups of which at most one has ports. It combines bounds, count buckets and
+dirty lists, keeps the populated group's sorted edges, and rechecks the join
+neighbourhood on the normal deferred flush. Multiple populated predecessors,
+pending teardown/stranded work, uncertain snapshots and undecided curve policy
+retain the ordinary merge path. A zero-port group can have dirty work: its
+pending local reads are transferred, not silently discarded.
+
+The temporary `netInfo.mergeOwner` keeps the original network identity until
+the merge is validated. If local reads discover an illegal bridge, the network
+is restored to that predecessor and registered with the existing stranded-merge
+machinery before refusal. Removing/refunding a low-id bridge can therefore
+recover the incumbent without destroying it. Validated merges clear provenance;
+retiring its predecessor clears it too, so retries cannot alias a recycled id.
+
+Verbose sprite diagnostics keep whole-shape assertions for groups up to 32
+parts, but use `skin-local` summaries for local changes to larger groups. Logging
+must not flood a large group merely to report a bounded sprite update.
 
 ## Which events reach the guest at all
 
@@ -106,7 +171,7 @@ What this removes is everything else on the map — an assembler placed, a tree 
 
 **The in-guest name read stays, and that is not a half-measure.** The filter says "one of the things this mod cares about"; the handler still has to know *which* — a part, the marker, a piece of our own network being copied or destroyed, or a belt near a cluster. What changed is how often that is paid.
 
-**And WHEN it is paid moved once more, for a reason that is about the heap rather than about the clock.** `onEvent` reads `position` and `surface_index` first now and buys the `name` last, because a name comes back as a Go string — `getStr` copies the host's bytes, since the arena under them is released when the call returns — and under `-gc=leaking` that copy is permanent, 32 B for one `express-transport-belt`, in the save and in every multiplayer join. A DISAPPEARANCE or a ROTATION can only concern this mod if it is on a registered tile, inside the two-tile neighbour gate, or on the hidden surface, and all three are answered from guest memory — so those events do not buy a name at all. An APPEARANCE still buys it unconditionally and always will: a part placed alone in the middle of nowhere has no neighbours to be recognised by. Measured at half of the largest-multiplier term this guest has; see "The marathon save".
+**The name precedes the footprint query.** `onEvent` reads surface and position, then the name so a 1x1 part can take its registry path without a bounding-box query. Other belt-connectables use their footprint rather than a centre-only gate: wide entities and underground partner changes can affect parts farther away. This trades the old early name-read rejection for complete invalidation. Under `-gc=leaking`, name strings remain permanent allocations; earlier measurements of the old centre-gated path are historical, not measurements of this implementation.
 
 ## `on_forces_merged` — the one event with no per-entity form at all
 

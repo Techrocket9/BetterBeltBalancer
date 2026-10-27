@@ -777,17 +777,21 @@ func claimCarry(roots []uint32) {
 		if _, had := nets[r]; had {
 			continue
 		}
-		tiles := collectCluster(r)
-		if len(tiles) == 0 {
-			continue
+		c := &classes[r]
+		x0, y0, x1, y1 := c.x0, c.y0, c.x1, c.y1
+		if !c.valid {
+			tiles := collectCluster(r)
+			if len(tiles) == 0 {
+				continue
+			}
+			x0, y0, x1, y1 = clusterBox(tiles)
 		}
-		x0, y0, x1, y1 := clusterBox(tiles)
 		for p := range carryPools {
 			pool := &carryPools[p]
 			if pool.owned {
 				continue
 			}
-			if pool.matches(tiles[0].s, pforce[r], x0, y0, x1, y1) {
+			if pool.matches(ppos[r].s, pforce[r], x0, y0, x1, y1) {
 				pool.claims++
 			}
 		}

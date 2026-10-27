@@ -41,6 +41,10 @@ fklua.toml, fklua.lock   the mod project: identity, dependencies, data module, s
 guest/go/                the CONTROL guest (its own Go module; TinyGo -> wasm -> Lua)
   main.go                events, subscriptions, load hooks, fk_state_version
   cluster.go             the part registry: orthogonally adjacent parts per surface and force
+  classification.go      cached edge classification and local dirty-part updates
+  workqueue.go           deduplicated work, bounded retries and retired node IDs
+  network.go             exact interface ownership and physical network integrity
+  buildcontext.go        event-time player identity and retained refund context
   compile.go             the network compiler and edge classification (straight + curved exits)
   lifecycle.go           clones, surface deletion, rebuild-from-world, the audit, force merges
   carry.go               where a teardown's items go (recompile reinserts, removal spills)
