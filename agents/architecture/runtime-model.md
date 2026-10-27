@@ -153,6 +153,13 @@ Verbose sprite diagnostics keep whole-shape assertions for groups up to 32
 parts, but use `skin-local` summaries for local changes to larger groups. Logging
 must not flood a large group merely to report a bounded sprite update.
 
+The M3 observer's `topology.go` measures ordinary deferred edits on 300-part
+lines with `work-stats`, preserving visible and hidden partner identities and
+seeded items. Its independent full-world oracle runs after the measured windows
+and requires zero classification drift. This is work-count evidence, not a
+wall-clock latency benchmark; invocation and results belong in the verification
+log.
+
 ## Which events reach the guest at all
 
 `script.on_event(id, handler, filters)` applies its filter list **in C++ before the handler runs**, and `fk.subscribe` carries one now ([`FKLUA-GAPS.md`](../../FKLUA-GAPS.md) item 3, fixed upstream). All eleven per-entity subscriptions use it, with the same five-term list:

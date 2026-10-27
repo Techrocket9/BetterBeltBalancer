@@ -449,3 +449,38 @@ after fetching complete upstream master and release/2.0 history, a second
 `make check` passed the provenance gate too. Engine-suite results are recorded
 separately below after the regression probes are included; no wall-clock speedup
 is claimed.
+
+## 2026-10-27: Upstream-Identity Engine Regression
+
+The PR's combined source tree, including the new synchronous network probe and
+twelve deferred 300-part topology cases, was tested with the original
+`better-belt-balancer` identity on headless Factorio 2.1.23. Go 1.26.6 and TinyGo
+0.41.1 ran in the Docker toolchain recorded above. Commands inside the container:
+
+```sh
+make -C /work/BetterBeltBalancer test FKLUA=/work/FkLua/bin/fklua FACTORIO_BIN=/work/toolchain/factorio-headless.sh
+BBB_TEST_TMP=/work/BetterBeltBalancer/dist/pr-leaking make -C /work/BetterBeltBalancer GC=leaking test SUITES="m3 edge" FKLUA=/work/FkLua/bin/fklua FACTORIO_BIN=/work/toolchain/factorio-headless.sh
+make -C /work/BetterBeltBalancer zip FKLUA=/work/FkLua/bin/fklua
+```
+
+All sixteen applicable default-collected suites passed. The seventeenth,
+`flip`, explicitly skipped because it requires Factorio 2.0. Both selected
+leaking suites passed too. This includes the normal suite's legacy migrations,
+priority-save adoption, stacking, quality, marathon and player-cursor gestures.
+Both collector modes retained all 220800 items during the 100-cycle saturated
+churn, with zero builds, teardowns or ground items. The M3 probes passed exact
+identity, pairing, registry, item and bounded-work checks, including the real
+bridge-input positive control and the independent post-measurement oracle.
+These are operation-count results, not wall-clock speedup measurements.
+
+The collected ZIP passed CRC checks, all eighteen file comparisons against the
+unpacked package, and nine Lua parses under FkLua's `lua52f`. It is 1020116 bytes,
+SHA256 `d41a22c9dcb9b3dff73f77a9c5b2537e066252d038099e03aa7f4176b44e4c2d`.
+Verification artifacts remain in the isolated container/volume and temporary
+host logs, not in the commits. The existing local installation and saves were
+not changed.
+
+Not run: Factorio 2.0, the other leaking-mode suites, the data-stage dump matrix,
+manual graphical checks, or injected host-read failures through retry
+exhaustion. Review also notes that teardown retains the existing nontransactional
+API-failure envelope; classification/build retries do not claim to fix it.
