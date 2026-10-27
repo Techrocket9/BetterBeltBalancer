@@ -524,6 +524,9 @@ func chnStep(phase, i int) {
 	s := surf()
 	switch phase {
 	case 0:
+		if i == 1 {
+			out.Open("churn-begin").End()
+		}
 		putSoft(s, part, 0, chn+2, nil, "")
 	case 10:
 		harness.KillAt(s, 0, chn+2, part, "")

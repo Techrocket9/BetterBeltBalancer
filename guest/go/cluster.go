@@ -63,11 +63,14 @@ var dirs = [4][2]int32{{0, -1}, {1, 0}, {0, 1}, {-1, 0}}
 // that allocates least wins.
 var (
 	parent []uint32 // union-find parent; parent[r] == r at a root
-	csize  []uint32 // cluster size, meaningful only at a root
-	ppos   []key    // where this node's part is
-	pforce []uint32 // which force built it; parts of two forces never merge
-	alive  []bool   // false for a slot on the free list
-	mark   []uint32 // flood-fill generation stamp
+	// Active roots only, for verbose event snapshots without a node-table scan.
+	rootPrev, rootNext []uint32
+	rootHead           uint32
+	csize              []uint32 // cluster size, meaningful only at a root
+	ppos               []key    // where this node's part is
+	pforce             []uint32 // which force built it; parts of two forces never merge
+	alive              []bool   // false for a slot on the free list
+	mark               []uint32 // flood-fill generation stamp
 	// pvar is the sprite variation currently ON the entity, or 0 for "we have
 	// not set one" -- a freshly built part, or a part registered by a
 	// rebuild-from-world that has no idea what the last build put there. It is
@@ -127,7 +130,10 @@ func init() { initRegistry() }
 // added here that only `init` did would be a half-reset registry, which is
 // worse than either state.
 func initRegistry() {
+	resetClassifications()
 	parent = parent[:0]
+	rootPrev, rootNext = rootPrev[:0], rootNext[:0]
+	rootHead = 0
 	csize = csize[:0]
 	ppos = ppos[:0]
 	pforce = pforce[:0]
@@ -143,6 +149,7 @@ func initRegistry() {
 
 	// The dummy slot, so ids start at 1.
 	parent = append(parent, 0)
+	rootPrev, rootNext = append(rootPrev, 0), append(rootNext, 0)
 	csize = append(csize, 0)
 	ppos = append(ppos, key{})
 	pforce = append(pforce, 0)
@@ -160,10 +167,18 @@ func newNode(k key, f uint32) uint32 {
 		pforce[id] = f
 		// A reused slot knows nothing about the entity now standing on it.
 		pvar[id], pprio[id] = 0, 0
+		discardClassification(id)
+		partSides[id], dirtyNext[id] = 0, 0
+		dirtyPart[id], changedPart[id] = false, false
+		priorityKnown[id] = false
+		forgetOverLimit(id)
+		workQueue[id] = queuedWork{}
+		addRoot(id)
 		return id
 	}
 	id := uint32(len(parent))
 	parent = append(parent, id)
+	rootPrev, rootNext = append(rootPrev, 0), append(rootNext, 0)
 	csize = append(csize, 1)
 	ppos = append(ppos, k)
 	pforce = append(pforce, f)
@@ -171,13 +186,44 @@ func newNode(k key, f uint32) uint32 {
 	mark = append(mark, 0)
 	pvar = append(pvar, 0)
 	pprio = append(pprio, 0)
+	appendClassNode()
+	addRoot(id)
 	return id
 }
 
+func addRoot(r uint32) {
+	rootPrev[r], rootNext[r] = 0, rootHead
+	if rootHead != 0 {
+		rootPrev[rootHead] = r
+	}
+	rootHead = r
+}
+
+func removeRoot(r uint32) {
+	prev, next := rootPrev[r], rootNext[r]
+	if prev == 0 {
+		rootHead = next
+	} else {
+		rootNext[prev] = next
+	}
+	if next != 0 {
+		rootPrev[next] = prev
+	}
+	rootPrev[r], rootNext[r] = 0, 0
+}
+
 func freeNode(id uint32) {
+	r := find(id)
+	if ni, has := nets[r]; has && ni.mergeOwner == id {
+		// A retry may outlive this node's retirement. Never let rollback
+		// provenance refer to a later part that reuses the same id.
+		ni.mergeOwner = 0
+		nets[r] = ni
+	}
 	alive[id] = false
 	csize[id] = 0
-	freeID = append(freeID, id)
+	workQueue[id].retired = true
+	queueRetiredNode(id)
 }
 
 // find is the union-find lookup with path compression, iterative because the
@@ -230,20 +276,71 @@ func AddPart(k key, f uint32) bool {
 	id := newNode(k, f)
 	index[k] = id
 	nParts++
-	// THE ONE TILE A MERGE CAN NEWLY BREAK THE ONE-BELT-PER-PART RULE ON is the
-	// tile of the part that made the merge, because adding a part can only take
-	// edges away from the tiles that were already there. The merge pre-pass
-	// (limit.go) needs those tiles a tick later and cannot re-derive them, so
-	// they are written down here, where they are free. One append to a
-	// high-water slice, and nothing at all on an engine that can stack or inside
-	// a rebuild-from-world. See sedge.go.
-	noteAddedPart(k)
-
+	// Decide before the first union. A low-id bridge must not temporarily
+	// inherit its first neighbour's net: a refused merge would then leave that
+	// incumbent owned by the bridge, which is freed when the edit is reverted.
+	neighborRoot := uint32(0)
+	extension := true
+	for i := 0; i < len(dirs); i++ {
+		nb, ok := index[key{k.s, k.x + dirs[i][0], k.y + dirs[i][1]}]
+		if !ok || pforce[nb] != f {
+			continue
+		}
+		r := find(nb)
+		if neighborRoot != 0 && neighborRoot != r {
+			extension = false
+			break
+		}
+		neighborRoot = r
+	}
 	merged := false
-	// Every root involved goes on the teardown queue -- the one that survives
-	// as well as the one that is absorbed, because the surviving cluster's
-	// network is now the wrong shape for it. compile.go's flush tears them all
-	// down before it builds anything.
+	safeExtension := extension && workQueue[id].pending == 0 &&
+		(neighborRoot == 0 || workQueue[neighborRoot].pending == 0)
+	// A real merge can also retain its sole populated predecessor. Zero-port
+	// snapshots contribute bounds, counts and dirty work, not a second machine.
+	safeMerge := !extension && !curveUndecided
+	populated, networks := 0, 0
+	var neighbors [4]uint32
+	nneighbors := 0
+	for i := 0; safeMerge && i < len(dirs); i++ {
+		nb, ok := index[key{k.s, k.x + dirs[i][0], k.y + dirs[i][1]}]
+		if !ok || pforce[nb] != f {
+			continue
+		}
+		r := find(nb)
+		seen := false
+		for _, prev := range neighbors[:nneighbors] {
+			seen = seen || prev == r
+		}
+		if seen {
+			continue
+		}
+		neighbors[nneighbors] = r
+		nneighbors++
+		c := &classes[r]
+		if !c.valid || !c.fits || workQueue[r].pending != 0 {
+			safeMerge = false
+			break
+		}
+		if len(c.edges) != 0 {
+			populated++
+		}
+		if ni, has := nets[r]; has {
+			networks++
+			if ni.condemned || ni.fp != c.fp {
+				safeMerge = false
+			}
+		}
+		safeMerge = safeMerge && populated <= 1 && networks <= 1
+	}
+	if safeMerge {
+		classes[id] = classification{valid: true, surf: k.s, force: f,
+			x0: k.x, y0: k.y, x1: k.x, y1: k.y}
+		classes[id].summarize()
+	}
+	// A lone incumbent can survive an extension until compile compares edges.
+	// Merges with multiple populated predecessors and batches already requiring
+	// teardown keep the all-down-before-build path and its unowned carry pools.
 	for i := 0; i < len(dirs); i++ {
 		nb, ok := index[key{k.s, k.x + dirs[i][0], k.y + dirs[i][1]}]
 		if !ok || pforce[nb] != f {
@@ -258,17 +355,56 @@ func AddPart(k key, f uint32) bool {
 		if rb < ra {
 			ra, rb = rb, ra
 		}
+		if safeMerge {
+			joinClassification(ra, rb)
+		} else if safeExtension {
+			moveClassification(neighborRoot, ra)
+		} else {
+			discardClassification(ra)
+			discardClassification(rb)
+		}
+		workQueue[ra].pending += workQueue[rb].pending
+		workQueue[ra].strandedN += workQueue[rb].strandedN
+		workQueue[rb].pending = 0
+		workQueue[rb].strandedN = 0
 		parent[rb] = ra
+		removeRoot(rb)
 		csize[ra] += csize[rb]
-		markDead(ra)
-		markDead(rb)
+		_, hasA := nets[ra]
+		netB, hasB := nets[rb]
+		if (safeExtension || safeMerge) && !(hasA && hasB) {
+			if safeMerge && hasA {
+				ni := nets[ra]
+				if ni.mergeOwner == 0 {
+					ni.mergeOwner = ra
+				}
+				nets[ra] = ni
+			}
+			if hasB {
+				if safeMerge && netB.mergeOwner == 0 {
+					netB.mergeOwner = rb
+				}
+				nets[ra] = netB
+				delete(nets, rb)
+				forgetOverLimit(rb)
+			}
+		} else {
+			markDead(ra)
+			markDead(rb)
+		}
 		logMerge(ra, rb)
 		merged = true
 	}
 	if !merged {
 		logFormed(id)
 	}
-	markLive(find(id))
+	r := find(id)
+	if classes[r].valid {
+		classes[r].include(k)
+		classes[r].counts[0]++
+	}
+	dirtyPartsNear(k)
+	queueLive(r)
 	return true
 }
 
@@ -296,6 +432,68 @@ func removePart(k key, player uint32) bool {
 		return false
 	}
 	oldRoot := find(id)
+	// Cached zero sides are insufficient after a refusal: the incumbent may
+	// still own an interface on this tile. Require agreement with its snapshot.
+	leaf := !curveUndecided && classes[oldRoot].valid && partSides[id] == 0 &&
+		workQueue[oldRoot].pending == 0
+	if ni, has := nets[oldRoot]; has && (ni.condemned || ni.fp != classes[oldRoot].fp) {
+		leaf = false
+	}
+	neighbor, degree := uint32(0), 0
+	for _, d := range dirs {
+		if nb, has := index[key{k.s, k.x + d[0], k.y + d[1]}]; has && pforce[nb] == pforce[id] {
+			neighbor, degree = nb, degree+1
+		}
+	}
+	if leaf && degree == 1 {
+		// Even a geometric leaf can have union-find children. Flatten the
+		// surviving component before its id can be recycled.
+		c := &classes[oldRoot]
+		prev := uint32(0)
+		for n := c.head; n != 0; n = dirtyNext[n] {
+			if n == id {
+				if prev == 0 {
+					c.head = dirtyNext[n]
+				} else {
+					dirtyNext[prev] = dirtyNext[n]
+				}
+				if c.tail == n {
+					c.tail = prev
+				}
+				break
+			}
+			prev = n
+		}
+		dirtyPart[id], dirtyNext[id] = false, 0
+		c.counts[0]--
+		removeRoot(oldRoot)
+		delete(index, k)
+		freeNode(id)
+		nParts--
+		gen++
+		r := rebuildComponent(neighbor)
+		// rebuildComponent's queue is already the complete membership list;
+		// use it for exact bounds without another flood or any host calls.
+		c.x0, c.x1 = ppos[r].x, ppos[r].x
+		c.y0, c.y1 = ppos[r].y, ppos[r].y
+		for _, n := range q {
+			c.include(ppos[n])
+		}
+		moveClassification(oldRoot, r)
+		if r != oldRoot {
+			if ni, has := nets[oldRoot]; has {
+				nets[r] = ni
+				delete(nets, oldRoot)
+			}
+		}
+		noteMinedByPlayer(k, pforce[id], player)
+		logShrunk(r)
+		dirtyPartsNear(k)
+		queueLive(r)
+		return true
+	}
+	removeRoot(oldRoot)
+	discardClassification(oldRoot)
 	f := pforce[id]
 	delete(index, k)
 	freeNode(id)
@@ -347,6 +545,7 @@ func removePart(k key, player uint32) bool {
 	noteMinedByPlayer(k, f, player)
 	if nseeds == 0 {
 		logDissolvedBy(oldRoot, player)
+		dirtyPartsNear(k)
 		return true
 	}
 
@@ -378,6 +577,7 @@ func removePart(k key, player uint32) bool {
 	} else {
 		logSplit(oldRoot, roots[:nroots])
 	}
+	dirtyPartsNear(k)
 	return true
 }
 
@@ -390,6 +590,7 @@ func rebuildComponent(start uint32) uint32 {
 	root := start
 	f := pforce[start]
 	for i := 0; i < len(q); i++ {
+		workFlooded++
 		n := q[i]
 		k := ppos[n]
 		for d := 0; d < len(dirs); d++ {
@@ -404,10 +605,17 @@ func rebuildComponent(start uint32) uint32 {
 			q = append(q, nb)
 		}
 	}
+	workQueue[root].pending = 0
+	workQueue[root].strandedN = 0
 	for i := 0; i < len(q); i++ {
 		parent[q[i]] = root
+		workQueue[root].pending += ownPending(q[i])
+		if workQueue[q[i]].stranded {
+			workQueue[root].strandedN++
+		}
 	}
 	csize[root] = uint32(len(q))
+	addRoot(root)
 	return root
 }
 
@@ -479,15 +687,12 @@ func partsInBox(dst []key, si uint32, x0, y0, x1, y1 int32) []key {
 
 // Snapshot returns the live cluster sizes, ascending.
 //
-// Driven by the node ARRAY, not by `index`: the order is the allocation order
-// of the slots, which is identical on every client, and the sort makes the
-// result independent even of that.
+// The active-root chain is updated with topology edits. Walking it rather than
+// every node keeps verbose logging independent of a large cluster's tile count.
 func Snapshot(dst []uint32) []uint32 {
 	dst = dst[:0]
-	for i := uint32(1); i < uint32(len(parent)); i++ {
-		if alive[i] && parent[i] == i {
-			dst = append(dst, csize[i])
-		}
+	for r := rootHead; r != 0; r = rootNext[r] {
+		dst = append(dst, csize[r])
 	}
 	// Insertion sort: these lists are short, and it costs no code size.
 	for i := 1; i < len(dst); i++ {

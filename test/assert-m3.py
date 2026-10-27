@@ -158,6 +158,223 @@ def all_of(rx, lines):
     return [m for m in (rx.search(raw) for raw in lines) if m]
 
 
+def assert_topology(run, need):
+    # Counters are cumulative read-only samples across the NORMAL deferred
+    # flush, not the audit oracle. Flooding a leaf's registry is intentional;
+    # classifying/restyling its 299 survivors or flooding a cached merge is not.
+    result = re.compile(
+        r"\[BBB-M3\] topology case=([\w-]+) work=\[([-\d ]+)\] "
+        r"before=\[([\d ]+)\] after=\[([\d ]+)\] paired=(true|false) "
+        r"items-before=(\d+) items-after=(\d+) parts=(\d+) interfaces=(\d+)")
+    # case: (physical parts, max flood, max classify/restyle, removed sizes, added sizes)
+    cases = {
+        "descendant-merge": (300, 0, 8, [298, 1], [300]),
+        "leaf-nonroot": (299, 299, 8, [300], [299]),
+        "reuse": (300, 1, 8, [], [1]),
+        "leaf-root": (299, 299, 8, [300], [299]),
+        "zero-merge": (300, 0, 8, [150, 149], [300]),
+        "active-merge": (300, 0, 8, [150, 149], [300]),
+        "lower-root-dirty-merge": (300, 0, 20, [150, 149], [300]),
+        "dirty-leaves": (297, 595, 24, [299], [297]),
+        "descendants-touch": (301, 0, 8, [299], [300]),
+        # Refusal reporting collects the component once; classification must
+        # still be local, proving this entered the cached fast-merge path.
+        "refused-bridge": (300, 300, 8, [150, 149], [300]),
+        # This is a real split, not the cached leaf path. Registry rebuilds and
+        # the stranded predecessor's fresh preflight are allowed; rebuilds of
+        # the incumbent NETWORK are still forbidden.
+        "refused-bridge-remove": (299, 900, 600, [300], [150, 149]),
+        # Local classification must notice the new bridge input; construction
+        # then collects the component to replace the old 1->1 with a 2->1.
+        "changed-port": (300, 300, 8, [150, 149], [300]),
+    }
+    setup, windows, seen = {}, {}, []
+    setup_name = active = None
+    state = None
+    before_state = None
+    for raw in run:
+        m = STATE.search(raw)
+        if m:
+            state = sorted(map(int, m[3].split(",")))
+        m = re.search(r"\[BBB-M3\] topology setup=([\w-]+) (begin|end)", raw)
+        if m:
+            if m[2] == "begin":
+                need(setup_name is None, "overlapping topology setup blocks")
+                setup_name = m[1]
+                setup[setup_name] = []
+            else:
+                need(setup_name == m[1], "unmatched topology setup end")
+                setup_name = None
+        elif setup_name:
+            setup[setup_name].append(raw)
+        m = re.search(r"\[BBB-M3\] topology case=([\w-]+) begin", raw)
+        if m:
+            need(active is None, "overlapping topology measurement windows")
+            active = m[1]
+            before_state = state[:] if state is not None else None
+            windows[active] = []
+        elif active:
+            windows[active].append(raw)
+        m = result.search(raw)
+        if not m:
+            continue
+        case = m[1]
+        seen.append(case)
+        need(case == active and case in cases, "unexpected topology result " + case)
+        active = None
+        if case not in cases:
+            continue
+        parts, flood, local, removed, added = cases[case]
+        work = list(map(int, m[2].split()))
+        before, after = (list(map(int, m[i].split())) for i in (3, 4))
+        need(len(work) == 6 and all(n >= 0 for n in work),
+             "topology %s has invalid counter deltas: %s" % (case, work))
+        if len(work) == 6:
+            # Disjoint dirty halos must ALL survive a union or reroot. An upper
+            # bound alone would accept silently dropping the donor's dirty list.
+            minimum = {"lower-root-dirty-merge": 15, "dirty-leaves": 14}.get(case, 1)
+            need(work[0] <= flood and minimum <= work[1] <= local and minimum <= work[2] <= local,
+                 "topology %s violated work bounds (flood<=%d, %d<=classify/restyle<=%d): %s"
+                 % (case, flood, minimum, local, work))
+            expected_builds = [1, 1] if case == "changed-port" else [0, 0]
+            need(work[4:] == expected_builds,
+                 "topology %s has builds/teardowns %s, expected %s"
+                 % (case, work[4:], expected_builds))
+        if case == "zero-merge":
+            need(before == after == [0, 0, 0, 0] and m[6] == m[7] == "0" and int(m[9]) == 0,
+                 "zero-port merge unexpectedly acquired an interface, network item or port")
+        else:
+            if case == "changed-port":
+                identity_ok = (len(before) == len(after) == 4 and all(before) and all(after)
+                               and all(a != b for a, b in zip(before, after)))
+                compiled = all_of(COMPILED, windows[case])
+                need(len(compiled) == 1 and compiled[0].groups()[1:] == ("2", "1"),
+                     "changed-port must compile exactly one 2->1 network, not retain a stale 1->1")
+            else:
+                identity_ok = len(before) == 4 and all(before) and before == after
+            need(identity_ok and m[5] == "true",
+                 "topology %s has incorrect interface/partner identities or broken reciprocal links: %s -> %s"
+                 % (case, before, after))
+            interfaces = 3 if case == "changed-port" else 2
+            need(m[6] == m[7] == "1" and int(m[9]) == interfaces,
+                 "topology %s failed exact one-item conservation or %d-interface census" % (case, interfaces))
+        need(int(m[8]) == parts, "topology %s has %s physical parts, expected %d" % (case, m[8], parts))
+        expected = before_state[:] if before_state is not None else []
+        for size in removed:
+            if size in expected:
+                expected.remove(size)
+            else:
+                need(False, "topology %s lacked predecessor of size %d" % (case, size))
+        expected.extend(added)
+        need(before_state is not None and state == sorted(expected),
+             "topology %s registry sizes diverged: %s -> %s, expected %s"
+             % (case, before_state, state, sorted(expected)))
+        need(not all_of(AUDIT, windows[case]), "topology %s used an audit inside its measurement" % case)
+    need(setup_name is None and active is None, "unfinished topology setup/measurement")
+    need(seen == list(cases), "missing, duplicate or reordered topology results: %s" % seen)
+
+    formed = re.compile(r"\[BBB\] cluster (\d+) formed")
+    merge = re.compile(r"\[BBB\] merge (\d+)\+(\d+)->(\d+)")
+
+    def root(label):
+        lines = setup.get(label, [])
+        first_node = first(formed, lines)
+        joins = all_of(merge, lines)
+        need(first_node is not None, "topology setup did not form " + label)
+        if first_node is None:
+            return None
+        node = int(first_node[1])
+        need(all(int(m[1]) == int(m[3]) == node for m in joins),
+             "topology %s first endpoint was not its verified minimum-ID root" % label)
+        return node
+
+    low, chain = root("nonroot-low"), root("nonroot-chain")
+    root_leaf = root("root-chain")
+    lower, populated = root("lower-right"), root("lower-left")
+    need(low is not None and chain is not None and low < chain,
+         "nonroot fixture needs a genuinely lower-ID zero-port predecessor")
+    need(lower is not None and populated is not None and lower < populated,
+         "lower-root fixture did not put the zero-port predecessor below the active root")
+    joins = all_of(merge, windows.get("descendant-merge", []))
+    need(any(int(m[1]) == low and int(m[2]) == chain for m in joins),
+         "descendant fixture never reparented the chain's former root")
+    shrunk = re.compile(r"\[BBB\] cluster (\d+) shrunk \((\d+) parts\)")
+    nonroot_shrink = first(shrunk, windows.get("leaf-nonroot", []))
+    root_shrink = first(shrunk, windows.get("leaf-root", []))
+    need(nonroot_shrink is not None and int(nonroot_shrink[1]) == low and int(nonroot_shrink[2]) == 299,
+         "nonroot leaf did not preserve the verified incumbent root and its 299 survivors")
+    need(root_leaf is not None and root_shrink is not None and int(root_shrink[1]) != root_leaf
+         and int(root_shrink[2]) == 299, "root leaf did not actually retire the verified root")
+    reused = first(formed, windows.get("reuse", []))
+    need(reused is not None and int(reused[1]) == chain,
+         "UF regression did not actually reuse the removed former-root ID")
+    joins = all_of(merge, windows.get("lower-root-dirty-merge", []))
+    need(any(int(m[1]) == lower and int(m[2]) == populated for m in joins),
+         "lower-root dirty merge never transferred the populated predecessor to the verified lower root")
+    dummy = root("rollback-dummy")
+    incumbent, empty = root("rollback-left"), root("rollback-right")
+    need(dummy is not None and incumbent is not None and empty is not None
+         and dummy < min(incumbent, empty),
+         "refusal rollback requires a reserved bridge ID below BOTH predecessors")
+    joins = all_of(merge, windows.get("refused-bridge", []))
+    need(len(joins) == 2 and {int(m[2]) for m in joins} == {incumbent, empty}
+         and all(int(m[1]) == int(m[3]) == dummy for m in joins),
+         "refused fast merge did not actually reuse the reserved lowest ID for both unions")
+    rollback_samples = {m[1]: m for m in all_of(result, run)}
+    standing = rollback_samples.get("refused-bridge")
+    removed = rollback_samples.get("refused-bridge-remove")
+    need(standing is not None and removed is not None and standing[3] == removed[3],
+         "refused bridge rollback must retain the SAME incumbent across both measurement windows")
+
+    # Only the intentional refusal and the independent post-measurement audit
+    # are exempt from the ordinary suite's global refusal/audit checks.
+    scoped = {"refusal": [], "oracle": []}
+    starts = {"refusal": 0, "oracle": 0}
+    scope = None
+    ordinary = []
+    for raw in run:
+        m = re.search(r"\[BBB-M3\] topology (refusal|oracle)-(begin|end)", raw)
+        if m:
+            if m[2] == "begin":
+                need(scope is None, "overlapping topology refusal/oracle brackets")
+                starts[m[1]] += 1
+                scope = m[1]
+            else:
+                need(scope == m[1], "unmatched topology refusal/oracle end")
+                scope = None
+        elif scope:
+            scoped[scope].append(raw)
+        else:
+            ordinary.append(raw)
+    need(scope is None and starts == {"refusal": 1, "oracle": 1},
+         "topology needs exactly one complete refusal bracket and one oracle bracket")
+    refusals = all_of(SEDGEREFUSED, scoped["refusal"])
+    need(len(refusals) == 1 and int(refusals[0][1]) == dummy and int(refusals[0][2]) == 1,
+         "reserved low-ID bridge must actually stand refused for exactly one multi-edge tile")
+    need(not all_of(AUDIT, scoped["refusal"]), "refusal rollback must use only deferred flushes")
+    need(not all_of(SEDGEREFUSED, scoped["oracle"]), "fresh topology oracle must not cause another refusal")
+    for case in ("refused-bridge", "refused-bridge-remove"):
+        need(any("topology case=" + case + " work=" in raw for raw in scoped["refusal"]),
+             "topology refusal bracket did not enclose the " + case + " measurement")
+    oracle = all_of(re.compile(AUDIT.pattern + r" cache-drift=(\d+)"), scoped["oracle"])
+    # At tick 65 the ordinary fixtures include tick 60's revived ghost rig:
+    # 15 clusters/nets over 64 parts. The probe adds 10 clusters, 2397 parts
+    # and 6 active nets, including the changed-port positive control.
+    need(len(all_of(AUDIT, scoped["oracle"])) == len(oracle) == 1
+         and tuple(map(int, oracle[0].groups())) == (25, 2461, 21, 0, 0, 0, 0),
+         "post-measurement fresh oracle must find the exact world with drift=0, unbuilt=0, "
+         "refused=0 and cache-drift=0: %s" % [m.groups() for m in oracle])
+    last_sample = max((i for i, raw in enumerate(run) if result.search(raw)), default=-1)
+    oracle_start = next((i for i, raw in enumerate(run) if "[BBB-M3] topology oracle-begin" in raw), -1)
+    cleanup_at = next((i for i, raw in enumerate(run) if "[BBB-M3] topology case=cleanup" in raw), -1)
+    need(0 <= last_sample < oracle_start < cleanup_at,
+         "fresh topology oracle must run after ALL measurements and before cleanup")
+    cleanup = all_of(re.compile(r"\[BBB-M3\] topology case=cleanup visible=(\d+) hidden=(\d+)"), run)
+    need(len(cleanup) == 1 and cleanup[0].groups() == ("0", "0"),
+         "topology cleanup must remove all probe entities and its six hidden networks")
+    return ordinary
+
+
 def main():
     create = read(sys.argv[1:2])
     run = read(sys.argv[2:3])
@@ -166,6 +383,77 @@ def main():
     def need(cond, msg):
         if not cond:
             fail.append(msg)
+
+    ordinary_run = assert_topology(run, need)
+
+    # These probes deliberately refuse two edits. Keep their evidence separate so
+    # the ordinary rigs and churn still forbid every single-edge refusal.
+    refusal_probe, ordinary_create = [], []
+    in_refusal_probe = False
+    for raw in create:
+        if "[BBB-M3] network refusal-begin" in raw:
+            in_refusal_probe = True
+        elif "[BBB-M3] network refusal-end" in raw:
+            in_refusal_probe = False
+        elif in_refusal_probe:
+            refusal_probe.append(raw)
+        else:
+            ordinary_create.append(raw)
+    need(not in_refusal_probe, "the refusal/audit/revert probe never finished")
+    need(len(all_of(SEDGEREFUSED, refusal_probe)) == 2,
+         "the refusal/audit/revert probes must actually refuse exactly two edits")
+    need(any(int(m[4]) > 0 and int(m[6]) == 1 for m in all_of(AUDIT, refusal_probe)),
+         "the probe must audit a standing refused edit before reverting it")
+    m = first(re.compile(r"\[BBB-M3\] network case=refusal-audit-revert before=(\d+) "
+                         r"during=(\d+) after=(\d+) paired=(true|false)"), refusal_probe)
+    need(m is not None and int(m[1]) > 0 and m[1] == m[2] == m[3] and m[4] == "true",
+         "refusal then audit then revert must preserve the original connected interface")
+    m = first(re.compile(r"\[BBB-M3\] network case=refused-bridge outer-before=(\d+) "
+                         r"outer-during=(\d+) outer-after=(\d+) inner-before=(\d+) "
+                         r"inner-during=(\d+) inner-after=(\d+) paired=(true|false)"), refusal_probe)
+    need(m is not None and int(m[1]) > 0 and int(m[4]) > 0 and
+         m[1] == m[2] == m[3] and m[4] == m[5] == m[6] and m[7] == "true",
+         "removing a refused low-id bridge must preserve both incumbent interfaces")
+
+    # Exact identities distinguish an untouched incumbent from a needless
+    # rebuild; a nonzero witness prevents a missing/missing false positive.
+    for case in ("extension", "lower-root", "nested", "idempotent"):
+        rx = re.compile(r"\[BBB-M3\] network case=" + case + r" before=(\d+) after=(\d+)")
+        m = first(rx, create)
+        need(m is not None and int(m[1]) > 0 and m[1] == m[2],
+             "network %s did not preserve its original interface: %s" % (case, m and m.groups()))
+    for case in ("missing", "disconnected", "hidden-partner"):
+        rx = re.compile(r"\[BBB-M3\] network case=" + case + r" paired=(true|false)")
+        m = first(rx, create)
+        need(m is not None and m[1] == "true", "audit did not repair " + case)
+    m = first(re.compile(r"\[BBB-M3\] network case=wrong-partner outer-before=(\d+) outer-after=(\d+) "
+                         r"inner-before=(\d+) inner-after=(\d+) paired=(true|false)"), create)
+    need(m is not None and all(int(m[i]) > 0 for i in range(1, 5)) and
+         m[1] != m[2] and m[3] != m[4] and m[5] == "true",
+         "audit must repair valid but cross-wired partner pairs in both networks")
+    m = first(re.compile(r"\[BBB-M3\] network case=merge outer-before=(\d+) outer-after=(\d+) "
+                         r"inner-before=(\d+) inner-after=(\d+) hidden-items=(\d+) visible-items=(\d+)"), create)
+    need(m is not None and all(int(m[i]) > 0 for i in range(1, 5)) and
+         m[1] != m[2] and m[3] != m[4] and (int(m[5]), int(m[6])) == (2, 0),
+         "genuine merge must replace both predecessors and carry both items inside")
+    m = first(re.compile(r"\[BBB-M3\] network case=split outer=(true|false) inner=(true|false) "
+                         r"hidden-items=(\d+) visible-items=(\d+)"), create)
+    need(m is not None and m.groups() == ("true", "true", "2", "0"),
+         "split must rebuild both successors without spilling their items")
+
+    cleanup_start = next((i for i, raw in enumerate(create)
+                          if "[BBB-M3] network cleanup-begin" in raw), None)
+    cleanup_end = next((i for i, raw in enumerate(create)
+                        if "[BBB-M3] network case=cleanup" in raw), None)
+    need(cleanup_start is not None and cleanup_end is not None and cleanup_start < cleanup_end,
+         "the network probe must finish synchronous cleanup before the ordinary fixtures")
+    if cleanup_start is not None and cleanup_end is not None and cleanup_start < cleanup_end:
+        cleanup_audits = all_of(AUDIT, create[cleanup_start:cleanup_end])
+        need(bool(cleanup_audits) and tuple(map(int, cleanup_audits[-1].groups())) == (0, 0, 0, 0, 0, 0),
+             "network probe cleanup must leave zero registered clusters, parts and networks")
+    m = first(re.compile(r"\[BBB-M3\] network case=cleanup visible=(\d+) hidden=(\d+)"), create)
+    need(m is not None and m.groups() == ("0", "0"),
+         "network probe cleanup must physically remove its visible and hidden entities")
 
     # ---------------------------------------------------------------- registry
     # The guest heap is discarded whenever the mod is rebuilt (this mod exports
@@ -325,7 +613,7 @@ def main():
     # deferred queue to drain inside the tick that a measurement is taken in --
     # `phase_part_died` and `phase_stress_end`. Only the first and the last are
     # judged.
-    audits = all_of(AUDIT, run)
+    audits = all_of(AUDIT, ordinary_run)
     need(len(audits) == 4, "expected 4 audits, got %d" % len(audits))
     if len(audits) >= 2:
         audits = [audits[0], audits[-1]]
@@ -361,7 +649,7 @@ def main():
               "%d parts and %d networks"
               % ((audits[0].group(4),) + final[:3]))
 
-    # AND NOT ONE ONE-BELT-PER-PART REFUSAL, ANYWHERE. This is a decision about
+    # NO ONE-BELT-PER-PART REFUSALS OUTSIDE THE ISOLATED PROBE. This is about
     # the churn as much as an assertion about the rigs: the six randomised edits
     # are aimed at a row's own single input, its own single output and an
     # EDGELESS part below the column, so no tile in this save can ever be asked
@@ -369,14 +657,14 @@ def main():
     # teardown counters above a function of the RULE rather than of the lifecycle
     # path under test, and would leave a cluster standing refused at the final
     # audit. The rule's three trigger shapes are the `sedge` suite's subject.
-    sedge = all_of(SEDGEREFUSED, run) + all_of(SEDGEREFUSED, create)
+    sedge = all_of(SEDGEREFUSED, ordinary_run) + all_of(SEDGEREFUSED, ordinary_create)
     need(not sedge,
-         "%d cluster(s) were refused for the one-belt-per-part rule: %r. Every "
+          "%d cluster(s) outside the refusal probe were refused for the one-belt-per-part rule: %r. Every "
          "rig and every churn edit in this suite is laid so that no tile ever "
          "carries two belts"
          % (len(sedge), [m.group(0).strip()[:70] for m in sedge[:3]]))
-    print("  one-belt-per-part refusals over the whole run: 0, as every rig and "
-          "every churn edit is laid to avoid one")
+    print("  one-belt-per-part refusals outside the isolated probe: 0, as every "
+          "ordinary rig and churn edit is laid to avoid one")
 
     # ------------------------------------------------------------------ forces
     # The last registry state of the build phase. Two forces built against each

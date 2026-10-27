@@ -157,9 +157,9 @@ func init() {
 	//
 	// THESE TWO TAKE NO FILTERS -- `runtime-api.json` gives a `filter` concept
 	// to 30 events and neither of these is one of them -- so they arrive for
-	// every rotation anywhere on the map and are rejected in-guest, by POSITION,
-	// which is a registry lookup with no host call behind it. They are a
-	// keypress, not a tick.
+	// every rotation anywhere on the map. The guest checks the entity's footprint
+	// against the registry; undergrounds also invalidate their possible partner
+	// footprints. They are a keypress, not a tick.
 	fkapi.Subscribe(fkapi.EventOnPlayerRotatedEntity)
 	fkapi.Subscribe(fkapi.EventOnPlayerFlippedEntity)
 
@@ -316,6 +316,10 @@ func onConfigurationChanged() {
 	curveRecheck()
 	ensureRegistry()
 	legacyRecheck(legTrigConfig)
+	// A retained heap still has the old prototype/connection answers. This is
+	// replicated configuration change, not on_load: keep the registry and
+	// invalidate every cached classification for the next deferred drain.
+	queueFullRevalidation(0)
 }
 
 // fk_migrate is the REBUILT-GUEST SIGNAL, and exporting it is now safe.
@@ -487,6 +491,8 @@ func onEventBody(id, ptr uint32) {
 		ev := fkapi.ReadOnForcesMerged(ptr)
 		if di, err := (fkapi.LuaForce{Object: ev.Destination}).Index(); err == nil {
 			onForcesMerged(ev.SourceIndex, di)
+		} else {
+			queueFullRevalidation(0)
 		}
 		return
 	case fkapi.EventOnForceCreated:
@@ -564,68 +570,28 @@ func onEventBody(id, ptr uint32) {
 	}
 
 	if !obj.Valid() {
+		queueFullRevalidation(0)
 		return
 	}
 
 	ent := fkapi.LuaEntity{Object: obj}
-	// `position` and `surface_index` are LuaControl's and LuaEntity inherits
-	// them. The generator forwards inherited members onto the subclass now
-	// (FKLUA-GAPS.md item 5, fixed upstream), so this is the obvious call
-	// rather than a hand-built LuaControl over the same handle.
-	//
-	// THE POSITION IS READ BEFORE THE NAME, AND THAT ORDER IS A HEAP DECISION.
-	// A name comes back as a Go string -- `getStr` copies the host's bytes,
-	// because the arena underneath them is released when the call returns -- and
-	// under `-gc=leaking` that copy is permanent, in the save and in every
-	// multiplayer join. Measured at 32 B for one `express-transport-belt`
-	// (agents/performance/marathon-save.md, leg D). A position and a surface index
-	// are scalars decoded out of the return block and cost nothing.
-	//
-	// The engine's filter admits every belt-connectable on the map, so this
-	// runs for every belt anyone lays or picks up anywhere -- which on a busy
-	// server is the highest-multiplier term the guest has. So: ask the cheap
-	// questions first, and buy the name only when the answer can depend on it.
-	pos, err := ent.Position()
-	if err != nil {
-		return
-	}
 	si, err := ent.SurfaceIndex()
 	if err != nil {
+		queueFullRevalidation(0)
 		return
 	}
-	// WHEN THE NAME CANNOT MATTER. Something DISAPPEARING or being ROTATED can
-	// only concern this mod if it is one of our parts (which is a registered
-	// tile), one of our network's visible interfaces (which stands ON a
-	// registered tile), one of our hidden entities (which is on the hidden
-	// surface), or a belt near a cluster (which is what the gate asks). All four
-	// are answered from guest memory.
-	//
-	// An APPEARANCE is the case that has no cheap gate and never will: a part
-	// placed alone in the middle of nowhere has no neighbours to be recognised
-	// by, so the name is the only thing that can identify it and it is bought
-	// unconditionally.
-	//
-	// ... EXCEPT WHEN THE ENGINE IS CLEARING A TILE FOR A PLAYER'S OWN BUILD.
-	// A part dropped onto a belt line far from every balancer is the common
-	// shape of the refused fast replace, and the mine that clears it would be
-	// rejected here -- so the belt would be gone before anything knew what it
-	// was. `isFastReplace` is a compare against one struct written by
-	// `on_pre_build`, with no host call behind it, and it is asked only of a
-	// mine a PLAYER made. See fastreplace.go.
+	pos, err := ent.Position()
+	if err != nil || !eventPositionOK(pos.X, pos.Y) {
+		queueFullRevalidation(si)
+		return
+	}
 	fastRep := what == evVanish && minedBy != 0 &&
 		isFastReplace(tick, minedBy, floorTile(pos.X), floorTile(pos.Y))
-	if !fastRep && what != evAppear && si != hiddenIdx && !nearCluster(si, pos.X, pos.Y) {
-		// ... EXCEPT THAT AN UNDERGROUND PAIR TURNS AS ONE. Rotating either half
-		// swaps BOTH ends, and the event names only the half under the cursor --
-		// so the half against a balancer changes from input to output with
-		// nothing inside the gate having been reported. See farUndergroundTurned.
-		if what == evModify {
-			farUndergroundTurned(ent, si, pos.X, pos.Y)
-		}
-		return
-	}
+	// Read the name before any footprint query: a 1x1 part needs no bounding
+	// box, and AddPart/RemovePart centrally invalidate its radius-two neighbours.
 	name, err := ent.Name()
 	if err != nil {
+		queueFullRevalidation(si)
 		return
 	}
 
@@ -638,10 +604,12 @@ func onEventBody(id, ptr uint32) {
 			// against the registry and makes no host call at all.
 			var ok bool
 			if f, ok = forceOf(obj); !ok {
+				queueFullRevalidation(si)
 				return
 			}
 		}
 		onPart(k, f, what, minedBy, builtBy, tick)
+		bindPlayerBuildIdentity(si, k.x, k.y, builtBy, ent)
 		return
 	}
 
@@ -676,10 +644,42 @@ func onEventBody(id, ptr uint32) {
 		return
 	}
 
+	ours := isOurs(name)
+	if !ours {
+		// A belt can fast-replace a part without raising its removal event.
+		// Reconcile that tile before recording neighbour claims/build notes.
+		if what == evAppear {
+			reapFastReplaced(si, floorTile(pos.X), floorTile(pos.Y), builtBy)
+		}
+		// This is the last moment a belt cleared for a player's part exists.
+		if fastRep {
+			noteReplacedBelt(si, floorTile(pos.X), floorTile(pos.Y), minedBy, tick,
+				name, ent)
+		}
+	}
+
+	// Do not gate on the entity's centre: a loader, splitter or modded belt can
+	// cover query tiles well outside it. The square also covers its old cardinal
+	// orientation after a rotation/flip. Unknown geometry takes the full path.
+	x0, y0, x1, y1, bounded := neighbourFootprint(ent, pos.X, pos.Y)
+	if si != hiddenIdx {
+		if bounded {
+			onNeighbourArea(si, x0, y0, x1, y1,
+				floorTile(pos.X), floorTile(pos.Y), minedBy, builtBy)
+			if what == evModify {
+				// The remote half matters even when the local half hit a cluster.
+				farUndergroundTurned(ent, si, x0, y0, x1, y1)
+			}
+		} else {
+			onUnknownNeighbour(si, floorTile(pos.X), floorTile(pos.Y), minedBy, builtBy)
+		}
+		bindPlayerBuildIdentity(si, floorTile(pos.X), floorTile(pos.Y), builtBy, ent)
+	}
+
 	// One of OUR prototypes, in an event we did not cause: the compiler never
 	// raises, so this is something else copying or destroying a piece of a
 	// network.
-	if isOurs(name) {
+	if ours {
 		switch {
 		case id == fkapi.EventOnEntityCloned:
 			// A copy. It belongs to no slot and it sits exactly where the
@@ -692,34 +692,11 @@ func onEventBody(id, ptr uint32) {
 				logS(")")
 				logEnd()
 			}
-		case what == evVanish:
+		case what == evVanish || what == evModify:
 			onNetworkLoss(si, pos.X, pos.Y, name)
 		}
 		return
 	}
-
-	// A BELT-CONNECTABLE APPEARING ON A PART'S TILE MEANS THE PART IS GONE, and
-	// nothing else says so: `fast_replaceable_group` is symmetric, so the line
-	// that lets a part replace a belt lets a belt replace a part -- and the
-	// engine raises no event at all for the entity it replaced. One tile lookup
-	// on the appearance path, a host call only on a hit, and it runs BEFORE the
-	// neighbourhood walk below so that walk sees the registry the removal left.
-	// See fastreplace.go.
-	if what == evAppear {
-		reapFastReplaced(si, floorTile(pos.X), floorTile(pos.Y), builtBy)
-	}
-	// AND A BELT THE ENGINE IS ABOUT TO DESTROY FOR A PART, read here because
-	// this dispatch is the last moment it exists. Every name branch above has
-	// returned by now, so what is left is a belt-connectable that is not one of
-	// ours -- which is the only thing a balancer part can be dropped onto. The
-	// build event a statement later is what decides whether anything was: if no
-	// part appears on this tile the record is simply never read, and the flush
-	// throws it away. See fastreplace.go.
-	if fastRep {
-		noteReplacedBelt(si, floorTile(pos.X), floorTile(pos.Y), minedBy, tick,
-			name, ent)
-	}
-	onNeighbour(si, pos.X, pos.Y, minedBy, builtBy)
 }
 
 // ---------------------------------------------------------------------------
@@ -759,10 +736,12 @@ func onUndo(playerIndex uint32, what string) {
 
 func onAreaCloned(ev fkapi.OnAreaCloned) {
 	if !ev.DestinationSurface.Valid() {
+		queueFullRevalidation(0)
 		return
 	}
 	si, err := fkapi.LuaSurface{Object: ev.DestinationSurface}.Index()
 	if err != nil {
+		queueFullRevalidation(0)
 		return
 	}
 	a := ev.DestinationArea
@@ -784,10 +763,12 @@ func onAreaCloned(ev fkapi.OnAreaCloned) {
 // generated struct and `on_undo_applied`'s unbounded `actions` array is not.
 func onBrushCloned(ev fkapi.OnBrushCloned) {
 	if !ev.DestinationSurface.Valid() {
+		queueFullRevalidation(0)
 		return
 	}
 	si, err := fkapi.LuaSurface{Object: ev.DestinationSurface}.Index()
 	if err != nil {
+		queueFullRevalidation(0)
 		return
 	}
 	dx := ev.DestinationOffset.X - ev.SourceOffset.X
@@ -837,8 +818,8 @@ func onSurfaceGone(si uint32) {
 	}
 }
 
-// onNetworkLoss handles one of our own entities being destroyed by something
-// that is not the compiler.
+// onNetworkLoss handles one of our own entities being destroyed or modified by
+// something that is not the compiler.
 //
 // The edge fingerprint cannot see this -- it describes the belts around a
 // cluster, not the interfaces on it -- so the owning cluster is put on the
@@ -866,7 +847,7 @@ func onNetworkLoss(si uint32, x, y float64, name string) {
 		if verboseLog {
 			logStart("a hidden ")
 			logS(name)
-			logS(" was destroyed from outside; slot ")
+			logS(" changed from outside; slot ")
 			logU(slot)
 			logS(" queued for a rebuild")
 			logEnd()
@@ -893,7 +874,7 @@ func onNetworkLoss(si uint32, x, y float64, name string) {
 	if verboseLog {
 		logStart("a visible ")
 		logS(name)
-		logS(" was destroyed from outside; its cluster was queued for a rebuild")
+		logS(" changed from outside; its cluster was queued for a rebuild")
 		logEnd()
 	}
 }
@@ -960,95 +941,106 @@ func onPart(k key, force uint32, what int, minedBy, builtBy uint32, tick uint64)
 	requestFlush()
 }
 
-// onNeighbour handles everything that is NOT one of our parts: the belts,
-// undergrounds, splitters and loaders whose orientation is what decides a
-// cluster's inputs and outputs.
-//
-// The gate is a TILE LOOKUP, not an API read. By the time we are here the
-// position is already in hand, and asking the registry whether any cluster tile
-// is within two tiles is a handful of in-guest probes against a map that is
-// only ever point-queried. Only a hit costs anything more.
-//
-// Two tiles rather than one: a splitter is two tiles wide and its position sits
-// on the boundary between them, so a splitter whose far half touches a cluster
-// reports a position two tiles away from the tile that matters.
-//
-// THIS IS THE PATH A 100-BELT PASTE ALONG A BALANCER'S EDGE TAKES, and it is the
-// reason the flush is deferred: a hundred belts used to be a hundred
-// classifications of the same cluster, ninety-nine of which the fingerprint then
-// threw away. Now they are a hundred queue insertions -- deduplicated, no host
-// call -- and one compile.
-// nearCluster reports whether any registered part tile is within two tiles of
-// (x, y) on surface `surf`.
-//
-// Twenty-five point queries against `index`, which is guest memory, and NOT ONE
-// HOST CALL. It is the same neighbourhood onNeighbour walks and for the same
-// reason: a splitter is two tiles wide and its position sits on the boundary
-// between the two tiles it covers, so a splitter whose far half touches a
-// cluster reports a position two tiles from the tile that matters.
-func nearCluster(surf uint32, x, y float64) bool {
-	tx, ty := floorTile(x), floorTile(y)
-	for dy := int32(-2); dy <= 2; dy++ {
-		for dx := int32(-2); dx <= 2; dx++ {
-			if _, ok := index[key{surf, tx + dx, ty + dy}]; ok {
-				return true
-			}
-		}
-	}
-	return false
+// Bound event-time point probes, not correctness: larger or unreadable geometry
+// falls back to a full surface invalidation. Keep integer conversion and the
+// radius/reach additions away from int32 overflow (including non-finite input).
+const (
+	maxNeighbourTiles   = 4096
+	maxUndergroundReach = 128
+	maxEventCoordinate  = 1 << 30
+)
+
+func eventPositionOK(x, y float64) bool {
+	return x >= -maxEventCoordinate && x <= maxEventCoordinate &&
+		y >= -maxEventCoordinate && y <= maxEventCoordinate
 }
 
-// farUndergroundTurned handles a rotation or flip of an underground belt that
-// is itself outside every cluster's gate, because its PARTNER may not be: the
-// engine swaps both ends of a pair when either is rotated and raises the event
-// for the one the player pointed at. Reported on the mod portal by Gamer433,
-// 2026-09-19 -- the balancer's arrows did not follow an underground turned from
-// its far end.
-//
-// POSITIONAL RATHER THAN BY HANDLE, because the partner attribute is
-// `neighbours` (a union) at the 2.0.77 pin and `underground_belt_neighbour` at
-// 2.1.17, and one tree ships on both. The partner lies on the rotated half's
-// own axis at most `max_underground_distance` tiles away, so every tile of that
-// reach is offered to the same neighbourhood walk a belt edit gets. It
-// over-approximates -- a cluster beside the tunnel that the pair does not touch
-// is queued too -- and what that costs is a classification the fingerprint
-// throws away.
-//
-// A rotation is a keypress, so the three host calls here are per gesture and
-// never per tick; a belt that is not an underground pays one and returns.
-func farUndergroundTurned(ent fkapi.LuaEntity, surf uint32, x, y float64) {
-	if is, err := ent.TypeIs("underground-belt"); err != nil || !is {
-		return
+// neighbourFootprint includes every point query covered by any cardinal
+// orientation of this entity, plus the classifier's two-tile dependency halo.
+func neighbourFootprint(ent fkapi.LuaEntity, x, y float64) (x0, y0, x1, y1 int32, ok bool) {
+	b, err := ent.BoundingBox()
+	if err != nil || !eventPositionOK(x, y) ||
+		!(b.LeftTop.X < b.RightBottom.X && b.LeftTop.Y < b.RightBottom.Y) ||
+		(b.Orientation != nil && *b.Orientation != 0) {
+		return 0, 0, 0, 0, false
 	}
-	d, err := ent.Direction()
+	extent := float64(0)
+	for _, d := range [4]float64{b.LeftTop.X - x, b.RightBottom.X - x,
+		b.LeftTop.Y - y, b.RightBottom.Y - y} {
+		if d < 0 {
+			d = -d
+		}
+		if !(d <= maxNeighbourTiles) {
+			return 0, 0, 0, 0, false
+		}
+		if d > extent {
+			extent = d
+		}
+	}
+	x0, y0 = floorTile(x-extent)-2, floorTile(y-extent)-2
+	x1, y1 = floorTile(x+extent)+2, floorTile(y+extent)+2
+	return x0, y0, x1, y1, int64(x1-x0+1)*int64(y1-y0+1) <= maxNeighbourTiles
+}
+
+// Both ends can change on a rotation/flip, whether or not the local footprint
+// hit. Four rays cover both the old and new axes without trusting direction or
+// version-specific partner attributes. Each ray sweeps the proven footprint,
+// already expanded by radius two, rather than just the partner's centre.
+func farUndergroundTurned(ent fkapi.LuaEntity, surf uint32, x0, y0, x1, y1 int32) {
+	is, err := ent.TypeIs("underground-belt")
 	if err != nil {
+		queueFullRevalidation(surf)
 		return
 	}
-	di, ok := dirIndex(d)
-	if !ok {
+	if !is {
 		return
 	}
 	proto, err := ent.Prototype()
 	if err != nil {
+		queueFullRevalidation(surf)
 		return
 	}
 	reach, err := fkapi.LuaEntityPrototype{Object: proto}.MaxUndergroundDistance()
-	if err != nil || reach == nil {
+	if err != nil || reach == nil || *reach > maxUndergroundReach {
+		queueFullRevalidation(surf)
 		return
 	}
-	// dirOf is north, east, south, west; the pair shares an axis and the
-	// partner may be on either side of it.
-	ax, ay := float64(0), float64(1)
-	if di == 1 || di == 3 {
-		ax, ay = 1, 0
+	n := int32(*reach)
+	if n == 0 {
+		return
 	}
-	for n := 1; n <= int(*reach); n++ {
-		for _, sgn := range [2]float64{-1, 1} {
-			px, py := x+sgn*ax*float64(n), y+sgn*ay*float64(n)
-			if nearCluster(surf, px, py) {
-				onNeighbour(surf, px, py, 0, 0)
-			}
+	w, h := int64(x1-x0+1), int64(y1-y0+1)
+	if 2*(w+int64(n)-1)*h+2*(h+int64(n)-1)*w > maxNeighbourTiles {
+		queueFullRevalidation(surf)
+		return
+	}
+	onNeighbourArea(surf, x0, y0-n, x1, y1-1, 0, 0, 0, 0)
+	onNeighbourArea(surf, x0+1, y0, x1+n, y1, 0, 0, 0, 0)
+	onNeighbourArea(surf, x0, y0+1, x1, y1+n, 0, 0, 0, 0)
+	onNeighbourArea(surf, x0-n, y0, x1-1, y1, 0, 0, 0, 0)
+}
+
+// Unknown footprints cannot safely scope player claims either. Preserve them
+// conservatively on the surface, but keep the build note on the actual entity.
+func onUnknownNeighbour(surf uint32, tx, ty int32, minedBy, builtBy uint32) {
+	queueFullRevalidation(surf)
+	if minedBy == 0 && builtBy == 0 {
+		return
+	}
+	nearForce := uint32(0)
+	for id := uint32(1); id < uint32(len(parent)); id++ {
+		if !alive[id] || ppos[id].s != surf {
+			continue
 		}
+		if nearForce == 0 {
+			nearForce = pforce[id]
+		}
+		if minedBy != 0 {
+			noteMinedByPlayer(ppos[id], pforce[id], minedBy)
+		}
+	}
+	if builtBy != 0 && nearForce != 0 {
+		noteBuiltByPlayer(surf, tx, ty, nearForce, builtBy, false, beltSpec{})
 	}
 }
 
@@ -1057,16 +1049,22 @@ func farUndergroundTurned(ent fkapi.LuaEntity, surf uint32, x, y float64) {
 // same reason it is on onPart, and the reason is the field report below.
 func onNeighbour(surf uint32, x, y float64, minedBy, builtBy uint32) {
 	tx, ty := floorTile(x), floorTile(y)
+	onNeighbourArea(surf, tx-2, ty-2, tx+2, ty+2, tx, ty, minedBy, builtBy)
+}
+
+// The footprint and halo are already in the bounds. There is deliberately no
+// force filter: curved-edge probes depend on parts/interfaces of other groups.
+func onNeighbourArea(surf uint32, x0, y0, x1, y1, tx, ty int32, minedBy, builtBy uint32) {
 	found := false
 	nearForce := uint32(0)
-	for dy := int32(-2); dy <= 2; dy++ {
-		for dx := int32(-2); dx <= 2; dx++ {
-			k := key{surf, tx + dx, ty + dy}
+	for y := y0; y <= y1; y++ {
+		for x := x0; x <= x1; x++ {
+			k := key{surf, x, y}
 			id, ok := index[k]
 			if !ok {
 				continue
 			}
-			markLive(find(id))
+			dirtyEdgesAt(k)
 			if nearForce == 0 {
 				nearForce = pforce[id]
 			}

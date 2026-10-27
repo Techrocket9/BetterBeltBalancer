@@ -29,13 +29,8 @@ package main
 // own filter struct costs a few static bytes and removes the aliasing question
 // instead of answering it.
 //
-// WHAT IT COSTS against the `find_entity` it replaces: the generated binding
-// for `find_entities_filtered` returns `make([]Object, n)`, so a HIT allocates
-// a one-element slice where `find_entity` allocated one boxed Object, and a
-// MISS allocates nothing on either side. The paths this sits on are refusals,
-// fast-replace hits, picture changes and the migration's build swaps -- none
-// is per-tick -- and the `mar` suite's slopes are the gate that says what it
-// really moved (see agents/features/quality-lookups.md).
+// The Into binding reuses one result buffer, including on local sprite work.
+// Callers receive an Object value, never a slice alias into that buffer.
 
 import "github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
 
@@ -43,6 +38,7 @@ var (
 	otArea    fkapi.BoundingBox
 	otName    fkapi.Value
 	otFilters = fkapi.EntitySearchFilters{Area: &otArea, Name: &otName}
+	otEnts    []fkapi.Object
 )
 
 // findOnTile returns the entity of that name standing on tile (x, y) of s,
@@ -54,7 +50,8 @@ func findOnTile(s fkapi.LuaSurface, name string, x, y int32) (o fkapi.Object, fo
 	otArea.LeftTop.X, otArea.LeftTop.Y = float64(x)+0.1, float64(y)+0.1
 	otArea.RightBottom.X, otArea.RightBottom.Y = float64(x)+0.9, float64(y)+0.9
 	otName = fkapi.OfString(name)
-	ents, err := s.FindEntitiesFiltered(otFilters)
+	ents, err := s.FindEntitiesFilteredInto(otEnts, otFilters)
+	otEnts = ents
 	if err != nil || len(ents) == 0 {
 		return fkapi.Object{}, false, err
 	}

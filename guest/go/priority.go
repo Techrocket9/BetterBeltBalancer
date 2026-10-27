@@ -372,6 +372,9 @@ func setPartPriority(k key, want int, player uint32) bool {
 	if !ok {
 		return false
 	}
+	if !priorityKnown[id] && !restyleTiles(find(id), collectCluster(find(id))) {
+		return false
+	}
 	on := pprio[id] == 0
 	switch want {
 	case prioOff:
@@ -403,6 +406,10 @@ func setPartPriority(k key, want int, player uint32) bool {
 	// fits its slot without one may not fit with one -- and the flag is the only
 	// thing that moved, so this is the only place that can tell.
 	edges := classifyEdges(surf, tiles, force)
+	if !classificationReadOK {
+		pprio[id] = prev
+		return false
+	}
 	pt, fits := plan.ShapeEdges(edges)
 	if !fits {
 		_, wasFits := shapeWithTileFlipped(edges, k)
@@ -522,9 +529,8 @@ func flipTilePrio(edges []plan.Edge, k key) {
 // transport line on it.
 //
 // IT ENUMERATES EXACTLY WHAT `teardownNet` ENUMERATES -- the hidden slot's box
-// and the visible cluster's box, through the same four names and the same
-// prebuilt filter -- because a number that counted a different set would be a
-// bound on the wrong thing. What it does not do is `drain`'s second half: no
+// and the recorded visible interfaces -- because counting a different set would
+// bound the wrong thing. What it does not do is `drain`'s second half: no
 // contents cross the boundary, so there is one host call per transport line and
 // no allocation per line.
 //
@@ -561,7 +567,11 @@ func heldItems(ni netInfo) uint32 {
 		}
 	}
 	if vis, ok := surfaceByIndex(ni.surf); ok {
-		total += countItemsIn(vis, ni.x0, ni.y0, ni.x1, ni.y1)
+		for _, ref := range ni.interfaces {
+			if e, found := resolveInterface(vis, ref); found {
+				total += countEntityItems(e)
+			}
+		}
 	}
 	return total
 }
@@ -582,24 +592,26 @@ func countItemsIn(s fkapi.LuaSurface, x0, y0, x1, y1 int32) uint32 {
 		}
 		heldEnts = ents
 		for i := range ents {
-			e := fkapi.LuaEntity{Object: ents[i]}
-			// The line count is ASKED FOR rather than assumed per prototype, for
-			// `drain`'s reason: a constant that was wrong by one would quietly
-			// under-count here, which is a spill this guard promised to prevent.
-			lines, err := e.GetMaxTransportLineIndex()
-			if err != nil || lines == 0 || lines > maxLinesToProbe {
-				continue
-			}
-			for j := uint32(1); j <= lines; j++ {
-				l, err := e.GetTransportLine(j)
-				if err != nil {
-					break
-				}
-				c, err := fkapi.LuaTransportLine{Object: l}.GetItemCount(nil)
-				if err == nil {
-					total += c
-				}
-			}
+			total += countEntityItems(fkapi.LuaEntity{Object: ents[i]})
+		}
+	}
+	return total
+}
+
+func countEntityItems(e fkapi.LuaEntity) uint32 {
+	lines, err := e.GetMaxTransportLineIndex()
+	if err != nil || lines == 0 || lines > maxLinesToProbe {
+		return 0
+	}
+	total := uint32(0)
+	for j := uint32(1); j <= lines; j++ {
+		l, err := e.GetTransportLine(j)
+		if err != nil {
+			break
+		}
+		c, err := fkapi.LuaTransportLine{Object: l}.GetItemCount(nil)
+		if err == nil {
+			total += c
 		}
 	}
 	return total

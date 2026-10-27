@@ -16,10 +16,7 @@ package main
 //     lockstep game is a desync.
 //   - EVERY TEARDOWN RUNS BEFORE EVERY BUILD, which is why flush is split.
 
-import (
-	"github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
-	"github.com/Techrocket9/BetterBeltBalancer/guest/go/plan"
-)
+import "github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
 
 // ---------------------------------------------------------------------------
 // Reading a part out of the world
@@ -87,9 +84,42 @@ var (
 //     destroyed (`clear_destination_entities` raises nothing).
 //  4. rebuild.
 func reconcileArea(si uint32, tx0, ty0, tx1, ty1 int32, what string) {
+	if si == hiddenIdx && hiddenIdx != 0 {
+		// A hidden-surface clone can have overwritten real slots. Per-entity
+		// clone events discard copies; audit repairs the damaged originals.
+		// A raw destination-box sweep here would cut through other live slots.
+		auditAll()
+		return
+	}
 	s, ok := surfaceByIndex(si)
 	if !ok {
+		queueFullRevalidation(si)
 		return
+	}
+	// Read the complete part snapshot before any destructive work. A failed
+	// query is not evidence that parts disappeared from the destination.
+	rcFound = rcFound[:0]
+	rcForce = rcForce[:0]
+	setSearchBox(tx0, ty0, tx1, ty1)
+	nameFilter = fkapi.OfString(PartName)
+	ents, err := s.FindEntitiesFiltered(findByName)
+	if err != nil {
+		queueFullRevalidation(si)
+		return
+	}
+	for i := range ents {
+		p, err := fkapi.LuaEntity{Object: ents[i]}.Position()
+		if err != nil || !eventPositionOK(p.X, p.Y) {
+			queueFullRevalidation(si)
+			return
+		}
+		f, ok := forceOf(ents[i])
+		if !ok {
+			queueFullRevalidation(si)
+			return
+		}
+		rcFound = append(rcFound, key{s: si, x: floorTile(p.X), y: floorTile(p.Y)})
+		rcForce = append(rcForce, f)
 	}
 	// The whole sequence is ONE carry transaction: step 1's teardowns drain the
 	// legitimate networks, and step 4 builds the clusters that succeed them, so
@@ -118,32 +148,13 @@ func reconcileArea(si uint32, tx0, ty0, tx1, ty1 int32, what string) {
 	// 2.
 	killed := sweep(s, tx0, ty0, tx1, ty1, false)
 
-	// 3. What the world says is there.
-	rcFound = rcFound[:0]
-	rcForce = rcForce[:0]
-	setSearchBox(tx0, ty0, tx1, ty1)
-	nameFilter = fkapi.OfString(PartName)
-	if ents, err := s.FindEntitiesFiltered(findByName); err == nil {
-		for i := range ents {
-			p, err := fkapi.LuaEntity{Object: ents[i]}.Position()
-			if err != nil {
-				continue
-			}
-			f, ok := forceOf(ents[i])
-			if !ok {
-				continue
-			}
-			rcFound = append(rcFound, key{s: si, x: floorTile(p.X), y: floorTile(p.Y)})
-			rcForce = append(rcForce, f)
-		}
-	}
-	// What the registry says is there. Gone first, so that a tile which was
+	// 3. What the registry says is there. Gone first, so that a tile which was
 	// cleared and rebuilt in the same clone is removed before it is re-added.
 	rcKeys = partsInBox(rcKeys, si, tx0, ty0, tx1, ty1)
 	for i := range rcKeys {
 		still := false
 		for j := range rcFound {
-			if rcFound[j] == rcKeys[i] {
+			if rcFound[j] == rcKeys[i] && pforce[index[rcKeys[i]]] == rcForce[j] {
 				still = true
 				break
 			}
@@ -159,17 +170,10 @@ func reconcileArea(si uint32, tx0, ty0, tx1, ty1 int32, what string) {
 		}
 	}
 
-	// 4. Whatever the registry now holds in the box gets a network.
-	for i := uint32(1); i < uint32(len(parent)); i++ {
-		if !alive[i] {
-			continue
-		}
-		k := ppos[i]
-		if k.s != si || k.x < tx0-2 || k.x > tx1+2 || k.y < ty0-2 || k.y > ty1+2 {
-			continue
-		}
-		markLive(find(i))
-	}
+	// 4. The clone can also replace belts whose footprints extend outside the
+	// reported box, without per-entity events. Full surface revalidation is the
+	// conservative rare-event path; only nearby originals were torn down above.
+	queueFullRevalidation(si)
 	flush()
 	endCarry()
 	if verboseLog {
@@ -208,9 +212,10 @@ var dsKeys []key
 // which is a network slot that is never reused and a hidden network that is
 // never destroyed.
 func dropSurface(si uint32, why string) {
-	rcRoots = rootsOnSurface(rcRoots, si)
+	rcRoots = networkRoots(rcRoots, si)
 	for i := range rcRoots {
-		markDead(rcRoots[i])
+		// Surface destruction is mandatory, even for a refused predecessor.
+		teardown(rcRoots[i])
 	}
 	flushDead()
 
@@ -218,10 +223,9 @@ func dropSurface(si uint32, why string) {
 	for i := range dsKeys {
 		RemovePart(dsKeys[i])
 	}
-	// Removal queues the survivors for a rebuild, and there are none: every
-	// part of every cluster on this surface has just gone.
+	// The drain drops dead node ids itself. Do not clear the whole live queue:
+	// it can also contain edits on another surface from earlier in this tick.
 	flushDead()
-	liveRoots = liveRoots[:0]
 	if verboseLog && (len(dsKeys) > 0 || len(rcRoots) > 0) {
 		logStart(why)
 		logS(": surface ")
@@ -247,9 +251,9 @@ func hiddenSurfaceGoing(why string) {
 	logS(" by something outside this mod; every compiled network is coming down " +
 		"with it and will be rebuilt")
 	logEnd()
-	rcRoots = liveRootList(rcRoots)
+	rcRoots = networkRoots(rcRoots, 0)
 	for i := range rcRoots {
-		markDead(rcRoots[i])
+		teardown(rcRoots[i])
 	}
 	flushDead()
 }
@@ -264,7 +268,7 @@ func hiddenSurfaceGone() {
 	// ground beside it.
 	beginCarry()
 	hiddenIdx = 0
-	rcRoots = liveRootList(rcRoots)
+	rcRoots = networkRoots(rcRoots, 0)
 	// Anything hiddenSurfaceGoing did not reach -- a clear that raised no
 	// pre-event -- still has a netInfo pointing at entities that no longer
 	// exist. Forget it, taking the visible interfaces down with it: leaving
@@ -277,6 +281,7 @@ func hiddenSurfaceGone() {
 	// list rebuilt on top of those returns would hand the same slot out twice.
 	nextSlot = 1
 	freeSlots = freeSlots[:0]
+	rcRoots = liveRootList(rcRoots)
 	for i := range rcRoots {
 		markLive(rcRoots[i])
 	}
@@ -349,6 +354,7 @@ func onForcesMerged(src, dst uint32) {
 	if src == 0 || src == dst {
 		return
 	}
+	remapBuildForce(src, dst)
 	// One carry transaction, for the same reason reconcileArea is one: every
 	// cluster torn down at step 2 is rebuilt at step 5, under a root the remap
 	// may have changed but over the same tiles. A merge of two forces is a
@@ -374,21 +380,36 @@ func onForcesMerged(src, dst uint32) {
 			}
 		}
 	}
-	if moved == 0 {
-		// Nothing was queued and nothing was drained, but the transaction still
-		// has to close: the depth counter is what decides when a pool settles.
-		endCarry()
-		return
-	}
-	// 2. Down they come, items handed back, slots released.
-	flushDead()
+	if moved != 0 {
+		// 2. Down they come while ownership still names the old roots.
+		flushDead()
+		// rebuildComponent inserts its result into the active-root chain. Unlink
+		// ALL old roots first, and release their dirty bits before reparenting:
+		// an absorbed root must not retain a list that blocks later local edits.
+		for r := uint32(1); r < uint32(len(parent)); r++ {
+			if alive[r] && parent[r] == r && (pforce[r] == src || pforce[r] == dst) {
+				removeRoot(r)
+				discardClassification(r)
+			}
+		}
 
-	// 3. The remap itself -- of the registry, and of the pools step 2 drained,
-	//    which carry the force their networks were built with and would
-	//    otherwise be unrecognisable to the cluster that inherits them.
-	for i := uint32(1); i < uint32(len(parent)); i++ {
-		if alive[i] && pforce[i] == src {
-			pforce[i] = dst
+		// 3. Remap the registry before re-deriving the destination components.
+		for i := uint32(1); i < uint32(len(parent)); i++ {
+			if alive[i] && pforce[i] == src {
+				pforce[i] = dst
+			}
+		}
+		gen++
+	}
+	// Preflight can spare source-force predecessors, including non-root nets.
+	// Their later teardown must open destination-force pools too. Do this even
+	// when no source parts remain: retained ownership can outlive those parts.
+	rcRoots = networkRoots(rcRoots, 0)
+	for _, r := range rcRoots {
+		ni := nets[r]
+		if ni.force == src {
+			ni.force = dst
+			nets[r] = ni
 		}
 	}
 	remapCarryForce(src, dst)
@@ -399,13 +420,23 @@ func onForcesMerged(src, dst uint32) {
 	//    so a flood fill per unvisited node is a complete re-derivation, and it
 	//    picks the smallest id in each component as the root exactly as a split
 	//    does. Node id order, so every client agrees.
-	gen++
 	clusters := uint32(0)
 	for i := uint32(1); i < uint32(len(parent)); i++ {
-		if !alive[i] || pforce[i] != dst || mark[i] == gen {
+		if !alive[i] || pforce[i] != dst {
 			continue
 		}
-		markLive(rebuildComponent(i))
+		if moved == 0 {
+			// A belt-only source can change eligibility, but not part topology.
+			if parent[i] != i {
+				continue
+			}
+			markLive(i)
+		} else {
+			if mark[i] == gen {
+				continue
+			}
+			markLive(rebuildComponent(i))
+		}
 		clusters++
 	}
 	// 5. And rebuild. Most of these are fingerprint skips: a balancer nowhere
@@ -421,7 +452,11 @@ func onForcesMerged(src, dst uint32) {
 	logPlural(moved)
 	logS(" remapped, ")
 	logU(clusters)
-	logS(" clusters of the surviving force re-derived")
+	if moved == 0 {
+		logS(" clusters of the surviving force revalidated")
+	} else {
+		logS(" clusters of the surviving force re-derived")
+	}
 	logEnd()
 }
 
@@ -479,9 +514,6 @@ var (
 	rfwClaim    map[uint32]uint32
 	rfwMaxClaim uint32
 	rfwSlots    []uint32
-	adoptPos    []key
-	adoptDir    []uint32
-	adoptSeen   []bool
 )
 
 // collectSurfaces fills rfwSurfIdx/rfwSurfObj with every surface in the game,
@@ -538,17 +570,11 @@ func collectSurfaces() {
 // rebuildFromWorld re-derives the whole registry, and ADOPTS the networks it
 // finds rather than rebuilding them.
 //
-// Adoption is what makes a mod upgrade cheap and lossless. A rebuild of every
-// balancer on a large map is hundreds of milliseconds of teardown and thousands
-// of create_entity calls, and every item standing in every hidden network would
-// be spilled on the floor. Adoption costs about thirty host calls per cluster
-// and touches nothing: the network is already correct, because no tick has
-// passed since it was built.
-//
-// It is only taken when the evidence is complete -- the visible interfaces
-// found in the cluster's box match the edge list re-derived from the world,
-// position for position and direction for direction. Anything less falls back
-// to a rebuild, which is always correct.
+// Adoption leaves a verified physical network untouched. A saved network may
+// already be broken, so matching the external belts alone is not evidence:
+// every planned entity and both ends of every pair must still be standing.
+// Older networks with a different port order are rebuilt once into canonical
+// order; subsequent adoption and same-build reloads preserve their identities.
 func rebuildFromWorld() {
 	statCompiles, statSkipped, statBuilds, statTeardowns, statCreates = 0, 0, 0, 0, 0
 	// A refusal issued while this flag is up logs, requeues and says NOTHING
@@ -618,14 +644,14 @@ func rebuildFromWorld() {
 		// inspectNetwork classifies every cluster it inspects, and "does any tile
 		// carry two belts" is a number that classification already produced.
 		//
-		// ONE SCAN, TWO OUTCOMES, CHOSEN LATER BY THE CAPABILITY MARKER. On 2.0
-		// these clusters are ADOPTED -- every interface is still standing, so the
-		// comparison below matches exactly -- and settleEdgeMode offers to keep
-		// them working. On 2.1 the engine has already deleted all but one
-		// interface per tile before any script ran, so the comparison cannot match,
+		// ONE SCAN, TWO OUTCOMES, CHOSEN BY THE CAPABILITY MARKER. On 2.0
+		// an exact network is adopted; a non-exact one rebuilds normally, after
+		// deferred grandfathering if the setting is still off. On 2.1 the engine
+		// has already deleted all but one interface per tile before any script
+		// ran, so the comparison cannot match,
 		// the standing remnant is CONDEMNED, and the compile that follows tears it
-		// down and refuses. Neither decision is taken here: the rebuild judges the
-		// world with the worst information anything will ever have and may not
+		// down and refuses. Neither outcome is announced here: the rebuild judges
+		// the world with the worst information anything will ever have and may not
 		// address a player (see refuseAdmit). It notes, and the flush it asks for
 		// speaks.
 		//
@@ -640,10 +666,11 @@ func rebuildFromWorld() {
 			// WHETHER A STANDING NETWORK COMES DOWN WITH IT, which is what decides
 			// the sentence the summary uses. On 2.1 the engine pruned the interfaces
 			// before any script ran, so the comparison cannot match and the remnant
-			// is condemned and spilled; on 2.0 the cluster is adopted whole and
-			// nothing moves. See sedge.go, the msgMigrated pair.
+			// is condemned and spilled. On 2.0 an ordering mismatch is not engine
+			// illegality: retain the network until policy permits a carrying rebuild.
+			// See sedge.go, the msgMigrated pair.
 			stood := false
-			if !exact {
+			if !exact && !stackCapable() {
 				if _, had := nets[r]; had {
 					condemnStanding(r)
 					stood = true
@@ -652,9 +679,15 @@ func rebuildFromWorld() {
 			noteAnnounce(r, stood)
 		}
 		if slot > 0 {
-			if _, taken := rfwClaim[slot]; taken {
+			if prev, taken := rfwClaim[slot]; taken {
 				// Two clusters cannot own one slot. Neither is trustworthy.
 				exact = false
+				markDead(prev)
+				markLive(prev)
+				// Only the first claimant may sweep/release the shared slot.
+				ni := nets[r]
+				ni.slot = 0
+				nets[r] = ni
 			} else {
 				rfwClaim[slot] = r
 				if slot > rfwMaxClaim {
@@ -761,8 +794,7 @@ func registerPartsOn(s fkapi.LuaSurface, si uint32) uint32 {
 	}
 	// Nothing is compiled yet: the caller decides per cluster whether to adopt
 	// the network already standing or to build a new one.
-	deadRoots = deadRoots[:0]
-	liveRoots = liveRoots[:0]
+	resetWorkQueues()
 	return n
 }
 
@@ -795,21 +827,7 @@ func inspectNetwork(root uint32) (slot uint32, exact bool, multi bool) {
 	if !ok {
 		return 0, false, false
 	}
-	x0, y0, x1, y1 := tiles[0].x, tiles[0].y, tiles[0].x, tiles[0].y
-	for i := range tiles {
-		if tiles[i].x < x0 {
-			x0 = tiles[i].x
-		}
-		if tiles[i].x > x1 {
-			x1 = tiles[i].x
-		}
-		if tiles[i].y < y0 {
-			y0 = tiles[i].y
-		}
-		if tiles[i].y > y1 {
-			y1 = tiles[i].y
-		}
-	}
+	x0, y0, x1, y1 := clusterBox(tiles)
 
 	setSearchBox(x0, y0, x1, y1)
 	nameFilter = fkapi.OfString(nameLinkedBelt)
@@ -822,39 +840,50 @@ func inspectNetwork(root uint32) (slot uint32, exact bool, multi bool) {
 		return 0, false, false
 	}
 
-	adoptPos = adoptPos[:0]
-	adoptDir = adoptDir[:0]
+	refs := takeInterfaces()
 	ok = true
 	for i := range ents {
-		p, err := fkapi.LuaEntity{Object: ents[i]}.Position()
+		e := fkapi.LuaEntity{Object: ents[i]}
+		p, err := e.Position()
 		if err != nil {
 			ok = false
-			break
+			continue
 		}
-		d, err := fkapi.LuaEntity{Object: ents[i]}.Direction()
-		if err != nil {
+		// The box is only a query accelerator. A hole can hold an entirely
+		// independent balancer, including one of the same force.
+		id, part := index[key{s: si, x: floorTile(p.X), y: floorTile(p.Y)}]
+		if !part || find(id) != root {
+			continue
+		}
+		u, err := e.UnitNumber()
+		if err != nil || u == nil || *u == 0 {
 			ok = false
-			break
+			continue
 		}
-		adoptPos = append(adoptPos, key{s: si, x: floorTile(p.X), y: floorTile(p.Y)})
-		adoptDir = append(adoptDir, d)
-	}
-
-	// The slot, from where the first interface's partner sits. The hidden
-	// surface is carved on a fixed grid, so a position IS a slot number.
-	// `linked_belt_neighbour` is an OPTIONAL attribute, so an absent one comes
-	// back as `(nil, nil)` rather than as an error -- upstream's F2, 2026-08-03.
-	// An unconnected linked belt is the ordinary case here (it is what a
-	// half-built network looks like), so the nil test is the reading, not a
-	// guard: before F2 it arrived as ERR_NO_MEMBER and was indistinguishable
-	// from a Factorio that does not have the member at all.
-	if nb, err := (fkapi.LuaEntity{Object: ents[0]}).LinkedBeltNeighbour(); err == nil && nb != nil && nb.Valid() {
-		if np, err := (fkapi.LuaEntity{Object: *nb}).Position(); err == nil &&
-			np.X >= 0 && np.Y >= 0 {
-			col, row := uint32(np.X)/slotW, uint32(np.Y)/slotH
-			if col < slotCols {
-				slot = row*slotCols + col + 1
-			}
+		refs = append(refs, netInterface{x: p.X, y: p.Y, unit: *u})
+		// Try EVERY interface: the first one may already be disconnected in
+		// the save. A partner on another visible surface is never a slot.
+		nb, err := e.LinkedBeltNeighbour()
+		if err != nil || nb == nil || !nb.Valid() {
+			ok = false
+			continue
+		}
+		partner := fkapi.LuaEntity{Object: *nb}
+		nsi, err := partner.SurfaceIndex()
+		if err != nil || hiddenIdx == 0 || nsi != hiddenIdx {
+			ok = false
+			continue
+		}
+		np, err := partner.Position()
+		if err != nil || np.X < 0 || np.Y < 0 || uint32(np.X)/slotW >= slotCols {
+			ok = false
+			continue
+		}
+		candidate := uint32(np.Y)/slotH*slotCols + uint32(np.X)/slotW + 1
+		if slot == 0 {
+			slot = candidate
+		} else if slot != candidate {
+			ok = false
 		}
 	}
 
@@ -862,69 +891,27 @@ func inspectNetwork(root uint32) (slot uint32, exact bool, multi bool) {
 	// (tile, direction) and so is an interface, one to one.
 	force := pforce[root]
 	edges := classifyEdges(s, tiles, force)
+	ok = ok && classificationReadOK
 	// The one thing this pass is asked for that is not about adoption, taken
 	// while the counts are fresh and before anything below can return.
-	multi = sedgeWorst >= 2
+	multi = classificationReadOK && sedgeWorst >= 2
 
-	// Record it before deciding, so that the caller's fallback -- invert the
-	// fingerprint and let compile() tear this down -- has a box to sweep.
-	nets[root] = netInfo{fp: fingerprint(edges), slot: slot, surf: si, force: force,
-		x0: x0, y0: y0, x1: x1, y1: y1, ents: uint32(len(edges))}
-
-	if !ok || slot == 0 {
-		return slot, false, multi
+	if len(refs) == 0 {
+		recycleInterfaces(refs)
+		return 0, false, multi
 	}
-	if adoptMatches(edges) {
-		return slot, true, multi
-	}
-	return slot, false, multi
+	// Record ownership even on failure, so repair removes only these originals.
+	ni := netInfo{fp: fingerprint(edges), slot: slot, surf: si, force: force,
+		x0: x0, y0: y0, x1: x1, y1: y1, interfaces: refs}
+	nets[root] = ni
+	return slot, ok && networkIntact(ni, edges), multi
 }
 
-// adoptMatches reports whether the interfaces inspectNetwork found standing are
-// in one-to-one correspondence with an edge list.
+// sweepOrphanSlots removes empty unclaimed networks and rebuilds the allocator
+// around claimed slots and orphaned slots whose contents must be preserved.
 //
-// Split out of inspectNetwork because the curved-exit pass used to ask it of a
-// SECOND, curve-free edge list -- a signature three ordinary shapes of old-rule
-// save failed (curveupg.go). The reading moved into classifyEdges, so the second
-// list is gone and this has one caller again; it stays a function because a
-// comparison this long inside a function that long is where the next reader
-// looks for it.
-func adoptMatches(edges []plan.Edge) bool {
-	if len(edges) != len(adoptPos) {
-		return false
-	}
-	for len(adoptSeen) < len(edges) {
-		adoptSeen = append(adoptSeen, false)
-	}
-	for i := range edges {
-		adoptSeen[i] = false
-	}
-	for i := range adoptPos {
-		hit := false
-		for j := range edges {
-			if adoptSeen[j] {
-				continue
-			}
-			if edges[j].TileX == adoptPos[i].x && edges[j].TileY == adoptPos[i].y &&
-				edges[j].Dir == adoptDir[i] {
-				adoptSeen[j], hit = true, true
-				break
-			}
-		}
-		if !hit {
-			return false
-		}
-	}
-	return true
-}
-
-// sweepOrphanSlots destroys every hidden network no cluster claims, and rebuilds
-// the slot allocator around the ones that are claimed.
-//
-// The occupied slots are found from the LANE SPLITTERS on the hidden surface:
-// there is exactly one per used input port, so every network that exists has at
-// least one and no network has many. One query plus one position read each,
-// against one query per slot for a scan that would have to guess how far to go.
+// Scan all four prototypes: even a damaged slot with no lane splitters must be
+// cleared before the allocator can reuse it.
 //
 // This is also where a prototype rename lands. Our four prototypes are ours, so
 // they can only be renamed by a version of this mod -- which is a rebuilt guest,
@@ -936,7 +923,9 @@ func sweepOrphanSlots() {
 		freeSlots = freeSlots[:0]
 		return
 	}
-	allNameFilter = fkapi.OfString(nameLaneSplit)
+	// A damaged slot can have lost every lane splitter but still hold belts.
+	allNameFilter = fkapi.OfArray(fkapi.OfString(nameBelt), fkapi.OfString(nameLinkedBelt),
+		fkapi.OfString(nameLaneSplit), fkapi.OfString(nameSplitter))
 	ents, err := hid.FindEntitiesFiltered(findByNameAll)
 	if err != nil {
 		return
@@ -979,7 +968,6 @@ func sweepOrphanSlots() {
 		if _, claimed := rfwClaim[s]; claimed {
 			continue
 		}
-		freeSlots = append(freeSlots, s)
 		occupied := false
 		for j := range rfwSlots {
 			if rfwSlots[j] == s {
@@ -988,10 +976,21 @@ func sweepOrphanSlots() {
 			}
 		}
 		if !occupied {
+			freeSlots = append(freeSlots, s)
 			continue
 		}
 		ox, oy := slotOrigin(s)
+		// A damaged save may have lost every visible pointer to this slot.
+		// Reserve its contents rather than deleting or feeding them to a guess.
+		if !emptyOrphanSlot(hid, ox, oy) {
+			logAlertStart("preserved orphaned hidden slot ")
+			logU(s)
+			logS("; it may contain items and its original owner cannot be determined")
+			logEnd()
+			continue
+		}
 		orphans += sweep(hid, ox, oy, ox+slotW-1, oy+slotH-1, false)
+		freeSlots = append(freeSlots, s)
 	}
 	nextSlot = maxSlot + 1
 	if verboseLog && orphans > 0 {
@@ -1034,8 +1033,20 @@ func auditAll() uint32 {
 	legacyRearm(legTrigAudit)
 	auditRoots = liveRootList(auditRoots)
 	nets0, drift, unbuilt, refused := uint32(0), uint32(0), uint32(0), uint32(0)
+	cacheDrift := uint32(0)
 	for i := range auditRoots {
 		r := auditRoots[i]
+		// Pending edits intentionally leave the snapshot behind the world until
+		// the drain. Only a settled, valid snapshot makes an oracle claim here.
+		settled := classes[r].valid && classes[r].head == 0 && !curveUndecided
+		if settled {
+			for _, pending := range liveRoots {
+				if int(pending) < len(alive) && alive[pending] && find(pending) == r {
+					settled = false
+					break
+				}
+			}
+		}
 		tiles := collectCluster(r)
 		if len(tiles) == 0 {
 			continue
@@ -1045,7 +1056,31 @@ func auditAll() uint32 {
 			drift++
 			continue
 		}
+		// A pre-flush audit can encounter freshly pasted priority badges.
+		// Recover those before treating the independent edge read as authoritative.
+		if !restyleTiles(r, tiles) {
+			drift++
+			if _, had := nets[r]; had {
+				nets0++
+			}
+			continue
+		}
 		edges := classifyEdges(s, tiles, pforce[r])
+		if !classificationReadOK {
+			// Report uncertainty as drift, never as a matching/empty network.
+			// The repair loop below requests a full fresh read again.
+			drift++
+			if _, had := nets[r]; had {
+				nets0++
+			}
+			continue
+		}
+		// Compare before any invalidation/repair, even when no network exists.
+		// The core oracle compares raw edges/provenance and snapshot metadata;
+		// a network fingerprint alone cannot detect a stale no-network answer.
+		if settled && !classificationMatches(r, edges) {
+			cacheDrift++
+		}
 		n, m := 0, 0
 		for j := range edges {
 			if edges[j].Out {
@@ -1098,8 +1133,17 @@ func auditAll() uint32 {
 		}
 		if had {
 			nets0++
-			if ni.fp != fingerprint(edges) {
+			fp := fingerprint(edges)
+			if ni.fp != fp || ni.force != pforce[r] {
+				// Keep the incumbent's hash: a refused edit can be reverted back
+				// to it without rebuilding the network that never changed.
 				drift++
+			} else if !networkIntact(ni, edges) {
+				drift++
+				// A missing/disconnected entity does not move the edge hash.
+				// Invalidate it explicitly so the repair cannot take the skip.
+				ni.fp = ^fp
+				nets[r] = ni
 			}
 			continue
 		}
@@ -1126,6 +1170,8 @@ func auditAll() uint32 {
 	// an unanchored pattern over the five counters that were here first.
 	logS(" refused=")
 	logU(refused)
+	logS(" cache-drift=")
+	logU(cacheDrift)
 	logEnd()
 	logStats("audit")
 	// Repair, after reporting.
@@ -1140,6 +1186,23 @@ func auditAll() uint32 {
 	// tick), so this line is the heap the save is taken on. See gc.go.
 	logHeap("post-audit")
 	return uint32(len(auditRoots))
+}
+
+// queueFullRevalidation is the conservative event/API-failure hook. Zero means
+// all surfaces; an unreadable hidden entity can affect a network anywhere.
+// No immediate flush: a mined entity is still present during its event.
+func queueFullRevalidation(si uint32) {
+	all := si == 0 || (hiddenIdx != 0 && si == hiddenIdx)
+	found := false
+	for r := uint32(1); r < uint32(len(parent)); r++ {
+		if alive[r] && parent[r] == r && (all || ppos[r].s == si) {
+			markLive(r)
+			found = true
+		}
+	}
+	if found {
+		requestFlush()
+	}
 }
 
 // revalidateSurface re-classifies every cluster on one surface and rebuilds the

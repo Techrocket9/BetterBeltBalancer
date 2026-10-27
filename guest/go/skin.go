@@ -100,14 +100,18 @@ func maskAt(k key, f uint32) uint8 {
 // anything else that is holding that buffer. Every caller runs it to completion
 // first.
 func restyle(root uint32) {
-	tiles := collectCluster(root)
+	restyleTiles(root, collectCluster(root))
+}
+
+func restyleTiles(root uint32, tiles []key) bool {
 	if len(tiles) == 0 {
-		return
+		return true
 	}
 	f := pforce[root]
 
 	skinTile, skinWant, skinNode = skinTile[:0], skinWant[:0], skinNode[:0]
 	for i := range tiles {
+		workRestyled++
 		id, ok := index[tiles[i]]
 		if !ok {
 			continue
@@ -121,12 +125,12 @@ func restyle(root uint32) {
 		skinNode = append(skinNode, id)
 	}
 	if len(skinTile) == 0 {
-		return
+		return true
 	}
 
 	surf, ok := surfaceByIndex(tiles[0].s)
 	if !ok {
-		return
+		return false
 	}
 
 	// One query per part whose picture changed, never per part; the alternative
@@ -144,21 +148,25 @@ func restyle(root uint32) {
 	// below can hand the host one contiguous run of handles.
 	skinEnt = skinEnt[:0]
 	unknown, n := 0, 0
+	readOK := true
 	for i := range skinTile {
 		o, found, ferr := findOnTile(surf, PartName, skinTile[i].x, skinTile[i].y)
 		if ferr != nil || !found {
+			readOK = false
 			continue
 		}
 		skinTile[n], skinWant[n], skinNode[n] = skinTile[i], skinWant[i], skinNode[i]
 		skinEnt = append(skinEnt, o)
-		if pvar[skinNode[n]] == 0 {
+		if !priorityKnown[skinNode[n]] {
 			unknown++
 		}
 		n++
 	}
 	skinTile, skinWant, skinNode = skinTile[:n], skinWant[:n], skinNode[:n]
 	if unknown > 0 {
-		recoverPriority(f)
+		if !recoverPriority(f) {
+			return false // never overwrite an unknown persisted priority
+		}
 	}
 
 	set := uint32(0)
@@ -170,6 +178,7 @@ func restyle(root uint32) {
 			continue
 		}
 		if err := (fkapi.LuaEntity{Object: skinEnt[i]}).SetGraphicsVariation(skinWant[i]); err != nil {
+			readOK = false
 			continue
 		}
 		// Only after the engine took it. A part the world does not have (a
@@ -178,7 +187,28 @@ func restyle(root uint32) {
 		pvar[skinNode[i]] = skinWant[i]
 		set++
 	}
-	logSkin(root, tiles, set)
+	if verboseLog {
+		// Keep the small full-shape assertion surface without making a local
+		// edit flood a large cluster merely to describe its sprite update.
+		if len(tiles) != int(csize[root]) && csize[root] > 32 {
+			logStart("skin-local cluster=")
+			logU(root)
+			logS(" parts=")
+			logU(csize[root])
+			logS(" checked=")
+			logU(uint32(len(tiles)))
+			logS(" set=")
+			logU(set)
+			logEnd()
+			return readOK
+		}
+		logged := tiles
+		if len(tiles) != int(csize[root]) {
+			logged = collectCluster(root)
+		}
+		logSkin(root, logged, set)
+	}
+	return readOK
 }
 
 // recoverPriority reads the PRIORITY flag back off parts whose picture this
@@ -205,10 +235,10 @@ func restyle(root uint32) {
 // *uint8, which under -gc=leaking is a permanent allocation per part, on a path
 // a blueprint paste drives once per part pasted.
 //
-// A PART WHOSE PICTURE THE GUEST DOES KNOW IS READ AND IGNORED. It is in the run
+// A PART WHOSE PRIORITY THE GUEST KNOWS IS READ AND IGNORED. It is in the run
 // because splitting the handles into two buffers would cost more than the
 // engine's own read, and ignoring it is not an oversight: a variation that moved
-// under a pvar we trust is either a settings paste, which has its own event and
+// under a known priority is either a settings paste, which has its own event and
 // its own handler, or somebody picking a cell by hand in the map editor -- and
 // an editor pick silently flipping a balancer's port priority on the next flush
 // is worse than an editor pick that only looks wrong.
@@ -220,21 +250,27 @@ func restyle(root uint32) {
 // a badge somebody picked by hand in the editor becomes a real flag. There is
 // nothing here that could tell it from one, the variation being the only record
 // of the flag that survives a rebuilt guest at all.
-func recoverPriority(f uint32) {
+func recoverPriority(f uint32) bool {
 	if cap(skinRead) < len(skinEnt) {
 		skinRead = make([]fkapi.BulkOptUint8, len(skinEnt))
 	}
 	skinRead = skinRead[:len(skinEnt)]
 	if _, err := fkapi.LuaEntityGraphicsVariationBulk(skinEnt, skinRead); err != nil {
-		return
+		return false
 	}
+	readOK := true
 	for i := range skinTile {
 		// An element the host could not read comes back as the zero value with
 		// Has false, never as the previous crossing's number, so a dead handle
 		// leaves the flag alone.
-		if pvar[skinNode[i]] != 0 || !skinRead[i].Has {
+		if priorityKnown[skinNode[i]] {
 			continue
 		}
+		if !skinRead[i].Has {
+			readOK = false
+			continue
+		}
+		priorityKnown[skinNode[i]] = true
 		// IT ONLY EVER RAISES THE FLAG, and there is no `else` because both
 		// states that reach here with pprio already set are states the REGISTRY
 		// is right about: a fresh node's flag is 0, and the one other way to
@@ -253,6 +289,7 @@ func recoverPriority(f uint32) {
 			pvar[skinNode[i]] = skinWant[i]
 		}
 	}
+	return readOK
 }
 
 // logSkin is the assertion surface for the headless suite: the whole cluster's
@@ -267,11 +304,22 @@ func logSkin(root uint32, tiles []key, set uint32) {
 	if !verboseLog {
 		return
 	}
+	const maxLoggedVariants = 32
 	skinSort = skinSort[:0]
 	for i := range tiles {
 		k := tiles[i]
 		at := len(skinSort)
-		skinSort = append(skinSort, k)
+		// Only the first logged tiles need ordering, even for a huge cluster.
+		if at == maxLoggedVariants {
+			last := skinSort[at-1]
+			if k.y > last.y || (k.y == last.y && k.x >= last.x) {
+				continue
+			}
+			at--
+			skinSort[at] = k
+		} else {
+			skinSort = append(skinSort, k)
+		}
 		for at > 0 && (skinSort[at-1].y > k.y ||
 			(skinSort[at-1].y == k.y && skinSort[at-1].x > k.x)) {
 			skinSort[at-1], skinSort[at] = skinSort[at], skinSort[at-1]
@@ -281,7 +329,7 @@ func logSkin(root uint32, tiles []key, set uint32) {
 	logStart("skin cluster=")
 	logU(root)
 	logS(" parts=")
-	logU(uint32(len(skinSort)))
+	logU(uint32(len(tiles)))
 	logS(" set=")
 	logU(set)
 	logS(" vars=")
@@ -289,11 +337,10 @@ func logSkin(root uint32, tiles []key, set uint32) {
 		if i > 0 {
 			logS(",")
 		}
-		if i == 32 {
-			logS("...")
-			break
-		}
 		logU(uint32(pvar[index[skinSort[i]]]))
+	}
+	if len(tiles) > maxLoggedVariants {
+		logS(",...")
 	}
 	logEnd()
 }

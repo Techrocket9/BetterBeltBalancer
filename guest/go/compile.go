@@ -200,23 +200,20 @@ func hiddenSurface() (fkapi.LuaSurface, bool) {
 
 // netInfo is everything a teardown needs, and nothing else.
 //
-// The visible bounding box is stored rather than recomputed because a teardown
-// often happens when the cluster it belonged to no longer exists -- the last
-// part was mined -- and the visible linked belts still standing on those tiles
-// have to be found somehow.
-//
-// fp is a fingerprint of the edge list, not the list itself. The list is a
-// per-compile allocation and this guest's allocator never gives memory back
-// (-gc=leaking), so a stored slice per cluster would be a leak that grows with
-// play. A 64-bit collision would mean one missed rebuild, and it would be the
-// SAME missed rebuild on every client, so it is not a desync.
+// The box is carry geometry, NOT entity ownership: independent clusters can
+// stand inside a concave cluster's box. Visible interfaces retain their exact
+// positions and scalar unit numbers, even after their parts have been removed.
+// The backing slices are recycled by teardown, including under -gc=leaking.
 type netInfo struct {
 	fp             uint64
+	condemned      bool   // obligation belongs to this network, not its current root
+	mergeOwner     uint32 // predecessor identity until a cached merge is validated
 	slot           uint32
 	surf           uint32
 	force          uint32
 	x0, y0, x1, y1 int32
 	ents           uint32
+	interfaces     []netInterface
 }
 
 // nets is point-queried only: NEVER RANGED OVER, never used to decide an order.
@@ -258,6 +255,7 @@ var (
 	// arm that runs for every belt laid perpendicular to a balancer costs no
 	// permanent heap at all. The `mar` suite's leg H is what holds it to that.
 	probeEnts []fkapi.Object
+	sideEnts  []fkapi.Object
 
 	// edgeCurved is index-parallel to edgeBuf: whether each edge was produced by
 	// the curve arm. Package level and high-water for edgeBuf's own reason, and
@@ -439,8 +437,6 @@ func initBuffers() {
 	carryTake = carryTake[:0]
 	carryClaims.Reset()
 	buildNotes = buildNotes[:0]
-	limPending = limPending[:0]
-	addedTiles = addedTiles[:0]
 	// The engine capability is re-derived rather than assumed: a fresh heap has
 	// never asked, and the load hooks that can reach a DIFFERENT engine throw
 	// the answer away again. See sedge.go.
@@ -546,6 +542,7 @@ func collectCluster(root uint32) []key {
 	// changed and its fingerprint still matches.
 	f := pforce[root]
 	for i := 0; i < len(cq); i++ {
+		workFlooded++
 		k := ppos[cq[i]]
 		tileBuf = append(tileBuf, k)
 		for d := 0; d < len(dirs); d++ {
@@ -583,6 +580,7 @@ var dirOf [4]uint32
 // happening anyway. No allocation and no extra host call, which is the gate the
 // `mar` suite holds everything on this path to.
 func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge {
+	classificationReadOK = true
 	edgeBuf = edgeBuf[:0]
 	edgeCurved = edgeCurved[:0]
 	sedgeWorst, sedgeTiles = 0, 0
@@ -592,41 +590,9 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 	forceFilter = fkapi.OfNumber(float64(force))
 	for i := range tiles {
 		k := tiles[i]
-		// THE PRIORITY FLAG IS THE PART'S, NOT THE BELT'S, so it is read once
-		// per tile and stamped onto every edge that tile carries -- which on an
-		// engine that lets a part hold two belts is both of them, and that is
-		// the intended reading: a player flags a PART. One map point query, no
-		// host call, on a walk that is already doing one per side.
-		prio := false
-		if id, ok := index[k]; ok {
-			prio = pprio[id] != 0
-		}
-		onTile := uint32(0)
-		for d := 0; d < len(dirs); d++ {
-			nx, ny := k.x+dirs[d][0], k.y+dirs[d][1]
-			if _, ok := index[key{k.s, nx, ny}]; ok {
-				continue // interior side
-			}
-			dir := dirOf[d]
-			out, found, viaCurve := classifySide(surf, k.s, nx, ny, dir)
-			if !found {
-				continue
-			}
-			onTile++
-			// An INPUT interface faces the incoming belt with its input side,
-			// so it points the other way; an OUTPUT interface points at the
-			// belt it feeds.
-			ld := dir
-			if !out {
-				ld = plan.Opposite(dir)
-			}
-			edgeBuf = append(edgeBuf, plan.Edge{TileX: k.x, TileY: k.y, Dir: ld,
-				Out: out, Prio: prio})
-			// WHICH EDGES THE CURVE ARM PRODUCED, parallel to edgeBuf and used
-			// by one caller: the adoption comparison, which asks what this
-			// cluster would look like WITHOUT them. See curveupg.go.
-			edgeCurved = append(edgeCurved, viaCurve)
-		}
+		state := classifyTile(surf, k)
+		onTile := uint32(sideCount(state))
+		edgeBuf, edgeCurved = stateEdges(k, state, edgeBuf, edgeCurved)
 		if onTile > 1 {
 			sedgeTiles++
 			if onTile > sedgeWorst {
@@ -640,10 +606,25 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 	// comparison, the per-tile counts just taken, the port bound, the build)
 	// reads the world under the rule the save was written to. One bool test on
 	// every classification of every save this is not about. See curveupg.go.
-	if curveUndecided {
+	sortEdges(edgeBuf, edgeCurved)
+	if curveUndecided && classificationReadOK {
 		curveDecide(tiles)
 	}
+	recordOracleClass(tiles, force)
 	return edgeBuf
+}
+
+func edgeLess(a, b plan.Edge) bool {
+	if a.TileY != b.TileY {
+		return a.TileY < b.TileY
+	}
+	if a.TileX != b.TileX {
+		return a.TileX < b.TileX
+	}
+	if a.Dir != b.Dir {
+		return a.Dir < b.Dir
+	}
+	return !a.Out && b.Out
 }
 
 // classifySide reports whether the tile at (tx, ty) holds something that feeds
@@ -661,20 +642,30 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 func classifySide(surf fkapi.LuaSurface, si uint32, tx, ty int32, dir uint32) (out bool, found bool, viaCurve bool) {
 	searchPos.X = float64(tx) + 0.5
 	searchPos.Y = float64(ty) + 0.5
-	ents, err := surf.FindEntitiesFiltered(findByPos)
+	ents, err := surf.FindEntitiesFilteredInto(sideEnts, findByPos)
+	sideEnts = ents
 	if err != nil {
+		classificationReadOK = false
 		return false, false, false
 	}
 	back := plan.Opposite(dir)
 	curveDir, curve := uint32(0), false
 	for i := range ents {
 		e := fkapi.LuaEntity{Object: ents[i]}
-		t, err := e.Type()
-		if err != nil {
-			continue
+		t := ""
+		for _, name := range beltTypeNames {
+			is, err := e.TypeIs(name)
+			if err != nil {
+				classificationReadOK = false
+			}
+			if is {
+				t = name
+				break
+			}
 		}
 		d, err := e.Direction()
 		if err != nil {
+			classificationReadOK = false
 			continue
 		}
 		if o, f := classifyStraight(e, t, d, dir, back); f {
@@ -749,6 +740,7 @@ func classifyStraight(e fkapi.LuaEntity, t string, d, dir, back uint32) (out boo
 		// this switch without allocating.
 		isOut, err := e.BeltToGroundTypeIs(linkTypeOutput)
 		if err != nil {
+			classificationReadOK = false
 			return false, false
 		}
 		if isOut && d == back {
@@ -760,6 +752,7 @@ func classifyStraight(e fkapi.LuaEntity, t string, d, dir, back uint32) (out boo
 	case "loader-1x1", "loader":
 		isOut, err := e.LoaderTypeIs(linkTypeOutput)
 		if err != nil {
+			classificationReadOK = false
 			return false, false
 		}
 		if isOut && d == back {
@@ -877,6 +870,7 @@ func feedsTile(surf fkapi.LuaSurface, px, py int32, pdir uint32) bool {
 	ents, err := surf.FindEntitiesFilteredInto(probeEnts, findAnyByPos)
 	probeEnts = ents
 	if err != nil {
+		classificationReadOK = false
 		// A query this guest cannot make is a question it cannot answer, and the
 		// safe answer is "something might be feeding it": declining a curve
 		// costs a port the player has to lay differently, where accepting one
@@ -888,6 +882,7 @@ func feedsTile(surf fkapi.LuaSurface, px, py int32, pdir uint32) bool {
 		e := fkapi.LuaEntity{Object: ents[i]}
 		d, err := e.Direction()
 		if err != nil {
+			classificationReadOK = false
 			continue
 		}
 		if d != back {
@@ -920,6 +915,9 @@ func feedsTile(surf fkapi.LuaSurface, px, py int32, pdir uint32) bool {
 func probeFeeds(e fkapi.LuaEntity, d, pdir, back uint32) bool {
 	for n := range beltTypeNames {
 		is, err := e.TypeIs(beltTypeNames[n])
+		if err != nil {
+			classificationReadOK = false
+		}
 		if err != nil || !is {
 			continue
 		}
@@ -927,9 +925,15 @@ func probeFeeds(e fkapi.LuaEntity, d, pdir, back uint32) bool {
 		return found && !out
 	}
 	if is, err := e.TypeIs(linkedBeltType); err != nil || !is {
+		if err != nil {
+			classificationReadOK = false
+		}
 		return false
 	}
 	isOut, err := e.LinkedBeltTypeIs(linkTypeOutput)
+	if err != nil {
+		classificationReadOK = false
+	}
 	return err == nil && isOut
 }
 
@@ -953,6 +957,7 @@ func fingerprint(edges []plan.Edge) uint64 {
 	// and the reinsertion that go with it, for no change at all.
 	outAll, inAll := plan.PrioCollapses(edges)
 	for i := range edges {
+		workEdges++
 		e := edges[i]
 		mix(uint64(uint32(e.TileX)))
 		mix(uint64(uint32(e.TileY)))
@@ -1029,28 +1034,61 @@ func linkName(l plan.LinkType) string {
 
 // compile (re)builds one cluster's network.
 //
-// Returns false only for a real failure, which is always logged loudly: a
-// half-built network moves items into a hole, so the failure path destroys
-// everything it placed and leaves the cluster with no network at all.
-func compile(root uint32) bool {
+// Refusals finish normally; unreadable state and failed construction get a
+// bounded deferred retry. Partial construction is unwound before retrying.
+func compile(root uint32) compileResult {
 	statCompiles++
-	tiles := collectCluster(root)
-	if len(tiles) == 0 {
-		return true
+	if root == 0 || int(root) >= len(alive) || !alive[root] {
+		return compileDone
+	}
+	for _, r := range preflightBlocked {
+		if root == r {
+			return compileRetry
+		}
 	}
 	force := pforce[root]
-	surf, ok := surfaceByIndex(tiles[0].s)
+	surf, ok := surfaceByIndex(ppos[root].s)
 	if !ok {
-		return false
+		return compileRetry
 	}
-	edges := classifyEdges(surf, tiles, force)
-	fp := fingerprint(edges)
+	if !prepareClassification(root, surf) {
+		return compileRetry
+	}
+	c := &classes[root]
+	edges, fp := c.edges, c.fp
+	sedgeWorst, sedgeTiles = 0, 0
+	for n := 2; n < len(c.counts); n++ {
+		if c.counts[n] != 0 {
+			sedgeWorst = uint32(n)
+		}
+		sedgeTiles += c.counts[n]
+	}
+	worst, over := multiEdgeShape()
+	if !classificationReadOK {
+		return compileRetry
+	}
 
 	ni, hadNet := nets[root]
-	if hadNet && ni.fp == fp && ni.force == force {
+	if hadNet && ni.mergeOwner != 0 {
+		owner := ni.mergeOwner
+		ni.mergeOwner = 0
+		if (!c.fits || over) && alive[owner] && find(owner) == root {
+			// A refused bridge must not own its incumbent: removing/refunding
+			// that bridge needs to recover the original without a teardown.
+			delete(nets, root)
+			nets[owner] = ni
+			addStranded(owner)
+			hadNet = false
+		} else {
+			nets[root] = ni
+		}
+	}
+	if hadNet && !ni.condemned && ni.fp == fp && ni.force == force && c.fits && !over {
+		ni.x0, ni.y0, ni.x1, ni.y1 = c.x0, c.y0, c.x1, c.y1
+		nets[root] = ni
 		statSkipped++
 		forgetOverLimit(root)
-		return true // nothing that matters changed
+		return compileDone // nothing that matters changed
 	}
 
 	// THE ORDERING CARVE-OUT, AND IT IS THE ONE PLACE A REFUSAL DEMOLISHES
@@ -1065,17 +1103,14 @@ func compile(root uint32) bool {
 	// teardown opened settles onto the ground, which is what this mod does with a
 	// REMOVAL's items, and a machine that cannot exist any more is a removal.
 	//
-	// Only rebuildFromWorld and the setting-flip sweep condemn, so this is a scan
-	// of an empty slice in every save that was built under the rule it is running
-	// under. BOTH of them INVERT the stored fingerprint before they condemn, and
-	// that is what carries a condemned cluster past the skip above: flipping the
-	// setting moves nothing in the world, so nothing else would.
+	// The obligation is on netInfo itself. A read failure cannot consume it,
+	// and re-rooting moves it with the exact network that must be removed.
 	//
 	// `hadNet` goes false with it, for two reasons: the teardown further down must
 	// not run a second time, and a compile that SUCCEEDS after this (the setting
 	// flipped back on) has to draw from the `owned` pool this just opened, which
 	// takeCarry matches by root rather than by geometry. See sedge.go.
-	if hadNet && takeCondemned(root) {
+	if hadNet && ni.condemned {
 		teardownForRebuild(root)
 		hadNet = false
 	}
@@ -1094,9 +1129,12 @@ func compile(root uint32) bool {
 	// not be joined is inert -- the same degradation as a belt this guest never
 	// heard about (agents/architecture/runtime-model.md, "The failure envelope") -- and limit.go tells the
 	// player and offers the piece back. See agents/maxports.md §4.
-	if pt, over := overLimitShape(edges); over {
-		refuseShape(root, fp, pt, tiles, force)
-		return false
+	if !c.fits {
+		if prev, known := overLimit[root]; !rebuildingFromWorld && known && prev == fp && !pendingBuildFor(root) {
+			return compileRefused
+		}
+		refuseShape(root, fp, c.ports, collectCluster(root), force)
+		return compileRefused
 	}
 	// AND THE ONE-BELT-PER-PART RULE IS ASKED IN THE SAME PLACE, for the same
 	// reason and through the same machinery (sedge.go, limit.go). The port limit
@@ -1107,11 +1145,18 @@ func compile(root uint32) bool {
 	//
 	// The counts come out of classifyEdges above and nothing between here and
 	// there re-classifies.
-	if worst, over := multiEdgeShape(); over {
-		refuseSingleEdge(root, fp, worst, tiles, force)
-		return false
+	if over {
+		if prev, known := overLimit[root]; !rebuildingFromWorld && known && prev == fp && !pendingBuildFor(root) {
+			return compileRefused
+		}
+		refuseSingleEdge(root, fp, worst, collectCluster(root), force)
+		return compileRefused
 	}
 	forgetOverLimit(root)
+	if !hadNet && (c.ports.N == 0 || c.ports.M == 0) {
+		return compileDone
+	}
+	tiles := collectCluster(root)
 
 	if hadNet {
 		// The recompile proper, and its drain is this cluster's OWN. It opens a
@@ -1121,13 +1166,12 @@ func compile(root uint32) bool {
 		teardownForRebuild(root)
 	}
 	if len(edges) == 0 {
-		return true
+		return compileDone
 	}
 
-	// The visible bounding box, for the teardown that will one day have to find
-	// these interfaces without the cluster to guide it -- and, since 2026-08-02,
-	// for deciding which drained items this network inherits.
-	x0, y0, x1, y1 := clusterBox(tiles)
+	// Carry uses the cluster box to match geometric successors. Teardown uses
+	// the separately recorded interface identities, never this rectangle.
+	x0, y0, x1, y1 := c.x0, c.y0, c.x1, c.y1
 
 	slot := allocSlot()
 	ox, oy := slotOrigin(slot)
@@ -1165,7 +1209,7 @@ func compile(root uint32) bool {
 		logS("; not compiled, and the early refusal did not catch it")
 		logEnd()
 		releaseSlot(slot)
-		return false
+		return compileRetry
 	}
 	// THE OTHER UNREACHABLE BACKSTOP, and the twin of the one above. plan.Build
 	// has no test to mirror for the one-belt-per-part rule -- it would happily
@@ -1177,28 +1221,36 @@ func compile(root uint32) bool {
 	// See sedge.go.
 	if singleEdgeBackstop(root) {
 		releaseSlot(slot)
-		return false
+		return compileRetry
 	}
 	if len(ops) == 0 {
 		// Inputs but no outputs, or the other way round. Legitimate.
 		releaseSlot(slot)
-		return true
+		return compileDone
 	}
 
 	hid, ok := hiddenSurface()
 	if !ok {
 		releaseSlot(slot)
-		return false
+		return compileRetry
 	}
 
 	if !execute(ops, surf, hid, force) {
 		releaseSlot(slot)
-		return false
+		return compileRetry
+	}
+	interfaces, remembered := rememberInterfaces(ops, entBuf)
+	if !remembered {
+		logError("could not record visible network ownership")
+		unwind()
+		releaseSlot(slot)
+		return compileRetry
 	}
 
 	statBuilds++
+	workBuilds++
 	nets[root] = netInfo{fp: fp, slot: slot, surf: tiles[0].s, force: force,
-		x0: x0, y0: y0, x1: x1, y1: y1, ents: uint32(len(ops))}
+		x0: x0, y0: y0, x1: x1, y1: y1, ents: uint32(len(ops)), interfaces: interfaces}
 	// The network is standing and empty. Whatever the teardowns of this flush
 	// drained out of the network(s) this one succeeds goes back INSIDE it --
 	// entBuf is parallel to ops, so the fill order is plan order and needs no
@@ -1219,7 +1271,7 @@ func compile(root uint32) bool {
 		logU(slot)
 		logEnd()
 	}
-	return true
+	return compileDone
 }
 
 // execute walks the plan. Two passes: create everything, then connect the
@@ -1448,6 +1500,7 @@ func forgetNet(root uint32) { teardownNet(root, false, false) }
 func teardownNet(root uint32, hiddenHalf, owned bool) {
 	ni, ok := nets[root]
 	if !ok {
+		queueRetiredNode(root)
 		return
 	}
 	delete(nets, root)
@@ -1458,21 +1511,30 @@ func teardownNet(root uint32, hiddenHalf, owned bool) {
 	forgetOverLimit(root)
 	openPool(root, ni, owned)
 	statTeardowns++
+	workTeardowns++
 
 	// slot 0 means "we know the interfaces are there but not which slot they
 	// lead to" -- rebuildFromWorld's fallback, when a linked belt's partner
 	// could not be followed. The visible half still has to come down; the
 	// hidden half becomes an orphan for sweepOrphanSlots to find.
 	sweptHidden := false
-	if hid, ok := hiddenSurface(); ok && hiddenHalf && ni.slot != 0 {
-		ox, oy := slotOrigin(ni.slot)
-		sweep(hid, ox, oy, ox+slotW-1, oy+slotH-1, true)
-		sweptHidden = true
+	if hiddenHalf && ni.slot != 0 {
+		if hid, ok := hiddenSurface(); ok {
+			ox, oy := slotOrigin(ni.slot)
+			sweep(hid, ox, oy, ox+slotW-1, oy+slotH-1, true)
+			sweptHidden = true
+		}
 	}
 	vis, haveVis := surfaceByIndex(ni.surf)
 	if haveVis {
-		sweep(vis, ni.x0, ni.y0, ni.x1, ni.y1, true)
+		for _, ref := range ni.interfaces {
+			if e, found := resolveInterface(vis, ref); found {
+				drain(e)
+				_, _ = e.Destroy(fkapi.LuaEntityDestroyArgs{})
+			}
+		}
 	}
+	recycleInterfaces(ni.interfaces)
 	// THE SLOT GOES BACK ON THE FREE LIST ONLY ONCE WHAT WAS STANDING IN IT IS
 	// GONE. `hiddenSurface()` can fail -- create_surface refused, or the surface
 	// was deleted under us between one call and the next -- and the old
@@ -1502,6 +1564,7 @@ func teardownNet(root uint32, hiddenHalf, owned bool) {
 		logS(" items")
 		logEnd()
 	}
+	queueRetiredNode(root)
 }
 
 // sweep drains and destroys every one of our entities in a box.
@@ -1538,6 +1601,7 @@ func setSearchBox(x0, y0, x1, y1 int32) {
 
 func sweep(s fkapi.LuaSurface, x0, y0, x1, y1 int32, give bool) uint32 {
 	setSearchBox(x0, y0, x1, y1)
+	si, _ := s.Index()
 	killed := uint32(0)
 	for n := range sweepNames {
 		nameFilter = fkapi.OfString(sweepNames[n])
@@ -1547,6 +1611,11 @@ func sweep(s fkapi.LuaSurface, x0, y0, x1, y1 int32, give bool) uint32 {
 		}
 		for i := range ents {
 			e := fkapi.LuaEntity{Object: ents[i]}
+			// Clone cleanup may encounter a predecessor spared by the merge
+			// refusal pass. Its original interface is not a disposable copy.
+			if !give && si != hiddenIdx && ownsInterface(si, e) {
+				continue
+			}
 			if give {
 				drain(e)
 			}
@@ -1842,21 +1911,29 @@ var (
 func requestFlush() { fk.Defer() }
 
 func markDead(r uint32) {
-	for i := range deadRoots {
-		if deadRoots[i] == r {
-			return
-		}
+	invalidateClassification(r)
+	if int(r) < len(alive) && alive[r] {
+		invalidateClassification(find(r))
 	}
+	if workQueue[r].dead {
+		return
+	}
+	setPending(r, true, true)
 	deadRoots = append(deadRoots, r)
 }
 
 func markLive(r uint32) {
-	for i := range liveRoots {
-		if liveRoots[i] == r {
-			return
-		}
+	invalidateClassification(r)
+	if int(r) < len(alive) && alive[r] {
+		invalidateClassification(find(r))
 	}
-	liveRoots = append(liveRoots, r)
+	queueLive(r)
+}
+
+// queueLive is scheduling only; local edits retain their classification.
+func queueLive(r uint32) {
+	workQueue[r].retries = 0
+	enqueueLive(r)
 }
 
 // flushDead runs every queued teardown and nothing else.
@@ -1870,12 +1947,13 @@ func markLive(r uint32) {
 // part queues BOTH predecessors' roots dead, so without this pass two working
 // balancers are demolished before flushLive discovers that what they became
 // cannot be built. `spareOverLimitMerges` takes those teardowns back off the
-// queue -- for a merge and never for anything else -- and costs a `find` per
-// queued root and no host call at all below seventeen parts. See limit.go.
+// queue. True merges and stranded predecessors take a full readable preflight;
+// ordinary single-component extensions never enter that path. See limit.go.
 func flushDead() {
 	spareOverLimitMerges()
 	for i := range deadRoots {
 		teardown(deadRoots[i])
+		setPending(deadRoots[i], true, false)
 	}
 	deadRoots = deadRoots[:0]
 }
@@ -1894,6 +1972,10 @@ func flushDead() {
 // A node that has been freed since (its part was mined in the same tick) is
 // dropped: whatever cluster its removal left behind queued itself.
 func flushLive() {
+	for _, r := range liveRoots {
+		workQueue[r].live = false
+		queueRetiredNode(r)
+	}
 	n := 0
 	for i := range liveRoots {
 		r := liveRoots[i]
@@ -1901,16 +1983,10 @@ func flushLive() {
 			continue
 		}
 		r = find(r)
-		dup := false
-		for j := 0; j < n; j++ {
-			if liveRoots[j] == r {
-				dup = true
-				break
-			}
-		}
-		if dup {
+		if workQueue[r].live {
 			continue
 		}
+		workQueue[r].live = true
 		liveRoots[n] = r
 		n++
 	}
@@ -1921,15 +1997,14 @@ func flushLive() {
 	// knows the second exists. No host call; see carry.go.
 	claimCarry(liveRoots)
 	for i := range liveRoots {
-		// The sprite before the network, and both from the same re-resolved
-		// root. restyle() is free -- not one host call -- for a cluster whose
-		// SHAPE did not change, which is every cluster queued by a belt being
-		// laid nearby, so this is not a second cost on the common path. See
-		// skin.go.
-		restyle(liveRoots[i])
-		compile(liveRoots[i])
+		// compile prepares local sprites and classification before comparing the
+		// construction. Only a full fallback floods the cluster here.
+		r := liveRoots[i]
+		finishCompile(r, compile(r))
+		workQueue[r].live = false
 	}
 	liveRoots = liveRoots[:0]
+	publishCompileRetries()
 }
 
 // flush is the only place a network is created or destroyed.
@@ -1953,6 +2028,7 @@ func flush() {
 	// Belt Balancer 2 in it. See legacy.go, which is emphatic about why this is
 	// deferred rather than done inside the event.
 	legacyRunBuilds()
+	beginBuildNotes()
 	beginCarry()
 	flushDead()
 	flushLive()
@@ -1995,25 +2071,13 @@ func flush() {
 	// for a world with one belt on every part.
 	settleCurveMode()
 	settleEdgeMode()
-	// One tick's worth of "who built what" is spent. The notes were filled by
-	// the events of the PREVIOUS tick and read by the drain above; anything
-	// after this belongs to the next one. The tick's NEW PART TILES go with them
-	// and for the same reason: the merge pre-pass that reads them has run. So do
-	// the condemnations, whose teardowns the drain has either performed or made
-	// moot -- a condemned cluster that dissolved before it was compiled took its
-	// network down with it. And so does the conversion's own root list, whose
-	// whole span is exactly this: the migration made those clusters and this drain
-	// is what refused them, so past here they are ordinary balancers like any
-	// other and an edit to one is an edit (legacy.go, legacyRoots).
+	// Keep unresolved player context and any notes appended by reentrant events.
+	// Condemnation ends only with its network, never with a flush or a retry.
 	forgetBuildNotes()
-	// ... and the belts the engine destroyed for them, which have exactly the
-	// same span: a record made by a mine in the previous tick was read by the
-	// build event that followed it and by the revert above, and nothing after
-	// this can want it. See fastreplace.go.
+	// Matched belt specs are owned by buildNotes; unmatched event records expire.
 	forgetReplacedBelts()
-	forgetAddedParts()
-	forgetCondemned()
 	forgetLegacyConverted()
+	releaseRetiredNodes()
 }
 
 // The log helpers -- logError, logAlert, and the builder every line is

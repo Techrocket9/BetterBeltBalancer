@@ -134,8 +134,13 @@ func curvedExitsAllowed() bool {
 // a flip to TRUE was reported as "left unconnected" and then ignored.
 func curveSettingOn() bool {
 	if curveCache == curveUnchecked {
+		on, present := readGlobalBool(CurvedExitsSetting)
+		if !present {
+			classificationReadOK = false
+			return true // retain the default, but never cache a failed read
+		}
 		curveCache = curveOn
-		if on, present := readGlobalBool(CurvedExitsSetting); present && !on {
+		if !on {
 			curveCache = curveOff
 		}
 	}

@@ -425,3 +425,62 @@ The tile holds a `transport-belt` at direction 4 on the player's force from that
 **And the smoke that was never run on 2.1 is run, on the RELEASED zip rather than a rebuild.** That zip alone in a scratch mods directory with a `mod-list.json` beside it and a private `write-data`, a bare `--create`: **exit 0, zero Error and zero Warning lines**, all three data stages loading (`settings.lua` at 0.061, `data.lua` at 0.297, `data-final-fixes.lua` at 0.805) and the control stage arming at checksum 1289863643 -- `[BBB] guest init: cluster tracking armed for bbb-balancer-part` -- with **no follow line**, on base plus the three expansions and again on base alone. The 0.3.4 zip's own smoke stays NOT RUN and is not made redundant by this: 0.3.5 differs from it in the data guest.
 
 **WHAT IS STILL OWED AFTER THIS PASS.** The **portal uploads**, unchanged. The **packaged-zip repro against a real Cerys install**, which needs that mod's own zip and is the one thing the `cerys` fixture stands in for. The **2.1.16 golden rows**, which are a Steam betas checkbox away and which nothing here touches. And the `release/2.0` arm's own engine gates, which this binary cannot run at all.
+
+## 2026-10-27: Concave Ownership And Incremental Edits
+
+Prepared the runtime changes against upstream master `6af2a5c`, retaining the
+upstream mod ID, generated-setting constructors and asset paths. Fork branding,
+local installation records, package renaming, PR text and the illustrative image
+are not part of this change. Network ownership, integrity checks, cached local
+classification, conservative invalidation, retired-node safety and bounded build
+retries are described in `agents/architecture/runtime-model.md`.
+
+Verification in Docker image `bbb-toolchain:tinygo-0.41.1-go1.26.6`, with sibling
+FkLua available at `/work/FkLua`:
+
+```sh
+make -C /work/BetterBeltBalancer check mod FKLUA=/work/FkLua/bin/fklua
+```
+
+Passed the six pure-Go packages, data/observer/fixture vet, generated bindings and
+lock checks, formatting, both wasm builds, packaging/pruning, sprite references
+and changelog grammar. The initial release-arm check skipped the shallow clone;
+after fetching complete upstream master and release/2.0 history, a second
+`make check` passed the provenance gate too. Engine-suite results are recorded
+separately below after the regression probes are included; no wall-clock speedup
+is claimed.
+
+## 2026-10-27: Upstream-Identity Engine Regression
+
+The PR's combined source tree, including the new synchronous network probe and
+twelve deferred 300-part topology cases, was tested with the original
+`better-belt-balancer` identity on headless Factorio 2.1.23. Go 1.26.6 and TinyGo
+0.41.1 ran in the Docker toolchain recorded above. Commands inside the container:
+
+```sh
+make -C /work/BetterBeltBalancer test FKLUA=/work/FkLua/bin/fklua FACTORIO_BIN=/work/toolchain/factorio-headless.sh
+BBB_TEST_TMP=/work/BetterBeltBalancer/dist/pr-leaking make -C /work/BetterBeltBalancer GC=leaking test SUITES="m3 edge" FKLUA=/work/FkLua/bin/fklua FACTORIO_BIN=/work/toolchain/factorio-headless.sh
+make -C /work/BetterBeltBalancer zip FKLUA=/work/FkLua/bin/fklua
+```
+
+All sixteen applicable default-collected suites passed. The seventeenth,
+`flip`, explicitly skipped because it requires Factorio 2.0. Both selected
+leaking suites passed too. This includes the normal suite's legacy migrations,
+priority-save adoption, stacking, quality, marathon and player-cursor gestures.
+Both collector modes retained all 220800 items during the 100-cycle saturated
+churn, with zero builds, teardowns or ground items. The M3 probes passed exact
+identity, pairing, registry, item and bounded-work checks, including the real
+bridge-input positive control and the independent post-measurement oracle.
+These are operation-count results, not wall-clock speedup measurements.
+
+The collected ZIP passed CRC checks, all eighteen file comparisons against the
+unpacked package, and nine Lua parses under FkLua's `lua52f`. It is 1020116 bytes,
+SHA256 `d41a22c9dcb9b3dff73f77a9c5b2537e066252d038099e03aa7f4176b44e4c2d`.
+Verification artifacts remain in the isolated container/volume and temporary
+host logs, not in the commits. The existing local installation and saves were
+not changed.
+
+Not run: Factorio 2.0, the other leaking-mode suites, the data-stage dump matrix,
+manual graphical checks, or injected host-read failures through retry
+exhaustion. Review also notes that teardown retains the existing nontransactional
+API-failure envelope; classification/build retries do not claim to fix it.

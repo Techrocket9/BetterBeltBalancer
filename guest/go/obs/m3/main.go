@@ -1051,6 +1051,7 @@ var schedule = []harness.Step{
 
 //go:wasmexport fk_on_init
 func onInit() {
+	networkRegression()
 	seed = 20260801
 	rows := len(rigOrder)*pitch + 8
 	a := makeSurface(surfA, rows)
@@ -1139,6 +1140,7 @@ func onEvent(id, ptr uint32) {
 		return
 	}
 	t := fkapi.ReadOnTick(ptr).Tick
+	topologyTick(t)
 	harness.Run(schedule, t)
 
 	// The roboport has no electric network out here, so it is topped up directly
