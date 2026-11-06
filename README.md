@@ -26,11 +26,13 @@ This mod compiles instead. When a cluster of parts changes, the guest (the Go pr
    outputs, and nothing was configured.  balance and not just the belts.
 ```
 
-The network is a butterfly over P = next_pow2(max(inputs, outputs)) lines, log2(P) stages of P/2 splitters, with a lane-splitter stage on entry that makes it lane-accurate rather than only belt-accurate. A 4x4 balancer is 32 hidden entities; an 8x8 is 84.
+The network is a butterfly over P = next_pow2(max(inputs, outputs)) lines, log2(P) stages of P/2 splitters, with a lane-splitter stage on entry that makes it lane-accurate rather than only belt-accurate. From 3 to 32 lines it is two butterflies, one straight after the other, for the reason below. A 4x4 balancer is 44 entities and an 8x8 is 128, counting the linked belts on the parts themselves.
 
 It balances the way the same splitter tree would if you built it by hand, including where that tree falls short. When the inputs are only partly fed and an output is blocked, or takes less than its share, the outputs nearest it in the tree take up its share and the split among the rest is uneven. In a four by four balancer fed by one belt with one output blocked, the three open outputs get a quarter, a quarter and a half of that belt. Once every open output is full, the split is even again.
 
-The network is not throughput unlimited by construction either. The hidden belts run faster than any vanilla belt (see Belt speed below), and on express and turbo belts that is enough for every input and output combination checked up to 16 belts per side. At 32 or 64 belts per side it is not: some combinations of a few inputs and a few outputs carry less than the belts feeding them.
+One butterfly is not throughput unlimited: two inputs that meet at a splitter, feeding two outputs that leave from one, share a single line in between and move one belt of the two. Two butterflies in a row are the usual way to make a balancer throughput unlimited, and that is what a balancer with up to 32 belts on its busiest side is built as: any set of full input belts feeding any set of open output belts moves as many belts as the smaller set. A balancer with 33 to 64 belts on a side stays one butterfly deep, because two of that size do not fit the space the mod gives each balancer, and some combinations of a few inputs and a few outputs can carry less than the belts feeding them. The hidden belts run faster than any vanilla belt (see Belt speed below), which makes up part of that difference.
+
+A balancer built by an earlier version keeps the network it was built with until something rebuilds it, and any edit does: adding or removing a belt or a part, or changing a priority.
 
 One balancer supports up to 64 belts per side (inputs and outputs counted separately); the limit is the size of the hidden-surface slot a network compiles into.
 

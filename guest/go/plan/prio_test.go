@@ -781,15 +781,15 @@ func TestPriorityCapacityIsRecorded(t *testing.T) {
 		plain, prio, resid int
 	}{
 		{2, 2, 1, 64, 106, 42},
-		{4, 4, 1, 192, 442, 250},
-		{4, 4, 2, 192, 362, 170},
-		{3, 5, 1, 448, 912, 464},
-		{5, 3, 1, 458, 816, 358},
-		{8, 8, 1, 512, 1253, 741},
-		{8, 8, 2, 512, 1280, 768},
-		{8, 8, 4, 512, 1109, 597},
-		{16, 16, 1, 1280, 3258, 1978},
-		{32, 32, 1, 3072, 8037, 4965},
+		{4, 4, 1, 277, 442, 165},
+		{4, 4, 2, 277, 362, 85},
+		{3, 5, 1, 746, 912, 166},
+		{5, 3, 1, 757, 816, 59},
+		{8, 8, 1, 810, 1253, 443},
+		{8, 8, 2, 810, 1280, 470},
+		{8, 8, 4, 810, 1109, 299},
+		{16, 16, 1, 2133, 3258, 1125},
+		{32, 32, 1, 5290, 8037, 2747},
 	} {
 		pl, ptPl, _ := Build(nil, edges(c.n, c.m), 0, 0)
 		if got := reinsertableOf(pl); got != c.plain {
@@ -834,6 +834,10 @@ func TestPriorityCapacityIsRecorded(t *testing.T) {
 // back is a property of the engine, and pinning it exactly here would fail on
 // the day a belt's item pitch or a splitter's buffer moved, over a bound that
 // would still be sound.
+//
+// BOTH WERE DRAINED FROM ONE BUTTERFLY, which the 4->4 no longer is (twice), so
+// the bound is held against the network that was measured: reinsertableOf over
+// oneButterfly's ops is the same arithmetic Reinsertable does over Build's.
 func TestTheBoundIsUnderWhatTheEngineGaveBack(t *testing.T) {
 	for _, c := range []struct {
 		n, m    int
@@ -842,12 +846,19 @@ func TestTheBoundIsUnderWhatTheEngineGaveBack(t *testing.T) {
 		{2, 2, 72},
 		{4, 4, 232},
 	} {
-		pt, _ := ShapeEdges(edges(c.n, c.m))
-		if got := Reinsertable(pt); got > c.drained {
+		if got := reinsertableOf(oneButterfly(t, c.n, c.m)); got > c.drained {
 			t.Errorf("a jammed %d->%d gave back %d items in a game and this "+
 				"bound says the network can take %d; the difference is what a "+
 				"toggle would put on the ground", c.n, c.m, c.drained, got)
 		}
+	}
+	// And the two-deep 4->4 as Build lays it now: the prio suite's mp44, a
+	// dead-ended plain 4->4 fed from tick 0, held 360 on Factorio 2.1.24 on
+	// 2026-11-05, against 232 one deep.
+	pt, _ := ShapeEdges(edges(4, 4))
+	if got := Reinsertable(pt); got > 360 {
+		t.Errorf("a jammed two-deep 4->4 held 360 items in a game and this bound "+
+			"says it can take %d", got)
 	}
 }
 
@@ -863,8 +874,9 @@ func TestTheBoundIsUnderWhatTheEngineGaveBack(t *testing.T) {
 // It is not idle. A priority network is MORE splitter than a plain one -- 40% of
 // a priority 2->2's tiles against 33% of the plain one's -- so the shapes the
 // guard is actually asked about are the ones the two measured rows argue least
-// about. The tightest row of the sweep is 1->4 at q=2, which clears the
-// pessimistic reading by 2.48 points.
+// about. The tightest row of the sweep is the plain 3->1, which since twice is
+// two butterflies over four lines and clears the pessimistic reading by 1.21
+// points (245 items against 248). Before twice it was 1->4 at q=2, by 2.48.
 func TestTheBoundHoldsOnShapesNobodyMeasured(t *testing.T) {
 	check := func(n, m, q int) {
 		var es []Edge
@@ -951,6 +963,10 @@ func TestAPriorityToggleCanShrinkTheNetworkInEitherDirection(t *testing.T) {
 // [1, 0, 1, 0] a priority butterfly produces on the output side, and the same
 // thing it says -- a de-concentrator alone spreads over a SET of inputs, so it
 // needs a balancing butterfly and a pair of input-side tiers around it.
+//
+// It is probed on ONE butterfly because a de-concentrator is one, the way the
+// concentrator buildPrio lays is; the plain network Build lays for these shapes
+// is two deep since twice.
 func TestTheInputPriorityMirrorIsTheSameShape(t *testing.T) {
 	for _, c := range []struct {
 		n, m int
@@ -960,10 +976,7 @@ func TestTheInputPriorityMirrorIsTheSameShape(t *testing.T) {
 		{8, 1, []float64{1, 0, 0, 0, 0, 0, 0, 0}},
 		{4, 2, []float64{1, 0, 1, 0}},
 	} {
-		ops, _, ok := Build(nil, edges(c.n, c.m), 0, 0)
-		if !ok {
-			t.Fatalf("%d->%d refused", c.n, c.m)
-		}
+		ops := oneButterfly(t, c.n, c.m)
 		for i := range ops {
 			if ops[i].Proto == ProtoSplitter {
 				ops[i].InPrio = PrioLeft
@@ -977,6 +990,73 @@ func TestTheInputPriorityMirrorIsTheSameShape(t *testing.T) {
 			if math.Abs(v-c.want[i]) > 1e-9 {
 				t.Fatalf("%d->%d with every splitter drawing from the smaller y "+
 					"first: intake %v, want %v", c.n, c.m, tak, c.want)
+			}
+		}
+	}
+}
+
+// oneButterfly is the plain network for n inputs and m outputs laid with its
+// stages ONCE: what Build laid for every shape before twice, and what it still
+// lays for two lines and for 64. Two things in this file are about that network
+// rather than about whatever Build lays today -- the drains a real Factorio
+// measured, and the input-priority probe -- and they are held against it here.
+//
+// Only shapes with no loopback, which is every shape either of them asks for.
+// The layout is Build's own, op for op, with the second stagesAt left out.
+func oneButterfly(t *testing.T, n, m int) []Op {
+	t.Helper()
+	es := edges(n, m)
+	pt, fits := ShapeEdges(es)
+	if !fits || pt.Loop != 0 || pt.QOut != 0 {
+		t.Fatalf("%d->%d: oneButterfly lays plain shapes with no loopback", n, m)
+	}
+	var ops []Op
+	recv := make([]int32, n)
+	for r := 0; r < n; r++ {
+		ops = append(ops, Op{Proto: ProtoLinkedBelt, X: 0.5 + colRecv, Y: 0.5 + float64(r),
+			Dir: East, Link: LinkOutput, Pair: -1})
+		recv[r] = int32(len(ops) - 1)
+		ops = append(ops, Op{Proto: ProtoLaneSplitter, X: 0.5 + colLaneSplit, Y: 0.5 + float64(r),
+			Dir: East, Pair: -1})
+	}
+	ops, col := stagesAt(ops, pt.P, colFirstStage, 0, 0, PrioNone)
+	send := make([]int32, m)
+	for r := 0; r < m; r++ {
+		ops = append(ops, Op{Proto: ProtoLinkedBelt, X: 0.5 + float64(col), Y: 0.5 + float64(r),
+			Dir: East, Link: LinkInput, Pair: -1})
+		send[r] = int32(len(ops) - 1)
+	}
+	nin, nout := 0, 0
+	for _, e := range es {
+		if e.Out {
+			ops = append(ops, Op{Proto: ProtoLinkedBelt, X: float64(e.TileX) + 0.5,
+				Y: float64(e.TileY) + 0.5, Dir: e.Dir, Link: LinkOutput, Visible: true, Pair: -1})
+			ops[send[nout]].Pair = int32(len(ops) - 1)
+			nout++
+		} else {
+			ops = append(ops, Op{Proto: ProtoLinkedBelt, X: float64(e.TileX) + 0.5,
+				Y: float64(e.TileY) + 0.5, Dir: e.Dir, Link: LinkInput, Visible: true,
+				Pair: recv[nin]})
+			nin++
+		}
+	}
+	return ops
+}
+
+// TestOneButterflyIsWhatBuildLaysWhereItLaysOne is what lets oneButterfly stand
+// in for the network the two measurements were taken on: where twice is false,
+// Build and it must agree op for op, so the only thing that differs elsewhere is
+// the second stagesAt.
+func TestOneButterflyIsWhatBuildLaysWhereItLaysOne(t *testing.T) {
+	for _, nm := range [][2]int{{2, 2}, {2, 1}, {1, 2}, {64, 64}, {64, 1}} {
+		got := oneButterfly(t, nm[0], nm[1])
+		want, _, _ := Build(nil, edges(nm[0], nm[1]), 0, 0)
+		if len(got) != len(want) {
+			t.Fatalf("%d->%d: %d ops, Build lays %d", nm[0], nm[1], len(got), len(want))
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				t.Fatalf("%d->%d op %d: %+v, Build lays %+v", nm[0], nm[1], i, got[i], want[i])
 			}
 		}
 	}

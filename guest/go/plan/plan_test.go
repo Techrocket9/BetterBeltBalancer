@@ -381,7 +381,7 @@ var loopShapes = [][2]int{
 func hiddenPorts(t *testing.T, ops []Op, pt Ports, ox, oy int32) (recv, send map[int]int) {
 	t.Helper()
 	recv, send = map[int]int{}, map[int]int{}
-	sendCol := Width(pt.P) - 1
+	sendCol := plainWidth(pt.P) - 1
 	for i, o := range ops {
 		if o.Visible || o.Link == LinkNone {
 			continue
@@ -574,28 +574,36 @@ func TestShapeTable(t *testing.T) {
 	}
 }
 
-// TestPlanFitsItsSlot: Width() is what the slot grid is sized from, so a plan
-// that reached further would overwrite its neighbour's network.
+// TestPlanFitsItsSlot: plainWidth() is how far a plan reaches into its slot,
+// so a plan that reached further would overwrite its neighbour's network.
 func TestPlanFitsItsSlot(t *testing.T) {
+	shapes := [][2]int{{32, 32}, {17, 32}, {32, 1}, {64, 64}, {33, 64}, {1, 64}}
 	for n := 1; n <= 16; n++ {
 		for m := 1; m <= 16; m++ {
-			ops, pt, ok := Build(nil, edges(n, m), 0, 0)
-			if !ok {
-				t.Fatalf("%d->%d refused", n, m)
+			shapes = append(shapes, [2]int{n, m})
+		}
+	}
+	for _, nm := range shapes {
+		n, m := nm[0], nm[1]
+		ops, pt, ok := Build(nil, edges(n, m), 0, 0)
+		if !ok {
+			t.Fatalf("%d->%d refused", n, m)
+		}
+		w := plainWidth(pt.P)
+		if w > SlotWidth {
+			t.Fatalf("%d->%d is %d columns and a slot is %d", n, m, w, SlotWidth)
+		}
+		for _, o := range ops {
+			if o.Visible {
+				continue
 			}
-			w := Width(pt.P)
-			for _, o := range ops {
-				if o.Visible {
-					continue
-				}
-				x := int(math.Floor(o.X))
-				y := int(math.Floor(o.Y))
-				if x < 0 || x >= w {
-					t.Fatalf("%d->%d: x=%d outside width %d", n, m, x, w)
-				}
-				if y < 0 || y >= pt.P {
-					t.Fatalf("%d->%d: y=%d outside %d rows", n, m, y, pt.P)
-				}
+			x := int(math.Floor(o.X))
+			y := int(math.Floor(o.Y))
+			if x < 0 || x >= w {
+				t.Fatalf("%d->%d: x=%d outside width %d", n, m, x, w)
+			}
+			if y < 0 || y >= pt.P {
+				t.Fatalf("%d->%d: y=%d outside %d rows", n, m, y, pt.P)
 			}
 		}
 	}
@@ -645,8 +653,8 @@ func TestNoNetworkWithoutBothSides(t *testing.T) {
 // on, so a change that quietly doubles the compile cost shows up here first.
 func TestEntityCount(t *testing.T) {
 	for _, c := range []struct{ n, m, want int }{
-		{4, 4, 32},
-		{8, 8, 84},
+		{4, 4, 44},
+		{8, 8, 128},
 	} {
 		ops, _, _ := Build(nil, edges(c.n, c.m), 0, 0)
 		if len(ops) != c.want {

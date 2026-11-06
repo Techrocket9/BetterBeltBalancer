@@ -199,6 +199,8 @@ type Edge struct {
 //	         jumper IN ends / straight belt
 //	         jumper OUT ends / straight belt
 //	         stage s splitters
+//	then, where twice(P), the stages again, the first of them straight
+//	         after the last splitter column with no jumper block in front
 //	last     send    linked belt, input end -- the visible output's partner
 //
 // The jumper block is two columns and cannot be one: a row that is moving away
@@ -222,12 +224,47 @@ func stageCols(p int) int {
 	return k + (k-1)*jumperCols
 }
 
-// Width is how many tile columns a P-line network occupies: the recv column,
-// the lane-splitter column, the stages and the send column. It is also the
-// width of any plain butterfly BLOCK, which is what the priority construction
-// builds its two sub-balancers out of.
+// Width is how many tile columns one butterfly BLOCK occupies: the recv
+// column, the lane-splitter column, the stages and the send column. The
+// priority construction builds its two tier balancers out of these. The plain
+// network is plainWidth wide, which is wider wherever it runs its stages twice.
 func Width(p int) int {
 	return colFirstStage + stageCols(p) + 1
+}
+
+// twice says whether the plain network over p lines runs its butterfly twice.
+//
+// ONE BUTTERFLY BALANCES AND IS NOT THROUGHPUT UNLIMITED. Two inputs on one
+// first-stage splitter feeding the two outputs of one last-stage splitter share
+// a single line in between, so they move one belt of the two on offer, and at
+// 32 and 64 lines four inputs can be held to a quarter. The hidden belts' speed
+// hides most of that from a player, not all of it. A second butterfly laid
+// straight after the first gives every input more than one route to every
+// output, and the flow model then delivers min(inputs, outputs) on every
+// combination it is given (TestTheDoubledNetworkIsThroughputUnlimited).
+//
+// TWO LINES ARE ONE SPLITTER, and one splitter already takes whatever its two
+// inputs offer whichever of its outputs is open, so a second one would add
+// entities and nothing else.
+//
+// It does nothing for the other thing a single butterfly does: with partial
+// input and an output that is blocked, the outputs nearest it in the tree still
+// take its share, and the split among the rest is still uneven.
+//
+// THE SLOT IS WHAT STOPS IT AT 32 LINES. Two butterflies over 64 lines are 35
+// columns and a slot is SlotWidth wide; a hidden entity's position is its slot
+// number (compile.go), so widening the slot is a change to what every standing
+// save means. A 64-line network stays one butterfly deep.
+func twice(p int) bool {
+	return p > 2 && Width(p)+stageCols(p) <= SlotWidth
+}
+
+// plainWidth is how many tile columns the plain network over p lines occupies.
+func plainWidth(p int) int {
+	if twice(p) {
+		return Width(p) + stageCols(p)
+	}
+	return Width(p)
 }
 
 // stages is log2(p) for a power of two.
@@ -581,6 +618,9 @@ func Build(dst []Op, edges []Edge, ox, oy int32) (ops []Op, pt Ports, ok bool) {
 
 	// --- stages -------------------------------------------------------------
 	ops, col := stagesAt(ops, p, colFirstStage, ox, oy, PrioNone)
+	if twice(p) {
+		ops, col = stagesAt(ops, p, col, ox, oy, PrioNone)
+	}
 
 	// --- tail: send ---------------------------------------------------------
 	for r := 0; r < p; r++ {
@@ -841,24 +881,33 @@ func buildPrio(ops []Op, edges []Edge, pt Ports, ox, oy int32) ([]Op, Ports, boo
 // ---------------------------------------------------------------------------
 
 // Propagate runs a flow vector through the network the physical layout builds:
-// permute rows, then average adjacent pairs, once per stage.
+// permute rows, then average adjacent pairs, once per stage, and the whole
+// schedule a second time where twice(p) says Build lays it twice. The second
+// pass starts with no permutation because Build lays no jumper block between
+// the two.
 func Propagate(in []float64) []float64 {
 	p := len(in)
 	k := stages(p)
 	ord := order(p)
 	f := append([]float64(nil), in...)
 	next := make([]float64, p)
-	for s := 0; s < k; s++ {
-		if s > 0 {
-			perm := permutation(ord[s-1], ord[s])
-			for r := 0; r < p; r++ {
-				next[perm[r]] = f[r]
+	passes := 1
+	if twice(p) {
+		passes = 2
+	}
+	for pass := 0; pass < passes; pass++ {
+		for s := 0; s < k; s++ {
+			if s > 0 {
+				perm := permutation(ord[s-1], ord[s])
+				for r := 0; r < p; r++ {
+					next[perm[r]] = f[r]
+				}
+				copy(f, next)
 			}
-			copy(f, next)
-		}
-		for t := 0; t < p/2; t++ {
-			mid := (f[2*t] + f[2*t+1]) / 2
-			f[2*t], f[2*t+1] = mid, mid
+			for t := 0; t < p/2; t++ {
+				mid := (f[2*t] + f[2*t+1]) / 2
+				f[2*t], f[2*t+1] = mid, mid
+			}
 		}
 	}
 	return f
@@ -968,6 +1017,8 @@ func PropagateLoop(ext []float64, pt Ports) (rows []float64, ok bool) {
 // arithmetic. The shortfall is the splitter family: eight linked belts alone
 // account for all but 8 of the 2->2's 72, so one splitter and two lane
 // splitters gave back 8 positions between them where the arithmetic claims 32.
+// Both were one butterfly deep; the 4->4 is two since twice, and the tests hold
+// the bound against the network that was drained (oneButterfly, prio_test.go).
 //
 // SO THE DISCOUNT IS FLAT AND IT IS TWO THIRDS. Two measurements cannot fit a
 // per-proto model -- read per tile they imply 2 positions a splitter-family tile
@@ -979,7 +1030,8 @@ func PropagateLoop(ext []float64, pt Ports) (rows []float64, ok bool) {
 // is what carries it past the two plain rows: take the worse of the two --
 // belts and linked belts exact at eight a tile, the splitter family at two --
 // and the flat two thirds is under it on every shape this planner builds, by
-// 2.48 points at the tightest (1->4 at q=2). That matters because a priority network is MORE
+// 1.21 points at the tightest (the plain 3->1, two butterflies over four lines
+// since twice; before it, 1->4 at q=2 by 2.48). That matters because a priority network is MORE
 // splitter and not less: 40% of a priority 2->2's tiles are splitter family
 // against 33% of the plain one's, so a bound that leaned on the plain shapes'
 // composition would lean the wrong way. TestTheBoundHoldsOnShapesNobodyMeasured.

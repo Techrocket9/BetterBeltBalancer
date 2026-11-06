@@ -207,3 +207,95 @@ func TestABlockedOutputIsNotRebalancedUnderPartialLoad(t *testing.T) {
 		}
 	}
 }
+
+// TestTheDoubledNetworkIsThroughputUnlimited is twice's claim: wherever the
+// plain network is two butterflies deep, any set of full input belts feeding
+// any set of open output belts moves min(inputs, outputs) belts. Every link in
+// the model carries one belt, which is the hidden belts running no faster than
+// the player's; the game runs them faster, so this is the harder case.
+//
+// Exhaustive over every subset on both sides for every shape to 6x6 and for
+// 8x8, and over a fixed pseudo-random sample at 16x16 and 32x32. And the
+// exception pinned rather than remembered: at 64 lines, where twice is false,
+// four adjacent inputs feeding four spread-out outputs move one belt of four.
+func TestTheDoubledNetworkIsThroughputUnlimited(t *testing.T) {
+	try := func(n, m int, ops []Op, im, om uint64) (took, want float64) {
+		in, out := make([]float64, n), make([]float64, m)
+		k, j := 0, 0
+		for b := 0; b < n; b++ {
+			if im>>uint(b)&1 == 1 {
+				in[b] = 1
+				k++
+			}
+		}
+		for b := 0; b < m; b++ {
+			if om>>uint(b)&1 == 1 {
+				out[b] = 1
+				j++
+			}
+		}
+		_, tak, ok := Simulate(ops, in, out)
+		if !ok {
+			t.Fatalf("%d->%d in=%b out=%b: the flow model did not converge", n, m, im, om)
+		}
+		for _, v := range tak {
+			took += v
+		}
+		return took, float64(min(k, j))
+	}
+	check := func(n, m int, ops []Op, im, om uint64) {
+		if took, want := try(n, m, ops, im, om); took < want-1e-9 {
+			t.Fatalf("%d->%d: inputs %0*b into outputs %0*b move %g belts of %g",
+				n, m, n, im, m, om, took, want)
+		}
+	}
+	exhaust := func(n, m int) {
+		ops, pt, _ := Build(nil, edges(n, m), 100, 200)
+		if !twice(pt.P) && pt.P > 2 {
+			t.Fatalf("%d->%d (P=%d) is one butterfly deep", n, m, pt.P)
+		}
+		for im := uint64(1); im < 1<<uint(n); im++ {
+			for om := uint64(1); om < 1<<uint(m); om++ {
+				check(n, m, ops, im, om)
+			}
+		}
+	}
+	for n := 1; n <= 6; n++ {
+		for m := 1; m <= 6; m++ {
+			exhaust(n, m)
+		}
+	}
+	exhaust(8, 8)
+
+	// A linear congruential generator, so the sample is the same on every run.
+	seed := uint64(1)
+	next := func(lim int) int {
+		seed = seed*6364136223846793005 + 1442695040888963407
+		return int(seed>>33) % lim
+	}
+	for _, p := range []int{16, 32} {
+		ops, _, _ := Build(nil, edges(p, p), 100, 200)
+		if !twice(p) {
+			t.Fatalf("P=%d is one butterfly deep", p)
+		}
+		for i := 0; i < 400; i++ {
+			var im, om uint64
+			for c := 1 + next(8); c > 0; c-- {
+				im |= 1 << uint(next(p))
+			}
+			for c := 1 + next(8); c > 0; c-- {
+				om |= 1 << uint(next(p))
+			}
+			check(p, p, ops, im, om)
+		}
+	}
+
+	ops, _, _ := Build(nil, edges(64, 64), 100, 200)
+	if twice(64) {
+		t.Fatal("P=64 is two butterflies deep, and two do not fit the slot")
+	}
+	if took, _ := try(64, 64, ops, 0xf, 1|1<<16|1<<32|1<<48); math.Abs(took-1) > 1e-9 {
+		t.Fatalf("64->64: four adjacent inputs into four outputs 16 apart move %g "+
+			"belts; the README says a 64-line balancer can be held to one", took)
+	}
+}

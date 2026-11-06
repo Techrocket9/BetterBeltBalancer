@@ -140,15 +140,17 @@ Entities, and how many items the network can be given back. The second column is
 | shape | plain entities | plain takes back | q | priority entities | priority takes back | growth | **residual bound** |
 |---|--:|--:|--:|--:|--:|--:|--:|
 | 2->2 | 11 | 64 | 1 | 18 | 106 | 1.71x | 42 |
-| 4->4 | 32 | 192 | 1 | 71 | 442 | 2.30x | 250 |
-| 4->4 | 32 | 192 | 2 | 58 | 362 | 1.90x | 170 |
-| 3->5 | 72 | 448 | 1 | 143 | 912 | 2.02x | 464 |
-| 5->3 | 74 | 458 | 1 | 128 | 816 | 1.74x | 358 |
-| 8->8 | 84 | 512 | 1 | 199 | 1253 | 2.42x | 741 |
-| 8->8 | 84 | 512 | 2 | 203 | 1280 | 2.48x | 768 |
-| 8->8 | 84 | 512 | 4 | 176 | 1109 | 2.15x | 597 |
-| 16->16 | 208 | 1280 | 1 | 515 | 3258 | 2.52x | 1978 |
-| 32->32 | 496 | 3072 | 1 | 1267 | 8037 | 2.59x | 4965 |
+| 4->4 | 44 | 277 | 1 | 71 | 442 | 1.60x | 165 |
+| 4->4 | 44 | 277 | 2 | 58 | 362 | 1.31x | 85 |
+| 3->5 | 116 | 746 | 1 | 143 | 912 | 1.22x | 166 |
+| 5->3 | 118 | 757 | 1 | 128 | 816 | 1.08x | 59 |
+| 8->8 | 128 | 810 | 1 | 199 | 1253 | 1.55x | 443 |
+| 8->8 | 128 | 810 | 2 | 203 | 1280 | 1.58x | 470 |
+| 8->8 | 128 | 810 | 4 | 176 | 1109 | 1.37x | 299 |
+| 16->16 | 336 | 2133 | 1 | 515 | 3258 | 1.53x | 1125 |
+| 32->32 | 832 | 5290 | 1 | 1267 | 8037 | 1.52x | 2747 |
+
+**The plain columns moved on 2026-11-05 and the priority columns did not.** The plain network over 3 to 32 lines is two butterflies deep since then (`plan.go`, `twice`), so its entity count and what it takes back grew and every residual bound shrank; the priority construction was already two butterflies deep and its tier balancers are laid by `subAt`, which `twice` does not touch. Two lines (one splitter) and 64 lines (too wide for two) are unchanged. The growth column is priority takes back over plain takes back, as before. Before that date the plain 4->4 was 32 entities taking back 192, the 8->8 84 and 512, the 16->16 208 and 1280, and the 32->32 496 and 3072.
 
 The entity count is **not monotone in q**, and that is the tier balancers rather than an error: a 4x4 costs more with one priority port than with two, because one leaves three normal ports and a square butterfly over three ports is four rows with a loopback in it, where two and two are a pair of single-splitter blocks.
 
@@ -168,7 +170,7 @@ So before the flag moves, the guest asks `plan.Reinsertable` what the successor 
 
 **THE TILE ARITHMETIC IS NOT THE BOUND, AND ASSUMING IT WAS IS WHAT THE FIRST CUT OF THIS GUARD GOT WRONG.** The two places this repository has drained a jammed network of a shape the arithmetic can be computed for: CLAUDE.md's M2 conservation check puts **72 items** in a full plain 2->2, where the tiles say 96, and the `hand` leg's first shrink puts **232** in a saturated dead-ended plain 4->4, where they say 288. A guard comparing what the machine holds against the tile arithmetic therefore passes a toggle on a 2->2 holding anything from 65 to 96 items and spills the difference -- with the refusal message, which tells the player to let the balancer empty, walking them into the band rather than out of it. The shortfall is the splitter family: eight linked belts alone account for all but 8 of the 2->2's 72, so one splitter and two lane splitters gave back 8 where the arithmetic claims 32.
 
-`plan.Reinsertable` is therefore the arithmetic less a third, which is under both measured fractions (75.0% and 80.6%) and under the pessimistic per-tile reading of them on every shape this planner builds, tightest at 1->4 with q=2 and 2.48 points to spare. It is a bound and not a measurement; being under costs a refusal a player did not need, and being over costs items on the floor.
+`plan.Reinsertable` is therefore the arithmetic less a third, which is under both measured fractions (75.0% and 80.6%) and under the pessimistic per-tile reading of them on every shape this planner builds, tightest at the plain 3->1 with 1.21 points to spare (245 items against 248). Before the plain network went two deep the tightest was 1->4 with q=2, at 2.48. Both measured fractions are of one-butterfly networks, and `TestTheBoundIsUnderWhatTheEngineGaveBack` holds the bound against that shape (`oneButterfly` in `prio_test.go`), not against what Build lays for a 4->4 today. It is a bound and not a measurement; being under costs a refusal a player did not need, and being over costs items on the floor.
 
 That is also what says the guard is reachable rather than theoretical. A priority 2->2 takes back 106 and the plain 2->2 it becomes takes back 64; a jammed priority 2->2 is carrying around 120 items, well over the 64. So the suite's rig is a dead-ended 2->2: fill it, clear the flag, and the refusal fires.
 
@@ -343,6 +345,9 @@ The capacity table above is item POSITIONS and the spill guard's bound is what a
 | priority 2 -> 2, q = 1 | **128** | 106 | 192 | 67% |
 | plain 4 -> 4 | **232** | 192 | 320 | 73% |
 | priority 4 -> 4, q = 1 | **578** | 442 | 736 | 79% |
+| plain 4 -> 4, two butterflies deep | **360** | 277 | 416 | 87% |
+
+**The last row is 2026-11-05, Factorio 2.1.24 (build 87808), `mp44` in the `make test` that took the plain network two deep**, the same rig on the same code path; the four above it are the 2026-09-15 run, when the plain 4 -> 4 was one deep. The same run read `mp22` 72, `mq22` 128 and `pbnd` 128 again, to the item: a two-line network and a priority one are laid as they were. `TestTheBoundIsUnderWhatTheEngineGaveBack` carries the 360 beside the two one-deep figures.
 
 **Two of them reproduce CLAUDE.md's own records to the item** -- M2's full 2x2 draining 72 and a saturated dead-ended 4x4 draining 232 -- by a different route, in a different save, which is what makes the other two worth quoting. The 4 -> 4 figure is the guard's own reading of the machine it refused.
 

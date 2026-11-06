@@ -54,10 +54,11 @@ func protoName(p plan.Proto) string {
 // The hidden surface, and the slot grid on it
 // ---------------------------------------------------------------------------
 
-// slotW is comfortably wider than plan.Width(64) = 19, and slotH taller than
-// the 64 rows a MaxPorts network uses. Generous on purpose: a slot's bounds are
-// what a teardown sweeps, and an entity outside them would survive a rebuild as
-// a ghost network nothing owns.
+// slotW is wider than the widest plain network: 29 columns for two butterflies
+// over 32 lines, and 19 for the one butterfly a 64-line network keeps because
+// two would be 35 (plan's twice). slotH is taller than the 64 rows a MaxPorts
+// network uses. A slot's bounds are what a teardown sweeps, and an entity
+// outside them would survive a rebuild as a ghost network nothing owns.
 const (
 	slotW    = plan.SlotWidth
 	slotH    = plan.SlotHeight

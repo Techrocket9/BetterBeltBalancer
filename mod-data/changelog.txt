@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.7
+Date: 2026-11-05
+  Changes:
+    - Balancers with up to 32 belts on a side are now throughput unlimited. Inside, a balancer is a butterfly of splitters, the standard layout for a balancer whose size is a power of two, and one butterfly can bottleneck when a few inputs feed a few outputs. The fast belts inside hid that on smaller balancers, but on balancers with more than 16 belts a side some combinations of inputs and outputs carried less than was fed in. The network is now two butterflies deep, which is the usual way to make a balancer throughput unlimited. A balancer you already have keeps its old network until it is next rebuilt, which happens whenever you add or remove a belt or a part next to it, or change a priority.
+  Info:
+    - A balancer with more than 32 belts on a side is still one butterfly deep, because two of that size do not fit the space the mod gives each balancer. The belts inside run at twice turbo belt speed, which makes up part of the difference.
+    - How a balancer splits items when an output is blocked and the inputs are only partly fed is unchanged, and is what the same splitters built by hand would do: the outputs nearest the blocked one take up its share until they fill. Thanks to GennP for the report.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.6
 Date: 2026-09-20
   Bugfixes:
