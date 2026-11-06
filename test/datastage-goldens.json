@@ -60,5 +60,27 @@
       ],
       "prototype_list_checksum": "4244797564"
     }
+  },
+  "2.1.24": {
+    "_note": "Captured by --capture; read the dump before trusting a fresh line. Per engine and per mod set: the dump carries every prototype every mod defined. Only the DEFAULT settings are hashed; the variant and speed arms assert values.",
+    "base": {
+      "bbb_lines": [],
+      "data_raw_sha256": "dca49b15300d54dd251c249513ae70124ff220de83ccf955140c41b1604c6613",
+      "mod_settings_sha256": "87d351968e34ece60290f5567f72226c30cfada7c78ac57abab6a86f35877897",
+      "mods": [
+        "better-belt-balancer"
+      ],
+      "prototype_list_checksum": "529209389"
+    },
+    "incumbent": {
+      "bbb_lines": [],
+      "data_raw_sha256": "53dc8f381563a131579440cefd7fb25e9f0010c832600a5ba3fea9edb691c183",
+      "mod_settings_sha256": "87d351968e34ece60290f5567f72226c30cfada7c78ac57abab6a86f35877897",
+      "mods": [
+        "better-belt-balancer",
+        "belt-balancer-2"
+      ],
+      "prototype_list_checksum": "4124439340"
+    }
   }
 }
