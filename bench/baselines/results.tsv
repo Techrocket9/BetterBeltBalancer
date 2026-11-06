@@ -258,3 +258,27 @@ mega	better-belt-balancer_0.1.0	40	4	express	3600	2	0.9485	0.4290	8.4960	863.58	
 mega-control	none	40	4	express	3600	2	0.8225	0.4060	3.0860	769.95	205.12	445.12	3.92	3190402	1.000	2.0.77	2026-08-05	mega r3
 mega-idle	better-belt-balancer_0.1.0	40	4	express	3600	2	0.2240	0.0740	8.1620	186.10	55.39	2.45	2.89	0	n/a	2.0.77	2026-08-05	mega r3
 mega-control-idle	none	40	4	express	3600	2	0.1895	0.0680	2.9830	184.34	54.66	1.69	2.92	0	n/a	2.0.77	2026-08-05	mega r3
+control	none	50	4	express	3600	2	0.2080	0.0770	4.2400					432400	1.000	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.6	50	4	express	3600	2	0.2485	0.0830	31.8570					435000	1.001	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.7	50	4	express	3600	2	0.2750	0.1010	5.0610					432900	1.001	2.1.24	2026-11-06	twice-ab
+control	none	200	4	express	3600	2	0.6045	0.1970	7.5030					1729600	1.000	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.6	200	4	express	3600	2	0.7230	0.2060	9.9180					1740000	1.001	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.7	200	4	express	3600	2	0.5970	0.2370	7.1340					1731600	1.001	2.1.24	2026-11-06	twice-ab
+control	none	50	4	express	3600	2	0.2050	0.0870	10.6030					432400	1.000	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.6	50	4	express	3600	2	0.1915	0.0800	4.8380					435000	1.001	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.7	50	4	express	3600	2	0.2215	0.0880	4.8080					432900	1.001	2.1.24	2026-11-06	twice-ab
+control	none	200	4	express	3600	2	0.5150	0.1930	8.4580					1729600	1.000	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.6	200	4	express	3600	2	0.4605	0.1640	6.3660					1740000	1.001	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.7	200	4	express	3600	2	0.5460	0.2220	6.5020					1731600	1.001	2.1.24	2026-11-06	twice-ab
+control	none	50	4	express	3600	2	0.1855	0.0870	3.4670					432400	1.000	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.6	50	4	express	3600	2	0.2055	0.0910	4.1340					435000	1.001	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.7	50	4	express	3600	2	0.1995	0.0860	4.6730					432900	1.001	2.1.24	2026-11-06	twice-ab
+control	none	200	4	express	3600	2	0.5455	0.2050	8.9220					1729600	1.000	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.6	200	4	express	3600	2	0.5665	0.1810	36.7160					1740000	1.001	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.7	200	4	express	3600	2	0.7720	0.2640	9.4530					1731600	1.001	2.1.24	2026-11-06	twice-ab
+control	none	50	4	express	3600	2	0.2065	0.0740	15.6690					432400	1.000	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.6	50	4	express	3600	2	0.2430	0.0800	8.4870					435000	1.001	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.7	50	4	express	3600	2	0.2355	0.0910	11.2450					432900	1.001	2.1.24	2026-11-06	twice-ab
+control	none	200	4	express	3600	2	0.5095	0.1950	6.9960					1729600	1.000	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.6	200	4	express	3600	2	0.6520	0.1970	8.2450					1740000	1.001	2.1.24	2026-11-06	twice-ab
+saturated	better-belt-balancer_0.3.7	200	4	express	3600	2	0.5980	0.2080	6.9840					1731600	1.001	2.1.24	2026-11-06	twice-ab

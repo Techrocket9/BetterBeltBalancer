@@ -179,6 +179,17 @@ The 64x64 is 1,152 hidden entities. Its first compile, by the audit subtraction 
 
 An empty 64x64 recompile is about 155 ms and a full one about 380 ms, against the 8x8's 25.7 ms saturated. The saturated arm rises within a run (306.8, 368.2, 410.4 ms; then 313.7, 377.1, 426.7) because the network is still filling and the reinsertion is proportional to items in flight, so the ceiling is the last rep's 410-427 ms: a 25-tick freeze on every client, triggered by one belt. It is the main input to any decision about raising the 64-port limit; [`../../agents/maxports.md`](../../agents/maxports.md) has the arithmetic.
 
+## Two butterflies deep
+
+From 0.3.7 a balancer with 3 to 32 belts on its busiest side is two butterflies deep instead of one, which makes a 4x4 44 entities instead of 32. Every figure above was measured on the one-deep network, so the two were run against each other: the same 4x4 express saturated cells, the 0.3.6 and 0.3.7 zips built from this repository, a control beside them, Factorio 2.1.24 on the same M3 Pro, four repetitions with control, 0.3.6 and 0.3.7 run back to back at each size. The rows are tagged `twice-ab` in `results.tsv`.
+
+| per saturated 4x4 balancer, per tick, slope n=50 to n=200 less the control's | rep 1 | rep 2 | rep 3 | rep 4 | from the medians |
+| --- | --: | --: | --: | --: | --: |
+| 0.3.6, one butterfly | 0.52 | -0.27 | 0.01 | 0.71 | 0.40 |
+| 0.3.7, two butterflies | -0.50 | 0.10 | 1.42 | 0.40 | 0.30 |
+
+The second butterfly's cost is below what this machine resolves. Single repetitions swing by about two microseconds per balancer for both builds, which is the drift the caveats below describe acting on a difference of a few percent, and the two medians, 0.40 and 0.30, sit inside the same noise as the headline's "0.4-0.9 µs, and the ratio is tens". A negative slope is that noise and not a balancer cheaper than belts. Both builds delivered the same throughput at a balance of 1.001.
+
 ## Targets
 
 The design targets were at least 10x at scale, about 100x saturated, and idle equal to the control.
