@@ -1,6 +1,6 @@
 # Better Belt Balancer
 
-A Factorio 2.1 mod. Balancer parts are 1x1 tiles: place several next to each other and they become one balancer, of whatever shape you built. The belts feeding it are its inputs and the belts it feeds are its outputs; orientation alone decides, so there is nothing to configure. Each part connects to one belt, so a four-in four-out balancer is eight parts: four carrying the inputs and four carrying the outputs. Items are balanced across every output exactly, per lane, under every load condition: saturated, starved, partially blocked, asymmetric.
+A Factorio 2.1 mod. Balancer parts are 1x1 tiles: place several next to each other and they become one balancer, of whatever shape you built. The belts feeding it are its inputs and the belts it feeds are its outputs; orientation alone decides, so there is nothing to configure. Each part connects to one belt, so a four-in four-out balancer is eight parts: four carrying the inputs and four carrying the outputs. Items are balanced across every output, per lane, whenever every output can take its share: saturated, starved, or fed unevenly. A blocked output is the exception, described under How it works.
 
 The mod is written in Go, compiled to WebAssembly by TinyGo and then to Lua by [FkLua](https://github.com/Techrocket9/FkLua). That covers both halves of a Factorio mod: the control stage that runs while you play, and the settings and data stages that declare the prototypes. There is no hand-written Lua in the shipped mod.
 
@@ -27,6 +27,10 @@ This mod compiles instead. When a cluster of parts changes, the guest (the Go pr
 ```
 
 The network is a butterfly over P = next_pow2(max(inputs, outputs)) lines, log2(P) stages of P/2 splitters, with a lane-splitter stage on entry that makes it lane-accurate rather than only belt-accurate. A 4x4 balancer is 32 hidden entities; an 8x8 is 84.
+
+It balances the way the same splitter tree would if you built it by hand, including where that tree falls short. When the inputs are only partly fed and an output is blocked, or takes less than its share, the outputs nearest it in the tree take up its share and the split among the rest is uneven. In a four by four balancer fed by one belt with one output blocked, the three open outputs get a quarter, a quarter and a half of that belt. Once every open output is full, the split is even again.
+
+The network is not throughput unlimited by construction either. The hidden belts run faster than any vanilla belt (see Belt speed below), and on express and turbo belts that is enough for every input and output combination checked up to 16 belts per side. At 32 or 64 belts per side it is not: some combinations of a few inputs and a few outputs carry less than the belts feeding them.
 
 One balancer supports up to 64 belts per side (inputs and outputs counted separately); the limit is the size of the hidden-surface slot a network compiles into.
 
