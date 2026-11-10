@@ -1,4 +1,14 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.8
+Date: 2026-11-09
+  Bugfixes:
+    - Undo and redo no longer stutter in a base with many balancers. Every undo or redo, of anything at all, re-checked the belts around every balancer on your surface, which took a few milliseconds per balancer: about an eighth of a second for fifty 4x4 balancers with items on them, and close to two seconds for two hundred 8x8s. Undo and redo now cost nothing unless they put back or take away a balancer part or a belt next to one, and then they cost what that change costs. Thanks to GriimVT for the report.
+    - Dragging balancer parts into place beside running belts no longer stutters. The balancer was rebuilt every few ticks while you dragged, one part bigger each time, so a twenty-part drag rebuilt it ten times. A drag is now built once, a fifth of a second after you stop. The same goes for taking a balancer apart one part after another, and for construction robots building or deconstructing one, which wait about a second for the rest of their wave. Thanks to GriimVT for the report.
+  Changes:
+    - A part you mine from a running balancer leaves its tile empty straight away, and whatever its edge was carrying goes into your inventory as before. The rest of the balancer keeps running as it was until you stop mining, and is then rebuilt or taken down once, with its contents going back inside it or into your inventory.
+  Info:
+    - A single part or belt you place next to a balancer still connects on the next tick. Changes made by other mods' scripts are not batched.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.7
 Date: 2026-11-05
   Changes:
