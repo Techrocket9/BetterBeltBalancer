@@ -687,17 +687,18 @@ func phaseCloneBrush() {
 
 // 8/9. A belt whose direction changes with NO EVENT, and the re-validation.
 //
-// `entity.direction = x` raises nothing at all. That is exactly what an undone
-// ROTATION does to the world, and the reason the undo handler re-validates
-// rather than trusting the actions array it is handed.
+// `entity.direction = x` raises nothing at all, so a script that turns a belt
+// beside a balancer leaves the network stale until something re-classifies it.
+// The audit marker is that something, and this pair asserts it repairs the edit.
 //
-// The undo EVENT itself is out of reach here and the harness does not pretend
-// otherwise: a headless --create has no player to scope by, LuaUndoRedoStack can
-// be read and edited but never APPLIED, and script.raise_event refuses
-// ("on_undo_applied can't be raised through script"). What is tested is the
-// machinery the handler calls -- a pass that re-classifies every cluster from
-// the world -- reached here through the audit marker, which runs the same
-// classify-and-repair and additionally reports what it found.
+// This USED TO stand for an undone rotation too, and no longer does: measured
+// on 2.1.24 in a client, an undo or a redo of a rotation raises
+// on_player_rotated_entity like the rotation itself, so the mod no longer
+// subscribes to on_undo_applied or on_redo_applied at all
+// (agents/history/verification-log.md, 2026-11-09). The undo event is still out
+// of reach headlessly -- LuaUndoRedoStack can be read but never applied, and
+// script.raise_event refuses it -- which is why that measurement is a client
+// one.
 func phaseSilentRotate() {
 	mark(8, "belt direction changed with no event")
 	s := harness.Surface(surfA)

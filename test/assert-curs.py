@@ -164,6 +164,10 @@ LINE_TILE = (-2, 0)
 # each. Nothing else in it moved, which is what says those bands are forty tiles
 # clear of every gesture above them.
 #
+# AND BY +1 CLUSTER, +20 PARTS AND +1 NETWORK FROM `post-drag` ON for band (k),
+# whose rig is ten fed rows with no part at all until the player drags twenty
+# into them.
+#
 # AND BY +1 CLUSTER AND +2 PARTS AGAIN for band (j), whose row has NO network
 # until its underground pair is turned -- two inputs and no output is a
 # half-built state -- so `nets` gains one at `post-urot` and not before.
@@ -183,9 +187,11 @@ AUDIT_EXPECT = {
     "post-curve":       (12, 169, 11, 1, 0, 1),
     "post-lb":          (12, 169, 11, 1, 0, 1),
     "post-urot":        (12, 169, 12, 1, 0, 1),
-    "post-bmin-mine":   (12, 169, 12, 1, 0, 1),
-    "post-pock":        (11, 164, 11, 1, 0, 1),
-    "final":            (11, 164, 11, 1, 0, 1),
+    "post-drag":        (13, 189, 13, 1, 0, 1),
+    "post-bmin-mine":   (13, 189, 13, 1, 0, 1),
+    "post-pock":        (12, 184, 12, 1, 0, 1),
+    "final":            (12, 184, 12, 1, 0, 1),
+    "post-unbuild":     (11, 164, 11, 1, 0, 1),
 }
 
 # What a SATURATED express belt tile holds: four items per lane at the belt's own
@@ -620,7 +626,7 @@ def main():
                     "DISSOLVE alone, by which time a balancer taken apart part "
                     "by part is almost empty. A rig that was not saturated "
                     "satisfies every other count here")
-    pre, after = need("pock-pre"), need("pock-5")
+    pre, after = need("pock-pre"), need("pock-after")
     if pre and after:
         if after[PLATE] - pre[PLATE] != sum(offered):
             fail.append("band (d1): the player gained %d plates over the "
@@ -822,6 +828,78 @@ def main():
     if rates.get("urot", 0) <= 0:
         fail.append("band (j) delivered %s items through the turned pair"
                     % rates.get("urot"))
+
+    # ---- (k) the drag ------------------------------------------------------
+    #
+    # Twenty parts clicked in one every six ticks beside running belts. A burst
+    # of a player's own builds is held until it settles, so the whole gesture is
+    # ONE compile, of the finished 10->10, where it used to be one per click
+    # once the second column began. The window closes before the audit, which
+    # would compile the cluster whatever the event path did.
+    win = window("gesture begin name=drag", "gesture end name=drag")
+    got = find(COMPILED, win)
+    print("  drag compiled %s" % [(g[1], g[2], g[3]) for g in got])
+    if len(got) != 1 or (got[0][1], got[0][2], got[0][3]) != ("10", "10", "16"):
+        fail.append("band (k) compiled %s across the drag. Twenty parts dragged "
+                    "in beside running belts are one gesture and must build ONE "
+                    "network, a 10->10 over 16 ports"
+                    % [(g[1], g[2], g[3]) for g in got])
+    DRAGTICK = re.compile(r"\[BBB-CURS\] dragtick t=(\d+) .*?Duration: ([\d.]+)ms")
+    ticks = [float(m.group(2)) for m in (DRAGTICK.search(l) for l in lines) if m]
+    if ticks:
+        print("  drag ticks %d, total %.1f ms, worst %.1f ms, over 16.7 ms: %d"
+              % (len(ticks), sum(ticks), max(ticks),
+                 sum(1 for t in ticks if t > 16.667)))
+    else:
+        fail.append("band (k) logged no dragtick profile lines")
+    if rates.get("drag", 0) <= 0:
+        fail.append("band (k) delivered %s items through the dragged balancer"
+                    % rates.get("drag"))
+
+    # ---- (k2) the removal drag ---------------------------------------------
+    #
+    # The same twenty parts mined off again one every six ticks, the east
+    # column first, from a running 10->10. A mine opens a burst, which keeps
+    # the network standing and takes down only the mined tile's own interface;
+    # when the burst settles the west column is all that is left, inputs and no
+    # output, so there is nothing to build. So NO compile and ONE teardown, and
+    # everything the machine held reaches the miner, none of it the floor (the
+    # ground check below covers the two unbuild samples).
+    win = window("gesture begin name=unbuild", "gesture end name=unbuild")
+    got = find(COMPILED, win)
+    torn = [l for l in win if "[BBB] torn down cluster" in l]
+    print("  unbuild compiled %s, torn down %d"
+          % ([(g[1], g[2], g[3]) for g in got], len(torn)))
+    if got or len(torn) != 1:
+        fail.append("band (k2) compiled %s and tore down %d networks across "
+                    "the removal drag. Twenty parts mined off a running "
+                    "balancer are one gesture: one teardown and no build"
+                    % ([(g[1], g[2], g[3]) for g in got], len(torn)))
+    steps = [l for l in win if "unbuild-mine step=" in l]
+    if len(steps) != 20 or any("took=true" not in l for l in steps):
+        fail.append("band (k2) mined %d parts of twenty: %s" % (len(steps), steps))
+    offered = [int(g[1]) for g in find(OFFERED, win)]
+    pocketed = [int(g[2]) for g in find(POCKETED, win)]
+    print("  unbuild offered=%s pocketed=%s" % (offered, pocketed))
+    if offered != pocketed:
+        fail.append("band (k2) offered %s and pocketed %s" % (offered, pocketed))
+    pre, after = need("unbuild-pre"), need("unbuild-post")
+    if pre and after:
+        if after[PLATE] - pre[PLATE] != sum(offered):
+            fail.append("band (k2): the player gained %d plates over the "
+                        "removal drag and the mod says it offered %d"
+                        % (after[PLATE] - pre[PLATE], sum(offered)))
+        if after[PART] - pre[PART] != 20:
+            fail.append("band (k2): the player holds %d more parts than they "
+                        "did and mined twenty" % (after[PART] - pre[PART]))
+    UNBUILDTICK = re.compile(r"\[BBB-CURS\] unbuildtick t=(\d+) .*?Duration: ([\d.]+)ms")
+    ticks = [float(m.group(2)) for m in (UNBUILDTICK.search(l) for l in lines) if m]
+    if ticks:
+        print("  unbuild ticks %d, total %.1f ms, worst %.1f ms, over 16.7 ms: %d"
+              % (len(ticks), sum(ticks), max(ticks),
+                 sum(1 for t in ticks if t > 16.667)))
+    else:
+        fail.append("band (k2) logged no unbuildtick profile lines")
 
     # ---- the whole run -----------------------------------------------------
     #

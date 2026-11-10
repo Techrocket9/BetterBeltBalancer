@@ -64,7 +64,7 @@ On a build-stamp mismatch the runtime adopted the saved heap wholesale before ca
 
 ## 14. Event fields were marshalled eagerly and in full
 
-Every field of an event was encoded before dispatch. `on_undo_applied` carries `actions`, an unbounded array of blueprint entities, and this mod reads one `uint32` from that event, so an undo of a thousand-entity blueprint deep-copied a thousand entities across the boundary for nothing. Fixed upstream: `fk.subscribe` takes a field mask over optional and container fields, with a generated `Skip<Event><Field>` constant per maskable field. Upstream measured this subscription at 20 actions: 725 µs per dispatch unmasked, 1.9 µs masked; at 200 actions, 7.49 ms against 2.7 µs. This mod masks `actions` on undo and redo.
+Every field of an event was encoded before dispatch. `on_undo_applied` carries `actions`, an unbounded array of blueprint entities, and this mod reads one `uint32` from that event, so an undo of a thousand-entity blueprint deep-copied a thousand entities across the boundary for nothing. Fixed upstream: `fk.subscribe` takes a field mask over optional and container fields, with a generated `Skip<Event><Field>` constant per maskable field. Upstream measured this subscription at 20 actions: 725 µs per dispatch unmasked, 1.9 µs masked; at 200 actions, 7.49 ms against 2.7 µs. This mod masked `actions` on undo and redo while it subscribed to them. It subscribes to neither now, because an undone rotation raises the rotate event, which was the one thing it needed them for.
 
 ## 15. Dictionary-returning members were deferred, so surfaces could not be enumerated
 

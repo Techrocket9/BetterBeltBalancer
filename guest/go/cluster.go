@@ -315,6 +315,9 @@ func removePart(k key, player uint32) bool {
 	// The old root's network comes down unconditionally: its visible interfaces
 	// stand on tiles that may now belong to a different cluster, or to none.
 	markDead(oldRoot)
+	// Inside a held burst the network stays up and only this tile's interface
+	// comes down, on the next tick: settle.go.
+	noteRemoved(k, f, oldRoot)
 	// THE MINER IS RECORDED FOR EVERY PART A PLAYER MINES, AND NOT ONLY FOR THE
 	// ONE THAT DISSOLVES THE CLUSTER. That distinction was the miner's pocket's
 	// first cut and it made the feature almost inert in play, which is how a

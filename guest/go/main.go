@@ -169,23 +169,20 @@ func init() {
 	// per-entity events firing. None of them takes a filter either, and none of
 	// them needs one: they are all rare.
 	//
-	// Undo and redo: the actions they replay mostly arrive as ordinary build
-	// and mine events, but not all of them do -- an undone rotation is the one
-	// that gets away -- so the handler re-validates instead of trusting them.
-	//
-	// MASKED, because `actions` is the one unbounded field this mod subscribes
-	// to and it reads none of it. The mask is resolved once, at subscribe time,
-	// like a filter; a masked container arrives as (ptr, count) = (0, 0), which
-	// is a reading every generated decoder already produces, so the layout does
-	// not move and `player_index` keeps the offset the guest was compiled
-	// against. Upstream's own measurement of the same subscription, 200 actions
-	// of 2 entities each: 7.49 ms per dispatch unmasked, 2.7 us masked.
-	//
-	// `Skip…` constants exist only for maskable fields -- optionals and
-	// containers -- so being wrong about one costs a value that reads absent,
-	// never a zero indistinguishable from a real one.
-	fkapi.SubscribeMasked(fkapi.EventOnUndoApplied, fkapi.SkipOnUndoAppliedActions)
-	fkapi.SubscribeMasked(fkapi.EventOnRedoApplied, fkapi.SkipOnRedoAppliedActions)
+	// UNDO AND REDO ARE NOT SUBSCRIBED AT ALL, and that is what makes a ctrl+z
+	// that touches no balancer cost this mod nothing: no dispatch, no host call.
+	// Every action an undo or a redo replays reaches the guest through the
+	// ordinary per-entity events -- an undone removal is a ghost and then a
+	// build, an undone build a deconstruction and then a mine -- and the one this
+	// handler used to exist for, an undone ROTATION, raises
+	// on_player_rotated_entity too. Measured on 2.1.24 in a client with a probe
+	// mod (agents/history/verification-log.md, 2026-11-09): undo and redo of a
+	// belt rotation beside a balancer, within reach and out of it, each raised
+	// the rotate event in the same tick and BEFORE on_undo_applied /
+	// on_redo_applied, with the new direction already set. The handler that was
+	// here re-classified every cluster on the player's surface on every undo
+	// whatever was undone -- about 2.5 ms per running 4x4 -- to catch a change
+	// the rotate path was already catching.
 
 	// Cloning. `on_entity_cloned` (above) is per entity and does not fire for
 	// every clone path; these two report the region, which is what a
@@ -389,7 +386,14 @@ func onDeferred() {
 	// re-armed, and if the heap did NOT come back with it -- a rebuilt guest --
 	// the queues are empty and this is where the world scan belongs anyway.
 	ensureRegistry()
-	flush()
+	// A burst of edits is compiled once, when it settles (settle.go). A held
+	// tick re-arms the one-shot and still runs the two cheap tails below.
+	if holdFlush() {
+		requestFlush()
+	} else {
+		flush()
+		settled()
+	}
 	// The belt and braces behind fk_on_configuration_changed: a Blocked legacy
 	// phase is re-tested against the marker prototype, which is two host calls
 	// and no allocation, and only while it IS Blocked. One integer compare on
@@ -417,7 +421,14 @@ func onDeferred() {
 //
 //go:wasmexport fk_on_event
 func onEvent(id, ptr uint32) {
+	// A BUILD OR A MINE BY A PLAYER, A ROBOT OR A PLATFORM is the work a burst
+	// may hold (settle.go). Set per dispatch: an event dispatched inside this
+	// one answers for itself, so a script reacting to the build is not part of
+	// the gesture, and anything queued from any other dispatch clears the way.
+	outerG, outerB, outerR := gestureDispatch, buildDispatch, robotDispatch
+	gestureDispatch, buildDispatch, robotDispatch = isGesture(id)
 	onEventBody(id, ptr)
+	gestureDispatch, buildDispatch, robotDispatch = outerG, outerB, outerR
 	gcArmIfNeeded()
 }
 
@@ -459,12 +470,6 @@ func onEventBody(id, ptr uint32) {
 	tick := uint64(0)
 	switch id {
 	// --- events that carry no entity ---------------------------------------
-	case fkapi.EventOnUndoApplied:
-		onUndo(fkapi.ReadOnUndoApplied(ptr).PlayerIndex, "undo")
-		return
-	case fkapi.EventOnRedoApplied:
-		onUndo(fkapi.ReadOnRedoApplied(ptr).PlayerIndex, "redo")
-		return
 	case fkapi.EventOnAreaCloned:
 		onAreaCloned(fkapi.ReadOnAreaCloned(ptr))
 		return
@@ -725,37 +730,6 @@ func onEventBody(id, ptr uint32) {
 // ---------------------------------------------------------------------------
 // The events that report a region rather than an entity
 // ---------------------------------------------------------------------------
-
-// onUndo re-validates after an undo or a redo.
-//
-// The `actions` array is deliberately not read, and since the subscription
-// masks it the host does not marshal it either. Every action it describes is
-// replayed through the ordinary build and mine paths -- an undone removal
-// becomes a ghost and then a build, an undone build becomes a deconstruction
-// and then a mine -- so the registry is already right for almost all of them.
-// The exception is an undone ROTATION, which changes a belt's direction and
-// therefore a cluster's edge list without raising on_player_rotated_entity, and
-// re-classifying is both simpler and stricter than trusting a decode of a
-// variant table full of BlueprintEntities.
-//
-// Scoped to the player's surface, which is one host call's worth of scoping and
-// the difference between re-classifying one planet and re-classifying a Space
-// Age save's worth of them.
-func onUndo(playerIndex uint32, what string) {
-	o, err := fkapi.Game.GetPlayer(fkapi.OfNumber(float64(playerIndex)))
-	if err == nil && o != nil {
-		p := fkapi.LuaPlayer{Object: *o}
-		if si, err := p.SurfaceIndex(); err == nil {
-			revalidateSurface(si, what)
-			return
-		}
-	}
-	// No player to scope by -- a headless server, or an undo raised by another
-	// mod with an index that resolves to nothing. Re-validate everything: the
-	// conservative answer is the correct one, and this path is a keypress, not
-	// a tick.
-	revalidateAll(what)
-}
 
 func onAreaCloned(ev fkapi.OnAreaCloned) {
 	if !ev.DestinationSurface.Valid() {

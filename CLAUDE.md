@@ -48,6 +48,7 @@ guest/go/                the CONTROL guest (its own Go module; TinyGo -> wasm ->
   sedge.go               Factorio 2.1's one-belt-per-part rule and the multi-edge setting
   curve.go, curveupg.go  the curved-exit setting, and pre-curve saves keeping their reading
   priority.go            priority ports: the three doors onto setPartPriority
+  settle.go              a burst of builds or mines (a drag, robots) is compiled once, when it settles
   fastreplace.go         a belt replacing a part; the refused-replace belt restore
   legacy.go              adopting Belt Balancer 2/3 saves
   commands.go, probe.go  /bbb-audit, the remote interface, the insert probe
@@ -168,6 +169,7 @@ Each row names the section of the old single file it was, where it was one. The 
 | [`curve-setting.md`](agents/features/curve-setting.md) | `bbb-curved-exits` and the flip | "The curve rule is a setting" |
 | [`curve-upgrade.md`](agents/features/curve-upgrade.md) | pre-curve saves keep their reading; the state version; the ping list | "A save from before the curve rule keeps the reading it was built to" |
 | [`priority-ports.md`](agents/features/priority-ports.md) | the priority flag, its survival, refusals, spill guard, player side | "Priorities: a port that is fed first" |
+| [`settle.md`](agents/features/settle.md) | a burst of builds or mines by a player, robot or platform compiled once: the drag fix, the removal drag, robots, the rule and its measurement | new 2026-11-09 |
 | [`fast-replace.md`](agents/features/fast-replace.md) | a part over a belt and a belt over a part; the refused-replace belt restore | "Fast replace" |
 | [`single-edge-rule.md`](agents/features/single-edge-rule.md) | the working note for 2.1's rule: capability, setting, merge theorem, grandfather | "One belt per balancer part" |
 | [`legacy-migration.md`](agents/features/legacy-migration.md) | adopting a Belt Balancer 2 or 3 save | "Adopting a Belt Balancer 2 or 3 save" |

@@ -282,3 +282,26 @@ saturated	better-belt-balancer_0.3.7	50	4	express	3600	2	0.2355	0.0910	11.2450		
 control	none	200	4	express	3600	2	0.5095	0.1950	6.9960					1729600	1.000	2.1.24	2026-11-06	twice-ab
 saturated	better-belt-balancer_0.3.6	200	4	express	3600	2	0.6520	0.1970	8.2450					1740000	1.001	2.1.24	2026-11-06	twice-ab
 saturated	better-belt-balancer_0.3.7	200	4	express	3600	2	0.5980	0.2080	6.9840					1731600	1.001	2.1.24	2026-11-06	twice-ab
+mega-idle	better-belt-balancer_0.3.6	40	4	express	2400	1	1.2070	0.0570	214.8220					0	n/a	2.1.24	2026-11-10	lag-report hitch r1
+mega	better-belt-balancer_0.3.6	40	4	express	2400	1	3.2620	0.5170	469.9500					1862379	1.010	2.1.24	2026-11-10	lag-report hitch r1
+mega-idle	better-belt-balancer_0.3.7	40	4	express	2400	1	1.1250	0.0610	160.9460					0	n/a	2.1.24	2026-11-10	lag-report hitch r1
+mega	better-belt-balancer_0.3.7	40	4	express	2400	1	3.8550	0.7410	430.6630					1839988	1.013	2.1.24	2026-11-10	lag-report hitch r1
+mega-idle	better-belt-balancer_0.3.6	40	4	express	2400	1	1.0040	0.0570	163.4540					0	n/a	2.1.24	2026-11-10	lag-report hitch r2
+mega	better-belt-balancer_0.3.6	40	4	express	2400	1	2.9640	0.5050	461.0050					1862379	1.010	2.1.24	2026-11-10	lag-report hitch r2
+mega-idle	better-belt-balancer_0.3.7	40	4	express	2400	1	1.1130	0.0560	193.9510					0	n/a	2.1.24	2026-11-10	lag-report hitch r2
+mega	better-belt-balancer_0.3.7	40	4	express	2400	1	4.3710	0.6830	531.9140					1839988	1.013	2.1.24	2026-11-10	lag-report hitch r2
+saturated	better-belt-balancer_0.3.7	50	4	express	700	1	0.2120	0.0950	4.1050					72900	1.005	2.1.24	2026-11-10	lag-report undo proxy
+saturated	better-belt-balancer_0.3.7	200	4	express	700	1	0.5610	0.2290	5.2430					291600	1.005	2.1.24	2026-11-10	lag-report undo proxy
+saturated	better-belt-balancer_0.3.7	50	8	express	700	1	0.3300	0.1310	4.8130					139800	1.011	2.1.24	2026-11-10	lag-report undo proxy
+saturated	better-belt-balancer_0.3.7	200	8	express	700	1	2.3370	0.7620	11.2520					559200	1.011	2.1.24	2026-11-10	lag-report undo proxy
+saturated	better-belt-balancer_0.3.7	4	4	express	1500	1	0.5080	0.0610	57.8270					13032	1.002	2.1.24	2026-11-10	drag before r1
+idle	better-belt-balancer_0.3.7	4	4	express	1500	1	0.4330	0.0560	40.2870					0	n/a	2.1.24	2026-11-10	drag before r1
+saturated	better-belt-balancer_0.3.7	4	4	express	1500	1	0.2170	0.0590	30.2920					13032	1.002	2.1.24	2026-11-10	drag after r1
+idle	better-belt-balancer_0.3.7	4	4	express	1500	1	0.2210	0.0570	29.9530					0	n/a	2.1.24	2026-11-10	drag after r1
+saturated	better-belt-balancer_0.3.7	4	4	express	1500	1	0.5070	0.0570	56.9770					13032	1.002	2.1.24	2026-11-10	drag before r2
+idle	better-belt-balancer_0.3.7	4	4	express	1500	1	0.4180	0.0590	36.5290					0	n/a	2.1.24	2026-11-10	drag before r2
+saturated	better-belt-balancer_0.3.7	4	4	express	1500	1	0.2170	0.0580	27.9690					13032	1.002	2.1.24	2026-11-10	drag after r2
+idle	better-belt-balancer_0.3.7	4	4	express	1500	1	0.2140	0.0600	29.1220					0	n/a	2.1.24	2026-11-10	drag after r2
+saturated	better-belt-balancer_0.3.7	4	4	express	2700	1	0.7480	0.0650	94.2140					27432	1.001	2.1.24	2026-11-10	robots settle off
+saturated	better-belt-balancer_0.3.7	4	4	express	2700	1	0.4910	0.0590	62.3150					27432	1.001	2.1.24	2026-11-10	robots settle on
+saturated	better-belt-balancer_0.2.7	4	4	express	2700	1	0.6540	0.0940	75.3490	175.80	39.46	7.95	20.18	27432	1.001	2.0.77	2026-11-10	robots settle on, 2.0

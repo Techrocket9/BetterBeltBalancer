@@ -85,6 +85,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/harness"
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/protos"
@@ -306,11 +308,17 @@ var (
 	// each rig's own `totals` instead.
 	totals []int64
 	isMega bool
-	// hitchAt is where the hitch schedule reaches to remove and restore one
-	// input belt of the 64x64: the tile immediately west of the top-left part.
-	hitchTile  harness.XY
-	hitchArmed bool
+	// hitchTargets are the rigs the hitch schedule removes and restores one
+	// input belt of: the tile immediately west of each one's top-left part.
+	// Block 0's first 4x4 and its 8x8, then the three giants that build.
+	hitchTargets []hitchTarget
+	hitchArmed   bool
 )
+
+type hitchTarget struct {
+	name string
+	tile harness.XY
+}
 
 // ---------------------------------------------------------------------------
 // surface
@@ -592,7 +600,15 @@ func benchInit() {
 	cols := isqrtCeil(cfg.n)
 	rows := ceilDiv(cfg.n, cols)
 
-	s := makeSurface(cols*pitchX, rows*pitchY)
+	// With --hitch a uniform cell also carries the DRAG rig below the grid.
+	sw, sh := cols*pitchX, rows*pitchY
+	if cfg.hitch && sc.parts {
+		if w := dragCols + 22 + PAD; w > sw {
+			sw = w
+		}
+		sh += dragRows + 2 + PAD
+	}
+	s := makeSurface(sw, sh)
 	killEnemies()
 
 	totals = make([]int64, cfg.k)
@@ -612,9 +628,22 @@ func benchInit() {
 	// bb2, bb3 and no-mod cells are untouched.
 	if harness.EntityProtoExists(harness.AuditMarker) {
 		harness.Audit(s, -41, -41)
+		// A second audit with NOTHING pending re-classifies every cluster twice
+		// over (its own pass, then the flush it ends with, which is the whole of
+		// what an undo or a redo runs) and compiles nothing. It is the only
+		// stand-in for an undo there is: on_undo_applied cannot be raised from a
+		// script (agents/verification/suites/m3.md).
+		p := harness.StartProfiler()
+		harness.Audit(s, -41, -41)
+		p.Stop()
+		p.Log("[BENCH] timing audit only, nothing pending ")
 	}
 
-	reportSetup(len(rigs), cols*pitchX, rows*pitchY)
+	if cfg.hitch && sc.parts {
+		buildDragRig(s, 0, rows*pitchY)
+	}
+
+	reportSetup(len(rigs), sw, sh)
 }
 
 // isqrtCeil is `math.ceil(math.sqrt(n))` without a square root: the smallest c
@@ -695,14 +724,19 @@ func megaInit() {
 		return len(rigs) - 1, partX0
 	}
 
+	var small []hitchTarget
 	for b := 0; b < nblocks; b++ {
 		ox := (b % bcols) * pitchX
 		y := (b / bcols) * blockH
 		for _, sh := range megaBlock {
-			add(sh, ox, y)
+			_, px := add(sh, ox, y)
+			if b == 0 && (sh.name == "4x4" || sh.name == "8x8") && !hasTarget(small, sh.name) {
+				small = append(small, hitchTarget{sh.name, harness.XY{X: px - 1, Y: y}})
+			}
 			y += shapeHeight(sh) + PAD
 		}
 	}
+	hitchTargets = append(hitchTargets, small...)
 
 	gx, gy := bcols*pitchX, 0
 	var deferred shape
@@ -711,7 +745,10 @@ func megaInit() {
 		if sh.defer_ {
 			deferred, deferredY = sh, gy
 		} else {
-			add(sh, gx, gy)
+			_, px := add(sh, gx, gy)
+			if !sh.overLimit {
+				hitchTargets = append(hitchTargets, hitchTarget{sh.name, harness.XY{X: px - 1, Y: gy}})
+			}
 		}
 		gy += shapeHeight(sh) + PAD
 	}
@@ -740,9 +777,7 @@ func megaInit() {
 		q.Log("[BENCH-MEGA] timing audit + FIRST COMPILE of the 64x64 ")
 	}
 
-	// Where the hitch schedule reaches to remove and restore one input belt of
-	// the 64x64: the tile immediately west of the top-left part.
-	hitchTile = harness.XY{X: gpx - 1, Y: deferredY}
+	hitchTargets = append(hitchTargets, hitchTarget{deferred.name, harness.XY{X: gpx - 1, Y: deferredY}})
 	hitchArmed = true
 
 	for i, name := range order {
@@ -966,7 +1001,7 @@ func megaMeter(tick uint64) {
 }
 
 // ---------------------------------------------------------------------------
-// the 64x64 recompile hitch (--hitch only)
+// the recompile hitch (--hitch only)
 // ---------------------------------------------------------------------------
 //
 // M2's tick-pair pattern, verbatim in shape: the guest defers its recompile to
@@ -975,10 +1010,28 @@ func megaMeter(tick uint64) {
 // engine tick as well as the recompile, and the `idle tick pair` probe measures
 // exactly that and nothing else. SUBTRACT IT.
 //
-// Three reps, at ticks that are not multiples of the 600-tick meter interval --
-// a meter sample inside a profiler window would be measured as recompile.
+// Five targets (4x4, 8x8, 16x16, 32x32, 64x64), three reps each, ROUND-ROBIN so
+// a saturated network that is still filling moves every target's reps alike
+// rather than the last target's alone. The windows start at 1210 and are 40
+// ticks apart, ending at 1774: none of them reaches a multiple of the 600-tick
+// meter interval, and a meter sample inside a window would be measured as
+// recompile. The 64x64 is the same 1,152 entities one deep and two deep, which
+// makes it the control when two builds are compared.
 
-var hitchAt = [3]uint64{1210, 1510, 1810}
+const (
+	hitchFirst = 1210
+	hitchStep  = 40
+	hitchReps  = 3
+)
+
+func hasTarget(ts []hitchTarget, name string) bool {
+	for i := range ts {
+		if ts[i].name == name {
+			return true
+		}
+	}
+	return false
+}
 
 // hitchOpen is RETAINED for the reason harness.Profiler.Retain exists: every one
 // of these windows spans a tick boundary by construction, and a handle that is
@@ -1007,29 +1060,196 @@ func hitchStop() {
 }
 
 func hitchTick(t uint64) {
-	if !hitchArmed {
+	if !hitchArmed || len(hitchTargets) == 0 || t < hitchFirst-2 {
 		return
 	}
+	slots := uint64(len(hitchTargets) * hitchReps)
+	i := (t - (hitchFirst - 2)) / hitchStep
+	if i >= slots {
+		return
+	}
+	base := hitchFirst + i*hitchStep
+	tg := hitchTargets[i%uint64(len(hitchTargets))]
 	s := harness.Surface(surfaceName)
-	for _, base := range hitchAt {
-		switch t {
-		case base - 2:
-			hitchStart("idle tick pair, nothing pending")
-			return
-		case base, base + 2, base + 4:
-			hitchStop()
-			if t == base {
-				if !harness.KillAt(s, hitchTile.X, hitchTile.Y, "", "transport-belt") {
-					out.Open("[BENCH-MEGA] hitch: no input belt at the 64x64").End()
-					return
-				}
-				hitchStart("64x64 teardown+rebuild(-1 input)")
-			} else if t == base+2 {
-				hitchStart("64x64 teardown+rebuild(full)")
-				belt(s, hitchTile.X, hitchTile.Y)
+	switch t {
+	case base - 2:
+		hitchStart("idle tick pair, nothing pending")
+	case base, base + 2, base + 4:
+		hitchStop()
+		if t == base {
+			if !harness.KillAt(s, tg.tile.X, tg.tile.Y, "", "transport-belt") {
+				out.Open("[BENCH-MEGA] hitch: no input belt at the ").S(tg.name).End()
+				return
 			}
-			return
+			hitchStart(tg.name + " teardown+rebuild(-1 input)")
+		} else if t == base+2 {
+			hitchStart(tg.name + " teardown+rebuild(full)")
+			belt(s, tg.tile.X, tg.tile.Y)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// the drag (--hitch on a uniform cell)
+// ---------------------------------------------------------------------------
+//
+// A player dragging balancer parts into place beside belts that are already
+// running: dragRows input belts end at a part column, dragRows output belts
+// start one column further on, and nothing stands in either column at create.
+// From dragStart one part is placed every dragGap ticks, the input column top
+// to bottom and then the output column, which is a 10->10 balancer of twenty
+// parts built the way the mod-portal report describes. Every tick from just
+// before the first part to well after the last is profiled on its own, so the
+// log carries the drag's whole cost tick by tick, and an idle stretch earlier
+// in the run gives the same windows with nothing happening, to subtract.
+//
+// The sinks are not metered: a steel chest takes more than one belt delivers
+// in the length of a run, and the uniform meter's per-index vector is the
+// grid's.
+//
+// THEN THE SAME BALANCER BY ROBOTS, in a run long enough to reach it
+// (--ticks 2700). A powered roboport beside the rig holds thirty construction
+// robots and a storage chest twenty parts. At botMineAt every part is marked
+// for deconstruction and the robots take the balancer apart; at botBuildAt a
+// ghost goes on every tile and they build it again. Each phase is profiled tick
+// by tick for botSpan ticks, as `botmine` and `botbuild`, and logged as a
+// phase marker so the compiles inside it can be counted. Robot arrivals are
+// whatever the engine makes of thirty robots and twenty jobs.
+
+const (
+	dragRows   = 10
+	dragCols   = 2
+	dragGap    = 6
+	dragStart  = 1210
+	dragTail   = 120
+	idleFrom   = 1050
+	idleTo     = 1150
+	botMineAt  = 1460
+	botBuildAt = 2060
+	botSpan    = 560
+)
+
+var dragParts []harness.XY
+
+func buildDragRig(s fkapi.LuaSurface, ox, oy int) {
+	partX0 := ox + 6
+	outX0 := partX0 + dragCols
+	for row := 0; row < dragRows; row++ {
+		ty := oy + row
+		source(s, ox, ty)
+		for tx := ox + 3; tx < partX0; tx++ {
+			belt(s, tx, ty)
+		}
+		sink(s, outX0, ty)
+	}
+	for c := 0; c < dragCols; c++ {
+		for row := 0; row < dragRows; row++ {
+			dragParts = append(dragParts, harness.XY{X: partX0 + c, Y: oy + row})
+		}
+	}
+	// The robots' corner, east of the sinks. A roboport is 4x4 and a
+	// substation 2x2, so both are placed by their centre on a tile corner.
+	bx := float64(ox + 18)
+	by := float64(oy + dragRows/2)
+	port := harness.Place(s, harness.Piece{Name: "roboport", X: ox + 18, Y: oy,
+		Pos: &fkapi.MapPosition{X: bx, Y: by}})
+	harness.Place(s, harness.Piece{Name: "substation", X: ox + 21, Y: oy,
+		Pos: &fkapi.MapPosition{X: bx + 3, Y: by}})
+	harness.Place(s, harness.Piece{Name: "electric-energy-interface", X: ox + 21, Y: oy,
+		Pos: &fkapi.MapPosition{X: bx + 3, Y: by + 2}})
+	if inv, err := (fkapi.LuaControl{Object: port}).GetInventory(
+		fkapi.DefinesInventoryRoboportRobot()); err == nil && inv != nil {
+		harness.InsertInto(*inv, "construction-robot", 30)
+	}
+	chest := harness.Place(s, harness.Piece{Name: "storage-chest", X: ox + 16, Y: oy + dragRows + 1})
+	harness.InsertInto(chest, cfg.partName, uint32(len(dragParts)))
+}
+
+// botPhase starts the robot phase that begins at t, if any.
+func botPhase(s fkapi.LuaSurface, t uint64) {
+	switch t {
+	case botMineAt:
+		out.Open("[BENCH] phase=botmine").End()
+		for _, xy := range dragParts {
+			if e, ok := harness.FindAt(s, xy.X, xy.Y, cfg.partName, ""); ok {
+				ent := fkapi.LuaEntity{Object: e}
+				if f, err := ent.Force(); err == nil {
+					_, _ = ent.OrderDeconstruction(f, nil, nil)
+				}
+			}
+		}
+	case botBuildAt:
+		out.Open("[BENCH] botmine left=").I(int64(partsStanding(s))).End()
+		out.Open("[BENCH] phase=botbuild").End()
+		for _, xy := range dragParts {
+			harness.PlaceSoft(s, harness.Piece{Name: "entity-ghost", InnerName: cfg.partName,
+				X: xy.X, Y: xy.Y, Raise: true})
+		}
+	case botBuildAt + botSpan:
+		out.Open("[BENCH] botbuild built=").I(int64(partsStanding(s))).End()
+		out.Open("[BENCH] phase=end").End()
+	}
+}
+
+func partsStanding(s fkapi.LuaSurface) int {
+	n := 0
+	for _, xy := range dragParts {
+		if _, ok := harness.FindAt(s, xy.X, xy.Y, cfg.partName, ""); ok {
+			n++
+		}
+	}
+	return n
+}
+
+var (
+	dragOpen     harness.Profiler
+	dragLive     bool
+	dragTickOpen uint64
+)
+
+func dragTick(t uint64) {
+	if len(dragParts) == 0 {
+		return
+	}
+	end := uint64(dragStart + dragGap*(len(dragParts)-1) + dragTail)
+	inIdle := t >= idleFrom && t <= idleTo
+	inDrag := t >= dragStart-1 && t <= end
+	inBotMine := t >= botMineAt-1 && t < botMineAt+botSpan
+	inBotBuild := t >= botBuildAt-1 && t < botBuildAt+botSpan
+	if dragLive {
+		dragOpen.Stop()
+		label := "[BENCH] drag tick="
+		switch {
+		case dragTickOpen < dragStart:
+			label = "[BENCH] idle tick="
+		case dragTickOpen >= botBuildAt-1:
+			label = "[BENCH] botbuild tick="
+		case dragTickOpen >= botMineAt-1:
+			label = "[BENCH] botmine tick="
+		}
+		dragOpen.Log(label + strconv.FormatUint(dragTickOpen+1, 10) + " ")
+		dragOpen.Release()
+		dragLive = false
+	}
+	if t == dragStart {
+		out.Open("[BENCH] phase=drag").End()
+	}
+	if t >= dragStart && (t-dragStart)%dragGap == 0 {
+		if i := int((t - dragStart) / dragGap); i < len(dragParts) {
+			s := harness.Surface(surfaceName)
+			harness.Place(s, harness.Piece{Name: cfg.partName, X: dragParts[i].X, Y: dragParts[i].Y, Raise: true})
+		}
+	}
+	if t == end {
+		out.Open("[BENCH] phase=end").End()
+	}
+	if t >= botMineAt {
+		botPhase(harness.Surface(surfaceName), t)
+	}
+	if (inIdle && t < idleTo) || (inDrag && t < end) || inBotMine || inBotBuild {
+		dragOpen = harness.StartProfiler().Retain()
+		dragTickOpen = t
+		dragLive = true
 	}
 }
 
@@ -1073,7 +1293,11 @@ func tick(t uint64) {
 		}
 	}
 	if cfg.hitch {
-		hitchTick(t)
+		if isMega {
+			hitchTick(t)
+		} else {
+			dragTick(t)
+		}
 	}
 }
 

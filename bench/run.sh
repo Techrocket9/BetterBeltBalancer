@@ -26,7 +26,7 @@ MODS_SRC="${BB_MODS_SRC:-/Users/$USER/Library/Application Support/factorio/mods}
 
 MOD=none          # none | bb2 | bb3 | bbb | <path to a mod zip>
 SCENARIO=saturated # saturated | idle | control | control-idle | mega[-idle] | mega-control[-idle]
-HITCH=0           # mega only: run the 64x64 recompile-hitch schedule
+HITCH=0           # mega only: run the recompile-hitch schedule
 N=1
 K=4
 TIER=express
@@ -49,8 +49,9 @@ Options:
   --scenario X     saturated | idle | control | control-idle
                    mega | mega-idle | mega-control | mega-control-idle
                                                         (default: saturated)
-  --hitch          mega only: remove and restore one input belt of the 64x64
-                   three times during the run and profile the recompile
+  --hitch          mega only: remove and restore one input belt of a 4x4, an
+                   8x8, the 16x16, the 32x32 and the 64x64, three times each
+                   during the run, and profile each recompile
   -n N             number of rigs (mega: number of BLOCKS)  (default: 1)
   -k K             balancer size (K in, KxK parts, K out) (default: 4)
   --tier X         normal | fast | express               (default: express)
@@ -182,8 +183,8 @@ esac
 # four times below.
 IS_IDLE=0; case "$SCENARIO" in idle|control-idle|mega-idle|mega-control-idle) IS_IDLE=1 ;; esac
 IS_MEGA=0; case "$SCENARIO" in mega|mega-idle|mega-control|mega-control-idle) IS_MEGA=1 ;; esac
-if [ "$HITCH" -eq 1 ] && [ "$IS_MEGA" -eq 0 ]; then
-  echo "--hitch needs a mega scenario (the 64x64 only exists there)" >&2; exit 2
+if [ "$HITCH" -eq 1 ] && [ "$IS_MEGA" -eq 0 ] && [ "$SCENARIO" != saturated ] && [ "$SCENARIO" != idle ]; then
+  echo "--hitch needs a mega scenario, or saturated/idle for the drag" >&2; exit 2
 fi
 
 CELL="${MOD_LABEL}-${SCENARIO}-n${N}-k${K}-${TIER}"
@@ -376,6 +377,10 @@ if [ "$IS_MEGA" -eq 1 ]; then
     echo "    over-limit refusals (65-input cluster): $OVER"
     [ "$OVER" -ge 1 ] || { echo "the 65-input cluster was NOT refused; the cap did not fire" >&2; exit 1; }
   fi
+else
+  # Uniform cells against this mod time a second audit with nothing pending:
+  # every cluster re-classified, which is what an undo or a redo pays.
+  grep -E "\[BENCH\] timing" "$CREATE_LOG" | sed 's/^.*\[BENCH\]/    [BENCH]/' || true
 fi
 
 # --- benchmark ---------------------------------------------------------------
@@ -404,8 +409,42 @@ BBB_LINES="$(grep -c "\[BBB\]" "$RUN_LOG" || true)"
 # steady-state measurement and its avg_ms is not comparable with one. Each probe
 # spans two ticks -- opened in the tick that mutates, closed in the tick that
 # flushes -- so subtract the `idle tick pair` line from the two beside it.
-if [ "$HITCH" -eq 1 ]; then
+if [ "$HITCH" -eq 1 ] && [ "$IS_MEGA" -eq 1 ]; then
   grep "\[BENCH-MEGA\] hitch" "$RUN_LOG" | sed 's/^.*\[BENCH-MEGA\]/    [BENCH-MEGA]/'
+fi
+# The drag: one line per profiled tick. Summarised rather than printed: the
+# idle stretch's median is the floor, and what each phase adds over it, its
+# worst tick, and how many of its ticks ran past a 60 UPS frame are the reading.
+# Three phases, each read only when the run reached it: the scripted drag, then
+# (with --ticks 2700) robots taking the same balancer apart and building it
+# again. The compiles are counted between each phase's own markers.
+if [ "$HITCH" -eq 1 ] && [ "$IS_MEGA" -eq 0 ]; then
+  awk '
+    function dur() { match($0, /Duration: [0-9.]+/); return substr($0, RSTART+10, RLENGTH-10)+0 }
+    /\[BENCH\] idle tick=/     { idle[ni++] = dur() }
+    /\[BENCH\] drag tick=/     { v["drag", n["drag"]++] = dur() }
+    /\[BENCH\] botmine tick=/  { v["botmine", n["botmine"]++] = dur() }
+    /\[BENCH\] botbuild tick=/ { v["botbuild", n["botbuild"]++] = dur() }
+    /\[BENCH\] phase=/         { match($0, /phase=[a-z]+/); ph = substr($0, RSTART+6, RLENGTH-6) }
+    /compiled cluster/          { c[ph]++ }
+    /\[BENCH\] botmine left=/  { match($0, /left=[0-9]+/); left = substr($0, RSTART+5, RLENGTH-5) }
+    /\[BENCH\] botbuild built=/ { match($0, /built=[0-9]+/); built = substr($0, RSTART+6, RLENGTH-6) }
+    /Performed .* updates/      { exit }
+    END {
+      if (ni == 0 || n["drag"] == 0) { print "    drag: no probe lines"; exit }
+      for (i = 1; i < ni; i++) { x = idle[i]; j = i - 1; while (j >= 0 && idle[j] > x) { idle[j+1] = idle[j]; j-- } idle[j+1] = x }
+      med = (ni % 2) ? idle[(ni-1)/2] : (idle[ni/2-1] + idle[ni/2]) / 2
+      split("drag botmine botbuild", phs, " ")
+      for (k = 1; k <= 3; k++) {
+        p = phs[k]; if (n[p] == 0) continue
+        tot = 0; mx = 0; over = 0
+        for (i = 0; i < n[p]; i++) { x = v[p, i]; tot += x - med; if (x > mx) mx = x; if (x > 16.667) over++ }
+        extra = ""
+        if (p == "botmine" && left != "") extra = ", parts left " left
+        if (p == "botbuild" && built != "") extra = ", parts built " built
+        printf "    %s: %d ticks, idle tick median %.3f ms, added %.1f ms, worst tick %.1f ms, %d ticks over 16.7 ms, %d compiles%s\n", p, n[p], med, tot, mx, over, c[p]+0, extra
+      }
+    }' "$RUN_LOG"
 fi
 
 # --- sanity: did anything actually move? -------------------------------------

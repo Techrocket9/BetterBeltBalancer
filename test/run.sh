@@ -1280,7 +1280,7 @@ for suite in $SUITES; do
       # inventory arithmetic -- guest/go/obs/curs's header is the table.
       echo "=== curs: the player gestures, from a real cursor ==="
       stage_curs "$TMP/curs"
-      load_fixture "$TMP/curs" "${BBB_CURS_TICKS:-1800}"
+      load_fixture "$TMP/curs" "${BBB_CURS_TICKS:-1950}"
       echo "==> asserting the cursor gestures"
       python3 "$ROOT/test/assert-curs.py" "$TMP/curs/run.log"
       ;;

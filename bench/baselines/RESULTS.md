@@ -190,6 +190,86 @@ From 0.3.7 a balancer with 3 to 32 belts on its busiest side is two butterflies 
 
 The second butterfly's cost is below what this machine resolves. Single repetitions swing by about two microseconds per balancer for both builds, which is the drift the caveats below describe acting on a difference of a few percent, and the two medians, 0.40 and 0.30, sit inside the same noise as the headline's "0.4-0.9 µs, and the ratio is tens". A negative slope is that noise and not a balancer cheaper than belts. Both builds delivered the same throughput at a balance of 1.001.
 
+## What one edit costs
+
+Everything above is the steady state, where this mod runs no script. An edit is the other side: a belt or a part added to or taken from a balancer rebuilds its whole network on the next tick, and an undo or a redo re-reads the belts around every balancer on the player's surface. A player feels both as a hitch. Both were measured on Factorio 2.1.24 on the same M3 Pro, 0.3.6 against 0.3.7, after a player reported lag when placing ten or more connected parts and on every undo.
+
+**A rebuild**, timed by `--hitch`: one input belt removed and put back, three times each at five sizes, less the idle tick pair beside it. Two repetitions of each cell, so each median is over twelve windows. Milliseconds:
+
+| one rebuild | 0.3.6 empty | 0.3.7 empty | 0.3.6 saturated | 0.3.7 saturated | saturated ratio |
+| --- | --: | --: | --: | --: | --: |
+| 4x4 | 9.8 | 10.4 | 17.2 | 27.1 | 1.57 |
+| 8x8 | 18.5 | 21.6 | 34.6 | 50.5 | 1.46 |
+| 16x16 | 36.5 | 47.4 | 84.0 | 122.6 | 1.46 |
+| 32x32 | 76.8 | 105.6 | 177.4 | 296.3 | 1.67 |
+| 64x64, the same network in both | 161.7 | 159.5 | 410.1 | 409.5 | 1.00 |
+
+```sh
+bench/run.sh --mod better-belt-balancer_0.3.6.zip --scenario mega-idle --hitch -n 40 --ticks 2400 --runs 1
+bench/run.sh --mod better-belt-balancer_0.3.6.zip --scenario mega      --hitch -n 40 --ticks 2400 --runs 1
+bench/run.sh --mod better-belt-balancer_0.3.7.zip --scenario mega-idle --hitch -n 40 --ticks 2400 --runs 1
+bench/run.sh --mod better-belt-balancer_0.3.7.zip --scenario mega      --hitch -n 40 --ticks 2400 --runs 1
+```
+
+The 64x64 is one butterfly deep in both versions and lands within a percent, so the rest of each row is the second butterfly and not the session. On a running balancer 0.3.7 pays about one and a half times what 0.3.6 did for every rebuild from 4x4 to 32x32, because the network it tears down and lays again is 1.4 to 1.7 times as many entities and holds more items to put back. Empty, the difference shrinks to 6% at 4x4.
+
+The larger finding is that a rebuild costs a frame or more at every size, in either version. A frame at 60 UPS is 16.7 ms and a running 4x4 already took 17.2 ms in 0.3.6. Laying parts one at a time beside belts that are already there changes the balancer's belts on every tick, so it rebuilds a balancer one part larger on every tick of the drag.
+
+**An undo**, through the stand-in described in the bench README: an audit with nothing pending reads the belts around every balancer twice, once for itself and once in the flush an undo runs, so an undo is about half of it. 0.3.7, saturated, one run each:
+
+| balancers on the surface | audit | per balancer | an undo, about |
+| --- | --: | --: | --: |
+| 50 4x4 | 251 ms | 5.0 ms | 2.5 ms each, 126 ms in all |
+| 200 4x4 | 1,063 ms | 5.3 ms | 2.7 ms each, 531 ms in all |
+| 50 8x8 | 829 ms | 16.6 ms | 8.3 ms each, 415 ms in all |
+| 200 8x8 | 3,757 ms | 18.8 ms | 9.4 ms each, 1.9 s in all |
+
+```sh
+bench/run.sh --mod better-belt-balancer_0.3.7.zip --scenario saturated -n 50 -k 4 --ticks 700 --runs 1
+```
+
+It grows with every balancer on the surface and with each one's size, whatever the undo was. Undoing a single inserter costs the same as undoing a balancer. This part of the code did not change in 0.3.7. The halving is read from the code, not measured: an undo cannot be raised from a script, so no headless run can time one directly.
+
+### A drag, before and after batching
+
+Builds and mines made by a player, a construction robot or a space platform are now compiled once per burst rather than once per part. A player's burst ends when 12 ticks pass with nothing new; a burst with a robot's or a platform's work in it waits 60. A part mined inside a burst clears its own tile on the next tick and the rest of the balancer keeps running until the burst ends. Edits made by a script, rotations and flips are still rebuilt on the next tick.
+
+A player clicking twenty parts from the cursor one every 6 ticks beside belts that are already running, ending on a 10->10, then later mining the same twenty off again one every 6 ticks. Each is profiled every tick for 171 ticks from just before the first click or mine. It runs in the test suite that has a player in it, so the rest of that suite's world is running underneath; "off" is the same build with batching disabled, and the two figures in a cell are two runs:
+
+| | networks compiled | the 171 ticks in all | worst tick | ticks over 16.7 ms |
+| --- | --: | --: | --: | --: |
+| placing, off | 10 | 617.0 / 804.5 ms | 56.9 / 64.2 ms | 10 |
+| placing, on | 1 | 181.2 / 245.2 ms | 25.5 / 29.0 ms | 1 |
+| mining, off | 9, and 10 teardowns | 1,070.5 ms | 97.2 ms | 10 |
+| mining, on | 0, and 1 teardown | 248.7 / 283.4 ms | 29.2 / 31.0 ms | 1 |
+
+```sh
+make test SUITES=curs
+```
+
+Mining, everything the balancer held reaches the player's inventory and nothing reaches the ground in either run. With batching off, each of the nine shrinks puts the items back into a smaller balancer and the last mine hands over the rest; with it on, the balancer is taken down once, after the last mine.
+
+The same twenty parts by construction robots, in the bench's drag rig: a powered roboport with thirty robots beside it deconstructs them, then builds them again from ghosts. Added over the idle tick, 561 ticks each:
+
+| | networks compiled | added | worst tick | ticks over 16.7 ms |
+| --- | --: | --: | --: | --: |
+| robots deconstruct, off | 4 | 426.1 ms | 96.5 ms | 5 |
+| robots deconstruct, on | 0 | 81.9 / 110.6 ms | 28.7 / 27.5 ms | 1 |
+| robots build, off | 11 | 443.7 ms | 95.4 ms | 7 |
+| robots build, on | 1 | 110.3 / 159.0 ms | 30.3 ms | 1 |
+
+```sh
+bench/run.sh --mod better-belt-balancer_0.3.7.zip --scenario saturated --hitch -n 4 -k 4 --ticks 2700 --runs 1
+```
+
+Robots arrive in waves. With the 12-tick wait a player gets, eighteen of the twenty parts were built in 92 ticks and compiled once, and the last two arrived 37 and 48 ticks later and rebuilt the whole running balancer each time: 3 compiles and a worst tick of 77.3 ms. Robots that come back for a second trip more than a second later still rebuild once per wave.
+
+The same drag placed by script, which is not batched, is the first phase of the same run: 564.7 to 585.0 ms added, a worst tick of 61.9 to 65.4 ms, ten networks compiled. On 0.3.7 before batching, at 1500 ticks: 515.2 and 505.1 ms added over idle with belts running and 398.1 and 386.9 with them empty, a worst tick of 57.6, 56.8, 39.9 and 36.3 ms.
+
+What is left of a batched burst is the one rebuild or teardown at its end, about 30 ms at this size.
+
+**An undo now costs nothing** unless it rebuilds or removes a balancer part or a belt beside one, and then it costs what that edit costs. The mod no longer listens for undo or redo at all. The re-check measured above existed to catch an undone rotation, and in a client on Factorio 2.1.24 undoing or redoing a rotation raises the same rotate event the rotation itself does, which the mod already handles. Undoing or redoing a flip of a belt, an underground belt or a splitter raises that rotate event too, and the balancer was rebuilt after each.
+
 ## Targets
 
 The design targets were at least 10x at scale, about 100x saturated, and idle equal to the control.

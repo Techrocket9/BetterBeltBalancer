@@ -81,6 +81,24 @@ What it costs is two host calls per chest that has something in it and one per c
 
 The two `control*` scenarios require `--mod none` (they place no balancer part); the other two require a balancer mod.
 
+Against this mod, a uniform cell also times a second audit at create, after everything is built and nothing is pending, and `run.sh` prints it:
+
+```
+[BENCH] timing audit only, nothing pending Duration: ...
+```
+
+An audit re-reads the belts around every balancer and changes nothing. It does that twice: once for its own count, and once in the flush it ends with, which is the same work the mod does after an undo or a redo. An undo cannot be raised from a script, so this is the closest a headless run gets to timing one, and an undo costs about half of it.
+
+`--hitch` on a `saturated` or `idle` cell runs the drag instead. Below the grid it lays ten input belts ending at an empty column and ten output belts starting one column further on, and from tick 1210 it places a balancer part every 6 ticks, the input column top to bottom and then the output column: twenty parts, a 10->10. The parts are placed by script (`raise_built`), and the mod batches only builds and mines made by a player, a robot or a platform, so this is the cost of a drag that is rebuilt once per part. The batched player drag is measured by the `curs` suite, where there is a player.
+
+A run of 2700 ticks or more goes on to robots. A powered roboport with thirty construction robots stands beside the rig from the start. At tick 1460 every part is marked for deconstruction and the robots take the balancer apart; at tick 2060 a ghost goes on every tile and they build it again from a storage chest. Each robot phase is profiled every tick for 560 ticks.
+
+Every tick from just before the first part to 120 ticks after the last is profiled on its own, and so is a stretch from tick 1050 to 1150 with nothing happening. `run.sh` prints, for each phase the run reached (`drag`, `botmine`, `botbuild`), what it added over the idle stretch's median tick, its worst tick, how many of its ticks ran past a 60 UPS frame, and how many networks were compiled inside it, and for the robot phases how many parts were left standing or built:
+
+```
+bench/run.sh --mod bbb --scenario saturated --hitch -n 4 -k 4 --ticks 2700 --runs 1
+```
+
 ### Megabase scenarios
 
 The uniform scenarios build `n` copies of one shape at `k <= 8`. A megabase is a mix of sizes, most small and a few large, and the `mega` family builds that mix.
@@ -105,7 +123,7 @@ The first compile of the 64x64 is timed at create as a subtraction: the setup mo
 [BENCH-MEGA] timing audit + FIRST COMPILE of the 64x64  Duration: 1858.15ms
 ```
 
-`--hitch` (mega only) profiles the 64x64 recompile during the run: three times (ticks 1210, 1510 and 1810, chosen not to coincide with the 600-tick meter) it removes one input belt of the 64x64 and puts it back, opening a profiler in the tick that mutates and closing it in the tick that flushes, with an `idle tick pair, nothing pending` probe beside each to subtract. That cell mutates the world mid-run, so its `avg_ms` is not a steady-state number and must not be compared with one; its `max_ms` is the hitch itself.
+`--hitch` (mega only) profiles a recompile at five sizes during the run: the first block's first 4x4 and its 8x8, the 16x16, the 32x32 and the 64x64. For each it removes one input belt and puts it back, three times, round robin across the five so that a saturated network still filling moves every size alike. The fifteen windows start at tick 1210 and are 40 ticks apart, so none reaches the 600-tick meter. Each window opens a profiler in the tick that mutates and closes it in the tick that flushes, with an `idle tick pair, nothing pending` probe beside it to subtract. The 64x64 is laid the same way by every version, so it is the control when two builds are compared. That cell mutates the world mid-run, so its `avg_ms` is not a steady-state number and must not be compared with one; its `max_ms` is the largest hitch.
 
 ```sh
 bench/run.sh --mod bbb --scenario mega --hitch -n 40 --ticks 2400 --runs 1
@@ -164,7 +182,11 @@ BENCH_TMP=/tmp/bbb-mega BENCH_VPROF_TICKS=3600 MEGA=1 REPS=3 bench/matrix.sh
 --scenario X     saturated | idle | control | control-idle
                  mega | mega-idle | mega-control | mega-control-idle
                                                        (default: saturated)
---hitch          mega only: profile three 64x64 recompiles during the run
+--hitch          mega: profile three recompiles each of a 4x4, an 8x8, the
+                 16x16, the 32x32 and the 64x64 during the run.
+                 saturated or idle: drag twenty parts into place and
+                 profile every tick of it; with --ticks 2700, robots then
+                 take them apart and build them again
 -n N             number of rigs (mega: number of blocks)  (default: 1)
 -k K             balancer size (K in, KxK parts, K out)   (default: 4)
 --tier X         normal | fast | express                  (default: express)

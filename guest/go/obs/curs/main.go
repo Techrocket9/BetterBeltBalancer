@@ -53,6 +53,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/harness"
 	"github.com/Techrocket9/BetterBeltBalancer/guest/go/obs/protos"
@@ -173,7 +175,22 @@ const (
 	// and the event names only the far one.
 	urot = lbEng + 12
 
-	rows = urot + 12
+	// (k) A DRAG, the mod portal report of 2026-11-06: "lags when placing a lot
+	// of them connected". dragRows ordinary rows, each fed from the west and
+	// drained to the east, with NO parts at all; the player then clicks twenty
+	// parts in from the cursor one every dragGap ticks, the west column top to
+	// bottom and then the east, which ends on a 10->10. What is asserted is that
+	// the whole gesture compiles ONCE, into that shape, and delivers: a burst of
+	// a player's own builds is held until it settles (guest/go/settle.go).
+	// After the run's final audit the player mines the twenty parts off again,
+	// one every dragGap ticks, the east column bottom to top and then the west:
+	// a removal drag of a running balancer, which tears the network down once,
+	// builds nothing, and puts nothing on the floor.
+	drag     = urot + 12
+	dragRows = 10
+	dragGap  = 6
+
+	rows = drag + dragRows + 12
 )
 
 // The tile each gesture is aimed at, so that the observer, the log and the
@@ -725,11 +742,14 @@ func gSecondBelt() {
 // gPockMine is the field report's own gesture: a saturated balancer taken apart
 // ONE PART PER TICK, by the player, with `mine_entity`.
 //
-// Each of the first four steps is a SHRINK -- the machine recompiles into a
-// smaller butterfly and hands back less than it drained -- and only the fifth is
-// the dissolve. That is the whole of what the first report was about: the pocket
-// shipped crediting the miner on the dissolve alone, by which time there is
-// almost nothing left in the machine.
+// The first report was that the pocket shipped crediting the miner on the
+// DISSOLVE alone, by which time a machine taken apart shrink by shrink had
+// almost nothing left in it. A player's mine opens a burst now
+// (guest/go/settle.go): the network stays up, each mined tile's own interface
+// goes to the pocket on the tick after its mine, and the rest of the machine
+// goes there when the audit marker drains the burst. So the first four steps
+// are no longer shrinks at all, and the pocket is still credited for every one
+// of them. `pock-after` is the sample that sees all of it.
 func gPockMine(i int) func() {
 	return func() {
 		xy := pockOrder[i-1]
@@ -1091,6 +1111,84 @@ func gUrot() {
 	urotSample("urot-turned")
 }
 
+func buildDrag(s fkapi.LuaSurface) {
+	for r := 0; r < dragRows; r++ {
+		feed(s, drag+r)
+	}
+}
+
+// dragAt is the tile of the i-th click: the west column top to bottom, then
+// the east.
+func dragAt(i int) harness.XY {
+	return harness.XY{X: i / dragRows, Y: drag + i%dragRows}
+}
+
+func gDragBegin() {
+	out.Open("gesture begin name=drag").End()
+	stand(harness.XY{X: 0, Y: drag + dragRows/2})
+	hold(part, 2*dragRows)
+}
+
+func gDragClick(i int) func() {
+	return func() { click(dragAt(i), nil) }
+}
+
+func gUnbuildBegin() {
+	out.Open("gesture begin name=unbuild").End()
+	stand(harness.XY{X: 0, Y: drag + dragRows/2})
+	sample("unbuild-pre", harness.XY{X: 0, Y: drag}, drag-1, drag+dragRows, plate, belt, part)
+}
+
+// gUnbuildMine mines the parts in the reverse of the order they were clicked.
+func gUnbuildMine(i int) func() {
+	return func() {
+		xy := dragAt(2*dragRows - 1 - i)
+		took := mine(xy, part, "")
+		out.Open("unbuild-mine step=").I(int64(i)).S(" took=").B(took).End()
+	}
+}
+
+// The drag is profiled TICK BY TICK, from the tick before the first click to
+// well after the gesture should have settled, so the log carries what the
+// gesture cost and when. This observer's on_tick runs after the mod's deferred
+// flush in the same tick (it loads after it), so each window holds one whole
+// tick including that flush.
+// The removal drag is profiled the same way, as `unbuildtick`.
+const (
+	dragProfFrom    = t0 + 819
+	dragProfTo      = t0 + 990
+	unbuildProfFrom = t0 + 1113
+	unbuildProfTo   = t0 + 1284
+)
+
+var (
+	dragProf     harness.Profiler
+	dragProfLive bool
+	dragProfTick uint64
+	dragProfName string
+)
+
+func dragProfile(t uint64) {
+	if dragProfLive {
+		dragProf.Stop()
+		dragProf.Log("[BBB-CURS] " + dragProfName + " t=" + strconv.FormatUint(dragProfTick+1, 10) + " ")
+		dragProf.Release()
+		dragProfLive = false
+	}
+	name := ""
+	if t >= dragProfFrom && t < dragProfTo {
+		name = "dragtick"
+	} else if t >= unbuildProfFrom && t < unbuildProfTo {
+		name = "unbuildtick"
+	}
+	if name != "" {
+		dragProf = harness.StartProfiler().Retain()
+		dragProfTick = t
+		dragProfName = name
+		dragProfLive = true
+	}
+}
+
 func buildLine(s fkapi.LuaSurface) {
 	// A WEST-facing dead-ended line: the head is x=-4 and nothing feeds it, so
 	// what `lineLoad` puts on the middle belt has nowhere to go and what the mod
@@ -1297,6 +1395,7 @@ var schedule = []harness.Step{
 	{Tick: t0 + 1076, Do: gPockMine(4)},
 	{Tick: t0 + 1080, Do: gPockMine(5)},
 	{Tick: t0 + 1084, Do: func() { auditAt("post-pock", 12, 0) }},
+	{Tick: t0 + 1086, Do: func() { sample("pock-after", harness.XY{X: 0, Y: pock}, pock-3, pock+6, plate, belt, part) }},
 
 	// (h) The curved exit, in the gap while (d2)'s network fills. The bands are
 	// forty tiles clear of every other rig, so nothing here touches a count above
@@ -1343,7 +1442,63 @@ var schedule = []harness.Step{
 	{Tick: t0 + 804, Do: func() { auditAt("post-urot", 12, 0) }},
 	{Tick: t0 + 1000, Do: func() { rate("urot", harness.XY{X: 7, Y: urot}) }},
 
+	// (k) the drag, after (j) and before the pocket bands mine anything.
+	{Tick: t0 + 816, Do: gDragBegin},
+	{Tick: t0 + 820, Do: gDragClick(0)},
+	{Tick: t0 + 826, Do: gDragClick(1)},
+	{Tick: t0 + 832, Do: gDragClick(2)},
+	{Tick: t0 + 838, Do: gDragClick(3)},
+	{Tick: t0 + 844, Do: gDragClick(4)},
+	{Tick: t0 + 850, Do: gDragClick(5)},
+	{Tick: t0 + 856, Do: gDragClick(6)},
+	{Tick: t0 + 862, Do: gDragClick(7)},
+	{Tick: t0 + 868, Do: gDragClick(8)},
+	{Tick: t0 + 874, Do: gDragClick(9)},
+	{Tick: t0 + 880, Do: gDragClick(10)},
+	{Tick: t0 + 886, Do: gDragClick(11)},
+	{Tick: t0 + 892, Do: gDragClick(12)},
+	{Tick: t0 + 898, Do: gDragClick(13)},
+	{Tick: t0 + 904, Do: gDragClick(14)},
+	{Tick: t0 + 910, Do: gDragClick(15)},
+	{Tick: t0 + 916, Do: gDragClick(16)},
+	{Tick: t0 + 922, Do: gDragClick(17)},
+	{Tick: t0 + 928, Do: gDragClick(18)},
+	{Tick: t0 + 934, Do: gDragClick(19)},
+	{Tick: t0 + 992, Do: func() { out.Open("gesture end name=drag").End() }},
+	{Tick: t0 + 994, Do: func() { auditAt("post-drag", 12, 0) }},
+	{Tick: t0 + 1090, Do: func() { rate("drag", dragChests()...) }},
+
 	{Tick: t0 + 1100, Do: func() { reportPlayer("final"); auditAt("final", 12, 0) }},
+
+	// (k2) the removal drag, after the final audit so that every tag above is
+	// what it was. The pocket is open again for it.
+	{Tick: t0 + 1104, Do: emptyInventory},
+	{Tick: t0 + 1110, Do: gUnbuildBegin},
+	{Tick: t0 + 1114, Do: gUnbuildMine(0)},
+	{Tick: t0 + 1120, Do: gUnbuildMine(1)},
+	{Tick: t0 + 1126, Do: gUnbuildMine(2)},
+	{Tick: t0 + 1132, Do: gUnbuildMine(3)},
+	{Tick: t0 + 1138, Do: gUnbuildMine(4)},
+	{Tick: t0 + 1144, Do: gUnbuildMine(5)},
+	{Tick: t0 + 1150, Do: gUnbuildMine(6)},
+	{Tick: t0 + 1156, Do: gUnbuildMine(7)},
+	{Tick: t0 + 1162, Do: gUnbuildMine(8)},
+	{Tick: t0 + 1168, Do: gUnbuildMine(9)},
+	{Tick: t0 + 1174, Do: gUnbuildMine(10)},
+	{Tick: t0 + 1180, Do: gUnbuildMine(11)},
+	{Tick: t0 + 1186, Do: gUnbuildMine(12)},
+	{Tick: t0 + 1192, Do: gUnbuildMine(13)},
+	{Tick: t0 + 1198, Do: gUnbuildMine(14)},
+	{Tick: t0 + 1204, Do: gUnbuildMine(15)},
+	{Tick: t0 + 1210, Do: gUnbuildMine(16)},
+	{Tick: t0 + 1216, Do: gUnbuildMine(17)},
+	{Tick: t0 + 1222, Do: gUnbuildMine(18)},
+	{Tick: t0 + 1228, Do: gUnbuildMine(19)},
+	{Tick: t0 + 1286, Do: func() {
+		sample("unbuild-post", harness.XY{X: 0, Y: drag}, drag-1, drag+dragRows, plate, belt, part)
+		out.Open("gesture end name=unbuild").End()
+	}},
+	{Tick: t0 + 1288, Do: func() { auditAt("post-unbuild", 12, 0) }},
 }
 
 // rate totals named sink chests, which is what says a balancer is still
@@ -1366,6 +1521,15 @@ func rate(tag string, chests ...harness.XY) {
 	out.Open("rate tag=").S(tag).S(" delivered=").I(total).End()
 }
 
+// dragChests are band (k)'s ten sinks.
+func dragChests() []harness.XY {
+	cs := make([]harness.XY, 0, dragRows)
+	for r := 0; r < dragRows; r++ {
+		cs = append(cs, harness.XY{X: 6, Y: drag + r})
+	}
+	return cs
+}
+
 // The sinks each band is measured at.
 var (
 	endChests  = []harness.XY{{X: 6, Y: repEnd}, {X: 6, Y: repEnd + 1}}
@@ -1381,6 +1545,7 @@ func onInit() {
 	buildBrdg(s)
 	buildCurve(s)
 	buildUrot(s)
+	buildDrag(s)
 
 	// `--create` never reaches a tick, and this suite has no `--create` -- but the
 	// fixture's own first tick is the benchmark's, so without a marker here every
@@ -1389,7 +1554,7 @@ func onInit() {
 	harness.Audit(s, 12, 0)
 	out.Open("mark tag=init").End()
 	reportPlayer("init")
-	out.Open("plan t0=").I(t0).S(" end_tick=").I(t0 + 1100).S(" rows=").I(rows).End()
+	out.Open("plan t0=").I(t0).S(" end_tick=").I(t0 + 1288).S(" rows=").I(rows).End()
 }
 
 // start is the first tick this guest sees, and THE SCHEDULE IS RELATIVE TO IT.
@@ -1412,6 +1577,7 @@ func onEvent(id, ptr uint32) {
 		start = t
 	}
 	harness.Run(schedule, t-start)
+	dragProfile(t - start)
 }
 
 func main() {}

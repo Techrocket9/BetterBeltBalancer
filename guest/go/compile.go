@@ -1843,6 +1843,7 @@ var (
 func requestFlush() { fk.Defer() }
 
 func markDead(r uint32) {
+	noteQueued()
 	for i := range deadRoots {
 		if deadRoots[i] == r {
 			return
@@ -1852,6 +1853,7 @@ func markDead(r uint32) {
 }
 
 func markLive(r uint32) {
+	noteQueued()
 	for i := range liveRoots {
 		if liveRoots[i] == r {
 			return
@@ -1953,11 +1955,16 @@ func flush() {
 	// reaches. One length test on an empty slice in every save that never had a
 	// Belt Balancer 2 in it. See legacy.go, which is emphatic about why this is
 	// deferred rather than done inside the event.
+	// Anything this flush queues -- a revert's `mine_entity`, a conversion's
+	// build -- is the mod's own work and never held (settle.go).
+	flushDepth++
 	legacyRunBuilds()
 	beginCarry()
 	flushDead()
 	flushLive()
 	endCarry()
+	// Whatever a burst held has now been compiled (settle.go).
+	endBurst()
 	// AND THE OVER-LIMIT REVERT RUNS HERE, AFTER THE DRAIN AND AFTER THE
 	// TRANSACTION HAS CLOSED, WHICH IS THE ONLY PLACE IT MAY. `mine_entity`
 	// dispatches on_player_mined_entity synchronously, so it re-enters this
@@ -2015,6 +2022,7 @@ func flush() {
 	forgetAddedParts()
 	forgetCondemned()
 	forgetLegacyConverted()
+	flushDepth--
 }
 
 // The log helpers -- logError, logAlert, and the builder every line is
