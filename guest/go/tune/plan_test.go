@@ -128,11 +128,12 @@ func wantSettings() []wantSetting {
 			// Each preset shows the FIRST rung of every ladder, because the
 			// settings stage has no data.raw to walk one with.
 			//
-			// THE WRAP LINE AND THE LADDER LINE ARE ON THIS DROPDOWN AND ON
-			// NEITHER RESEARCH ROW, and that asymmetry is the library's own rule
-			// rather than an omission here: both go wherever a TYPEABLE LIST is
-			// rendered, and a research preset renders a localised technology
-			// name with nothing in it to copy. THE SWITCH LINE IS LAST on both.
+			// THE LADDER LINE IS ON THIS DROPDOWN AND ON NEITHER RESEARCH ROW,
+			// and that asymmetry is the library's own rule rather than an
+			// omission here: it goes where the lists it is about are rendered,
+			// and a research preset renders a localised technology name with
+			// nothing in it to shorten. This dropdown carrying it is also why
+			// the text field below does not. THE SWITCH LINE IS LAST on both.
 			description: fkrecipes.Arr(
 				fkrecipes.Str(""),
 				localeRef("mod-setting-description", "bbb-recipe-cost", "bbb-recipe-cost"),
@@ -142,7 +143,6 @@ func wantSettings() []wantSetting {
 				presetLine("bbb-recipe-cost", "belt-express", "4 steel-plate, 2 iron-gear-wheel, 2 express-transport-belt"),
 				presetLine("bbb-recipe-cost", "splitter", "1 splitter, 2 iron-plate"),
 				presetLine("bbb-recipe-cost", "splitter-express", "1 express-splitter, 2 steel-plate"),
-				fkrecipes.Str(wrapSentence),
 				fkrecipes.Str(dropdownLadderSentence),
 				fkrecipes.Str(dropdownSwitchSentence),
 			),
@@ -159,12 +159,12 @@ func wantSettings() []wantSetting {
 			defaultValue: fkrecipes.Str("default"),
 			order:        "aab",
 			autoTrim:     true,
-			// EIGHT PARAMETERS, and only the first two are this mod's: its own
+			// SIX PARAMETERS, and only the first two are this mod's: its own
 			// description key, then the declared list rendered in the language
-			// the field takes, then the library's own FIVE sentences. See
+			// the field takes, then the library's own THREE sentences. See
 			// [textFieldLines], and `true` because this is the INGREDIENT field:
-			// its format line names the word `none` and its ladder line names
-			// what a player crafts where the pack field's names a research.
+			// its format line names the word `none`, and it carries no ladder
+			// line because the dropdown above it does.
 			description: fkrecipes.Arr(append([]fkrecipes.Value{
 				fkrecipes.Str(""),
 				localeRef("mod-setting-description",
@@ -229,14 +229,15 @@ func wantSettings() []wantSetting {
 			defaultValue: fkrecipes.Str("default"),
 			order:        "bad",
 			autoTrim:     true,
-			// The recipe text field's eight parameters again, with this mod's
-			// own rendered default in the middle and the library's same five
-			// sentences after it -- LESS THE WORD `none` and IN THE PACK
-			// VOCABULARY, which is why [textFieldLines] takes the kind. A pack
-			// list refuses that word ("research takes at least one science
-			// pack"), so the library does not offer it here, and its ladder
-			// line is about a research taking fewer packs rather than about a
-			// craft costing less.
+			// The recipe text field's shape again, with this mod's own rendered
+			// default in the middle and the library's sentences after it --
+			// LESS THE WORD `none` and PLUS THE LADDER LINE, which is why
+			// [textFieldLines] takes the kind. A pack list refuses that word
+			// ("research takes at least one science pack"), so the library does
+			// not offer it here; and the cost dropdown beside this field renders
+			// no list and so composes no ladder line, which leaves this field
+			// the one place in the pair that says a research can take fewer
+			// packs than shown. Seven parameters.
 			description: fkrecipes.Arr(append([]fkrecipes.Value{
 				fkrecipes.Str(""),
 				localeRef("mod-setting-description",
@@ -316,14 +317,20 @@ func localeRef(section, key, raw string) fkrecipes.Value {
 // is written out at every site instead.
 //
 // TRANSCRIBED FROM WHAT THE PLAN EMITS AND CHECKED AGAINST THE LIBRARY'S OWN
-// CONSTANTS, one by one: `listWrapLine`, `textFormatLine` with
-// `ingredientNoneClause`, `textSwitchLine`, `textFallbackLine`,
-// `dropdownSwitchLine` and `researchRangeLine` in FkRecipes go/customize.go.
+// CONSTANTS, one by one: `textFormatLine` with `ingredientNoneClause`,
+// `textSwitchLine`, `textFallbackLine`, `dropdownSwitchLine`,
+// `researchRangeLine`, `packsLadderLine` and `dropdownLadderLine` in FkRecipes
+// go/customize.go at go/v0.1.2.
+//
+// FkRecipes v0.1.2 REWROTE ALL OF THEM SHORTER, and deleted one. The wrap
+// sentence ("a list too long for one line continues on the next") is gone from
+// every composition and is documented to authors instead; the format, switch
+// and fallback sentences keep their claims in fewer words; and the ladder
+// sentence is composed once per pair rather than once per field (see
+// [textFieldLines]). The two research numbers are the one place the text grew.
 const (
-	wrapSentence = "\nA list too long for one line continues on the next; " +
-		"the continuation is part of the same list."
-	formatSentence = "\nWrite internal names, as the default line above does, " +
-		"in at most 2000 characters."
+	formatSentence = "\nInternal names, as on the default line, up to 2000 " +
+		"characters."
 	// THE WORD `none` IS AN INGREDIENT CLAUSE AND NOT A SENTENCE, appended to
 	// the format line above on an ingredient list and on nothing else.
 	noneClause = " The word none empties the list, so the recipe costs " +
@@ -332,18 +339,17 @@ const (
 	// field at "aab", `bbb-tech-cost` at "b" and its pack field at "bad". The
 	// library compares the EMITTED ORDER STRINGS rather than the declaration
 	// order, so this word is a fact about where the rows land in the menu.
-	textSwitchSentence = "\nWhile this says default the option chosen above " +
-		"applies; anything else applies instead of it."
+	textSwitchSentence = "\nLeave this as default and the option chosen above " +
+		"decides; anything else applies instead."
 	// SET ASIDE AND THEN NOTHING ELSE HAPPENS, which is the wording FkRecipes
-	// ca4c344 arrived at and this file's fourth spelling of the same fact. It
+	// ca4c344 arrived at and v0.1.2 shortened without changing the claim. It
 	// used to say "that default applies instead", which is false beside a
 	// dropdown: what applies is the PRESET the player is standing on, and this
 	// mod measured all six of them under one byte-identical sentence. What is
 	// true on all six, and beside a field with no dropdown at all, is that the
 	// field behaves as though it held the word `default`.
-	textFallbackSentence = "\nA text this mod cannot use is set aside and the " +
-		"field behaves as though it said default; the reason is in the log, " +
-		"or in the load error if the load stops anyway."
+	textFallbackSentence = "\nText this mod cannot use is set aside as though " +
+		"it said default; the reason is in the log or the load error."
 	// And BELOW on both dropdowns, which is the same two pairs read from the
 	// other end.
 	dropdownSwitchSentence = "\nThe setting below applies instead while it " +
@@ -362,27 +368,20 @@ const (
 	// agents/migration-assessment-3.md; FkRecipes 933d4d3 composes the sentence
 	// itself, so a consumer who never wrote that locale line gets it too.
 	//
-	// THREE SENTENCES AND NOT ONE, because the vocabulary is the list's. An
-	// ingredient list shortens what a player CRAFTS and a pack list shortens
-	// what a research TAKES, so the two text fields get different words for one
-	// rule; and the ingredient DROPDOWN says "an option" rather than "a list
-	// this mod chose", because the lists it is about are the presets the player
-	// is choosing between.
-	ingredientLadderSentence = "\nWhere a list this mod chose names something " +
-		"your mods do not have, the next name it offers is used instead; an " +
-		"entry it offers nothing for is left out, and two that land on one " +
-		"name have their amounts added, so what you craft can be a shorter " +
-		"list than the one shown."
-	packsLadderSentence = "\nWhere a list this mod chose names a science pack " +
-		"your mods do not have, the next name it offers is used instead; a " +
-		"pack it offers nothing for is left out, and two that land on one " +
-		"pack have their amounts added, so the research can take fewer packs " +
-		"than the list shows."
-	dropdownLadderSentence = "\nWhere an option names something your mods do " +
-		"not have, the next name it offers is used instead; an entry it " +
-		"offers nothing for is left out, and two that land on one name have " +
-		"their amounts added, so what you craft can be a shorter list than " +
-		"the one shown."
+	// TWO SENTENCES HERE, of the library's three, because the vocabulary is
+	// the list's and this mod composes only two of them. A pack list shortens
+	// what a research TAKES, and the ingredient DROPDOWN says "an option",
+	// because the lists it is about are the presets the player is choosing
+	// between. The library's third, `ingredientLadderLine`, belongs on an
+	// ingredient text field with no ingredient dropdown beside it, and this
+	// mod has none: its one ingredient field sits beside `bbb-recipe-cost`,
+	// whose own line already says it (see [textFieldLines]).
+	packsLadderSentence = "\nA pack your mods lack takes the mod's next name " +
+		"for it or is left out; two landing on one pack are added, so the " +
+		"research can take fewer packs than shown."
+	dropdownLadderSentence = "\nAn entry your mods lack takes the mod's next " +
+		"name for it or is left out; two landing on one name are added, so an " +
+		"option can craft a shorter list than it shows."
 )
 
 // presetLine is one preset's line of a dropdown's composed description: a
@@ -390,11 +389,13 @@ const (
 // menu, not the raw key), then what that preset means written out.
 //
 // IT IS TWO LINES PER PRESET SINCE FkRecipes 0077f3c, NOT ONE. The separator
-// between the label and the list was `": "` and is `"\n  type: "`, so the label
-// keeps its own line and the copyable internal list is indented under it. The
-// reason is the consumer's own dropdown labels: this mod's are 35 to 65
+// between the label and the list was `": "` and is `"\n  to type: "`, so the
+// label keeps its own line and the copyable internal list is indented under
+// it. The reason is the consumer's own dropdown labels: this mod's are 35 to 65
 // characters and the closed widget truncates at about 37, so on the old
-// one-line shape the list a player was meant to copy began past the fold.
+// one-line shape the list a player was meant to copy began past the fold. The
+// head was `type:` until v0.1.2, which read as the noun rather than as the
+// instruction it is.
 //
 // THE SETTING IS A PARAMETER even though only the recipe dropdown's lines are
 // built here now (the research dropdown's have a shape of their own, below),
@@ -407,25 +408,29 @@ func presetLine(setting, value, text string) fkrecipes.Value {
 		fkrecipes.Str(""),
 		fkrecipes.Str("\n"),
 		localeRef("string-mod-setting", setting+"-"+value, value),
-		fkrecipes.Str("\n  type: "+text),
+		fkrecipes.Str("\n  to type: "+text),
 	)
 }
 
-// textFieldLines is the FIVE sentences the LIBRARY appends to every text
-// setting it composes a description for, under this mod's own rendered default
-// line: the wrap, the ladder, the format, the switch and the fallback.
+// textFieldLines is the sentences the LIBRARY appends to a text setting it
+// composes a description for, under this mod's own rendered default line: the
+// ladder where this field is the one that carries it, then the format, the
+// switch and the fallback. Three on the ingredient field and four on the pack
+// field since FkRecipes v0.1.2; five on both before it, when every text field
+// also carried a wrap sentence and its own ladder line.
 //
 // TRANSCRIBED FROM WHAT THE PLAN EMITS AND THEN CHECKED SENTENCE BY SENTENCE
-// AGAINST THE LIBRARY'S OWN CONSTANTS. Two of the five were here before fix
-// round 2, two arrived with it, and the ladder line arrived with FkRecipes
-// 933d4d3; the format line grew a clause on one of the two fields.
+// AGAINST THE LIBRARY'S OWN CONSTANTS. The format line grows a clause on one of
+// the two fields.
 //
-// THE LADDER LINE SITS SECOND, DIRECTLY UNDER THE WRAP LINE AND OVER THE
-// FORMAT LINE, and the order is the library's rule rather than a preference:
-// the wrap line names a RELATIONSHIP between the rendered default line and its
-// continuation, so nothing may come between the list and it, and the format
-// line under both still says "as the default line above does", which three
-// lines up is as true as one.
+// THE LADDER LINE IS COMPOSED ONCE PER PAIR, ON THE FIELD THAT RENDERS THE
+// LISTS IT IS ABOUT, which is v0.1.2's rule. The INGREDIENT text sits beside
+// `bbb-recipe-cost`, an ingredient dropdown whose own description already
+// carries the disclosure over the presets a player is choosing between, so the
+// text field does not repeat it. The PACK text sits beside `bbb-tech-cost`, a
+// cost dropdown that renders no list and composes no ladder line, so the pack
+// field is the only place in that pair where a player can read the rule, and
+// it carries it first, directly under the default line it is about.
 //
 // ONE HELPER RATHER THAN TWO COPIES, which is the one place this file derives
 // where it otherwise transcribes, and the reason is what these sentences ARE:
@@ -437,38 +442,33 @@ func presetLine(setting, value, text string) fkrecipes.Value {
 // argument. `none` empties an ingredient list and is a legitimate thing for a
 // player to want; a pack list REFUSES the word ("research takes at least one
 // science pack"), so the library does not offer it there. And the ladder line
-// is a WHOLE SEPARATE SENTENCE per field rather than a clause: a research unit
-// is priced in packs and a recipe is crafted from a list, so "what you craft"
-// names nothing on a technology and "fewer packs" names nothing on a recipe. A
-// parameter is what makes "the ingredient field says it and the pack field does
-// not" a thing this file can state and therefore get wrong.
+// is on one field and not the other, for the reason above. A parameter is what
+// makes "the ingredient field says it and the pack field does not" a thing
+// this file can state and therefore get wrong.
 //
-// THE THIRD SENTENCE IS THE SWITCH AND IT IS FIX ROUND 2'S WHOLE SUBJECT. The
-// settings screen has no conditional visibility at all, so it can never show
-// which of the two rows is deciding; saying the RULE in both tooltips is what
-// the library can do instead, and this is the text-field half of it.
+// THE SWITCH IS FIX ROUND 2'S WHOLE SUBJECT. The settings screen has no
+// conditional visibility at all, so it can never show which of the two rows is
+// deciding; saying the RULE in both tooltips is what the library can do
+// instead, and this is the text-field half of it.
 //
-// THE FOURTH IS THE FALLBACK, ANNOUNCED WHERE THE PLAYER TYPES. A text this mod
+// THE LAST IS THE FALLBACK, ANNOUNCED WHERE THE PLAYER TYPES. A text this mod
 // cannot use is set aside, this mod's declared list applies, and the reason
-// goes to the log. The clause "or in the load error if the load stops anyway"
-// is the library saying the fallback is NOT total, which is
-// [TestATextTheGameCannotAnswerFallsBackAndSaysSo]'s subject.
+// goes to the log. "Or the load error" is the library saying the fallback is
+// NOT total, which is [TestATextTheGameCannotAnswerFallsBackAndSaysSo]'s
+// subject.
 func textFieldLines(ingredients bool) []fkrecipes.Value {
+	var lines []fkrecipes.Value
 	format := formatSentence
 	if ingredients {
 		format += noneClause
+	} else {
+		lines = append(lines, fkrecipes.Str(packsLadderSentence))
 	}
-	ladder := packsLadderSentence
-	if ingredients {
-		ladder = ingredientLadderSentence
-	}
-	return []fkrecipes.Value{
-		fkrecipes.Str(wrapSentence),
-		fkrecipes.Str(ladder),
+	return append(lines,
 		fkrecipes.Str(format),
 		fkrecipes.Str(textSwitchSentence),
 		fkrecipes.Str(textFallbackSentence),
-	}
+	)
 }
 
 // numberDescription is the whole composed description of a RESEARCH NUMBER,
@@ -481,12 +481,17 @@ func textFieldLines(ingredients bool) []fkrecipes.Value {
 // means, which they could not guess. The ceiling is a string parameter because
 // it is rendered by the library's own amount formatter rather than by Go's
 // float printing -- 1000000 and not 1e+06 -- and this mod's two ceilings differ.
+//
+// THE SENTINEL LEADS SINCE FkRecipes v0.1.2, and the range follows it: beside a
+// research dropdown 0 is how the field says "not customised" rather than the
+// bottom of a range anyone would pick, so the sentence is shaped like the text
+// fields' switch line. It is the one sentence that round made longer.
 func numberDescription(setting, max string) fkrecipes.Value {
 	return fkrecipes.Arr(
 		fkrecipes.Str(""),
 		localeRef("mod-setting-description", setting, setting),
-		fkrecipes.Str("\nA whole number from 0 to "+max+
-			". While it is 0 the option chosen above decides."),
+		fkrecipes.Str("\nLeave this at 0 and the option chosen above supplies "+
+			"the number; otherwise a whole number up to "+max+"."),
 	)
 }
 

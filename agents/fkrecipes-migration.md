@@ -2367,6 +2367,23 @@ The operator halted the fix-and-assess chain during this round and asked for a t
 
 On a stock install nothing this chain touched changed the mod's default behaviour: every owned prototype on the default configuration is identical to the 0.3.2 release but `place_result`, this mod's own freeze fix, and the data-raw hashes have not moved since `cb89891`. The question the chain was opened for, whether stored preferences and saves migrate, was CLEAN in all three assessments and a byte identity in the third.
 
+## FkRecipes go/v0.1.2, 2026-11-10: the settings tooltip is shorter, and nothing else moves
+
+**The bump is `go get github.com/Techrocket9/fkrecipes/go@v0.1.2` and nothing in the plan changes.** v0.1.2 (`19992c9`, tagged 2026-09-22, the "settings-tooltip round") rewrites the prose the library composes onto settings and adds three optional fields (`Describes`, `CostChoice.Display`, `DescribeSetting`) that this plan uses none of. In Go every addition is a zero value that means the old behaviour, so `tune.Plan()` compiles unchanged and the control guest, which does not link the library at all, cannot move.
+
+**What went red is the one test that transcribes the composition, and it went red in exactly the five places the library's `docs/migration.md` ("Taking v0.1.2") lists.** `TestEverySettingPrototypeIsTheOneThatShipped`, five descriptions:
+
+- `bbb-recipe-cost`: each preset's second line opens `\n  to type: ` where it opened `\n  type: `; the wrap sentence is gone; the ladder sentence is the shorter `dropdownLadderLine`, 160 bytes where it was 256, keeping all three clauses (substitution, leaving out, the merge).
+- `better-belt-balancer-recipe-ingredients`: six lines under this mod's entry become four (default, format with `none`, switch, fallback). It loses its ladder line because the ingredient dropdown beside it carries the same disclosure, which is v0.1.2's once-per-pair rule.
+- `better-belt-balancer-tech-packs`: KEEPS its ladder line, because `bbb-tech-cost` is a cost dropdown and composes none; loses the wrap line; format, switch and fallback reworded.
+- `better-belt-balancer-tech-count` and `-tech-seconds`: the sentence leads with the sentinel, `Leave this at 0 and the option chosen above supplies the number; otherwise a whole number up to <max>.`, which is the one line the round made longer.
+
+`guest/go/tune/plan_test.go` is re-transcribed from what the plan emits and checked against the library's constants at the tag (`textFormatLine`, `textSwitchLine`, `textFallbackLine`, `dropdownSwitchLine`, `researchRangeLine`, `packsLadderLine`, `dropdownLadderLine`). `ingredientLadderSentence` is deleted rather than updated, because this plan has no ingredient text field without a dropdown beside it and so never composes `ingredientLadderLine`. The comments in `mod-data/locale/en/better-belt-balancer.cfg` that transcribe the composition are brought to the same shape; no shipped string in that file moves, since none of them repeated the library's sentences.
+
+**The golden moved in exactly the shape the library predicted, and the prediction was checked before the capture.** On Factorio 2.1.24, `mod_settings_sha256` `87d351968e34ece6` to `3e0a5186e9e1c334` on both mod sets, `data_raw_sha256` unmoved on both. The control and the field-by-field diff are in `agents/verification/gates.md`; the gate and suite runs are the verification log's entry of the same date.
+
+**Not measured: what the shorter tooltip looks like in a client.** The library measured its own figures (an ingredient text beside a dropdown 850 to 411 characters of library text, a pack text beside a cost dropdown 762 to 322); this mod's tooltips were not opened on screen.
+
 ## The FkLua baseline
 
 The migration was measured against a freshly rebuilt fklua so that a packaging difference could not be mistaken for a library effect.
