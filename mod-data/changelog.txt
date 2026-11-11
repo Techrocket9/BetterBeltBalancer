@@ -1,4 +1,15 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.9
+Date: 2026-11-10
+  Features:
+    - A second balancer part, the lane-keeping balancer part, builds a balancer that never mixes a belt's two lanes. The left lane of every input is balanced over the left lane of every output and the right lane over the right, so a belt carrying one item on each side reaches every output with the same item on the same side. Its lit lines are green where the ordinary part's are blue. It costs two ordinary balancer parts, whatever recipe the startup settings give the ordinary part, and the same research unlocks it. Thanks to Gamer433 for the request.
+    - Everything else works as it does for the ordinary part: one belt per part, priority with ALT + P, blueprints, and a balancer you change putting what it was holding back inside it, each item on the lane it was taken from.
+  Changes:
+    - A lane-keeping part never joins an ordinary one. Placed side by side they are two balancers, each with only the belts on its own parts. Holding one kind over the other replaces it, as a fast replace does.
+    - The startup settings' tooltips for the recipe and the research cost are shorter. Nothing any setting does changes.
+  Info:
+    - The Factorio 2.0 release, carrying everything 0.3.9 brings to Factorio 2.1 from the same source.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.9
 Date: 2026-11-10
   Features:
