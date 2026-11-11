@@ -2712,3 +2712,13 @@ Asks, not designs. Each one is what would have let experiment D2 keep this mod's
 - **A way for a `Recipe` to produce an item the plan does not declare**, by name with a presence check, in the shape `IngredientNamed` already has for the ingredient direction. That is what would let a mod keep a hand-rolled item and still reach `IngredientsBy`, which is the verb this mod wanted and could not have.
 
 None of these asks anything of the planner's behaviour, which is measured correct here in both of the places this mod would use it.
+
+## A second technology priced like the first: MISSING, 2026-11-11; ANSWERED by go/v0.1.3 the same day
+
+The lane-keeping part's research wants two things the library gives separately and never together: a place after a technology THIS PLAN declares (`AfterTech`), and the cost that technology ends up with under the player's cost settings. Three routes, each refused, measured against v0.1.2:
+
+- **`CostOf: "bbb-balancer"`** cannot work: `CostOf` reads the unit out of data.raw while the plan is being made, and the plan's own technology is not in data.raw until the plan is emitted. There is no `CostOfTech TechRef`.
+- **The same `CostBy` and `CostFrom` handles on a second technology** are refused at plan time: `fkrecipes: the setting bbb-tech-cost takes a text setting from more than one technology; one dropdown composes one description`. And `CostBy` refuses `AfterTech` beside it in any case, because it places the technology at the tier's source.
+- **A placeholder `Unit` with `AfterTech`** loads, but its packs are probed in every game: a game without `automation-science-pack` logs `ERROR: bbb-lane-balancer: ... completes for free` for a research whose shipped unit is the copied one. It also undoes the lazy probe `TestAnUnreachedFallbacksPackIsNeverProbed` pins.
+
+**ANSWERED.** FkRecipes go/v0.1.3 (`51c6d6b`, both tags pushed) adds `TechSpec.CostOfTech TechRef`, a fourth exclusive cost source: it copies the unit and level cap the named plan technology ENDED UP with, after its own ladder, fallback, pack filter and settings, makes it the sole prerequisite (refused beside After, AfterTech or Before), asks the game nothing a second time and so logs nothing for a cost it did not compute, and hands the copying technology one sentence pointing at the source when the source's description carries a cost note. This mod adopted it the same day: `bbb-lane-balancer` is `CostOfTech: balancerTech`, the data-guest workaround that copied the emitted unit with `fkdata.Get` was deleted before it was committed, and the lane recipe comes out `enabled = false` because a plan technology now unlocks it.

@@ -356,8 +356,8 @@ func TestTheLocaleFileRenamesNoTechnologyOfTheGames(t *testing.T) {
 		// belongs here because [Plan] declares it: `technology-name.bbb-balancer`
 		// names a technology nobody else has, and without it the research screen
 		// shows the player the raw key. [TechName] is the whole of what this
-		// plan declares, so it is the whole of the exemption.
-		if e.Section != "technology-name" || e.Key == TechName {
+		// plan declares, with [LaneTechName] beside it for the same reason.
+		if e.Section != "technology-name" || e.Key == TechName || e.Key == LaneTechName {
 			continue
 		}
 		t.Errorf("[technology-name] %s is defined in this mod's own locale "+

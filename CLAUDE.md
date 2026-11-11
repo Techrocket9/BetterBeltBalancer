@@ -115,7 +115,7 @@ The record of which Factorio was installed when is [`agents/architecture/environ
 
 - Factorio at `~/Library/Application Support/Steam/steamapps/common/Factorio/factorio.app/Contents/MacOS/factorio` (Steam, Space Age, mac-arm64); user dir `~/Library/Application Support/factorio/`. **Which version is installed is a Steam betas setting and it moves: ask `--version` rather than any sentence.** On 2026-11-05 it answered `2.1.24 (build 87808)`, and trunk's api pin is 2.1.24 since that day. `test/run.sh` stamps staged test mods for the running engine but GATES the packaged mod, so trunk's `make test` needs a 2.1 binary and the `release/2.0` arm a 2.0 one. `--benchmark` never saves.
 - **FkLua is a sibling checkout** at `../FkLua` (a `replace` in `guest/go/go.mod`); the toolchain is `../FkLua/bin/fklua`. Its floor is `ddd9700` (the commit that added `fkdata.Raise`), which no manifest can enforce.
-- **FkRecipes arrives through the real module channel**: `guest/go/go.mod` requires `github.com/Techrocket9/fkrecipes/go v0.1.2` with no `replace` (since 2026-11-10; v0.1.1 before).
+- **FkRecipes arrives through the real module channel**: `guest/go/go.mod` requires `github.com/Techrocket9/fkrecipes/go v0.1.3` with no `replace` (since 2026-11-11, for `CostOfTech`; v0.1.2 from 2026-11-10, v0.1.1 before).
 - **TinyGo 0.41.1 + binaryen.** The host Go is 1.27.1 and TinyGo 0.41.1 refuses it, so every wasm build (including the speed arm inside `make datastage-check`) runs under `GOTOOLCHAIN=go1.26.6`.
 - Where FkLua does not do what this mod needs, the gap is written down in [`FKLUA-GAPS.md`](FKLUA-GAPS.md) and worked around here. **Do not fork or patch FkLua for it** — that project wants the feedback, not a divergent copy.
 

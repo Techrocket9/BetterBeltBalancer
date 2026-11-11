@@ -1977,6 +1977,38 @@ def main() -> int:
     return 0
 
 
+# THE LANE-KEEPING PART'S RESEARCH, asserted on every technology arm. The plan
+# prices it with `CostOfTech` (FkRecipes go/v0.1.3), which copies what the
+# ordinary research ends up costing, so the claim is an equation out of the
+# same dump: its unit and level cap ARE the ordinary research's, it sits after
+# the ordinary research and nowhere else, it unlocks the lane recipe and
+# nothing else, and that recipe is not craftable from the start.
+LANE_TECH, LANE_RECIPE = "bbb-lane-balancer", "bbb-lane-balancer-part"
+LANE_FIELDS = (', lane: .technology["%s"], lrec: .recipe["%s"]'
+               % (LANE_TECH, LANE_RECIPE))
+
+
+def lane_tech_wrong(ours: dict, lane, lrec) -> "str | None":
+    """Why the lane research is not the ordinary one's cost after it, or None."""
+    if lane is None:
+        return f"there is no `{LANE_TECH}` technology"
+    if lane.get("unit") != ours.get("unit"):
+        return (f"`{LANE_TECH}` charges {lane.get('unit')}\n{'':>5}  and "
+                f"`bbb-balancer` charges {ours.get('unit')}")
+    if lane.get("max_level") != ours.get("max_level"):
+        return (f"`{LANE_TECH}` has max_level {lane.get('max_level')} and "
+                f"`bbb-balancer` {ours.get('max_level')}")
+    if lane.get("prerequisites") != ["bbb-balancer"]:
+        return (f"`{LANE_TECH}`'s prerequisites are "
+                f"{lane.get('prerequisites')}, not ['bbb-balancer']")
+    if lane.get("effects") != [{"type": "unlock-recipe", "recipe": LANE_RECIPE}]:
+        return f"`{LANE_TECH}` unlocks {lane.get('effects')}"
+    if lrec is None or lrec.get("enabled") is not False:
+        return (f"the recipe `{LANE_RECIPE}` is "
+                f"{'missing' if lrec is None else 'enabled from the start'}")
+    return None
+
+
 def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
     """Every non-default value of both cost settings, one arm each.
 
@@ -2043,7 +2075,7 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
             # rather than against a figure transcribed here, which would go
             # stale the day base re-costs a tier.
             return project(dump, '{ours: .technology["bbb-balancer"], '
-                                 'src: .technology["%s"]}' % src)
+                                 'src: .technology["%s"]' % src + LANE_FIELDS + '}')
 
         p = run_arm(arm, factorio, series, mod_dir, None,
                     startup={TECH_SETTING: value}, probe=probe)["probe"]
@@ -2061,9 +2093,13 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
             bad = True
             print(f"FAIL {arm}: the prerequisite is {ours['prerequisites']}, "
                   f"not [{value}] -- the unit moved and the tree position did not")
+        elif why := lane_tech_wrong(ours, p["lane"], p["lrec"]):
+            bad = True
+            print(f"FAIL {arm}: {why}")
         else:
             u = ours["unit"]
-            print(f"  ok   {arm:<26} {u['count']} x {u['time']}s, after {value}")
+            print(f"  ok   {arm:<26} {u['count']} x {u['time']}s, after {value}; "
+                  f"{LANE_TECH} the same, after bbb-balancer")
 
     # THE WHOLE COST WRITTEN, one arm, asserting the unit, the prerequisite and
     # the whole log stream. See TECH_COST_ARMS for what the state is, why the
@@ -2071,8 +2107,9 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
     # it anti-vacuous.
     for arm, startup, want_unit, want_after, want_lines in TECH_COST_ARMS:
         got = run_arm(arm, factorio, series, mod_dir, None, startup=startup,
-                      probe=lambda d: project(d, '.technology["bbb-balancer"]'))
-        ours, lines = got["probe"], got["fkrecipes_lines"]
+                      probe=lambda d: project(d, '{ours: .technology["bbb-balancer"]'
+                                                 + LANE_FIELDS + '}'))
+        ours, lines = got["probe"]["ours"], got["fkrecipes_lines"]
         # NO ASSERTION HERE IS LOAD-BEARING FOR THE OTHERS, WHICH IS WHAT THE
         # WITHDRAWAL BOUGHT. The old order put the log line first because it
         # was the only separator: `Position` placed a written cost from this
@@ -2099,9 +2136,14 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
                   f"{'':>5}  and the whole stream, in order, has to be "
                   f"{want_lines!r}")
             continue
+        if why := lane_tech_wrong(ours, got["probe"]["lane"], got["probe"]["lrec"]):
+            bad = True
+            print(f"FAIL {arm}: {why}")
+            continue
         u = ours["unit"]
         print(f"  ok   {arm:<26} {u['count']} x {u['time']}s in "
-              f"{[p[0] for p in u['ingredients']]}, after {want_after[0]}")
+              f"{[p[0] for p in u['ingredients']]}, after {want_after[0]}; "
+              f"{LANE_TECH} the same")
         for line in lines:
             print(f"{'':>5}  said {line!r}")
 
@@ -2112,7 +2154,7 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
     for arm, tier, startup, moved, want_lines in TECH_TIER_ARMS:
         def tier_probe(dump: Path, src=tier):
             return project(dump, '{ours: .technology["bbb-balancer"], '
-                                 'src: .technology["%s"]}' % src)
+                                 'src: .technology["%s"]' % src + LANE_FIELDS + '}')
 
         got = run_arm(arm, factorio, series, mod_dir, None, startup=startup,
                       probe=tier_probe)
@@ -2145,9 +2187,14 @@ def check_variants(factorio: str, series: str, mod_dir: Path) -> bool:
                   f"{'':>5}  and the whole stream, in order, has to be "
                   f"{want_lines!r}")
             continue
+        if why := lane_tech_wrong(ours, got["probe"]["lane"], got["probe"]["lrec"]):
+            bad = True
+            print(f"FAIL {arm}: {why}")
+            continue
         u = ours["unit"]
         print(f"  ok   {arm:<26} {u['count']} x {u['time']}s in "
-              f"{[p[0] for p in u['ingredients']]}, after {tier}")
+              f"{[p[0] for p in u['ingredients']]}, after {tier}; "
+              f"{LANE_TECH} the same")
         if not lines:
             print(f"{'':>5}  and said nothing")
         for line in lines:

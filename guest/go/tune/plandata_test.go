@@ -2,6 +2,7 @@ package tune
 
 import (
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -112,9 +113,8 @@ func TestTheDataPlanIsTheseExtendsAndNothingElse(t *testing.T) {
 // stage, written down rather than measured off the plan for the reason every
 // expectation in this file is transcribed.
 //
-// Five: the ordinary part's item and recipe, the lane-keeping part's item and
-// recipe, and the technology that unlocks both.
-const dataPrototypeCount = 5
+// Six: each part's item and recipe, and each part's technology.
+const dataPrototypeCount = 6
 
 // TestTheItemIsTheOneThatShipped is the transcription, field by field.
 //
@@ -184,6 +184,53 @@ func TestTheLanePartCostsTwoOrdinaryParts(t *testing.T) {
 			[]ingredientPair{{"bbb-balancer-part", 2}})
 		checkOnly(t, "the lane recipe", got,
 			"type", "name", "enabled", "energy_required", "ingredients", "results", "order")
+	}
+}
+
+// TestTheLaneResearchCostsWhatTheBalancerResearchCostsAfterIt is
+// `CostOfTech` held to its promise in this plan: whatever the four cost
+// settings and the game make `bbb-balancer` cost, `bbb-lane-balancer` costs
+// the same, sits after it and nowhere else, unlocks the lane recipe alone, and
+// adds no log line of its own. Driven over every tier, a typed cost, and the
+// two degraded games (no technology carries a unit, so the fallback prices
+// it; and no science pack either, so it is free), because those are where a
+// cost computed a second time would come out different.
+func TestTheLaneResearchCostsWhatTheBalancerResearchCostsAfterIt(t *testing.T) {
+	worlds := map[string]fixtureWorld{"the default": everythingWorld()}
+	for _, option := range TechOptions() {
+		worlds["tier "+option] = everythingWorld().withStartup(SettingTechCost, option)
+	}
+	worlds["a typed count"] = everythingWorld().withNumberStartup(SettingTechCount, 50)
+	worlds["the fallback"] = everythingWorld().withTechs()
+	worlds["a packless fallback"] = everythingWorld().withTechs().withTools()
+	names := make([]string, 0, len(worlds))
+	for name := range worlds {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, what := range names {
+		protos, logs := extendsOf(t, dataOps(t, worlds[what]))
+		ours := protoOf(t, protos, "technology", TechName)
+		lane := protoOf(t, protos, "technology", LaneTechName)
+		if !reflect.DeepEqual(lane["unit"], ours["unit"]) {
+			t.Errorf("%s: the lane research charges %s and the balancer research %s",
+				what, showValue(lane["unit"]), showValue(ours["unit"]))
+		}
+		if !reflect.DeepEqual(lane["max_level"], ours["max_level"]) {
+			t.Errorf("%s: the lane research's max_level is %s and the balancer research's %s",
+				what, showValue(lane["max_level"]), showValue(ours["max_level"]))
+		}
+		checkPrereqs(t, what, lane, TechName)
+		checkEffects(t, lane, LanePartName)
+		checkStr(t, what, lane, "icon",
+			"__better-belt-balancer__/graphics/icons/lane-balancer-part.png")
+		checkStr(t, what, lane, "order", "a-b-bbc")
+		for _, line := range logs {
+			if strings.Contains(line, LaneTechName) {
+				t.Errorf("%s: the lane research logged a line of its own about a cost "+
+					"it did not compute: %s", what, line)
+			}
+		}
 	}
 }
 
@@ -819,7 +866,7 @@ func TestTheTechnologyIsTheOneThatShipped(t *testing.T) {
 		"__better-belt-balancer__/graphics/icons/balancer-part.png")
 	checkNum(t, TechName, got, "icon_size", 64)
 	checkStr(t, TechName, got, "order", "a-b-bbb")
-	checkEffects(t, got, "bbb-balancer-part", "bbb-lane-balancer-part")
+	checkEffects(t, got, "bbb-balancer-part")
 	checkOnly(t, TechName, got,
 		"type", "name", "icon", "icon_size", "prerequisites", "unit", "effects", "order")
 }

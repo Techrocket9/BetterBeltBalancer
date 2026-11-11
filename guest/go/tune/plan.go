@@ -513,11 +513,11 @@ func Plan() *fkrecipes.Lib {
 	// on 2.0.77). None of the three logistics tiers is priced by a formula in
 	// base, so this reaches a modpack that repriced one and nothing else; the
 	// library says so in the log and in the technology's own tooltip.
-	lib.LegacyTechnology(TechName, fkrecipes.TechSpec{
+	balancerTech := lib.LegacyTechnology(TechName, fkrecipes.TechSpec{
 		Icon:     PartIcon,
 		IconSize: 64,
 		Order:    TechOrder,
-		Unlocks:  []fkrecipes.RecipeRef{recipe, laneRecipe},
+		Unlocks:  []fkrecipes.RecipeRef{recipe},
 		CostBy: &fkrecipes.CostChoices{
 			Setting:  techCost,
 			Choices:  techChoices(),
@@ -528,6 +528,26 @@ func Plan() *fkrecipes.Lib {
 			Count:   techCount,
 			Seconds: techSeconds,
 		},
+	})
+
+	// THE LANE-KEEPING PART'S OWN RESEARCH, after this one and at its cost.
+	//
+	// `CostOfTech` (FkRecipes go/v0.1.3) copies what this research ENDS UP
+	// costing -- after its tier, its fallback, its pack filter and the three
+	// typed fields -- and makes it the sole prerequisite, so "the same cost,
+	// after it" holds under every value of the four settings by construction
+	// rather than by binding them twice, which the library refuses. Nothing is
+	// asked of the game a second time, so a degraded cost logs once, on this
+	// research, and the lane research's tooltip carries one sentence pointing
+	// here. It was the ask in agents/fkrecipes-migration.md, "A second
+	// technology priced like the first"; test/check-datastage.py's
+	// `lane_tech_wrong` asserts the shipped equality on every technology arm.
+	lib.LegacyTechnology(LaneTechName, fkrecipes.TechSpec{
+		Icon:       LanePartIcon,
+		IconSize:   64,
+		Order:      LaneTechOrder,
+		Unlocks:    []fkrecipes.RecipeRef{laneRecipe},
+		CostOfTech: balancerTech,
 	})
 
 	return lib
@@ -651,8 +671,15 @@ const (
 	// LanePartOrder puts the lane-keeping part straight after the ordinary one.
 	LanePartOrder = "c[splitter]-z[bbb-lane-balancer]"
 
-	// TechName is the technology that unlocks both recipes.
+	// TechName is the technology that unlocks the ordinary part's recipe.
 	TechName = "bbb-balancer"
+
+	// LaneTechName is the technology that unlocks the lane-keeping part's
+	// recipe: [TechName]'s cost, with [TechName] its only prerequisite.
+	LaneTechName = "bbb-lane-balancer"
+
+	// LaneTechOrder sorts it straight after [TechOrder].
+	LaneTechOrder = "a-b-bbc"
 
 	// PartIcon is the icon every player-facing prototype of this mod uses. A
 	// stale path here is a defect only the GRAPHICAL client sees -- headless
