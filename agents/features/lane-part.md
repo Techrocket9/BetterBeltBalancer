@@ -54,5 +54,5 @@ The priority toggle's capacity guard (`prioFitsWhatIsStanding`) counts a lane-ke
 ## Not verified
 
 - **The look in a graphical client.** Headless Factorio opens no sprite file. The preview at half scale was looked at; the game has not been.
-- **A player's ALT + P, paste and fast-replace gestures between kinds.** Behind the player wall like the rest of priority's doors. The scripted fast replace in both directions is the `lane` suite's `frep` rig.
+- **A player's ALT + P, paste and fast-replace gestures between kinds.** Behind the player wall like the rest of priority's doors. The scripted fast replace in both directions is the `lane` suite's `frep` rig. The interactive checklist's section L (`test/interactive/README.md`, staged at x = 92 by `bbb-interactive-setup`) is where a human walks them, with the look.
 - **Factorio 2.0 is verified** (2026-11-10, 2.0.77, as a recut worktree): both `make test` arms green with `lane` reading the 2.1 numbers to the item, and the 2.0.77 goldens re-captured. On 2.0 the dump has no recycling recipe for the lane part.

@@ -64,6 +64,9 @@ SPILLED = re.compile(r"\[BBB\] spilled (\d+) items beside cluster (\d+)")
 #   fast replace  a 2 -> 2 over four parts and a 1 -> 1 over five
 #   demo          cross 1 -> 3, compact 8 -> 8, c-shape 8 -> 8, c-shape 8 -> 9,
 #                 long run 8 -> 8
+#   lane          four 1 -> 2 over a 2x2 each (the ordinary control and three
+#                 of lane-keeping parts, one of them jammed) and two 1 -> 1 over
+#                 two parts each (one of each kind)
 SHAPES = sorted([
     (4, 4, 4),    # A, pocket
     (2, 2, 2),    # B, the belt at the edge
@@ -77,8 +80,14 @@ SHAPES = sorted([
     (8, 8, 8),    # demo, c-shape
     (8, 9, 16),   # demo, c-shape express
     (8, 8, 8),    # demo, long run
+    (1, 2, 2),    # L, ordinary 1 -> 2 on the split feed
+    (1, 2, 2),    # L, lane-keeping 1 -> 2 on the split feed
+    (1, 2, 2),    # L, lane-keeping 1 -> 2 for ALT + P
+    (1, 1, 1),    # L, lane-keeping 1 -> 1 beside the free tiles
+    (1, 1, 1),    # L, ordinary 1 -> 1 for the fast replace
+    (1, 2, 2),    # L, lane-keeping 1 -> 2, jammed
 ])
-PARTS = 228
+PARTS = 248
 CLUSTERS = len(SHAPES)
 
 

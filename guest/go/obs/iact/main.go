@@ -42,9 +42,10 @@ import (
 )
 
 const (
-	part   = "bbb-balancer-part"
-	belt   = "express-transport-belt"
-	loader = protos.IactLoader
+	part     = "bbb-balancer-part"
+	lanePart = "bbb-lane-balancer-part"
+	belt     = "express-transport-belt"
+	loader   = protos.IactLoader
 )
 
 var out = harness.Line{Tag: "[BBB-INTERACTIVE] "}
@@ -59,9 +60,10 @@ var dirN, dirE, dirS, dirW uint32
 // around x = 20 and the demo scenes in a second column around x = 56, far
 // enough apart that no scene's belts are inside a gesture rig's neighbour gate.
 const (
-	x0, x1, y0, y1 = 8, 76, -34, 104
+	x0, x1, y0, y1 = 8, 112, -34, 104
 	col            = 20 // the gesture column
 	dcol           = 56 // the demo column
+	lcol           = 92 // the lane-keeping part's column
 )
 
 // One tile along a cardinal direction.
@@ -389,6 +391,76 @@ func bandFastReplace(s fkapi.LuaSurface) {
 }
 
 // ---------------------------------------------------------------------------
+// L: THE LANE-KEEPING PART, a column of its own at x = 92. The headless `lane`
+// suite asserts every lane of every output; what is left for a human is what it
+// looks like, and the three gestures a script cannot make: ALT + P, a settings
+// paste, and a fast replace from a real cursor. Every rig is single-edge and
+// compiles, so the staging assertion's "every cluster has a network" holds.
+// ---------------------------------------------------------------------------
+
+// sourceOf is `source` for any item.
+func sourceOf(s fkapi.LuaSurface, item string, x, y int, dir uint32) {
+	if c, ok := box(s, "infinity-chest", x, y); ok {
+		harness.InfinityFilter(c, item, "", 1000)
+	}
+	ox, oy := step(dir)
+	put(s, harness.Piece{Name: loader, X: x + ox, Y: y + oy, Dir: &dir, Type: "output"})
+}
+
+// laneFeed is an east belt into the part at (lcol, y) carrying iron plate on
+// its LEFT (north) lane and copper plate on its RIGHT (south): side-loaded at
+// x = lcol-6 from both sides, with a belt behind that tile so it stays
+// straight.
+func laneFeed(s fkapi.LuaSurface, y int) {
+	fx := lcol - 6
+	sourceOf(s, "iron-plate", fx, y-3, dirS)
+	put(s, harness.Piece{Name: belt, X: fx, Y: y - 1, Dir: &dirS})
+	sourceOf(s, "copper-plate", fx, y+3, dirN)
+	put(s, harness.Piece{Name: belt, X: fx, Y: y + 1, Dir: &dirN})
+	for x := lcol - 8; x <= lcol-1; x++ {
+		put(s, harness.Piece{Name: belt, X: x, Y: y, Dir: &dirE})
+	}
+}
+
+// oneTwo is a 2x2 block of `name` on the lane-split feed: the feed into its
+// north-west part, an output off each of its east parts, and its south-west
+// part edgeless. `sinks` false dead-ends the outputs so the machine jams full.
+func oneTwo(s fkapi.LuaSurface, name string, y int, sinks bool) {
+	for dy := 0; dy <= 1; dy++ {
+		put(s, harness.Piece{Name: name, X: lcol, Y: y + dy})
+		put(s, harness.Piece{Name: name, X: lcol + 1, Y: y + dy})
+	}
+	laneFeed(s, y)
+	for dy := 0; dy <= 1; dy++ {
+		if sinks {
+			drainFrom(s, lcol+2, y+dy, dirE, 4)
+			continue
+		}
+		for x := lcol + 2; x <= lcol+4; x++ {
+			put(s, harness.Piece{Name: belt, X: x, Y: y + dy, Dir: &dirE})
+		}
+	}
+}
+
+// oneOne is two parts of `name` side by side, fed plain iron from the west and
+// drained east.
+func oneOne(s fkapi.LuaSurface, name string, y int) {
+	put(s, harness.Piece{Name: name, X: lcol, Y: y})
+	put(s, harness.Piece{Name: name, X: lcol + 1, Y: y})
+	feedTo(s, lcol-1, y, dirE, 2)
+	drainFrom(s, lcol+2, y, dirE, 2)
+}
+
+func bandLane(s fkapi.LuaSurface) {
+	oneTwo(s, part, -24, true)     // La: the ordinary control on the split feed
+	oneTwo(s, lanePart, -16, true) // Lb: the same with lane-keeping parts
+	oneTwo(s, lanePart, -6, true)  // Lc: ALT + P on an output
+	oneOne(s, lanePart, 4)         // Ld: the two kinds side by side
+	oneOne(s, part, 10)            // Le: fast replace by hand
+	oneTwo(s, lanePart, 18, false) // Lg: a jammed machine, recompiled and mined
+}
+
+// ---------------------------------------------------------------------------
 // The demo band: the mod portal's capture scenes, versioned here so a capture
 // is reproducible instead of living in a save nobody kept.
 //
@@ -518,6 +590,7 @@ func onInit() {
 	bandLimit(s)
 	bandBridge(s)
 	bandFastReplace(s)
+	bandLane(s)
 
 	demoCross(s)
 	demoCompact(s)
@@ -536,7 +609,7 @@ func onInit() {
 
 	out.Open("gestures staged: pocket y-24, edge y-12, limit y0 " +
 		"(spare part at (20,-1)), bridge y45 (gap at (20,61)), fast replace y90 " +
-		"and the fed line at y103").End()
+		"and the fed line at y103; lane-keeping column at x92").End()
 	out.Open("demo scenes staged at x56: cross y-24, compact y-10, " +
 		"c-shape 8->8 y6, c-shape 8->9 y30, long run y60").End()
 }
@@ -559,18 +632,25 @@ var tags = []chartTag{
 	{dcol, 10, "demo: c-shape 8-to-8"},
 	{dcol, 34, "demo: c-shape 8-to-9"},
 	{dcol + 7, 60, "demo: long run 8-to-8"},
+	{lcol, -26, "L: ordinary 1-to-2 on a split belt"},
+	{lcol, -18, "L: lane-keeping 1-to-2 on the same belt"},
+	{lcol, -8, "L: ALT + P on (93,-6)"},
+	{lcol, 3, "L: ordinary part onto (92,5), lane part onto (93,5)"},
+	{lcol, 9, "L: lane parts over these two"},
+	{lcol, 17, "L: belt west from (91,19), then mine it"},
 }
 
 // The lines the player reads in chat when they spawn. They are the checklist's
 // own summary, kept beside it: test/interactive/README.md is the long form.
 var greeting = []string{
-	"[BBB] Five gesture rigs east of you and five demo scenes further east.",
+	"[BBB] Five gesture rigs east of you, five demo scenes further east, and the lane-keeping part at x=92.",
 	"[BBB] A: y=-24 mine the balancer part by part.",
 	"[BBB] B: y=-12 lay a south-facing belt at (20,-9), mine it, then try (20,-13).",
 	"[BBB] C: y=0 lay a south-facing belt at (20,-2), against the spare part.",
 	"[BBB] D: y=61 place a balancer part in the one-tile gap between the two big ones.",
 	"[BBB] E: y=90 drop a part onto (20,92); then lay a belt on (20,98).",
 	"[BBB] E: y=103 drop a part onto (20,103), the middle of the fed line.",
+	"[BBB] L: x=92 the lane-keeping part: compare y=-24 with y=-16, then the gestures at y=-6, 4, 10 and 18.",
 	"[BBB] Expected outcomes and the log lines to grep: test/interactive/README.md",
 }
 
@@ -598,6 +678,9 @@ func welcome(p fkapi.LuaPlayer) {
 		fkapi.KeyValue{Key: fkapi.OfString("count"), Val: fkapi.OfNumber(50)}))
 	p.Insert(fkapi.OfMap(
 		fkapi.KeyValue{Key: fkapi.OfString("name"), Val: fkapi.OfString(part)},
+		fkapi.KeyValue{Key: fkapi.OfString("count"), Val: fkapi.OfNumber(10)}))
+	p.Insert(fkapi.OfMap(
+		fkapi.KeyValue{Key: fkapi.OfString("name"), Val: fkapi.OfString(lanePart)},
 		fkapi.KeyValue{Key: fkapi.OfString("count"), Val: fkapi.OfNumber(10)}))
 
 	fo, err := p.Force()

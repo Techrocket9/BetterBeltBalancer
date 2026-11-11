@@ -1,8 +1,8 @@
 # The interactive checklist
 
-Seven things a headless Factorio cannot check, and the scenes the mod portal's animations are captured from. What a headless run cannot check is what a screen shows: where a message appears, what colour it is, whether a cursor shows a build preview or a red block, and whether a sound plays. The gestures themselves are driven by the headless suites, which build their rigs into a committed save that has a player in it and then click and mine from that player's own cursor; every count, every log line and every inventory below is asserted there. This checklist is what is left.
+Eight things a headless Factorio cannot check, and the scenes the mod portal's animations are captured from. What a headless run cannot check is what a screen shows: where a message appears, what colour it is, whether a cursor shows a build preview or a red block, and whether a sound plays. The gestures themselves are driven by the headless suites, which build their rigs into a committed save that has a player in it and then click and mine from that player's own cursor; every count, every log line and every inventory below is asserted there. This checklist is what is left.
 
-The `bbb-interactive-setup` mod stages a rig for gestures A to E beside spawn on a fresh world, so each of those costs about thirty seconds, and stages the five demo scenes in a second column east of them. `make interactive-install` builds and installs it; this file is the checklist it exists for. It stages and asserts nothing; the assertions are what you see and the `[BBB]` log lines listed below.
+The `bbb-interactive-setup` mod stages a rig for gestures A to E beside spawn on a fresh world, so each of those costs about thirty seconds, stages the five demo scenes in a second column east of them, and stages the lane-keeping part's rigs (L) in a third column east of those. `make interactive-install` builds and installs it; this file is the checklist it exists for. It stages and asserts nothing; the assertions are what you see and the `[BBB]` log lines listed below.
 
 Gestures F and G need no staged rig. They need your own save and your own graphical client.
 
@@ -15,7 +15,7 @@ make install                # the mod itself, into your Factorio mods directory
 make interactive-install    # the rig-staging mod beside it
 ```
 
-Enable both mods and start a new freeplay world with any settings (the setup mod disables the crash site and the intro). You spawn beside the five labelled gesture rigs with 50 express belts and 10 balancer parts in your inventory, and map tags mark every rig and every demo scene. When done, disable `bbb-interactive-setup`; nothing it stages survives into ordinary play.
+Enable both mods and start a new freeplay world with any settings (the setup mod disables the crash site and the intro). You spawn beside the five labelled gesture rigs with 50 express belts, 10 balancer parts and 10 lane-keeping balancer parts in your inventory, and map tags mark every rig and every demo scene. When done, disable `bbb-interactive-setup`; nothing it stages survives into ordinary play.
 
 Afterwards, grep `factorio-current.log` in your Factorio user directory for the lines named under each gesture. They are verbose-level `[BBB]` lines, so the mod must be the default build rather than `QUIET=1`.
 
@@ -101,6 +101,24 @@ A gap left in the line is the whole finding this gesture exists for, so look at 
 If the belt item is not in your inventory when the part comes back (you dropped it, or your inventory was full when the engine mined it and it spilled), the gap stays and an alert line says which item was missing. That is deliberate: the belt is put back only when it can be paid for.
 
 Log lines: `a belt-connectable fast-replaced the part at 20,98` for each replaced part, `compiled cluster ... 3->2` for the forward gesture, `carrying more than one belt` for the refusals, and `put the replaced belt at 20,103 back` for the mid-line gesture, with `had no ... to pay for the replaced belt` when it cannot be paid for. Only a refusal may produce a spill line, and no gesture here may produce a `[BBB] error:`.
+
+## L. The lane-keeping part (x = 92)
+
+Every rig here except the two at y = 4 and y = 10 is fed one express belt carrying iron plate on its left lane and copper plate on its right. The headless `lane` suite reads every lane of every output; what is left is what the screen shows and the gestures a script cannot make.
+
+**The look, and what lane-keeping means (y = -24 and y = -16).** Two 1-in/2-out balancers on the same split belt: the ordinary part at y = -24 and the lane-keeping part at y = -16. The lane-keeping balancer's lit lines must be green where the ordinary one's are blue, and its four parts must read as one machine with no seams, at default zoom and zoomed out. Look at the output belts: the lane-keeping balancer's outputs carry iron on the left and copper on the right, like the feed; the ordinary one's carry the two swapped. Turn on alt-mode: the input and output arrows draw on both, and on the green part they must still be legible.
+
+**Priority (y = -6).** Point at the lane-keeping part at (93, -6), which carries the top output, and press ALT + P. Expected: the part carries the priority mark, the top output takes the whole belt, the bottom output stops, and the top output still carries iron on the left and copper on the right. Press it again to take the priority away.
+
+**Settings paste between kinds.** Give the ordinary part at (93, -24) priority with ALT + P, then shift + right-click it to copy its settings and shift + left-click the lane-keeping part at (93, -16) to paste. Expected: the lane-keeping part gains no priority mark and its balancer is unchanged. The two kinds share nothing, settings included. Paste between two lane-keeping parts (from (93, -6) once it has priority, onto (93, -16)) and the mark does carry.
+
+**The two kinds side by side (y = 4).** A running lane-keeping 1-in/1-out over two parts, with two free tiles below it. Place an ordinary balancer part on (92, 5). Expected: it stays a separate one-part balancer, its outline is drawn all the way round, and the lane-keeping balancer's outline still runs between them; nothing about the running machine changes. Then place a lane-keeping part on (93, 5). Expected: it fuses into the green balancer with no seam. Run `/bbb-audit`: `drift=0 unbuilt=0`.
+
+**Fast replace between kinds (y = 10).** A running ordinary 1-in/1-out over two parts. Hold a lane-keeping part over (92, 10). The cursor must show the fast-replace preview rather than a red block. Place it, then the same on (93, 10). Expected: each ordinary part goes to your inventory, the lane-keeping part takes its tile, and once both are replaced the balancer runs again with green lines. Holding an ordinary part over a lane-keeping one replaces it the same way.
+
+**A recompile and a teardown under load (y = 18).** A lane-keeping 1-in/2-out whose outputs dead-end, so it is full. Lay three belts facing west from (91, 19), against the edgeless part, which gives the balancer a third output. Expected: the new belt fills with iron on one lane and copper on the other, in the same relation to its direction as the feed (on a belt running west, the left lane is the south one), and nothing lands on the ground. Then mine the balancer part by part: the items arrive in your inventory at every step, as in gesture A.
+
+Log lines: `compiled cluster ... 1->2` and `1->3` for the y = 18 recompile, `took back ... items into its new network` for its carry, and no `[BBB] error:` anywhere.
 
 ## F. Adopting a Belt Balancer 2 or 3 save
 
