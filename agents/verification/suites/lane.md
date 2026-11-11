@@ -11,8 +11,9 @@ The eighteenth suite, base only, both engines (every rig is built to the one-bel
 | `l22` | lane 2->2, a column of seven | clean; both outputs equal |
 | `ladj` / `oadj` | an ordinary part beside a lane part / beside an ordinary part, belt in one side, belt out the other | `ladj` delivers nothing (two balancers, one input-only and one output-only); `oadj` delivers |
 | `lorph` | a lane 1->1 compiled in `on_init`, then destroyed with no event | the upgrade's rebuild sweeps exactly its 3 hidden entities |
+| `lfor` | two lane 1->1s on adjacent tiles, one on the player force fed iron/copper and one on a second force fed steel/plastic; `merge_forces` at tick 1200 | two balancers before (each delivers only its pair), one lane-keeping 2->2 after (left lanes iron and steel, right lanes copper and plastic, never crossed; all four items in both sinks; 2 parts remapped) |
 | `frep` | an ordinary 1->1 whose two parts are script-fast-replaced by lane parts at tick 300, and back at tick 900 | it keeps delivering after each swap and the final audit is clean |
 
-Plus: every feed probe is split (anti-vacuity), each lane sink holds equal iron and copper, and the rebuild adopts the seven standing networks and rebuilds the two one-sided `ladj` clusters, `(7 networks adopted, 2 rebuilt)`; the final audit reads `clusters=9 parts=29 nets=7 drift=0 unbuilt=0`.
+Plus: every feed probe is split (anti-vacuity), each lane sink holds equal iron and copper, and the rebuild adopts the nine standing networks and rebuilds the two one-sided `ladj` clusters, `(9 networks adopted, 2 rebuilt)`; the final audit reads `clusters=10 parts=33 nets=8 drift=0 unbuilt=0`. Carry on 2.1.24: `[12, 16, 46]` (l12, the force merge, ljam).
 
 Red proof (2026-11-10, 2.1.24): with `drain`'s lane tally forced off, copper appears on the left lane of `l12-west` and `ljam-west` in window 1. See `agents/features/lane-part.md`.

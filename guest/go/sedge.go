@@ -1055,6 +1055,10 @@ func tellMigrated(n uint32, stood bool) {
 //
 // `root` and the BOX are here for the charting below rather than for the ping,
 // which needs one tile. See chartAffected.
+//
+// `force` is the cluster's GROUP (cluster.go, laneBit), which is what finds a
+// part on its tile; `affForces` holds REAL force indices, because a message
+// goes to a force and a force with both kinds of balancer affected gets one.
 type affCluster struct {
 	root  uint32
 	force uint32
@@ -1127,13 +1131,13 @@ func gatherAnnounced(notes []annNote) (uint32, bool) {
 		})
 		seen := false
 		for j := range affForces {
-			if affForces[j] == f {
+			if affForces[j] == realForce(f) {
 				seen = true
 				break
 			}
 		}
 		if !seen {
-			affForces = append(affForces, f)
+			affForces = append(affForces, realForce(f))
 		}
 	}
 	boxAffected()
@@ -1214,19 +1218,24 @@ func tellAffected(msgKey string, withPings bool, heading, what string) {
 		// makes it deterministic, which matters because what it produces reaches
 		// every client.
 		count := uint32(0)
+		group := uint32(0)
 		for j := range affected {
-			if affected[j].force != f {
+			if realForce(affected[j].force) != f {
 				continue
 			}
 			count++
 			if count == 1 {
 				affTile[0] = key{s: affected[j].surf, x: affected[j].x, y: affected[j].y}
+				group = affected[j].force
 			}
 		}
 		if count == 0 {
 			continue
 		}
-		lf, ok := forceOfCluster(affTile[:], f)
+		// The group, not the force: it is what names the part standing on that
+		// tile, and a lane-keeping cluster's part is not found by the ordinary
+		// part's name.
+		lf, ok := forceOfCluster(affTile[:], group)
 		if !ok {
 			// No part of ours left standing on that tile to read a force off, or the
 			// index moved. There is nobody to address and nothing to be done about
@@ -1237,7 +1246,7 @@ func tellAffected(msgKey string, withPings bool, heading, what string) {
 		lines, failed := 0, false
 		if withPings {
 			for j := range affected {
-				if affected[j].force != f {
+				if realForce(affected[j].force) != f {
 					continue
 				}
 				added, full := gpsAdd(&affected[j])

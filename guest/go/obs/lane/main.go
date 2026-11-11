@@ -38,6 +38,15 @@
 //	       for a part it replaces, so the guest has to notice a part of the
 //	       other kind on a registered tile (main.go); the sink must keep
 //	       filling after each swap.
+//	lfor   two lane-keeping 1->1s on ADJACENT tiles, one on the player force
+//	       (iron left, copper right) and one on a second force (steel left,
+//	       plastic right). The kind bit sits beside the force, so the two must
+//	       stay two balancers, each delivering only its own pair. At tick 1200
+//	       the second force is merged into the player's: the two become one
+//	       lane-keeping 2->2, whose left lanes carry iron and steel and whose
+//	       right lanes copper and plastic, never crossed. A merge that lost the
+//	       kind bit would compile an ordinary network and cross them, and a carry
+//	       pool that missed the remap would spill rather than reinsert.
 //	lorph  a lane-keeping 1->1 compiled in on_init and then destroyed with no
 //	       event, which leaves its hidden network standing and unclaimed. The
 //	       benchmark phase loads the save as an UPGRADE (`bump_build`), so the
@@ -60,6 +69,10 @@ const (
 	belt     = "express-transport-belt"
 	leftItem = "iron-plate"
 	rightItm = "copper-plate"
+	left2    = "steel-plate"
+	right2   = "plastic-bar"
+	other    = "bbb-lane-other"
+	mergeAt  = 1200
 	surfName = "bbb-lane"
 
 	modName    = "better-belt-balancer"
@@ -82,7 +95,8 @@ const (
 	lorphY = 66
 	ljamY  = 74
 	frepY  = 82
-	rows   = frepY + 4
+	lforY  = 90
+	rows   = lforY + 12
 )
 
 // The three measuring windows: before the recompile under load, the one it
@@ -103,8 +117,10 @@ const (
 type probe struct {
 	Name string
 	X, Y int
-	// counts[w][lane][item]: lane 0 left, 1 right; item 0 left item, 1 right.
-	counts [3][2][2]int64
+	// counts[w][lane][item]: lane 0 left, 1 right; item 0 iron, 1 copper,
+	// 2 steel, 3 plastic. The first two are the split feed every rig carries;
+	// the last two only the second force's half of `lfor`.
+	counts [3][2][4]int64
 }
 
 var probes []probe
@@ -156,6 +172,10 @@ func sample(tick uint64) {
 					p.counts[w][lane][0] += int64(it.Count)
 				case rightItm:
 					p.counts[w][lane][1] += int64(it.Count)
+				case left2:
+					p.counts[w][lane][2] += int64(it.Count)
+				case right2:
+					p.counts[w][lane][3] += int64(it.Count)
 				}
 			}
 		}
@@ -168,19 +188,24 @@ func reportLanes(w int) {
 		c := p.counts[w]
 		out.Open("lanes w=").I(int64(w)).S(" probe=").S(p.Name).
 			S(" L=").I(c[0][0]).S("/").I(c[0][1]).
-			S(" R=").I(c[1][0]).S("/").I(c[1][1]).End()
+			S(" R=").I(c[1][0]).S("/").I(c[1][1]).
+			S(" L2=").I(c[0][2]).S("/").I(c[0][3]).
+			S(" R2=").I(c[1][2]).S("/").I(c[1][3]).End()
 	}
 }
 
 func reportSinks() {
 	s := surf()
 	for _, k := range sinks {
-		iron, copper := int64(0), int64(0)
+		iron, copper, steel, plastic := int64(0), int64(0), int64(0), int64(0)
 		if o, ok := harness.FindOnTile(s, "steel-chest", k.At.X, k.At.Y); ok {
 			iron = harness.ItemCountIn(o, leftItem)
 			copper = harness.ItemCountIn(o, rightItm)
+			steel = harness.ItemCountIn(o, left2)
+			plastic = harness.ItemCountIn(o, right2)
 		}
-		out.Open("sink rig=").S(k.Name).S(" iron=").I(iron).S(" copper=").I(copper).End()
+		out.Open("sink rig=").S(k.Name).S(" iron=").I(iron).S(" copper=").I(copper).
+			S(" steel=").I(steel).S(" plastic=").I(plastic).End()
 	}
 }
 
@@ -332,6 +357,65 @@ func frepReport(tag string) {
 		S(" ordinary=").I(int64(plain)).S(" sink=").I(sink).End()
 }
 
+// forcePut places one piece of `lfor` on a given force.
+func forcePut(s fkapi.LuaSurface, name string, x, y int, dir *uint32, typ, force string) {
+	harness.Place(s, harness.Piece{Name: name, X: x, Y: y, Dir: dir, Type: typ, Force: force, Raise: true})
+}
+
+func forceChest(s fkapi.LuaSurface, item string, x, y int, force string) {
+	c := harness.Place(s, harness.Piece{Name: "infinity-chest", X: x, Y: y, Force: force})
+	harness.InfinityFilter(c, item, "", 1000)
+}
+
+// bandForces stages `lfor`. The player's half is two parts at (0,y) and (1,y)
+// fed from the west and drained east; the second force's half is the two parts
+// directly below, fed from the SOUTH up a lane-split column at x = 0 (on a belt
+// running north the left lane is the west one) and drained south from x = 1.
+func bandForces(s fkapi.LuaSurface) {
+	y := lforY
+	for x := 0; x <= 1; x++ {
+		put(s, lanePart, x, y, nil, "")
+		forcePut(s, lanePart, x, y+1, nil, "", other)
+	}
+	laneFeed(s, y, -7)
+	eastOut(s, "lforA", 2, y)
+
+	// The second force's feed: a north column from (0, y+10) up to (0, y+2),
+	// side-loaded at row y+8 from the west (steel, the left lane) and from the
+	// east (plastic, the right).
+	r := y + 8
+	forceChest(s, left2, -3, r, other)
+	forcePut(s, protos.LaneLoader, -2, r, &east, "output", other)
+	forcePut(s, belt, -1, r, &east, "", other)
+	forceChest(s, right2, 3, r, other)
+	forcePut(s, protos.LaneLoader, 2, r, &west, "output", other)
+	forcePut(s, belt, 1, r, &west, "", other)
+	for by := y + 10; by >= y+2; by-- {
+		forcePut(s, belt, 0, by, &north, "", other)
+	}
+	// Its output: south from (1, y+2) into a sink at (1, y+7).
+	for by := y + 2; by <= y+5; by++ {
+		forcePut(s, belt, 1, by, &south, "", other)
+	}
+	forcePut(s, protos.LaneLoader, 1, y+6, &south, "input", other)
+	harness.Place(s, harness.Piece{Name: "steel-chest", X: 1, Y: y + 7, Force: other})
+	addProbe("lforB-out@"+itoa(y+4), 1, y+4)
+	sinks = append(sinks, sinkAt{Name: "lforB-out@" + itoa(y+7), At: harness.XY{X: 1, Y: y + 7}})
+}
+
+// mergeForces merges the second force into the player's, which is the
+// `lfor` gesture.
+func mergeForces() {
+	src, okA := harness.ForceByName(other)
+	dst, okB := harness.ForceByName(harness.PlayerForce)
+	if okA && okB {
+		if err := fkapi.Game.MergeForces(src, dst); err != nil {
+			harness.Fatal("merge_forces", fk.LastError())
+		}
+	}
+	out.Open("forces merged tick=").U(harness.Tick()).End()
+}
+
 // carryAdd lays a third output on l12's edgeless part while it runs full: a
 // west belt from (-1, y+1) into a sink, sink first so that the belt the guest
 // sees is the last piece.
@@ -356,6 +440,7 @@ var schedule = []harness.Step{
 	{Tick: 5, Do: func() { setPrio(1, lprioY) }},
 	{Tick: carryTick, Do: carryAdd},
 	{Tick: carryTick, Do: jamAdd},
+	{Tick: mergeAt, Do: mergeForces},
 	{Tick: 299, Do: func() { frepReport("before") }},
 	{Tick: 300, Do: func() { swap(lanePart) }},
 	{Tick: 899, Do: func() { frepReport("lane") }},
@@ -448,6 +533,9 @@ func onInit() {
 	for x := 2; x <= 5; x++ {
 		put(s, belt, x, frepY, &east, "")
 	}
+
+	harness.CreateForce(other)
+	bandForces(s)
 
 	// lorph: a lane-keeping 1->1 with no feed, compiled by the audit below and
 	// then destroyed with no event.

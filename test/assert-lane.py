@@ -25,6 +25,12 @@ recompile under load lands in, and after. What is asserted:
   * the two kinds replace each other: `frep`'s two ordinary parts are
     script-fast-replaced by lane parts and back, and its sink keeps filling
     after each swap. The final audit is clean.
+  * the kind bit sits BESIDE the force: `lfor`'s two lane-keeping balancers,
+    on adjacent tiles but different forces, stay two balancers (each delivers
+    only its own pair: iron/copper and steel/plastic), and after the second
+    force is merged into the player's they are one lane-keeping 2->2 whose
+    left lanes carry iron and steel and right lanes copper and plastic, never
+    crossed, with all four items in both sinks.
   * the benchmark phase is an UPGRADE: the rebuild adopts every lane-keeping
     network and sweeps the one the observer orphaned (a lane-keeping 1->1 is
     three hidden entities), which a sweep that looked for lane splitters could
@@ -39,8 +45,10 @@ import re
 import sys
 
 LINE = re.compile(r"\[BBB-LANE\] (.*)$")
-LANES = re.compile(r"lanes w=(\d) probe=(\S+) L=(\d+)/(\d+) R=(\d+)/(\d+)")
-SINK = re.compile(r"sink rig=(\S+) iron=(\d+) copper=(\d+)")
+LANES = re.compile(r"lanes w=(\d) probe=(\S+) L=(\d+)/(\d+) R=(\d+)/(\d+)"
+                   r" L2=(\d+)/(\d+) R2=(\d+)/(\d+)")
+SINK = re.compile(r"sink rig=(\S+) iron=(\d+) copper=(\d+) steel=(\d+) plastic=(\d+)")
+MERGED = re.compile(r"\[BBB\] forces merged: \d+ -> \d+, (\d+) parts remapped")
 TOOK = re.compile(r"\[BBB\] cluster \d+ took back (\d+) items")
 SWEPT = re.compile(r"\[BBB\] swept (\d+) orphaned hidden entities")
 FREP = re.compile(r"frep t=(\S+) tick=\d+ lane=(\d+) ordinary=(\d+) sink=(\d+)")
@@ -67,15 +75,18 @@ def main(create_log, run_log):
         fail.append("lorph was never orphaned, so the sweep below proves nothing")
 
     lanes, sinks, flag = {}, {}, None
+    lanes2, sinks2 = {}, {}
     for l in run:
         m = LANES.search(l)
         if m:
             w, probe = int(m.group(1)), m.group(2)
             lanes[(w, probe)] = tuple(int(m.group(i)) for i in range(3, 7))
+            lanes2[(w, probe)] = tuple(int(m.group(i)) for i in range(7, 11))
             continue
         m = SINK.search(l)
         if m:
             sinks[m.group(1)] = (int(m.group(2)), int(m.group(3)))
+            sinks2[m.group(1)] = (int(m.group(4)), int(m.group(5)))
             continue
         if "flag rig=lprio" in l:
             flag = l.endswith("accepted=true")
@@ -156,6 +167,49 @@ def main(create_log, run_log):
         fail.append("the recompiles carried %s items; ljam's jammed network "
                     "should carry forty or more" % took)
 
+    # The kind bit sits beside the force: lfor.
+    A, B = "lforA-out@90", "lforB-out@94"
+    for w in (0, 1):
+        li, lc, ri, rc = lanes.get((w, A), (0, 0, 0, 0))
+        ls, lp, rs, rp = lanes2.get((w, A), (0, 0, 0, 0))
+        if lc or ri or ls or lp or rs or rp or not li or not rc:
+            fail.append("lfor w=%d: the player's balancer carried %s and %s before "
+                        "the merge; it should carry its own iron and copper only"
+                        % (w, lanes.get((w, A)), lanes2.get((w, A))))
+        li, lc, ri, rc = lanes.get((w, B), (0, 0, 0, 0))
+        ls, lp, rs, rp = lanes2.get((w, B), (0, 0, 0, 0))
+        if li or lc or ri or rc or lp or rs or not ls or not rp:
+            fail.append("lfor w=%d: the second force's balancer carried %s and %s "
+                        "before the merge; it should carry its own steel and plastic "
+                        "only, so the two kinds-and-forces joined" % (w, lanes.get((w, B)),
+                                                                      lanes2.get((w, B))))
+    left = {"iron": 0, "steel": 0}
+    right = {"copper": 0, "plastic": 0}
+    for probe in (A, B):
+        li, lc, ri, rc = lanes.get((2, probe), (0, 0, 0, 0))
+        ls, lp, rs, rp = lanes2.get((2, probe), (0, 0, 0, 0))
+        if lc or lp or ri or rs:
+            fail.append("lfor w=2, %s: lanes crossed after the merge -- copper %d and "
+                        "plastic %d on the left, iron %d and steel %d on the right"
+                        % (probe, lc, lp, ri, rs))
+        left["iron"] += li
+        left["steel"] += ls
+        right["copper"] += rc
+        right["plastic"] += rp
+    if not all(left.values()) or not all(right.values()):
+        fail.append("lfor w=2: after the merge the outputs carried left %s and right %s;"
+                    " one merged balancer feeds all four items to its outputs"
+                    % (left, right))
+    for name in ("lforA-out@90", "lforB-out@97"):
+        got = sinks.get(name, (0, 0)) + sinks2.get(name, (0, 0))
+        if not all(got):
+            fail.append("lfor: the sink %s holds iron/copper/steel/plastic %s; after the "
+                        "merge both sinks receive all four" % (name, got))
+    merged = [int(m.group(1)) for l in run for m in [MERGED.search(l)] if m]
+    if merged != [2]:
+        fail.append("lfor: the forces-merged lines report %s parts remapped; the second "
+                    "force has two lane-keeping parts" % merged)
+
     # The two kinds replace each other.
     frep = {m.group(1): tuple(int(m.group(i)) for i in range(2, 5))
             for l in run for m in [FREP.search(l)] if m}
@@ -190,10 +244,11 @@ def main(create_log, run_log):
         fail.append("expected one rebuild-from-world in the benchmark, saw %d" % len(rb))
     else:
         adopted, rebuilt = int(rb[0].group(4)), int(rb[0].group(5))
-        # Seven standing networks (o12, l12, lprio, l22, oadj, ljam, frep) and
-        # ladj's two one-sided clusters, which have none to adopt.
-        if (adopted, rebuilt) != (7, 2):
-            fail.append("the rebuild adopted %d and rebuilt %d; seven networks "
+        # Nine standing networks (o12, l12, lprio, l22, oadj, ljam, frep and
+        # lfor's two) and ladj's two one-sided clusters, which have none to
+        # adopt.
+        if (adopted, rebuilt) != (9, 2):
+            fail.append("the rebuild adopted %d and rebuilt %d; nine networks "
                         "stand and two clusters have none" % (adopted, rebuilt))
 
     if fail:
