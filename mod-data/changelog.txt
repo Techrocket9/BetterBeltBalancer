@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.10
+Date: 2026-11-11
+  Changes:
+    - The lane-keeping balancer part has a research of its own, Lane-keeping belt balancer, which comes after Belt balancer and costs the same, whatever the research cost settings make Belt balancer cost. Belt balancer unlocks only the ordinary balancer part again.
+  Info:
+    - In a save that researched Belt balancer under 0.3.9, the lane-keeping part stays craftable, because the game keeps a recipe a research has already unlocked. The new research still shows as unresearched there, and researching it changes nothing.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.9
 Date: 2026-11-10
   Features:
