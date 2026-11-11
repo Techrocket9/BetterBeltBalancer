@@ -460,6 +460,34 @@ func bandLane(s fkapi.LuaSurface) {
 	oneTwo(s, lanePart, 18, false) // Lg: a jammed machine, recompiled and mined
 }
 
+// THE SOURCE YARD, south of the lane rigs: one infinite source per item, each
+// ending in a two-belt stub running south, so a player can lay two of them into
+// opposite sides of a belt and build whatever split feed they want to try.
+// The loader has no item (obsdata.ExpressLoader clears `minable`), so sources
+// cannot be handed out; they are staged instead.
+var yardItems = []string{
+	"iron-plate", "copper-plate", "steel-plate",
+	"copper-cable", "electronic-circuit", "plastic-bar",
+}
+
+const yardY = 28
+
+// bandYard stages the yard. It is also called on a save made before the yard
+// existed (onConfigurationChanged), so it stages nothing when the yard's first
+// chest is already standing.
+func bandYard(s fkapi.LuaSurface) bool {
+	if _, ok := harness.FindOnTile(s, "infinity-chest", lcol, yardY); ok {
+		return false
+	}
+	for i, item := range yardItems {
+		x := lcol + 3*i
+		sourceOf(s, item, x, yardY, dirS)
+		put(s, harness.Piece{Name: belt, X: x, Y: yardY + 2, Dir: &dirS})
+		put(s, harness.Piece{Name: belt, X: x, Y: yardY + 3, Dir: &dirS})
+	}
+	return true
+}
+
 // ---------------------------------------------------------------------------
 // The demo band: the mod portal's capture scenes, versioned here so a capture
 // is reproducible instead of living in a save nobody kept.
@@ -591,6 +619,7 @@ func onInit() {
 	bandBridge(s)
 	bandFastReplace(s)
 	bandLane(s)
+	bandYard(s)
 
 	demoCross(s)
 	demoCompact(s)
@@ -609,7 +638,7 @@ func onInit() {
 
 	out.Open("gestures staged: pocket y-24, edge y-12, limit y0 " +
 		"(spare part at (20,-1)), bridge y45 (gap at (20,61)), fast replace y90 " +
-		"and the fed line at y103; lane-keeping column at x92").End()
+		"and the fed line at y103; lane-keeping column at x92, source yard at y28").End()
 	out.Open("demo scenes staged at x56: cross y-24, compact y-10, " +
 		"c-shape 8->8 y6, c-shape 8->9 y30, long run y60").End()
 }
@@ -638,7 +667,15 @@ var tags = []chartTag{
 	{lcol, 3, "L: ordinary part onto (92,5), lane part onto (93,5)"},
 	{lcol, 9, "L: lane parts over these two"},
 	{lcol, 17, "L: belt west from (91,19), then mine it"},
+	{yardTagX, yardY - 1, yardTag},
 }
+
+// The yard's tag, named once because a save that predates the yard adds it on
+// load as well.
+const (
+	yardTagX = lcol + 7
+	yardTag  = "sources: iron, copper, steel, cable, circuits, plastic"
+)
 
 // The lines the player reads in chat when they spawn. They are the checklist's
 // own summary, kept beside it: test/interactive/README.md is the long form.
@@ -651,6 +688,7 @@ var greeting = []string{
 	"[BBB] E: y=90 drop a part onto (20,92); then lay a belt on (20,98).",
 	"[BBB] E: y=103 drop a part onto (20,103), the middle of the fed line.",
 	"[BBB] L: x=92 the lane-keeping part: compare y=-24 with y=-16, then the gestures at y=-6, 4, 10 and 18.",
+	"[BBB] Sources: y=28 below the lane column, six items, each on a belt stub to side-load from.",
 	"[BBB] Expected outcomes and the log lines to grep: test/interactive/README.md",
 }
 
@@ -706,6 +744,28 @@ func welcome(p fkapi.LuaPlayer) {
 	for _, line := range greeting {
 		p.Print(fkapi.OfString(line), nil)
 	}
+}
+
+// onConfigurationChanged stages the source yard on a world made before it
+// existed, and tags it for the player force. A save made with the yard already
+// has it, and this does nothing.
+//
+//go:wasmexport fk_on_configuration_changed
+func onConfigurationChanged() {
+	s, ok := harness.SurfaceIfAny("nauvis")
+	if !ok || !bandYard(s) {
+		return
+	}
+	out.Open("source yard staged on an existing save at y").I(yardY).End()
+	fo, ok := harness.ForceByName(harness.PlayerForce)
+	if !ok {
+		return
+	}
+	text := yardTag
+	(fkapi.LuaForce{Object: fo}).AddChartTag(s.Object, fkapi.ChartTagSpec{
+		Position: harness.Center(yardTagX, yardY-1),
+		Text:     &text,
+	})
 }
 
 //go:wasmexport fk_on_event

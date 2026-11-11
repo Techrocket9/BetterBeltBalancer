@@ -571,9 +571,11 @@ OBS_M3_DIR    := $(OBS_DIST)/bbb-m3-test_0.1.0
 OBS_EDGE_DIR  := $(OBS_DIST)/bbb-edge-test_0.1.0
 # THE ONE PACKAGE HERE THAT IS NOT A SUITE'S, and the one whose version is not
 # 0.1.0: it is the rig-staging mod a HUMAN installs beside the real one to walk
-# test/interactive/README.md, and 0.2.0 is the version its hand-written
-# info.json carried.
-OBS_IACT_DIR  := $(OBS_DIST)/bbb-interactive-setup_0.2.0
+# test/interactive/README.md. 0.2.0 is the version its hand-written info.json
+# carried; 0.2.1 added the source yard, and the bump is what makes Factorio
+# raise on_configuration_changed on a world staged by 0.2.0, which is where
+# the yard is staged into a save that predates it.
+OBS_IACT_DIR  := $(OBS_DIST)/bbb-interactive-setup_0.2.1
 # THE TWO PACKAGES HERE THAT ARE NOT OBSERVERS AT ALL, and the only two in this
 # repository with no control stage: the `mig` suite's incumbent stand-in and the
 # stranger who owns its prototype name. Their versions are the ones their
@@ -874,7 +876,7 @@ $(OBS_IACT_DIR): $(DIST)/obs-iact.wasm $(DIST)/obs-iactdata.wasm Makefile
 	rm -rf $@
 	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-iact.wasm) \
 	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-iactdata.wasm) \
-	  --name bbb-interactive-setup --version 0.2.0 \
+	  --name bbb-interactive-setup --version 0.2.1 \
 	  --title "BBB interactive checklist rigs" \
 	  --description "Pre-stages the five player-gesture rigs the headless suites cannot drive (the miner's pocket, the belt at the edge, the 65th belt, the over-limit bridge, fast replace both ways) and the five mod-portal demo scenes, beside spawn on a fresh world. Every rig is built to Factorio 2.1's one-belt-per-part rule. Enable together with better-belt-balancer, start a new world, follow test/interactive/README.md, then disable." \
 	  --dependency "$(OBS_BASE_DEP)" --dependency "better-belt-balancer" \

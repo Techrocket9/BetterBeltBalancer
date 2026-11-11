@@ -386,7 +386,7 @@ JSON
 # It goes through copy_testmod like every other observer, because it IS one now:
 # a compiled Go guest under guest/go/obs/iact, packaged into dist/obs by
 # `make observers`. What is still special is only the name, which is not a
-# suite's, and the version, which is 0.2.0 rather than the estate's 0.1.0 --
+# suite's, and the version, which is 0.2.1 rather than the estate's 0.1.0 --
 # copy_testmod globs it for exactly that reason.
 stage_interactive() {
   local work="$1"
