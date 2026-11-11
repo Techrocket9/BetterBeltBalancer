@@ -210,7 +210,7 @@ func onTogglePriority(e *fkapi.CustomInputEvent) {
 	// difference between a keypress costing nothing and costing 32 bytes
 	// forever. It is also the answer to "is this one of ours" for every
 	// prototype at once.
-	if ours, err := ent.NameIs(PartName); err != nil || !ours {
+	if !isPartEntity(ent) {
 		return
 	}
 	k, ok := tileOfEntity(ent)
@@ -228,10 +228,21 @@ func onTogglePriority(e *fkapi.CustomInputEvent) {
 	// and two forces' parts touch all the time, so a player standing in front of
 	// somebody else's machine can hover a part of it. `pforce` is registry state
 	// and the player's own index is one host call.
-	if fi, err := p.ForceIndex(); err != nil || fi != pforce[id] {
+	if fi, err := p.ForceIndex(); err != nil || fi != realForce(pforce[id]) {
 		return
 	}
 	setPartPriority(k, prioToggle, e.PlayerIndex)
+}
+
+// isPartEntity says whether an entity is a balancer part of either kind, asked
+// with `name_is` so that no string is copied into the guest heap. Two calls for
+// the lane-keeping part, on a keypress or a paste and never per tick.
+func isPartEntity(e fkapi.LuaEntity) bool {
+	if ours, err := e.NameIs(PartName); err == nil && ours {
+		return true
+	}
+	ours, err := e.NameIs(LanePartName)
+	return err == nil && ours
 }
 
 // onSettingsPasted carries the flag from one part to another.
@@ -253,7 +264,7 @@ func onTogglePriority(e *fkapi.CustomInputEvent) {
 func onSettingsPasted(p uint32) {
 	e := fkapi.ReadOnEntitySettingsPasted(p)
 	dst := fkapi.LuaEntity{Object: e.Destination}
-	if ours, err := dst.NameIs(PartName); err != nil || !ours {
+	if !isPartEntity(dst) {
 		return
 	}
 	dk, ok := tileOfEntity(dst)
@@ -270,6 +281,8 @@ func onSettingsPasted(p uint32) {
 	if !ok {
 		return
 	}
+	// The same GROUP, which is force and kind together (cluster.go, laneBit):
+	// a paste between an ordinary part and a lane-keeping one carries nothing.
 	sid, ok := index[sk]
 	if !ok || pforce[sid] != pforce[did] {
 		return
@@ -549,7 +562,15 @@ func flipTilePrio(edges []plan.Edge, k key) {
 // rather than a fallback: the hidden surface being gone means the network's
 // hidden half is gone with it, and a visible surface that cannot be resolved
 // holds no interfaces of ours either.
+//
+// A LANE-KEEPING NETWORK IS TWO NETWORKS AS FAR AS ROOM GOES. Its items go
+// back onto the lane they came off (carry.go), so a successor with room for R
+// takes back R/2 on each lane, and a network full on one lane and empty on the
+// other holds what fits on one. For one of those this answers twice the fuller
+// lane's count, which compares against the same `room` as an ordinary total.
 func heldItems(ni netInfo) uint32 {
+	heldLeft, heldRight = 0, 0
+	heldLanes = isLane(ni.force)
 	total := uint32(0)
 	// `hiddenIdx` rather than `hiddenSurface()`, which CREATES the surface when
 	// it is missing. A keypress has no business making one, and a network that
@@ -563,8 +584,21 @@ func heldItems(ni netInfo) uint32 {
 	if vis, ok := surfaceByIndex(ni.surf); ok {
 		total += countItemsIn(vis, ni.x0, ni.y0, ni.x1, ni.y1)
 	}
+	if heldLanes {
+		heldLanes = false
+		if heldLeft > heldRight {
+			return 2 * heldLeft
+		}
+		return 2 * heldRight
+	}
 	return total
 }
+
+// heldLanes asks countItemsIn to keep the per-lane counts below as well.
+var (
+	heldLanes           bool
+	heldLeft, heldRight uint32
+)
 
 // heldEnts is the only buffer this reading needs; it grows to the biggest box
 // any toggle has looked at and is reused. The filter and the search box are
@@ -598,6 +632,13 @@ func countItemsIn(s fkapi.LuaSurface, x0, y0, x1, y1 int32) uint32 {
 				c, err := fkapi.LuaTransportLine{Object: l}.GetItemCount(nil)
 				if err == nil {
 					total += c
+					if heldLanes {
+						if laneOf(j) == 1 {
+							heldLeft += c
+						} else {
+							heldRight += c
+						}
+					}
 				}
 			}
 		}

@@ -324,11 +324,17 @@ const maxCarryKinds = 32
 // counts, what a spill puts on the floor, and what the split rule divides.
 // `stack` is 1 for an ordinary belt and is what `insert_at` is asked to
 // reproduce; 1 makes the call byte-identical to the pre-stacking one.
+//
+// `lane` is 0 for every group of an ordinary network, which mixes its lanes
+// anyway, and 1 (left) or 2 (right) for a LANE-KEEPING network's: there a
+// group goes back onto the lane it came off, or a recompile would put the
+// right lane's items on the left (laneOf, below).
 type carryItem struct {
 	name    string
 	quality string
 	count   uint32
 	stack   uint8
+	lane    uint8
 }
 
 // carryPool is one torn-down network's contents, plus everything needed to
@@ -592,6 +598,9 @@ func poolTotal(p *carryPool) uint32 {
 
 // tally is what drain() feeds. It merges by (name, quality, stack size) inside
 // the pool currently open, which is always the last one.
+//
+// The lane is `tallyLane`, which drain() sets per transport line and which is
+// 0 unless the pool belongs to a lane-keeping network.
 func tally(name, quality string, stack uint8, count uint32) {
 	if curPool < 0 || count == 0 {
 		return
@@ -599,10 +608,11 @@ func tally(name, quality string, stack uint8, count uint32) {
 	if stack == 0 {
 		stack = 1
 	}
+	lane := tallyLane
 	p := &carryPools[curPool]
 	for i := p.first; i < p.first+p.n; i++ {
 		if carryItems[i].name == name && carryItems[i].quality == quality &&
-			carryItems[i].stack == stack {
+			carryItems[i].stack == stack && carryItems[i].lane == lane {
 			carryItems[i].count += count
 			return
 		}
@@ -628,9 +638,51 @@ func tally(name, quality string, stack uint8, count uint32) {
 		p.spilled += count
 		return
 	}
-	carryItems = append(carryItems, carryItem{name: name, quality: quality, count: count, stack: stack})
+	carryItems = append(carryItems, carryItem{name: name, quality: quality, count: count, stack: stack, lane: lane})
 	p.n++
 }
+
+// tallyLane is the lane drain() is reading, for tally: 0 for an ordinary
+// network, 1 or 2 for a lane-keeping one's left or right line.
+var tallyLane uint8
+
+// poolKeepsLanes says whether the pool now open belongs to a lane-keeping
+// network. Its region's force is the group (cluster.go, laneBit).
+func poolKeepsLanes() bool {
+	return curPool >= 0 && isLane(carryPools[curPool].where.Force)
+}
+
+// laneOf is which lane transport line i of a belt-connectable carries: 1 for
+// a left lane and 2 for a right one.
+//
+// THE NUMBERS ARE THE ENGINE'S AND ARE RESOLVED BY NAME, like every define in
+// this guest: a belt's left line, an underground's or linked belt's secondary
+// left line, a splitter's two left split lines. Whatever is not one of those
+// is a right line. A lane-keeping network is built of nothing else, so this is
+// the whole of what "the lane it came off" means.
+func laneOf(i uint32) uint8 {
+	if !leftKnown {
+		leftLines = [...]uint32{
+			fkapi.DefinesTransportLineLeftLine(),
+			fkapi.DefinesTransportLineSecondaryLeftLine(),
+			fkapi.DefinesTransportLineLeftUndergroundLine(),
+			fkapi.DefinesTransportLineLeftSplitLine(),
+			fkapi.DefinesTransportLineSecondaryLeftSplitLine(),
+		}
+		leftKnown = true
+	}
+	for _, l := range leftLines {
+		if l == i {
+			return 1
+		}
+	}
+	return 2
+}
+
+var (
+	leftLines [5]uint32
+	leftKnown bool
+)
 
 // addOverflow merges one declined group into the buffer closePool will spill.
 // Same shape as addLineGroup and returnToPool, and by (name, quality) only --
@@ -806,8 +858,13 @@ func takeCarry(root, surf, force uint32, x0, y0, x1, y1 int32, hadNet bool,
 	if len(carryPools) == 0 {
 		return
 	}
-	var w lineWalk
-	w.ops, w.ents = ops, ents
+	// One walk per lane: 0 fills every line, as an ordinary network always
+	// has; 1 and 2 fill only the left or the right lines of a lane-keeping
+	// network, so a group goes back onto the lane it came off.
+	var walks [3]lineWalk
+	for l := range walks {
+		walks[l].ops, walks[l].ents, walks[l].lane = ops, ents, uint8(l)
+	}
 	took, left := uint32(0), uint32(0)
 	for p := range carryPools {
 		pool := &carryPools[p]
@@ -825,32 +882,36 @@ func takeCarry(root, surf, force uint32, x0, y0, x1, y1 int32, hadNet bool,
 		pool.drawn++
 
 		// The share, taken out of the pool so that a later claimant divides what
-		// is actually left.
-		carryTake = carryTake[:0]
-		for i := pool.first; i < pool.first+pool.n; i++ {
-			it := &carryItems[i]
-			if it.count == 0 {
+		// is actually left. One lane at a time: an ordinary pool holds lane 0
+		// alone and takes exactly one pass.
+		for lane := uint8(0); lane < 3; lane++ {
+			carryTake = carryTake[:0]
+			for i := pool.first; i < pool.first+pool.n; i++ {
+				it := &carryItems[i]
+				if it.count == 0 || it.lane != lane {
+					continue
+				}
+				n := (it.count + share - 1) / share
+				it.count -= n
+				carryTake = append(carryTake, carryItem{it.name, it.quality, n, it.stack, it.lane})
+			}
+			if len(carryTake) == 0 {
 				continue
 			}
-			n := (it.count + share - 1) / share
-			it.count -= n
-			carryTake = append(carryTake, carryItem{it.name, it.quality, n, it.stack})
-		}
-		if len(carryTake) == 0 {
-			continue
-		}
-		for i := range carryTake {
-			took += carryTake[i].count
-		}
-		took -= insertRemainder(&w, carryTake)
-		// Whatever would not fit goes back where it came from: a later claimant
-		// may have room, and if nobody does it spills at the end of the flush.
-		for i := range carryTake {
-			if carryTake[i].count == 0 {
-				continue
+			for i := range carryTake {
+				took += carryTake[i].count
 			}
-			left += carryTake[i].count
-			returnToPool(pool, &carryTake[i])
+			took -= insertRemainder(&walks[lane], carryTake)
+			// Whatever would not fit goes back where it came from: a later
+			// claimant may have room, and if nobody does it spills at the end of
+			// the flush.
+			for i := range carryTake {
+				if carryTake[i].count == 0 {
+					continue
+				}
+				left += carryTake[i].count
+				returnToPool(pool, &carryTake[i])
+			}
 		}
 	}
 	if took > 0 && verboseLog {
@@ -873,7 +934,7 @@ func takeCarry(root, surf, force uint32, x0, y0, x1, y1 int32, hadNet bool,
 func returnToPool(p *carryPool, it *carryItem) {
 	for i := p.first; i < p.first+p.n; i++ {
 		if carryItems[i].name == it.name && carryItems[i].quality == it.quality &&
-			carryItems[i].stack == it.stack {
+			carryItems[i].stack == it.stack && carryItems[i].lane == it.lane {
 			carryItems[i].count += it.count
 			return
 		}
@@ -1078,6 +1139,7 @@ const itemPitch = 0.25
 type lineWalk struct {
 	ops  []plan.Op
 	ents []fkapi.Object
+	lane uint8  // 0 every line; 1 or 2 only the left or right lines (laneOf)
 	pass int    // 0 interior, 1 linked belts, 2 exhausted
 	op   int    // the next op to consider
 	li   uint32 // the next line index on the current entity, 1-based
@@ -1099,6 +1161,9 @@ func (w *lineWalk) next() (fkapi.LuaTransportLine, float32, bool) {
 		if w.nl > 0 && w.li <= w.nl {
 			i := w.li
 			w.li++
+			if w.lane != 0 && laneOf(i) != w.lane {
+				continue
+			}
 			l, err := w.ent.GetTransportLine(i)
 			if err != nil {
 				continue

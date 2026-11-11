@@ -35,6 +35,13 @@ import (
 // WHICH -- a part, the audit marker, a piece of our own network, or a belt.
 const PartName = "bbb-balancer-part"
 
+// LanePartName is the LANE-KEEPING part: the same 1x1 machine, compiled
+// without the lane-splitter column, so each lane of every input is balanced
+// over the same lane of every output and the two lanes never meet. It never
+// joins an ordinary part; the registry keeps the kinds apart by `laneBit`
+// (cluster.go). See agents/features/lane-part.md.
+const LanePartName = "bbb-lane-balancer-part"
+
 // AuditName is a marker entity, defined in mod-data/prototypes/hidden.lua,
 // that nothing but a script can place. Building one asks the guest to check
 // every cluster's stored fingerprint against a from-scratch classification of
@@ -117,7 +124,7 @@ var entityFilter = append(
 		Key: fkapi.OfString("filter"),
 		Val: fkapi.OfString("transport-belt-connectable"),
 	})},
-	fkapi.NameFilter(PartName, AuditName, ProbeName, LegacyPartName)...,
+	fkapi.NameFilter(PartName, LanePartName, AuditName, ProbeName, LegacyPartName)...,
 )
 
 func init() {
@@ -634,7 +641,7 @@ func onEventBody(id, ptr uint32) {
 		return
 	}
 
-	if name == PartName {
+	if name == PartName || name == LanePartName {
 		k := key{s: si, x: floorTile(pos.X), y: floorTile(pos.Y)}
 		f := uint32(0)
 		if what == evAppear {
@@ -644,6 +651,21 @@ func onEventBody(id, ptr uint32) {
 			var ok bool
 			if f, ok = forceOf(obj); !ok {
 				return
+			}
+			if name == LanePartName {
+				f |= laneBit
+			}
+			// A PART OF ANOTHER GROUP ON A REGISTERED TILE MEANS THE ONE THAT
+			// WAS THERE IS GONE. Two parts cannot share a tile, and the two
+			// kinds are one fast-replaceable group, so a player can hold one
+			// kind over the other. A player's gesture mines the old part first
+			// and this never fires; a script's `fast_replace` raises nothing for
+			// the replaced entity (fastreplace.go), and without this the tile
+			// would stay registered as the old kind and the new part would be
+			// refused as a duplicate. The same-group case is the raise_built
+			// echo AddPart already ignores.
+			if id, held := index[k]; held && pforce[id] != f {
+				RemovePartMinedBy(k, builtBy)
 			}
 		}
 		onPart(k, f, what, minedBy, builtBy, tick)

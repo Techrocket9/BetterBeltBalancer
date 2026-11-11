@@ -373,6 +373,28 @@ func Plan() *fkrecipes.Lib {
 		IngredientsFrom: recipeIngredients,
 	})
 
+	// THE LANE-KEEPING PART: a second machine that never mixes a belt's two
+	// lanes, and never joins, pastes onto or inherits from the first.
+	//
+	// IT COSTS TWO ORDINARY PARTS, AND THAT IS THE WHOLE RECIPE. Twice the
+	// price is the rule, and naming the ordinary part as the ingredient keeps it
+	// twice the price under every preset and every recipe a player writes into
+	// the text field, without a second dropdown that could disagree with the
+	// first. agents/features/lane-part.md is the feature.
+	lanePart := lib.LegacyItem(LanePartName, fkrecipes.ItemSpec{
+		Icon:        LanePartIcon,
+		IconSize:    64,
+		StackSize:   50,
+		Subgroup:    "belt",
+		Order:       LanePartOrder,
+		PlaceResult: LanePartName,
+	})
+	laneRecipe := lib.LegacyRecipe(lanePart, LanePartName, fkrecipes.RecipeSpec{
+		CraftTime:   1,
+		Order:       LanePartOrder,
+		Ingredients: []fkrecipes.Ingredient{fkrecipes.IngredientOf(part, 2)},
+	})
+
 	// THE TECHNOLOGY, whose cost the player chooses.
 	//
 	// `CostBy` copies the chosen source's whole unit VERBATIM and makes that
@@ -495,7 +517,7 @@ func Plan() *fkrecipes.Lib {
 		Icon:     PartIcon,
 		IconSize: 64,
 		Order:    TechOrder,
-		Unlocks:  []fkrecipes.RecipeRef{recipe},
+		Unlocks:  []fkrecipes.RecipeRef{recipe, laneRecipe},
 		CostBy: &fkrecipes.CostChoices{
 			Setting:  techCost,
 			Choices:  techChoices(),
@@ -618,7 +640,18 @@ const (
 	// `placeable_by.item` are the three fields that bind them into one machine.
 	PartName = "bbb-balancer-part"
 
-	// TechName is the technology that unlocks the recipe.
+	// LanePartName is the lane-keeping part's item, recipe and entity, bound the
+	// same way [PartName] binds the ordinary one.
+	LanePartName = "bbb-lane-balancer-part"
+
+	// LanePartIcon is the lane-keeping part's icon: the ordinary icon with its
+	// highlight green rather than blue (`make graphics-lane`).
+	LanePartIcon = "__better-belt-balancer__/graphics/icons/lane-balancer-part.png"
+
+	// LanePartOrder puts the lane-keeping part straight after the ordinary one.
+	LanePartOrder = "c[splitter]-z[bbb-lane-balancer]"
+
+	// TechName is the technology that unlocks both recipes.
 	TechName = "bbb-balancer"
 
 	// PartIcon is the icon every player-facing prototype of this mod uses. A

@@ -26,6 +26,13 @@
 #         restyle's picture write, the fast-replace reap in both directions,
 #         and the over-limit refusal's delivery -- plus the question nothing
 #         had asked: does an uncommon balancer balance (base + the quality mod)
+#   lane  THE LANE-KEEPING PART. A belt with iron on its left lane and copper
+#         on its right, fed to lane-keeping balancers (1->2, 2->2, a priority
+#         output, a recompile under load) and to an ordinary control that mixes
+#         it; each lane of every output is read every eight ticks. A lane part
+#         beside an ordinary one stays a separate balancer, and the benchmark
+#         phase loads as an upgrade so the rebuild sweeps an orphaned
+#         lane-keeping network
 #   mig   ADOPTING A BELT BALANCER 2 OR 3 SAVE. The only suite whose two phases
 #         run under DIFFERENT MOD SETS: a mod is installed or uninstalled between
 #         `--create` and `--benchmark`. Seven legs and two name probes, covering
@@ -274,7 +281,7 @@ MOD_SERIES="$(sed -n 's/.*"factorio_version": *"\([^"]*\)".*/\1/p' "$MOD_DIR/inf
 #   INTERACTIVE checklist stages. It runs here because a rig that stopped
 #   landing, or one this mod refuses, costs a human a session to discover and
 #   costs this a single `--create` to catch.
-SUITES="${*:-m1 sedge mig21 flip m2 m3 mar upg curv prio edge mix plat qual mig iact curs}"
+SUITES="${*:-m1 sedge mig21 flip m2 m3 mar upg curv prio edge mix plat qual lane mig iact curs}"
 
 # A private write-data directory, so a concurrent Factorio cannot take the lock
 # out from under us.
@@ -1245,6 +1252,18 @@ for suite in $SUITES; do
       python3 "$ROOT/test/assert-mig.py" --engine "$ENGINE_SERIES" --leg probe \
         --incumbent belt-balancer-performance --version 1.0.5 "$TMP/migp2/create.log"
       ;;
+    lane)
+      # THE LANE-KEEPING PART. Every rig is fed one belt with iron on its left
+      # lane and copper on its right, and each lane of every output is read
+      # every eight ticks. The benchmark phase loads the save as an UPGRADE, so
+      # the rebuild-from-world has to adopt the lane-keeping networks and sweep
+      # the one the observer orphaned. See agents/features/lane-part.md.
+      echo "=== lane: the lane-keeping part never mixes a belt's two lanes ==="
+      stage "$TMP/lane" bbb-lane-test
+      BETWEEN=bump_build run "$TMP/lane" "${BBB_LANE_TICKS:-2400}"
+      unset BETWEEN
+      python3 "$ROOT/test/assert-lane.py" "$TMP/lane/create.log" "$TMP/lane/run.log"
+      ;;
     sedge)
       # FACTORIO 2.1'S RULE: ONE BELT PER BALANCER PART. Every edge is an
       # interface linked belt standing on the cluster's own tile, and 2.1 closed
@@ -1361,7 +1380,7 @@ for suite in $SUITES; do
       python3 "$ROOT/test/assert-interactive.py" "$TMP/iact/create.log"
       ;;
     *)
-      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix, mig, qual, sedge, mig21, flip or iact)" >&2
+      echo "unknown suite: $suite (expected m1, m2, m3, upg, plat, mar, edge, mix, mig, qual, lane, sedge, mig21, flip or iact)" >&2
       exit 1
       ;;
   esac

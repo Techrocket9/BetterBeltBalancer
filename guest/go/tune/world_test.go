@@ -292,7 +292,7 @@ func everythingWorld() fixtureWorld {
 		items:    ladderVocabulary(),
 		tools:    []string{"automation-science-pack", "logistic-science-pack"},
 		fluids:   []string{"water"},
-		entities: []string{PartName},
+		entities: []string{PartName, LanePartName},
 		techs: []fixtureTech{
 			{name: TechLogistics, unit: unitOf(20, 15, "automation-science-pack", 1)},
 			{name: TechLogistics2, prereqs: []string{TechLogistics},

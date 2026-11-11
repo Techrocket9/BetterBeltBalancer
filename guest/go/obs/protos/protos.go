@@ -63,6 +63,7 @@ const (
 	CurvLoader  = "bbbc-loader"
 	PrioLoader  = "bbbp-loader"
 	CursLoader  = "bbbcurs-loader"
+	LaneLoader  = "bbbl-loader"
 )
 
 // M2LaneSplitter is the `m2` suite's `lsio` rig, and it is the one prototype in

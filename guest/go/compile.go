@@ -590,7 +590,7 @@ func classifyEdges(surf fkapi.LuaSurface, tiles []key, force uint32) []plan.Edge
 	// The engine filters by force for us. A belt of another force could never
 	// have connected to an interface of ours, so classifying it as an edge
 	// would place a linked belt that silently moves nothing.
-	forceFilter = fkapi.OfNumber(float64(force))
+	forceFilter = fkapi.OfNumber(float64(realForce(force)))
 	for i := range tiles {
 		k := tiles[i]
 		// THE PRIORITY FLAG IS THE PART'S, NOT THE BELT'S, so it is read once
@@ -1009,7 +1009,7 @@ func createArgs(name string, x, y float64, dir uint32, ltype string, force uint3
 	posBuf[1].Number = y
 	kvBuf[argName].Val.Str = name
 	kvBuf[argDir].Val.Number = float64(dir)
-	kvBuf[argForce].Val.Number = float64(force)
+	kvBuf[argForce].Val.Number = float64(realForce(force))
 	n := argType
 	if ltype != "" {
 		kvBuf[argType].Val.Str = ltype
@@ -1134,6 +1134,9 @@ func compile(root uint32) bool {
 	ox, oy := slotOrigin(slot)
 	ops, pt, fits := plan.Build(opBuf, edges, ox, oy)
 	opBuf = ops
+	if isLane(force) {
+		plan.KeepLanes(ops)
+	}
 	// UNREACHABLE SINCE THE CHECK MOVED IN FRONT OF THE TEARDOWN, and kept as an
 	// `error:` precisely because of that: `overLimitShape` above mirrors
 	// plan.Build's own two tests, so getting here means the mirror has cracked
@@ -1574,7 +1577,14 @@ func drain(e fkapi.LuaEntity) {
 	// for every removal path and for every force that cannot stack, which is all
 	// of base Factorio, and then this loop is what it always was.
 	stacked := stacksPossible(e)
+	// A LANE-KEEPING network's items are tallied by the lane they stand on, so
+	// that takeCarry can put them back on it. Every other network leaves it 0.
+	lanes := poolKeepsLanes()
+	tallyLane = 0
 	for i := uint32(1); i <= n; i++ {
+		if lanes {
+			tallyLane = laneOf(i)
+		}
 		l, err := e.GetTransportLine(i)
 		if err != nil {
 			return
@@ -1609,6 +1619,7 @@ func drain(e fkapi.LuaEntity) {
 			tally(items[j].Name, items[j].Quality, 1, items[j].Count)
 		}
 	}
+	tallyLane = 0
 }
 
 // detailedTally reads one line POSITION BY POSITION so that the stack sizes

@@ -119,7 +119,8 @@ import "github.com/Techrocket9/BetterBeltBalancer/guest/go/fkapi"
 // the removal left rather than the one it found.
 func reapFastReplaced(surf uint32, tx, ty int32, builtBy uint32) {
 	k := key{s: surf, x: tx, y: ty}
-	if _, ok := index[k]; !ok {
+	id, ok := index[k]
+	if !ok {
 		// The whole cost in ordinary play: one point query against a map that
 		// is only ever point-queried.
 		return
@@ -134,7 +135,7 @@ func reapFastReplaced(surf uint32, tx, ty int32, builtBy uint32) {
 	// and was unregistered as replaced -- right for the wrong reason on a real
 	// fast replace (the part really is gone, at any quality), and wrong for a
 	// script that builds a colliding belt-connectable on top of one.
-	if _, standing, err := findOnTile(s, PartName, tx, ty); err != nil || standing {
+	if _, standing, err := findOnTile(s, partNameOf(pforce[id]), tx, ty); err != nil || standing {
 		// Still standing, so this is not a replace: a script built a colliding
 		// belt-connectable on top of a part (which `create_entity` permits and
 		// a player cannot do), or a query that failed. Either way the registry
@@ -454,7 +455,7 @@ func backArgs(b beltSpec, force uint32, x, y int32) fkapi.Value {
 	backKV[1] = fkapi.KeyValue{Key: fkapi.OfString("position"),
 		Val: fkapi.Value{Tag: fkapi.TagArray, Array: backPos[:]}}
 	backKV[2] = fkapi.KeyValue{Key: fkapi.OfString("force"),
-		Val: fkapi.OfNumber(float64(force))}
+		Val: fkapi.OfNumber(float64(realForce(force)))}
 	backKV[3] = fkapi.KeyValue{Key: fkapi.OfString("direction"),
 		Val: fkapi.OfNumber(float64(b.dir))}
 	// `raise_built` so that a mod which watched the belt go sees it come back.

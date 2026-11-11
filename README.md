@@ -70,6 +70,16 @@ A balancer can also be too big to give a belt priority, because a priority port 
 
 The flag is kept on the part itself, so it survives a blueprint, a copy of the blueprint, shift-clicking one part's settings onto another, and an update of the mod. The keybind is in Settings > Controls under this mod's name if ALT + P is taken on your keyboard. A mod or a scenario can set it without a keypress through the `better-belt-balancer` remote interface: `remote.call("better-belt-balancer", "set-part-priority", surface_index, x, y, on)`, which returns whether the flag ended up as asked.
 
+## Lane-keeping parts
+
+A second part, the lane-keeping balancer part, builds a balancer that never mixes a belt's two lanes. The left lane of every input is balanced over the left lane of every output, and the right lane over the right, so a belt carrying iron plate on one side and copper plate on the other reaches every output with iron and copper on the same sides. Its lit lines are green where the ordinary part's are blue.
+
+Inside, it is the ordinary network without the lane-splitter stage on entry. Splitters keep the two lanes apart, so with that stage gone each lane is a balancer of its own. Everything else works as it does for the ordinary part: one belt per part, priority with ALT + P, blueprints, and the items a balancer is holding going back inside it, each on the lane it was taken from, when you change it.
+
+The two kinds never join. A lane-keeping part next to an ordinary one makes two balancers, each with only the belts on its own parts.
+
+A lane-keeping part costs two ordinary balancer parts, whatever recipe the startup settings give the ordinary part, and the same research unlocks both.
+
 ## Fast replace
 
 Balancer parts share base's `transport-belt` fast-replace group, so a part held over a belt, an underground belt end or a lane splitter replaces it the way a splitter does: the belt and whatever it was carrying go to your inventory and the part takes the tile. Dropping a balancer straight into a belt line you already have is one click per tile. Splitters and loaders are not replaced this way (a splitter is two tiles wide, and loaders are a different group).
@@ -79,6 +89,8 @@ The group works in both directions, so a belt held over a part replaces the part
 On Factorio 2.1 there is one thing to know about replacing an edge part. The belt you lay sits on the tile the part occupied, which is next to the part beyond it, so it becomes that part's belt. If that part already has one, the balancer asks for two belts on one part, which 2.1 does not allow, and it is refused and stops until you take the belt away. What the machine was holding lands on the ground beside it, because the part is gone before the mod can find out that what is left cannot be built.
 
 A part dropped into the middle of a belt line is a different matter, because the part is then left with the belt behind it as an input and the belt ahead of it as an output. On Factorio 2.1 that is two belts on one part, so the part is refused and handed back, and the belt it replaced is put back on its tile with the line running again. It comes back empty: whatever it was carrying stays in your inventory, where the engine put it when it mined the belt, and the returned belt is paid for with the belt item you were refunded, so the count in your inventory is the one you started with. If that item is not there any more, the gap stays and the log says which item was missing.
+
+The two kinds of part share the group too, so a lane-keeping part held over an ordinary one replaces it, and the other way round.
 
 The collision mask is unchanged: a belt still cannot be laid *through* a balancer, only fast-replaced onto one part at a time.
 
@@ -98,6 +110,8 @@ They are declared through [FkRecipes](https://github.com/Techrocket9/FkRecipes),
 | Express belts | 4 steel plates, 2 gears, 2 express transport belts |
 | Splitter | 1 splitter, 2 iron plates |
 | Express splitter | 1 express splitter, 2 steel plates |
+
+The lane-keeping part is not on this list: its recipe is two balancer parts, so it follows whichever option or ingredient list you choose here.
 
 **Balancer part ingredients** sits under that setting and applies whenever it does not say `default`. Write the amount, then the item's internal name, and separate ingredients with commas: `2 iron-plate, 1 splitter`. Internal names are the ones the game uses in its own data and in rich text (`iron-plate`, not "Iron plate"). The word `default` hands the list back to the option chosen above, whose tooltip lists every option written this way, so you can start from the one you were on. The word `none` empties the list, and a balancer part then costs nothing to craft. The recycling recipe the game derives from this one goes with it, so where you have recycling a balancer part can no longer be recycled. A name your game does not have, a display name, or a fluid is never guessed at: the whole list is set aside, the option chosen above applies instead, and the log carries one line naming the setting, the entry and the reason. The game loads, so you can correct the field and restart. Because the option takes over whenever the field cannot be used, a typo in it is a recipe change, with the consequence described at the end of this section. The full format, with every message and what causes it, is FkRecipes' [ingredient list reference](https://github.com/Techrocket9/FkRecipes/blob/master/docs/ingredient-list.md).
 

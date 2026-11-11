@@ -784,6 +784,29 @@ func subAt(ops []Op, t int, cx, cy int32) []Op {
 	return ops
 }
 
+// KeepLanes turns a network into a LANE-KEEPING one, in place: every lane
+// splitter becomes a straight belt on the same tile, facing the same way.
+//
+// THE LANE SPLITTER COLUMN IS THE ONLY PLACE A NETWORK MIXES LANES. A splitter
+// keeps them (S1 measured it: without the column a left-lane-only feed parks
+// 4/0 on every output), and so do the belts and linked belts, so with the
+// column gone each lane of every input is balanced over the same lane of every
+// output and the two never meet. That is the lane-keeping part's whole
+// difference from the ordinary one (agents/features/lane-part.md).
+//
+// A BELT AND NOT A GAP, so that the layout does not move: the recv end and the
+// first stage are one tile apart in every shape Build lays, plain or priority,
+// and a straight belt is what joins two entities a tile apart. Nothing else in
+// the op list changes, so a lane-keeping network has the ordinary one's shape,
+// ports, slot footprint and entity count.
+func KeepLanes(ops []Op) {
+	for i := range ops {
+		if ops[i].Proto == ProtoLaneSplitter {
+			ops[i].Proto = ProtoBelt
+		}
+	}
+}
+
 // buildPrio is Build for an edge list with priority outputs in it. The header
 // above is the construction; this is the wiring.
 func buildPrio(ops []Op, edges []Edge, pt Ports, ox, oy int32) ([]Op, Ports, bool) {

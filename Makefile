@@ -200,7 +200,7 @@ FKRECIPES_SRC := $(shell find ../FkRecipes/go -name '*.go' -not -name '*_test.go
 DATA_GUEST_SRC := $(shell find guest/go/data guest/go/engine guest/go/skin guest/go/tune -name '*.go' -not -name '*_test.go') guest/go/go.mod $(FKRECIPES_SRC)
 DATA_SRC  := $(shell find mod-data -type f)
 
-.PHONY: all guest mod zip install test check datastage-check clean graphics graphics-priority observers bench-setup player-fixture
+.PHONY: all guest mod zip install test check datastage-check clean graphics graphics-priority graphics-lane observers bench-setup player-fixture
 
 all: mod
 
@@ -364,11 +364,19 @@ $(MOD_DIR).zip: $(WASM) $(DATA_WASM) $(DATA_SRC) fklua.toml $(PERSIST_STAMP) $(G
 # reach for against art somebody drew: it reads the committed sheet's first 47
 # cells and writes them back unchanged with the badged half beside them, so it
 # is idempotent and it cannot lose a cell.
+#
+# `graphics-lane` derives the lane-keeping part's sheet and icon from the
+# committed blue ones, glow turned green and every other pixel kept. It reads
+# the blue pair and never writes it, so it is safe against drawn art too; run it
+# after either blue file changes.
 graphics:
 	python3 tools/make-graphics.py
 
 graphics-priority:
 	python3 tools/make-graphics.py --priority
+
+graphics-lane:
+	python3 tools/make-graphics.py --lane
 
 # --- install -----------------------------------------------------------------
 
@@ -551,6 +559,7 @@ OBS_SEDGE_DIR := $(OBS_DIST)/bbb-sedge-test_0.1.0
 OBS_MAR_DIR   := $(OBS_DIST)/bbb-marathon-test_0.1.0
 OBS_MIG21_DIR := $(OBS_DIST)/bbb-mig21-observer_0.1.0
 OBS_QUAL_DIR  := $(OBS_DIST)/bbb-qual-test_0.1.0
+OBS_LANE_DIR  := $(OBS_DIST)/bbb-lane-test_0.1.0
 OBS_FLIP_DIR  := $(OBS_DIST)/bbb-flip-test_0.1.0
 OBS_CURV_DIR  := $(OBS_DIST)/bbb-curv-test_0.1.0
 OBS_PRIO_DIR  := $(OBS_DIST)/bbb-prio-test_0.1.0
@@ -587,7 +596,7 @@ OBS_FIXPLAYER_DIR := $(OBS_DIST)/bbb-fixplayer_0.1.0
 OBS_CURS_DIR      := $(OBS_DIST)/bbb-curs-test_0.1.0
 
 observers: $(OBS_M1_DIR) $(OBS_SEDGE_DIR) $(OBS_MAR_DIR) $(OBS_MIG21_DIR) \
-           $(OBS_QUAL_DIR) $(OBS_MIX_DIR) $(OBS_PLAT_DIR) $(OBS_MIG_DIR) \
+           $(OBS_QUAL_DIR) $(OBS_LANE_DIR) $(OBS_MIX_DIR) $(OBS_PLAT_DIR) $(OBS_MIG_DIR) \
            $(OBS_FLIP_DIR) $(OBS_CURV_DIR) $(OBS_PRIO_DIR) $(OBS_CURS_DIR) \
            $(OBS_M2_DIR) $(OBS_M3_DIR) $(OBS_EDGE_DIR) $(OBS_IACT_DIR) \
            $(OBS_BB2_DIR) $(OBS_FOREIGN_DIR) $(OBS_BENCH_DIR) \
@@ -636,6 +645,19 @@ $(OBS_SEDGE_DIR): $(DIST)/obs-sedge.wasm $(DIST)/obs-sedgedata.wasm Makefile
 	  --title "BBB single-edge verification" \
 	  --description "Builds balancers to Factorio 2.1's one-belt-per-part rule and drives the three ways an edit can break it. Asserts nothing itself." \
 	  --dependency "base >= 2.1.0" --dependency "better-belt-balancer" \
+	  -o .
+
+# The lane-keeping part's suite. Every rig is built to the one-belt rule, so
+# the same package runs on both arms and takes the arm's own base pin.
+$(OBS_LANE_DIR): $(DIST)/obs-lane.wasm $(DIST)/obs-lanedata.wasm Makefile
+	@mkdir -p $(OBS_DIST)
+	rm -rf $@
+	cd $(OBS_DIST) && $(abspath $(FKLUA)) mod $(abspath $(DIST)/obs-lane.wasm) \
+	  $(OBS_COMMON) --data-module $(abspath $(DIST)/obs-lanedata.wasm) \
+	  --name bbb-lane-test --version 0.1.0 \
+	  --title "BBB lane-keeping verification" \
+	  --description "Builds lane-keeping balancers on a lane-split feed and reads each lane of every output. Asserts nothing itself." \
+	  --dependency "$(OBS_BASE_DEP)" --dependency "better-belt-balancer" \
 	  -o .
 
 # The marathon suite. Its data stage is the same 1x1 express loader sedge's is,

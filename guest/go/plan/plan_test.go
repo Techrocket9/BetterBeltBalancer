@@ -680,3 +680,51 @@ func TestBuildDoesNotAllocateOnAReusedBuffer(t *testing.T) {
 		t.Fatalf("Build allocates %g times per call on a warm buffer", n)
 	}
 }
+
+// TestKeepLanesRemovesEveryLaneSplitterAndMovesNothing is the lane-keeping
+// network's whole construction: every lane splitter becomes a straight belt on
+// its own tile, facing its own way, and no other op changes. Driven over every
+// plain shape and a priority one, because both lay a lane-splitter column.
+func TestKeepLanesRemovesEveryLaneSplitterAndMovesNothing(t *testing.T) {
+	var shapes [][]Edge
+	for n := 1; n <= 8; n++ {
+		for m := 1; m <= 8; m++ {
+			var edges []Edge
+			for i := 0; i < n; i++ {
+				edges = append(edges, Edge{Dir: East})
+			}
+			for i := 0; i < m; i++ {
+				edges = append(edges, Edge{Dir: East, Out: true})
+			}
+			shapes = append(shapes, edges)
+		}
+	}
+	shapes = append(shapes, []Edge{{Dir: East}, {Dir: East},
+		{Dir: East, Out: true, Prio: true}, {Dir: East, Out: true}, {Dir: East, Out: true}})
+	for _, edges := range shapes {
+		ops, _, ok := Build(nil, edges, 0, 0)
+		if !ok {
+			t.Fatalf("%d edges did not build", len(edges))
+		}
+		before := append([]Op(nil), ops...)
+		splitters := 0
+		for i := range before {
+			if before[i].Proto == ProtoLaneSplitter {
+				splitters++
+			}
+		}
+		if splitters == 0 {
+			t.Fatalf("%d edges: the ordinary network has no lane splitter to remove", len(edges))
+		}
+		KeepLanes(ops)
+		for i := range ops {
+			want := before[i]
+			if want.Proto == ProtoLaneSplitter {
+				want.Proto = ProtoBelt
+			}
+			if ops[i] != want {
+				t.Errorf("%d edges: op %d is %+v after KeepLanes, want %+v", len(edges), i, ops[i], want)
+			}
+		}
+	}
+}

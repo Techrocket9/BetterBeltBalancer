@@ -145,7 +145,7 @@ func restyle(root uint32) {
 	skinEnt = skinEnt[:0]
 	unknown, n := 0, 0
 	for i := range skinTile {
-		o, found, ferr := findOnTile(surf, PartName, skinTile[i].x, skinTile[i].y)
+		o, found, ferr := findOnTile(surf, partNameOf(f), skinTile[i].x, skinTile[i].y)
 		if ferr != nil || !found {
 			continue
 		}

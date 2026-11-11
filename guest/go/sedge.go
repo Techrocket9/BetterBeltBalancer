@@ -527,7 +527,7 @@ func mergeWouldStrand(r uint32) bool {
 // force-blind for the same reason: a part of ANOTHER force standing beside this
 // one still occupies the side, so no interface can be placed against it.
 func edgesOnTile(surf fkapi.LuaSurface, k key, force uint32) int {
-	forceFilter = fkapi.OfNumber(float64(force))
+	forceFilter = fkapi.OfNumber(float64(realForce(force)))
 	n := 0
 	for d := 0; d < len(dirs); d++ {
 		nx, ny := k.x+dirs[d][0], k.y+dirs[d][1]

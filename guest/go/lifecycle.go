@@ -122,8 +122,17 @@ func reconcileArea(si uint32, tx0, ty0, tx1, ty1 int32, what string) {
 	rcFound = rcFound[:0]
 	rcForce = rcForce[:0]
 	setSearchBox(tx0, ty0, tx1, ty1)
-	nameFilter = fkapi.OfString(PartName)
-	if ents, err := s.FindEntitiesFiltered(findByName); err == nil {
+	// Both kinds, the lane-keeping part's group carrying laneBit (cluster.go).
+	for kind := 0; kind < 2; kind++ {
+		name, bit := PartName, uint32(0)
+		if kind == 1 {
+			name, bit = LanePartName, laneBit
+		}
+		nameFilter = fkapi.OfString(name)
+		ents, err := s.FindEntitiesFiltered(findByName)
+		if err != nil {
+			continue
+		}
 		for i := range ents {
 			p, err := fkapi.LuaEntity{Object: ents[i]}.Position()
 			if err != nil {
@@ -134,17 +143,19 @@ func reconcileArea(si uint32, tx0, ty0, tx1, ty1 int32, what string) {
 				continue
 			}
 			rcFound = append(rcFound, key{s: si, x: floorTile(p.X), y: floorTile(p.Y)})
-			rcForce = append(rcForce, f)
+			rcForce = append(rcForce, f|bit)
 		}
 	}
 	// What the registry says is there. Gone first, so that a tile which was
-	// cleared and rebuilt in the same clone is removed before it is re-added.
+	// cleared and rebuilt in the same clone is removed before it is re-added --
+	// and a tile that now holds the OTHER kind is gone too, so that the add
+	// below registers what the world has rather than finding the tile taken.
 	rcKeys = partsInBox(rcKeys, si, tx0, ty0, tx1, ty1)
 	for i := range rcKeys {
 		still := false
 		for j := range rcFound {
 			if rcFound[j] == rcKeys[i] {
-				still = true
+				still = pforce[index[rcKeys[i]]] == rcForce[j]
 				break
 			}
 		}
@@ -359,9 +370,13 @@ func onForcesMerged(src, dst uint32) {
 	//    its stored force index is about to be wrong -- and every cluster of the
 	//    destination force that TOUCHES one, because one of the two is about to
 	//    stop being a root. Both are marked; the flush deduplicates.
+	//
+	//    BOTH KINDS OF PART MOVE, and each keeps its kind: the group is the
+	//    force with laneBit beside it (cluster.go), so the compare is on
+	//    realForce and the remap below carries the bit across.
 	moved := uint32(0)
 	for i := uint32(1); i < uint32(len(parent)); i++ {
-		if !alive[i] || pforce[i] != src {
+		if !alive[i] || realForce(pforce[i]) != src {
 			continue
 		}
 		moved++
@@ -369,7 +384,7 @@ func onForcesMerged(src, dst uint32) {
 		k := ppos[i]
 		for d := 0; d < len(dirs); d++ {
 			if nb, ok := index[key{k.s, k.x + dirs[d][0], k.y + dirs[d][1]}]; ok &&
-				pforce[nb] == dst {
+				pforce[nb] == dst|(pforce[i]&laneBit) {
 				markDead(find(nb))
 			}
 		}
@@ -387,11 +402,12 @@ func onForcesMerged(src, dst uint32) {
 	//    which carry the force their networks were built with and would
 	//    otherwise be unrecognisable to the cluster that inherits them.
 	for i := uint32(1); i < uint32(len(parent)); i++ {
-		if alive[i] && pforce[i] == src {
-			pforce[i] = dst
+		if alive[i] && realForce(pforce[i]) == src {
+			pforce[i] = dst | (pforce[i] & laneBit)
 		}
 	}
 	remapCarryForce(src, dst)
+	remapCarryForce(src|laneBit, dst|laneBit)
 
 	// 4. Re-derive every component of the surviving force. The remap can only
 	//    ADD adjacencies -- two parts that were separated by a force boundary
@@ -402,7 +418,7 @@ func onForcesMerged(src, dst uint32) {
 	gen++
 	clusters := uint32(0)
 	for i := uint32(1); i < uint32(len(parent)); i++ {
-		if !alive[i] || pforce[i] != dst || mark[i] == gen {
+		if !alive[i] || realForce(pforce[i]) != dst || mark[i] == gen {
 			continue
 		}
 		markLive(rebuildComponent(i))
@@ -740,7 +756,19 @@ func rebuildFromWorld() {
 
 // registerPartsOn puts every part on one surface into the registry.
 func registerPartsOn(s fkapi.LuaSurface, si uint32) uint32 {
-	allNameFilter = fkapi.OfString(PartName)
+	n := registerKindOn(s, si, PartName, 0)
+	n += registerKindOn(s, si, LanePartName, laneBit)
+	// Nothing is compiled yet: the caller decides per cluster whether to adopt
+	// the network already standing or to build a new one.
+	deadRoots = deadRoots[:0]
+	liveRoots = liveRoots[:0]
+	return n
+}
+
+// registerKindOn registers every part of one kind on one surface, its group
+// carrying `bit` (cluster.go, laneBit).
+func registerKindOn(s fkapi.LuaSurface, si uint32, name string, bit uint32) uint32 {
+	allNameFilter = fkapi.OfString(name)
 	ents, err := s.FindEntitiesFiltered(findByNameAll)
 	if err != nil {
 		return 0
@@ -755,14 +783,10 @@ func registerPartsOn(s fkapi.LuaSurface, si uint32) uint32 {
 		if !ok {
 			continue
 		}
-		if AddPart(key{s: si, x: floorTile(p.X), y: floorTile(p.Y)}, f) {
+		if AddPart(key{s: si, x: floorTile(p.X), y: floorTile(p.Y)}, f|bit) {
 			n++
 		}
 	}
-	// Nothing is compiled yet: the caller decides per cluster whether to adopt
-	// the network already standing or to build a new one.
-	deadRoots = deadRoots[:0]
-	liveRoots = liveRoots[:0]
 	return n
 }
 
@@ -921,10 +945,21 @@ func adoptMatches(edges []plan.Edge) bool {
 // sweepOrphanSlots destroys every hidden network no cluster claims, and rebuilds
 // the slot allocator around the ones that are claimed.
 //
-// The occupied slots are found from the LANE SPLITTERS on the hidden surface:
-// there is exactly one per used input port, so every network that exists has at
-// least one and no network has many. One query plus one position read each,
+// The occupied slots are found from the LINKED BELTS on the hidden surface:
+// every network has them -- a recv and a send per used port, and the jumpers --
+// so every network that exists is found. One query plus one position read each,
 // against one query per slot for a scan that would have to guess how far to go.
+//
+// IT WAS THE LANE SPLITTERS UNTIL THE LANE-KEEPING PART, and they were the
+// cheaper marker: exactly one per used input port. A lane-keeping network has
+// none (plan.KeepLanes), so a scan for them does not see its slot at all. A
+// claimed one is safe either way (the loop below skips claimed slots); an
+// ORPHANED one would never be swept, and a slot above the highest one the scan
+// saw would be handed out again by the allocator over the entities still
+// standing in it. The `lane` suite's `lorph` rig is that orphan. The linked belts are about
+// three times as many entities on a path that runs once per rebuild, and the
+// dedup below checks the last slot first because consecutive results are
+// nearly always the same network.
 //
 // This is also where a prototype rename lands. Our four prototypes are ours, so
 // they can only be renamed by a version of this mod -- which is a rebuilt guest,
@@ -936,7 +971,7 @@ func sweepOrphanSlots() {
 		freeSlots = freeSlots[:0]
 		return
 	}
-	allNameFilter = fkapi.OfString(nameLaneSplit)
+	allNameFilter = fkapi.OfString(nameLinkedBelt)
 	ents, err := hid.FindEntitiesFiltered(findByNameAll)
 	if err != nil {
 		return
@@ -955,6 +990,9 @@ func sweepOrphanSlots() {
 		s := row*slotCols + col + 1
 		if s > maxSlot {
 			maxSlot = s
+		}
+		if n := len(rfwSlots); n > 0 && rfwSlots[n-1] == s {
+			continue
 		}
 		seen := false
 		for j := range rfwSlots {

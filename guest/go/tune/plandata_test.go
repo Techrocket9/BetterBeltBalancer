@@ -111,7 +111,10 @@ func TestTheDataPlanIsTheseExtendsAndNothingElse(t *testing.T) {
 // dataPrototypeCount is what this mod declares through the library at a data
 // stage, written down rather than measured off the plan for the reason every
 // expectation in this file is transcribed.
-const dataPrototypeCount = 3
+//
+// Five: the ordinary part's item and recipe, the lane-keeping part's item and
+// recipe, and the technology that unlocks both.
+const dataPrototypeCount = 5
 
 // TestTheItemIsTheOneThatShipped is the transcription, field by field.
 //
@@ -135,6 +138,53 @@ func TestTheItemIsTheOneThatShipped(t *testing.T) {
 	checkOnly(t, PartName, got,
 		"type", "name", "icon", "icon_size", "stack_size", "subgroup",
 		"order", "place_result")
+}
+
+// TestTheLanePartsItemIsTheOrdinaryOnesUnderItsOwnName is the lane-keeping
+// part's item, transcribed the same way: the ordinary item's eight fields, with
+// its own name, icon and order.
+func TestTheLanePartsItemIsTheOrdinaryOnesUnderItsOwnName(t *testing.T) {
+	protos, _ := extendsOf(t, dataOps(t, everythingWorld()))
+	got := protoOf(t, protos, "item", LanePartName)
+
+	checkStr(t, LanePartName, got, "type", "item")
+	checkStr(t, LanePartName, got, "name", "bbb-lane-balancer-part")
+	checkStr(t, LanePartName, got, "icon",
+		"__better-belt-balancer__/graphics/icons/lane-balancer-part.png")
+	checkNum(t, LanePartName, got, "icon_size", 64)
+	checkNum(t, LanePartName, got, "stack_size", 50)
+	checkStr(t, LanePartName, got, "subgroup", "belt")
+	checkStr(t, LanePartName, got, "order", "c[splitter]-z[bbb-lane-balancer]")
+	checkStr(t, LanePartName, got, "place_result", "bbb-lane-balancer-part")
+	checkOnly(t, LanePartName, got,
+		"type", "name", "icon", "icon_size", "stack_size", "subgroup",
+		"order", "place_result")
+}
+
+// TestTheLanePartCostsTwoOrdinaryParts under every recipe preset and under a
+// recipe the player wrote: its one ingredient is the ordinary part, so twice
+// the price follows whatever the ordinary part costs.
+func TestTheLanePartCostsTwoOrdinaryParts(t *testing.T) {
+	worlds := []fixtureWorld{everythingWorld()}
+	for _, option := range RecipeOptions() {
+		worlds = append(worlds, everythingWorld().withStartup(SettingRecipeCost, option))
+	}
+	worlds = append(worlds,
+		everythingWorld().withStartup(SettingRecipeIngredients, "3 iron-plate"))
+	for _, w := range worlds {
+		protos, _ := extendsOf(t, dataOps(t, w))
+		got := protoOf(t, protos, "recipe", LanePartName)
+		checkStr(t, "the lane recipe", got, "type", "recipe")
+		checkStr(t, "the lane recipe", got, "name", "bbb-lane-balancer-part")
+		checkBool(t, "the lane recipe", got, "enabled", false)
+		checkNum(t, "the lane recipe", got, "energy_required", 1)
+		checkStr(t, "the lane recipe", got, "order", "c[splitter]-z[bbb-lane-balancer]")
+		checkResults(t, got, "bbb-lane-balancer-part", 1)
+		checkIngredients(t, "the lane recipe", got,
+			[]ingredientPair{{"bbb-balancer-part", 2}})
+		checkOnly(t, "the lane recipe", got,
+			"type", "name", "enabled", "energy_required", "ingredients", "results", "order")
+	}
 }
 
 // TestThePlaceResultProbeRefusesAnAbsentEntity is the ordering constraint of
@@ -769,7 +819,7 @@ func TestTheTechnologyIsTheOneThatShipped(t *testing.T) {
 		"__better-belt-balancer__/graphics/icons/balancer-part.png")
 	checkNum(t, TechName, got, "icon_size", 64)
 	checkStr(t, TechName, got, "order", "a-b-bbb")
-	checkEffects(t, got, "bbb-balancer-part")
+	checkEffects(t, got, "bbb-balancer-part", "bbb-lane-balancer-part")
 	checkOnly(t, TechName, got,
 		"type", "name", "icon", "icon_size", "prerequisites", "unit", "effects", "order")
 }
@@ -2503,16 +2553,18 @@ func checkResults(t *testing.T, proto map[string]fkrecipes.Value, name string, a
 }
 
 // checkEffects pins the one effect: unlocking this mod's own recipe.
-func checkEffects(t *testing.T, proto map[string]fkrecipes.Value, recipe string) {
+func checkEffects(t *testing.T, proto map[string]fkrecipes.Value, recipes ...string) {
 	t.Helper()
 	v, ok := proto["effects"]
-	if !ok || v.Kind != fkrecipes.KindArr || len(v.Arr) != 1 {
-		t.Fatalf("the technology's effects are %v and it unlocks one recipe", v)
+	if !ok || v.Kind != fkrecipes.KindArr || len(v.Arr) != len(recipes) {
+		t.Fatalf("the technology's effects are %v and it unlocks %d recipe(s)", v, len(recipes))
 	}
-	fields := fieldsOf(t, v.Arr[0])
-	checkStr(t, "the effect", fields, "type", "unlock-recipe")
-	checkStr(t, "the effect", fields, "recipe", recipe)
-	checkOnly(t, "the effect", fields, "type", "recipe")
+	for i, recipe := range recipes {
+		fields := fieldsOf(t, v.Arr[i])
+		checkStr(t, "the effect", fields, "type", "unlock-recipe")
+		checkStr(t, "the effect", fields, "recipe", recipe)
+		checkOnly(t, "the effect", fields, "type", "recipe")
+	}
 }
 
 // checkPrereqs pins the prerequisite list at exactly one name, which is what

@@ -11,13 +11,16 @@ actually ends.
 
     python3 tools/make-graphics.py                    # or: make graphics
     python3 tools/make-graphics.py --priority          # or: make graphics-priority
-    python3 tools/make-graphics.py --preview /tmp/look.png [--half]
+    python3 tools/make-graphics.py --lane              # or: make graphics-lane
+    python3 tools/make-graphics.py --preview /tmp/look.png [--half] [--lane]
 
 Outputs (committed, so `make mod` works without Python):
 
-    mod-data/graphics/entity/balancer-part-variants.png   512x768, 8x12 cells of 64
-    mod-data/graphics/icons/balancer-part.png             64x64
-    mod-data/graphics/entity/io-arrows.png                256x32, 8 cells of 32
+    mod-data/graphics/entity/balancer-part-variants.png        512x768, 8x12 cells of 64
+    mod-data/graphics/icons/balancer-part.png                  64x64
+    mod-data/graphics/entity/io-arrows.png                     256x32, 8 cells of 32
+    mod-data/graphics/entity/lane-balancer-part-variants.png   --lane, from the first
+    mod-data/graphics/icons/lane-balancer-part.png             --lane, from the second
 
 THE SHEET IS 94 CELLS AND ONLY THE FIRST 47 ARE SHAPES. Cell 47+i is cell i with
 a priority badge composited onto it, because the guest encodes a part's PRIORITY
@@ -34,6 +37,17 @@ is idempotent and running it on an artist's 47-cell sheet badges their work
 rather than replacing it. The default mode below regenerates the placeholder
 art from scratch and would overwrite an artist's cells, which is what it has
 always done.
+
+`--lane` is the second mode that is safe against an artist's art, and for the
+same reason: it READS the committed blue sheet and icon, never writes them, and
+writes the lane-keeping part's pair beside them. The only difference is the
+glow: every pixel whose hue is in the cyan band is turned green, by a weight
+that fades at the band's edges so a fringe cannot stay cyan, and everything
+else -- plating, rust, the badge, alpha, the unused cells -- comes back byte for
+byte. It is a function of each pixel alone, so the green tiles fuse wherever
+the blue ones do, and re-running it after the blue sheet is redrawn re-derives
+the green one. `--preview ... --lane` assembles the shapes from the COMMITTED
+sheets: blue, green, and green badged.
 
 `--preview` writes nothing into the mod: it assembles the five named shapes into
 one image the way the game would, which is the only honest way to judge whether
@@ -78,6 +92,7 @@ cell on screen as 32: whatever replaces it has to be readable at about eleven
 pixels across, against plating that is already blue-grey and already lit.
 """
 
+import colorsys
 import math
 import os
 import struct
@@ -531,6 +546,112 @@ def priority_sheet():
     print("%d shapes, %d cells, %d per row" % (n, 2 * n, COLS))
 
 
+# --- the lane-keeping part ---------------------------------------------------
+#
+# The second part type wears the first one's art with its glow turned green, and
+# that is ALL that differs: same cells, same order, same badges, same alpha. It
+# is a per-pixel function of the committed blue file, so it cannot open a seam
+# the blue sheet does not have, and re-running it after an artist edits the blue
+# sheet re-derives the green one.
+#
+# A pixel is picked by hue, never by position. The conduits, the hub and its
+# glow ring, the dark groove beside a conduit and the teal glints in the trim
+# grille all sit at 165..205 degrees; the slate plating and its seams start at
+# 218 and run to 255; the rust trim and the amber badge are warm. The weight is
+# 1 inside LANE_FULL, falls smoothly to 0 across LANE_FADE on either side, and
+# is scaled down again below a saturation floor, so an anti-aliased fringe half
+# way between a conduit and the plating moves half way rather than staying cyan
+# or snapping. The badge's dark outline is (10, 14, 20), hue 216: the top of the
+# fade stops short of it on purpose, and `--lane` asserts that no pixel of
+# hue 214 or more changed.
+#
+# The shift is applied in HSV with S and V kept, then blended in RGB by the
+# weight. Blending the HUE instead would walk a half-weight fringe through cyan
+# on its way to green, which is the fringe this is here to avoid.
+
+LANE_SHIFT = -68.0             # degrees: cyan 190 lands on green 122
+LANE_FULL = (168.0, 205.0)     # hue band moved all the way
+LANE_FADE = (152.0, 214.0)     # weight is 0 outside this
+LANE_SAT = (0.05, 0.12)        # saturation floor: 0 below, 1 above
+
+
+def smoothstep(e0, e1, x):
+    t = (x - e0) / (e1 - e0)
+    t = 0.0 if t < 0 else (1.0 if t > 1 else t)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def lane_weight(h, s):
+    """How far a pixel of hue h (degrees) and saturation s is moved, 0..1."""
+    if h < LANE_FADE[0] or h >= LANE_FADE[1]:
+        return 0.0
+    w = smoothstep(LANE_FADE[0], LANE_FULL[0], h) * \
+        (1.0 - smoothstep(LANE_FULL[1], LANE_FADE[1], h))
+    return w * smoothstep(LANE_SAT[0], LANE_SAT[1], s)
+
+
+def lane_pixel(p):
+    """One pixel, cyan glow turned green. Alpha and every warm or grey pixel
+    come back as they went in."""
+    r, g, b, a = p
+    if a == 0:
+        return p
+    h, s, v = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+    w = lane_weight(h * 360.0, s)
+    if w <= 0.0:
+        return p
+    q = colorsys.hsv_to_rgb(((h * 360.0 + LANE_SHIFT) % 360.0) / 360.0, s, v)
+    out = tuple(min(255, max(0, int(math.floor(c + (255.0 * d - c) * w + 0.5))))
+                for c, d in zip((r, g, b), q))
+    return out + (a,)
+
+
+def lane_rows(rows):
+    memo = {}
+    out = []
+    for row in rows:
+        line = []
+        for p in row:
+            if p not in memo:
+                memo[p] = lane_pixel(p)
+            line.append(memo[p])
+        out.append(line)
+    return out
+
+
+def lane_sheet():
+    """Write the lane-keeping part's sheet and icon from the committed blue ones.
+
+    READS balancer-part-variants.png and balancer-part.png and never writes
+    them. Deterministic and idempotent: the output is a function of the input's
+    pixels alone, so a second run writes the same bytes.
+    """
+    pairs = (
+        (os.path.join(GFX, "entity", "balancer-part-variants.png"),
+         os.path.join(GFX, "entity", "lane-balancer-part-variants.png")),
+        (os.path.join(GFX, "icons", "balancer-part.png"),
+         os.path.join(GFX, "icons", "lane-balancer-part.png")),
+    )
+    for src_path, dst_path in pairs:
+        src, srgb = read_png(src_path)
+        dst = lane_rows(src)
+        moved = 0
+        for row, out in zip(src, dst):
+            for p, q in zip(row, out):
+                if p == q:
+                    continue
+                moved += 1
+                h, s, _ = colorsys.rgb_to_hsv(p[0] / 255.0, p[1] / 255.0,
+                                              p[2] / 255.0)
+                # The fence the band promises: alpha is never touched, and
+                # nothing outside the fade (the plating, the rust, the amber,
+                # the badge outline) moves.
+                assert p[3] == q[3], (src_path, p, q)
+                assert LANE_FADE[0] <= h * 360.0 < LANE_FADE[1], (src_path, p, q)
+        write_png(dst_path, dst, srgb)
+        print("%d of %d pixels moved" % (moved, len(src) * len(src[0])))
+
+
 def preview(path, half=False):
     """Assemble the five named shapes into one image, as the game would.
 
@@ -542,6 +663,26 @@ def preview(path, half=False):
 
         python3 tools/make-graphics.py --preview /tmp/look.png
     """
+    drawn = {}
+
+    def art(m):
+        if m not in drawn:
+            drawn[m] = draw_cell(m)
+        return drawn[m]
+
+    img = assemble(art)
+    if half:
+        img = halve(img)
+    write_png(path, img)
+
+
+def halve(img):
+    return [[img[2 * j][2 * i] for i in range(len(img[0]) // 2)]
+            for j in range(len(img) // 2)]
+
+
+def assemble(art):
+    """The named shapes side by side, each tile drawn with `art(mask)`."""
     shapes = [
         [(0, 0), (1, 0), (2, 0), (3, 0)],
         [(0, 0), (0, 1), (0, 2), (1, 2), (2, 2)],
@@ -568,16 +709,33 @@ def preview(path, half=False):
 
     w, h = ox, max(y for _, y in cells) + 1
     img = [[(20, 22, 26, 255)] * (w * CELL) for _ in range(h * CELL)]
-    drawn = {}
     for (x, y), m in cells.items():
-        if m not in drawn:
-            drawn[m] = draw_cell(m)
+        cell = art(m)
         for j in range(CELL):
-            img[y * CELL + j][x * CELL:(x + 1) * CELL] = drawn[m][j]
+            img[y * CELL + j][x * CELL:(x + 1) * CELL] = cell[j]
+    return img
+
+
+def lane_preview(path, half=False):
+    """The same shapes from the COMMITTED sheets: blue, then green, then green
+    with every part badged. Judges the artist's cells, not the placeholder."""
+    masks = variant_masks()
+    rows = []
+    for name, badged in (("balancer-part-variants.png", 0),
+                         ("lane-balancer-part-variants.png", 0),
+                         ("lane-balancer-part-variants.png", len(masks))):
+        src, _ = read_png(os.path.join(GFX, "entity", name))
+
+        def art(m, src=src, badged=badged):
+            i = masks.index(m) + badged
+            sx, sy = (i % COLS) * CELL, (i // COLS) * CELL
+            return [src[sy + y][sx:sx + CELL] for y in range(CELL)]
+
+        rows += assemble(art)
+        rows += [[(20, 22, 26, 255)] * len(rows[0])] * (CELL // 2)
     if half:
-        img = [[img[2 * j][2 * i] for i in range(w * CELL // 2)]
-               for j in range(h * CELL // 2)]
-    write_png(path, img)
+        rows = halve(rows)
+    write_png(path, rows)
 
 
 def main():
@@ -608,13 +766,20 @@ def main():
 
     write_png(os.path.join(GFX, "entity", "io-arrows.png"), arrow_strip())
 
+    # The green pair is derived from the blue pair just written, so a re-theme
+    # cannot leave the lane-keeping part wearing the old one.
+    lane_sheet()
+
     print("%d variants, %d per row" % (len(masks), COLS))
 
 
 if __name__ == "__main__":
     if "--preview" in sys.argv:
         i = sys.argv.index("--preview")
-        preview(sys.argv[i + 1], half="--half" in sys.argv)
+        look = lane_preview if "--lane" in sys.argv else preview
+        look(sys.argv[i + 1], half="--half" in sys.argv)
+    elif "--lane" in sys.argv:
+        lane_sheet()
     elif "--priority" in sys.argv:
         priority_sheet()
     else:

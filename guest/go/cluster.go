@@ -65,7 +65,14 @@ var (
 	parent []uint32 // union-find parent; parent[r] == r at a root
 	csize  []uint32 // cluster size, meaningful only at a root
 	ppos   []key    // where this node's part is
-	pforce []uint32 // which force built it; parts of two forces never merge
+	// pforce is which force built the part, WITH laneBit SET FOR A
+	// LANE-KEEPING PART. Parts of two forces never merge, and folding the kind
+	// into the same word is what keeps the two kinds apart everywhere at once:
+	// every "same force" test in this guest -- the merge, the split, the flood,
+	// the sprite mask, the settings paste, the carry claim, the miner's pocket
+	// -- is a "same force AND same kind" test without a line of its own. What
+	// crosses to the host is realForce(pforce[...]); see laneBit.
+	pforce []uint32
 	alive  []bool   // false for a slot on the free list
 	mark   []uint32 // flood-fill generation stamp
 	// pvar is the sprite variation currently ON the entity, or 0 for "we have
@@ -118,6 +125,36 @@ var (
 )
 
 func init() { initRegistry() }
+
+// laneBit marks a LANE-KEEPING part's group in `pforce` (and in everything
+// that carries a cluster's force beside it: netInfo, a carry pool's region, a
+// claim). A force index is a small number -- Factorio caps forces at 64 -- so
+// the top bit is never a real one.
+//
+// IT FAILS CLOSED, which is why it is a bit in the force word and not a slice
+// of its own. A comparison somebody forgets to extend still keeps the two kinds
+// apart, because the words differ; a value somebody forgets to mask on its way
+// to the host is a force index the engine refuses, loudly, rather than a lane
+// part quietly joining an ordinary balancer. The host boundary is five places
+// and each of them says realForce: createArgs, backArgs, the two edge-query
+// force filters, and forceOfCluster's compare. agents/features/lane-part.md.
+const laneBit uint32 = 1 << 31
+
+// realForce is the force index a group stands for, which is what the host is
+// given.
+func realForce(g uint32) uint32 { return g &^ laneBit }
+
+// isLane says whether a group is the lane-keeping part's.
+func isLane(g uint32) bool { return g&laneBit != 0 }
+
+// partNameOf is the prototype a group's parts are, for the lookups that find a
+// part in the world by name.
+func partNameOf(g uint32) string {
+	if isLane(g) {
+		return LanePartName
+	}
+	return PartName
+}
 
 // initRegistry puts the registry back to empty.
 //

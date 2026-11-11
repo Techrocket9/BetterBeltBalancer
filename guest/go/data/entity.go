@@ -18,8 +18,9 @@ import (
 // package now, and the entity and the legacy stub here carry it too; one
 // constant is what stops a re-theme moving four prototypes and leaving a fifth.
 const (
-	partIcon     = tune.PartIcon
-	partVariants = "__better-belt-balancer__/graphics/entity/balancer-part-variants.png"
+	partIcon         = tune.PartIcon
+	partVariants     = "__better-belt-balancer__/graphics/entity/balancer-part-variants.png"
+	lanePartVariants = "__better-belt-balancer__/graphics/entity/lane-balancer-part-variants.png"
 )
 
 // entity defines the visible part: a 1x1 tile that clicks together with its
@@ -41,12 +42,25 @@ const (
 // Without `transport_belt` a player can lay a belt straight through the
 // balancer, and the belt-orientation-decides-I/O rule stops making sense.
 //
+// THE LANE-KEEPING PART IS THE SAME PROTOTYPE UNDER ANOTHER NAME AND ANOTHER
+// SHEET. Everything that makes it a different machine is the control guest's:
+// it keeps the two kinds out of one cluster and compiles a lane-keeping
+// network without its lane splitters (agents/features/lane-part.md). The sheet
+// is the ordinary one with its highlight green, cell for cell, so skin's
+// variation numbers mean the same picture on both.
+//
 //go:noinline
 func entity() {
+	part(tune.PartName, partIcon, partVariants)
+	part(tune.LanePartName, tune.LanePartIcon, lanePartVariants)
+}
+
+//go:noinline
+func part(name, icon, variants string) {
 	fkdata.Extend(obj(
 		f("type", str("simple-entity-with-force")),
-		f("name", str(tune.PartName)),
-		f("icon", str(partIcon)),
+		f("name", str(name)),
+		f("icon", str(icon)),
 		f("icon_size", num(64)),
 
 		// `get-by-unit-number` is what lets the runtime resolve a part from a
@@ -63,8 +77,8 @@ func entity() {
 		// before a prototype of anybody else's is read. That is exactly what
 		// round one of the migration measured when the library prefixed the
 		// item's name (agents/fkrecipes-migration.md).
-		f("minable", obj(f("mining_time", num(0.1)), f("result", str(tune.PartName)))),
-		f("placeable_by", obj(f("item", str(tune.PartName)), f("count", num(1)))),
+		f("minable", obj(f("mining_time", num(0.1)), f("result", str(name)))),
+		f("placeable_by", obj(f("item", str(name)), f("count", num(1)))),
 
 		// FAST REPLACE, and it is the one line that makes a part behave like the
 		// machine it is. `"transport-belt"` is base's own group for every belt,
@@ -124,7 +138,7 @@ func entity() {
 		// `pictures` takes priority over `picture` and `animations`, so this is
 		// the only art the entity has.
 		f("pictures", obj(f("sheet", obj(
-			f("filename", str(partVariants)),
+			f("filename", str(variants)),
 			f("priority", str("high")),
 			f("width", num(64)),
 			f("height", num(64)),

@@ -660,7 +660,7 @@ func forceOfCluster(tiles []key, force uint32) (fkapi.LuaForce, bool) {
 	// failing quietly is a refusal delivered to NOBODY -- the balancer is
 	// protected either way, and the player watches their belt do nothing with
 	// no message at all.
-	o, found, ferr := findOnTile(surf, PartName, tiles[0].x, tiles[0].y)
+	o, found, ferr := findOnTile(surf, partNameOf(force), tiles[0].x, tiles[0].y)
 	if ferr != nil || !found {
 		return fkapi.LuaForce{}, false
 	}
@@ -672,7 +672,7 @@ func forceOfCluster(tiles []key, force uint32) (fkapi.LuaForce, bool) {
 	// The cluster's force index is registry state and the entity's is the
 	// world's; they agree unless something has moved between the classification
 	// pass and here, in which case there is no message worth sending.
-	if i, err := lf.Index(); err != nil || i != force {
+	if i, err := lf.Index(); err != nil || i != realForce(force) {
 		return fkapi.LuaForce{}, false
 	}
 	return lf, true
@@ -1156,7 +1156,7 @@ func revertOne(n buildNote, why string) {
 	// was mined by somebody else in the meantime, a belt was replaced by a part
 	// -- the note describes something that is not there any more and the safe
 	// answer is to leave it alone.
-	_, registered := index[key{n.s, n.x, n.y}]
+	nid, registered := index[key{n.s, n.x, n.y}]
 	if registered != n.isPart {
 		return
 	}
@@ -1178,7 +1178,7 @@ func revertOne(n buildNote, why string) {
 		// part at any quality their cursor holds, and a bare-name lookup
 		// (findpart.go) would leave a non-normal one standing instead of
 		// handing it back.
-		e, found, ferr := findOnTile(surf, PartName, n.x, n.y)
+		e, found, ferr := findOnTile(surf, partNameOf(pforce[nid]), n.x, n.y)
 		if ferr != nil || !found {
 			return
 		}

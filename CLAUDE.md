@@ -18,7 +18,8 @@ Conventions are inherited from FkLua — read [`../FkLua/CLAUDE.md`](../FkLua/CL
 
 - **Trunk targets Factorio 2.1 and its rule is one belt per balancer part** (since 2026-08-24): a part carries at most one edge, and a cluster that asks for more is refused. Design [`agents/single-edge.md`](agents/single-edge.md); rule `guest/go/sedge.go`; working note [`agents/features/single-edge-rule.md`](agents/features/single-edge-rule.md).
 - **Two release arms out of one tree.** `master` ships 0.3.x for Factorio 2.1; `release/2.0` ships 0.2.x for Factorio 2.0 and is recut from trunk with a four-file stamp (`fklua.toml`, `fklua.lock`, `guest/go/fkapi/fkapi.go`, `mod-data/changelog.txt`). `test/check-release-arm.sh` holds the branch to lines trunk has. The newest tags are `0.3.6` on `master` and `0.2.6` on `release/2.0` (`git tag`, 2026-09-22).
-- **Seventeen headless suites.** Fourteen answer the same on either engine; `mig21` and `mig` invert between 2.0 and 2.1, and `flip` exists on 2.0 only and prints a SKIP on 2.1.
+- **A second part, the lane-keeping part** (`bbb-lane-balancer-part`, since 2026-11-10): the ordinary network without its lane-splitter column, so no lane ever meets the other; it never joins an ordinary part. [`agents/features/lane-part.md`](agents/features/lane-part.md).
+- **Eighteen headless suites.** Fifteen answer the same on either engine; `mig21` and `mig` invert between 2.0 and 2.1, and `flip` exists on 2.0 only and prints a SKIP on 2.1.
 - **No hand-written Lua anywhere in the repository**: the control guest, the data guest and every test observer are Go.
 - **What is owed** is the outstanding list in [`agents/history/status.md`](agents/history/status.md) and the tail of [`agents/history/verification-log.md`](agents/history/verification-log.md), whose last entry is the newest record of what ran where.
 
@@ -40,7 +41,7 @@ The annotated form, with the reasoning behind each file, is [`agents/architectur
 fklua.toml, fklua.lock   the mod project: identity, dependencies, data module, shipped GC arm, api pin
 guest/go/                the CONTROL guest (its own Go module; TinyGo -> wasm -> Lua)
   main.go                events, subscriptions, load hooks, fk_state_version
-  cluster.go             the part registry: orthogonally adjacent parts per surface and force
+  cluster.go             the part registry: orthogonally adjacent parts per surface, force and kind (laneBit)
   compile.go             the network compiler and edge classification (straight + curved exits)
   lifecycle.go           clones, surface deletion, rebuild-from-world, the audit, force merges
   carry.go               where a teardown's items go (recompile reinserts, removal spills)
@@ -78,7 +79,7 @@ The annotated command list, the TinyGo flags and the `--persist=packed` decision
 | `make guest` | TinyGo -> `dist/bbb.wasm` and `dist/bbbdata.wasm`. `GC=leaking` builds the other `-gc` arm; `QUIET=1` drops `[BBB]` lines |
 | `make mod` / `make zip` / `make install` | package from `fklua.toml`; fails on a lost event/member prune (`dist/.fklua-mod.log`) |
 | `make check` | the six pure packages' tests, `go vet` of the data guest, bindings and lock current, gofmt, `test/check-release-arm.sh` |
-| `make test` | all seventeen suites against the installed Factorio. `make GC=leaking test` is the other arm, run as ONE invocation |
+| `make test` | all eighteen suites against the installed Factorio. `make GC=leaking test` is the other arm, run as ONE invocation |
 | `make datastage-check` | Factorio `--dump-data` against `test/datastage-goldens.json`: 24 arms, not part of `make test` |
 | `make prestate`, `make observers`, `make graphics` | the pre-state fixture for `curv`, the observer packages, the sprite sheet |
 | `make player-fixture SAVE=...` | re-cut `test/fixtures-player/` from a client save ([`agents/verification/player-fixture.md`](agents/verification/player-fixture.md)) |
@@ -101,6 +102,7 @@ One note per suite under [`agents/verification/suites/`](agents/verification/sui
 | [`mix`](agents/verification/suites/mix.md) | more than one item kind, and the carry pool's 32-group bound |
 | [`mig`](agents/verification/suites/mig.md) | adopting a Belt Balancer 2/3 save; two phases under different mod sets |
 | [`qual`](agents/verification/suites/qual.md) | every part at uncommon quality |
+| [`lane`](agents/verification/suites/lane.md) | the lane-keeping part on a lane-split feed: each lane of every output, carry, priority, the two kinds kept apart, the orphan sweep |
 | [`sedge`](agents/verification/suites/sedge.md) | 2.1's one-belt-per-part rule and the four ways an edit can break it |
 | [`mig21`](agents/verification/suites/mig21.md) | a committed 2.0 multi-edge save opened; no `--create` phase |
 | [`flip`](agents/verification/suites/flip.md) | the 2.0-only multi-edge setting through all four transitions |
@@ -168,6 +170,7 @@ Each row names the section of the old single file it was, where it was one. The 
 | [`curved-exits.md`](agents/features/curved-exits.md) | a belt that turns as it leaves is an output | "A belt that turns as it leaves" |
 | [`curve-setting.md`](agents/features/curve-setting.md) | `bbb-curved-exits` and the flip | "The curve rule is a setting" |
 | [`curve-upgrade.md`](agents/features/curve-upgrade.md) | pre-curve saves keep their reading; the state version; the ping list | "A save from before the curve rule keeps the reading it was built to" |
+| [`lane-part.md`](agents/features/lane-part.md) | the lane-keeping part: `KeepLanes`, `laneBit`, the lane-aware carry, the linked-belt orphan sweep | new 2026-11-10 |
 | [`priority-ports.md`](agents/features/priority-ports.md) | the priority flag, its survival, refusals, spill guard, player side | "Priorities: a port that is fed first" |
 | [`settle.md`](agents/features/settle.md) | a burst of builds or mines by a player, robot or platform compiled once: the drag fix, the removal drag, robots, the rule and its measurement | new 2026-11-09 |
 | [`fast-replace.md`](agents/features/fast-replace.md) | a part over a belt and a belt over a part; the refused-replace belt restore | "Fast replace" |

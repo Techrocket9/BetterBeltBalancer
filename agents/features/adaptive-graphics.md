@@ -46,6 +46,8 @@ The theme on top of that: a dark slate plated body with a vertical gradient, bru
 
 **A future artist replaces the PNGs and keeps the cell order.** The only contract is "cell *i* is the shape whose canonical mask is the *i*-th ascending one, 64×64, laid out 8 per row"; `variant_masks()` prints the list. Nothing in the guest or the prototype needs to change.
 
+**The lane-keeping part's sheet is this one recoloured, cell for cell (2026-11-10).** `make graphics-lane` (`tools/make-graphics.py --lane`) READS the committed blue sheet and icon and writes `lane-balancer-part-variants.png` and `lane-balancer-part.png`: every pixel whose hue is in the cyan glow band (fully 168-205 degrees, fading to nothing at 152 and 214, and below a saturation floor) is rotated -68 degrees with saturation and value kept, blended in RGB by the band weight so an anti-aliased edge never passes through cyan. Rust trim, slate plating, the amber badges and alpha are untouched (58,161 of 393,216 sheet pixels moved, 387 of the icon's 4,096). The same per-pixel function on every cell keeps the seams: across 2,432 tile-boundary pixel pairs of the six preview shapes, mean difference 9.73 blue and 9.62 green. Idempotent, so an artist's new blue sheet re-derives the green one with one command; the default no-flag run regenerates it too. The I/O arrow strip is shared, so a lane part's input arrows are green on a green part: legible in the preview, not yet looked at in a client.
+
 ## What it costs
 
 - **In the guest heap**: one byte per part (`pvar`, in cluster.go's parallel slices — 29 bytes per node became 30). That matters because the idle GC tail scales with the live heap, which is why it is a byte and not a struct.
